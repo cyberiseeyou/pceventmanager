@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance & Time Off - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item active">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>📊 Attendance Tracking & Time Off Management</h1>
+
+        <p class="help-intro">
+            Track employee attendance, manage time-off requests, and monitor unreported events to
+            ensure accurate payroll, compliance, and team accountability.
+        </p>
+
+        <div class="help-section">
+            <h2>Attendance Tracking Overview</h2>
+            <p>
+                The attendance system tracks when employees report to scheduled events and logs
+                their actual work hours. This data is essential for:
+            </p>
+            <ul>
+                <li>Payroll and timesheet accuracy</li>
+                <li>Performance monitoring and accountability</li>
+                <li>Compliance with labor regulations</li>
+                <li>Event completion verification</li>
+                <li>Identifying unreported or missed events</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>How Attendance Works</h2>
+
+            <h3>Automatic Attendance via QR Codes:</h3>
+            <p>
+                The primary attendance tracking method uses QR codes on event paperwork:
+            </p>
+            <ol>
+                <li>Employee receives event paperwork with unique QR code</li>
+                <li>Upon arrival, employee scans QR code with smartphone</li>
+                <li>System logs check-in time and location</li>
+                <li>Employee scans again at event completion for check-out</li>
+                <li>System calculates total hours worked</li>
+            </ol>
+
+            <h3>Manual Attendance Entry:</h3>
+            <p>
+                Managers can manually log attendance for events without QR scanning:
+            </p>
+            <ol>
+                <li>Navigate to <strong>Attendance → Attendance Calendar</strong></li>
+                <li>Select the date and event</li>
+                <li>Click <strong>Log Attendance</strong></li>
+                <li>Enter start time, end time, and any notes</li>
+                <li>Save the attendance record</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Viewing Attendance Records</h2>
+
+            <h3>Attendance Calendar View:</h3>
+            <p>
+                Navigate to <strong>Attendance → Attendance Calendar</strong> to see:
+            </p>
+            <ul>
+                <li>Color-coded attendance status for each day</li>
+                <li>Green: All events reported</li>
+                <li>Yellow: Partially reported</li>
+                <li>Red: Unreported events</li>
+                <li>Gray: No scheduled events</li>
+            </ul>
+
+            <h3>Employee Attendance History:</h3>
+            <p>
+                View individual employee attendance:
+            </p>
+            <ol>
+                <li>Go to <strong>Employees → Employee Management</strong></li>
+                <li>Click on an employee name</li>
+                <li>Navigate to the <strong>Attendance</strong> tab</li>
+                <li>View complete attendance history with filters</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Unreported Events</h2>
+            <p>
+                The Unreported Events page helps identify events that were scheduled but not
+                yet reported as completed.
+            </p>
+
+            <h3>Accessing Unreported Events:</h3>
+            <p>
+                Navigate to <strong>Dashboard → Unreported Events</strong>
+            </p>
+
+            <h3>What You'll See:</h3>
+            <ul>
+                <li><strong>Event Details:</strong> Name, date, location, assigned employee</li>
+                <li><strong>Days Unreported:</strong> How long since the event date</li>
+                <li><strong>Status:</strong> Scheduled, In Progress, or Overdue</li>
+                <li><strong>Priority:</strong> High (over 3 days), Medium (1-3 days), Low (same day)</li>
+            </ul>
+
+            <h3>Actions Available:</h3>
+            <ul>
+                <li><strong>Log Attendance:</strong> Manually enter attendance for the event</li>
+                <li><strong>Mark as No-Show:</strong> Employee didn't attend</li>
+                <li><strong>Contact Employee:</strong> Send reminder to report attendance</li>
+                <li><strong>View Details:</strong> See full event and schedule information</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Time Off Management</h2>
+
+            <h3>How Time Off Works:</h3>
+            <p>
+                Time-off requests prevent employees from being scheduled during requested periods.
+                The auto scheduler automatically skips employees on time off.
+            </p>
+
+            <h3>Adding Time Off Requests:</h3>
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Navigate to Time Off Page</h3>
+                        <p>
+                            Go to <strong>Employees → Time Off Requests</strong>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Click "Add Time Off Request"</h3>
+                        <p>
+                            Opens the time-off request form.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Fill in Request Details</h3>
+                        <ul>
+                            <li><strong>Employee:</strong> Select from dropdown</li>
+                            <li><strong>Start Date:</strong> First day of time off</li>
+                            <li><strong>End Date:</strong> Last day of time off</li>
+                            <li><strong>Reason:</strong> Optional note (vacation, sick, personal, etc.)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Save Request</h3>
+                        <p>
+                            System validates the dates and saves the request. Employee will be
+                            unavailable for scheduling during this period.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Viewing and Managing Time Off:</h3>
+            <ul>
+                <li><strong>Calendar View:</strong> See all time-off requests on a calendar</li>
+                <li><strong>Employee View:</strong> Filter by specific employee</li>
+                <li><strong>Date Range:</strong> View requests within a date range</li>
+                <li><strong>Edit/Delete:</strong> Modify or remove requests as needed</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Availability Overrides</h2>
+            <p>
+                Temporarily override an employee's normal availability without changing their
+                base weekly schedule.
+            </p>
+
+            <h3>When to Use Overrides:</h3>
+            <ul>
+                <li>One-time availability changes (doctor appointments, etc.)</li>
+                <li>Temporary availability adjustments (working extra days)</li>
+                <li>Special event availability exceptions</li>
+            </ul>
+
+            <h3>Creating an Availability Override:</h3>
+            <ol>
+                <li>Navigate to <strong>Employees → Employee Management</strong></li>
+                <li>Select employee and go to <strong>Availability</strong> tab</li>
+                <li>Click <strong>Add Override</strong></li>
+                <li>Select date and set availability (Available/Unavailable)</li>
+                <li>Set custom hours if employee is partially available</li>
+                <li>Add optional note explaining the override</li>
+                <li>Save the override</li>
+            </ol>
+
+            <div class="info-box">
+                <strong>Priority:</strong> Availability overrides take precedence over weekly
+                availability and time-off requests.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Employee Termination Tracking</h2>
+            <p>
+                Track employee termination dates to prevent scheduling past their last day.
+            </p>
+
+            <h3>Setting a Termination Date:</h3>
+            <ol>
+                <li>Edit employee information</li>
+                <li>Enter termination date in the <strong>Termination Date</strong> field</li>
+                <li>Employee status automatically changes to inactive on termination date</li>
+                <li>System prevents scheduling after termination date</li>
+            </ol>
+
+            <h3>What Happens After Termination:</h3>
+            <ul>
+                <li>Employee appears as inactive in roster</li>
+                <li>Cannot be assigned to new events</li>
+                <li>Historical data preserved for reporting</li>
+                <li>Past schedules remain visible</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Attendance Reports</h2>
+
+            <h3>Available Reports:</h3>
+            <ul>
+                <li>
+                    <strong>Daily Attendance Report:</strong> All attendance for a specific date
+                </li>
+                <li>
+                    <strong>Employee Attendance Summary:</strong> Individual employee's attendance history
+                </li>
+                <li>
+                    <strong>Unreported Events Report:</strong> Events missing attendance records
+                </li>
+                <li>
+                    <strong>Time Off Summary:</strong> All time-off requests by date range
+                </li>
+                <li>
+                    <strong>Attendance Rate Report:</strong> Percentage of events reported vs. scheduled
+                </li>
+            </ul>
+
+            <h3>Exporting Attendance Data:</h3>
+            <p>
+                Export attendance records for payroll or HR systems:
+            </p>
+            <ol>
+                <li>Navigate to desired attendance report</li>
+                <li>Set date range and filters</li>
+                <li>Click <strong>Export</strong></li>
+                <li>Choose format (Excel, CSV, PDF)</li>
+                <li>Download file</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Notifications and Reminders</h2>
+
+            <h3>Automatic Reminders:</h3>
+            <p>
+                The system can send automatic reminders for:
+            </p>
+            <ul>
+                <li>Unreported events (daily reminder after event date)</li>
+                <li>Upcoming time off (notification to managers)</li>
+                <li>Attendance discrepancies</li>
+                <li>Missing clock-in/clock-out</li>
+            </ul>
+
+            <h3>Configuring Notifications:</h3>
+            <p>
+                Navigate to <strong>Settings → Notifications</strong> to customize:
+            </p>
+            <ul>
+                <li>Who receives attendance notifications</li>
+                <li>Frequency of unreported event reminders</li>
+                <li>Email vs. in-app notifications</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Review unreported events daily:</strong> Check the Unreported Events
+                    page each morning and follow up on overdue items
+                </li>
+                <li>
+                    <strong>Enter time off immediately:</strong> Add time-off requests as soon
+                    as you learn about them to prevent scheduling conflicts
+                </li>
+                <li>
+                    <strong>Use QR codes:</strong> Encourage employees to use QR code scanning
+                    for faster, more accurate attendance
+                </li>
+                <li>
+                    <strong>Verify attendance weekly:</strong> Review weekly attendance reports
+                    before payroll processing
+                </li>
+                <li>
+                    <strong>Set termination dates early:</strong> Enter termination dates as
+                    soon as known to prevent invalid scheduling
+                </li>
+                <li>
+                    <strong>Document overrides:</strong> Always add notes to availability overrides
+                    explaining the reason
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Troubleshooting</h2>
+
+            <h3>QR Code Not Scanning</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Ensure good lighting and camera focus</li>
+                <li>Try a different QR scanner app</li>
+                <li>Manually enter event code from paperwork</li>
+                <li>Contact manager for manual attendance entry</li>
+            </ul>
+
+            <h3>Attendance Not Appearing</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Refresh the page</li>
+                <li>Verify attendance was successfully submitted (check confirmation)</li>
+                <li>Check that you're viewing the correct date</li>
+                <li>Contact system administrator if issue persists</li>
+            </ul>
+
+            <h3>Time Off Not Blocking Scheduling</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify time-off dates are correct</li>
+                <li>Ensure time off was saved successfully</li>
+                <li>Check if an availability override is taking precedence</li>
+                <li>Re-run the auto scheduler after adding time off</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.employee_management') }}" class="next-step-card">
+                    <span class="next-step-icon">👥</span>
+                    <span class="next-step-text">Learn about employee management</span>
+                </a>
+                <a href="{{ url_for('help.workload_analytics') }}" class="next-step-card">
+                    <span class="next-step-icon">📈</span>
+                    <span class="next-step-text">View workload analytics</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

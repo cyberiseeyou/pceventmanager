@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Product Connections - Scheduler{% endblock %}</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='img/favicon-48x48.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-top">
+                <div class="header-logo-container">
+                    <img src="{{ url_for('static', filename='img/PC-Logo_Primary_Full-Color-1024x251.png') }}"
+                        alt="Product Connections" class="header-logo">
+                </div>
+                <div class="header-brand">
+                    <h1 class="header-title">Product Connections Scheduler</h1>
+                </div>
+                <div class="header-spacer"></div>
+            </div>
+            <nav class="header-nav">
+                <!-- Mobile Hamburger Menu Button -->
+                <button class="hamburger-menu" id="hamburgerBtn" aria-label="Toggle navigation menu"
+                    aria-expanded="false">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+
+                <!-- Navigation Links (Desktop & Mobile) -->
+                <div class="nav-links" id="navLinks">
+                    <!-- Home Link (redirects to root which goes to today's daily view) -->
+                    <a href="{{ url_for('main.index') }}"
+                        class="nav-link {% if request.endpoint == 'main.daily_schedule_view' or request.endpoint == 'main.index' %}active{% endif %}"
+                        aria-label="Go to home page">
+                        <span class="nav-icon">🏠</span>
+                        <span class="nav-text">Home</span>
+                    </a>
+
+                    <!-- Scheduling Dropdown -->
+                    <div class="nav-dropdown">
+                        <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
+                            aria-label="Scheduling menu">
+                            <span class="nav-icon">📅</span>
+                            <span class="nav-text">Scheduling</span>
+                            <span class="nav-arrow">▼</span>
+                        </button>
+                        <div class="nav-dropdown-menu" hidden>
+                            <a href="{{ url_for('main.unscheduled_events') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}">
+                                Events
+                            </a>
+                            <a href="{{ url_for('main.unreported_events') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'main.unreported_events' %}active{% endif %}">
+                                Unreported Events
+                            </a>
+                            <a href="{{ url_for('main.calendar_view') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'main.calendar_view' %}active{% endif %}">
+                                Calendar
+                            </a>
+                            <a href="{{ url_for('auto_scheduler.index') }}"
+                                class="nav-dropdown-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') %}active{% endif %}">
+                                Auto-Scheduler
+                            </a>
+                            <a href="{{ url_for('admin.schedule_verification') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'admin.schedule_verification' %}active{% endif %}">
+                                Schedule Verification
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Team Dropdown -->
+                    <div class="nav-dropdown">
+                        <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
+                            aria-label="Team menu">
+                            <span class="nav-icon">👥</span>
+                            <span class="nav-text">Team</span>
+                            <span class="nav-arrow">▼</span>
+                        </button>
+                        <div class="nav-dropdown-menu" hidden>
+                            <a href="{{ url_for('employees.employees') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'employees.employees' %}active{% endif %}">
+                                Employees
+                            </a>
+                            <a href="{{ url_for('employees.time_off_requests') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'employees.time_off_requests' %}active{% endif %}">
+                                Time Off Requests
+                            </a>
+                            <a href="{{ url_for('main.attendance_calendar') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'main.attendance_calendar' %}active{% endif %}">
+                                Attendance
+                            </a>
+                            <a href="{{ url_for('admin.employee_analytics') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'admin.employee_analytics' %}active{% endif %}">
+                                Analytics
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Printing Link -->
+                    <a href="{{ url_for('printing.printing_home') }}"
+                        class="nav-link {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}"
+                        aria-label="Go to printing page">
+                        <span class="nav-icon">🖨️</span>
+                        <span class="nav-text">Printing</span>
+                    </a>
+                </div>
+
+                <div class="nav-user-section">
+                    <button id="refreshDatabaseBtn" class="refresh-database-btn"
+                        title="Refresh database from Crossmark API" aria-label="Refresh database">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        <span class="btn-text">Refresh Database</span>
+                    </button>
+                    <div class="notifications-dropdown">
+                        <button id="notificationsBtn" class="notifications-btn" title="View notifications"
+                            aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                            <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+                        </button>
+                        <div id="notificationsPanel" class="notifications-panel" hidden>
+                            <div class="notifications-header">
+                                <h3 class="notifications-title">Notifications</h3>
+                                <span id="notificationCount" class="notification-count">0</span>
+                            </div>
+                            <div id="notificationsContent" class="notifications-content">
+                                <div class="notifications-loading">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="user-dropdown">
+                        <button class="user-dropdown-toggle" id="userDropdownToggle" aria-haspopup="true"
+                            aria-expanded="false">
+                            <span class="user-name">{{ get_current_user().get('full_name',
+                                get_current_user().get('username', 'User')) if get_current_user() else 'User' }}</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div class="user-dropdown-menu" id="userDropdownMenu" hidden>
+                            <a href="{{ url_for('help.help_home') }}" class="dropdown-item">
+                                <span class="dropdown-icon">❓</span>
+                                Help
+                            </a>
+                            <a href="{{ url_for('admin.settings_page') }}" class="dropdown-item">
+                                <span class="dropdown-icon">⚙️</span>
+                                Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
+                                <span class="dropdown-icon">🚪</span>
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Database Refresh Modal -->
+    <div id="refreshDatabaseModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="refreshModalTitle">
+        <div class="modal-overlay"></div>
+        <div class="modal-container modal-container--medium">
+            <div class="modal-header">
+                <h2 class="modal-title" id="refreshModalTitle">Refresh Database</h2>
+                <button class="modal-close" id="closeRefreshModal" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="refreshModalContent">
+                    <p class="refresh-modal-message">This will clear all existing events and fetch the latest data from
+                        the Crossmark API.</p>
+                    <div id="refreshProgress" style="display: none;">
+                        <div class="progress-indicator">
+                            <div class="progress-spinner"></div>
+                            <span class="progress-text" id="refreshProgressText">Refreshing database...</span>
+                        </div>
+                    </div>
+                    <div id="refreshResult" style="display: none;">
+                        <div class="refresh-result-message" id="refreshResultMessage"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="refreshModalFooter">
+                <button class="btn btn-secondary" id="cancelRefresh">Cancel</button>
+                <button class="btn btn-primary" id="confirmRefresh">Refresh Database</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Times Configuration Warning Modal -->
+    <div id="eventTimesWarningModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header" style="background: #dc3545; color: white;">
+                <h2 style="margin: 0; font-size: 1.3em;">⚠️ Event Times Not Configured</h2>
+            </div>
+            <div class="modal-body" style="padding: 25px;">
+                <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+                    <strong>Important:</strong> Event time settings have not been configured yet.
+                </p>
+                <p style="margin-bottom: 20px; line-height: 1.6;">
+                    These settings are required for scheduling to work correctly. Without them, you will not be able to:
+                </p>
+                <ul style="margin-bottom: 20px; line-height: 1.8; padding-left: 25px;">
+                    <li>Create or edit schedules</li>
+                    <li>Run the auto-scheduler</li>
+                    <li>Validate event times</li>
+                </ul>
+                <p style="font-weight: bold; color: #dc3545; margin-bottom: 20px;">
+                    Please configure these settings immediately to ensure proper system operation.
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="eventTimesLater" style="padding: 10px 20px;">Later</button>
+                <button class="btn btn-primary" id="eventTimesGoToSettings"
+                    style="padding: 10px 20px; background: #dc3545;">Go to Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Product Connections. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- CSRF Protection (CRITICAL-02) -->
+    <script src="{{ url_for('static', filename='js/csrf_helper.js') }}"></script>
+
+    <!-- Core Infrastructure Modules (ES6) -->
+    <!-- Priority 2: Load shared modules first for global availability -->
+    <script type="module">
+        // Import and initialize core modules
+        import { apiClient } from '{{ url_for('static', filename='js / utils / api - client.js') }}';
+        import { stateManager } from '{{ url_for('static', filename='js / modules / state - manager.js') }}';
+        import { ariaAnnouncer } from '{{ url_for('static', filename='js / modules / aria - announcer.js') }}';
+        import { toaster } from '{{ url_for('static', filename='js / modules / toast - notifications.js') }}';
+        import ValidationEngine from '{{ url_for('static', filename='js / modules / validation - engine.js') }}';
+
+        // Make available globally for non-module scripts
+        window.apiClient = apiClient;
+        window.stateManager = stateManager;
+        window.ariaAnnouncer = ariaAnnouncer;
+        window.toaster = toaster;
+        window.ValidationEngine = ValidationEngine;
+
+        console.log('[Base] Core infrastructure modules loaded');
+    </script>
+
+    <!-- Navigation -->
+    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+
+    <!-- User Dropdown -->
+    <script src="{{ url_for('static', filename='js/user_dropdown.js') }}"></script>
+
+    <!-- Database Refresh Modal -->
+    <script src="{{ url_for('static', filename='js/database-refresh.js') }}"></script>
+
+    <!-- Event Times Warning Modal -->
+    <script>
+        (function () {
+            // Check if event times warning should be shown
+            const checkEventTimesConfiguration = () => {
+                // Check session storage to see if we've already dismissed this session
+                const dismissed = sessionStorage.getItem('eventTimesWarningDismissed');
+                if (dismissed === 'true') {
+                    return;
+                }
+
+                // Check if event times are configured (will be set by login response)
+                fetch('/api/session-info')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.event_times_configured === false) {
+                            showEventTimesWarning();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking event times configuration:', error);
+                    });
+            };
+
+            const showEventTimesWarning = () => {
+                const modal = document.getElementById('eventTimesWarningModal');
+                if (modal) {
+                    modal.classList.add('modal-open');
+                }
+            };
+
+            // Handle button clicks
+            document.addEventListener('DOMContentLoaded', () => {
+                const laterBtn = document.getElementById('eventTimesLater');
+                const goToSettingsBtn = document.getElementById('eventTimesGoToSettings');
+                const modal = document.getElementById('eventTimesWarningModal');
+
+                if (laterBtn) {
+                    laterBtn.addEventListener('click', () => {
+                        // Dismiss for this session only
+                        sessionStorage.setItem('eventTimesWarningDismissed', 'true');
+                        if (modal) {
+                            modal.classList.remove('modal-open');
+                        }
+                    });
+                }
+
+                if (goToSettingsBtn) {
+                    goToSettingsBtn.addEventListener('click', () => {
+                        // Navigate to settings page
+                        window.location.href = '{{ url_for("admin.settings_page") }}';
+                    });
+                }
+
+                // Check on page load
+                checkEventTimesConfiguration();
+            });
+        })();
+    </script>
+
+    <!-- Notifications -->
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+
+    <!-- AI Assistant Chat Bubble -->
+    {% include 'components/ai_chat_bubble.html' %}
+
+    <!-- Floating Schedule Verification Widget -->
+    {% include 'components/floating_verification_widget.html' %}
+    <!-- Session Timeout Warning Modal -->
+    <div id="sessionTimeoutModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="sessionTimeoutTitle"
+        style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-container modal-container--small">
+            <div class="modal-header" style="background: #f59e0b; color: white;">
+                <h2 class="modal-title" id="sessionTimeoutTitle">⏰ Session Expiring</h2>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 30px;">
+                <p style="font-size: 1.1em; margin-bottom: 15px;">
+                    You will be automatically logged out in
+                </p>
+                <div id="sessionTimeoutCountdown"
+                    style="font-size: 2.5em; font-weight: bold; color: #dc3545; margin-bottom: 20px;">
+                    60
+                </div>
+                <p style="color: #666; font-size: 0.9em;">
+                    seconds due to inactivity.
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: center; padding: 20px;">
+                <button class="btn btn-secondary" id="sessionTimeoutLogout">Log Out</button>
+                <button class="btn btn-primary" id="sessionTimeoutStayConnected">Stay Connected</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Activity Tracker -->
+    <script>
+        (function () {
+            // Session timeout configuration
+            const WARNING_BEFORE_TIMEOUT = 60; // Show warning 60 seconds before timeout
+            const HEARTBEAT_INTERVAL = 120000; // Send heartbeat every 2 minutes (120 seconds)
+            const CHECK_INTERVAL = 30000; // Check session status every 30 seconds
+
+            let lastActivity = Date.now();
+            let warningShown = false;
+            let countdownInterval = null;
+            let inactivityTimeout = 600; // Default 10 minutes, updated from server
+
+            // Track user activity
+            const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+            activityEvents.forEach(event => {
+                document.addEventListener(event, () => {
+                    lastActivity = Date.now();
+                    // Hide warning if user becomes active
+                    if (warningShown) {
+                        hideTimeoutWarning();
+                        sendHeartbeat(); // Immediately refresh session
+                    }
+                }, { passive: true });
+            });
+
+            // Get modal elements
+            const modal = document.getElementById('sessionTimeoutModal');
+            const countdownEl = document.getElementById('sessionTimeoutCountdown');
+            const logoutBtn = document.getElementById('sessionTimeoutLogout');
+            const stayBtn = document.getElementById('sessionTimeoutStayConnected');
+
+            // Handle modal buttons
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', () => {
+                    window.location.href = '/logout';
+                });
+            }
+
+            if (stayBtn) {
+                stayBtn.addEventListener('click', () => {
+                    hideTimeoutWarning();
+                    sendHeartbeat();
+                });
+            }
+
+            function showTimeoutWarning(secondsRemaining) {
+                if (warningShown) return;
+                warningShown = true;
+
+                if (modal) {
+                    modal.style.display = 'flex';
+                    modal.classList.add('modal-open');
+                }
+
+                let countdown = secondsRemaining;
+                if (countdownEl) {
+                    countdownEl.textContent = countdown;
+                }
+
+                countdownInterval = setInterval(() => {
+                    countdown--;
+                    if (countdownEl) {
+                        countdownEl.textContent = countdown;
+                    }
+
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        window.location.href = '/login?reason=timeout';
+                    }
+                }, 1000);
+            }
+
+            function hideTimeoutWarning() {
+                warningShown = false;
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('modal-open');
+                }
+            }
+
+            async function sendHeartbeat() {
+                try {
+                    const response = await fetch('/api/session/heartbeat', {
+                        method: 'POST',
+                        credentials: 'same-origin'
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.inactivity_timeout) {
+                            inactivityTimeout = data.inactivity_timeout;
+                        }
+                    } else if (response.status === 401) {
+                        // Session expired, redirect to login
+                        window.location.href = '/login?reason=timeout';
+                    }
+                } catch (error) {
+                    console.error('Heartbeat failed:', error);
+                }
+            }
+
+            async function checkSessionStatus() {
+                try {
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'same-origin'
+                    });
+
+                    if (response.status === 401) {
+                        // Session expired
+                        window.location.href = '/login?reason=timeout';
+                        return;
+                    }
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.inactivity_timeout) {
+                            inactivityTimeout = data.inactivity_timeout;
+                        }
+
+                        // Check if we should show warning
+                        if (data.seconds_remaining !== undefined) {
+                            if (data.seconds_remaining <= WARNING_BEFORE_TIMEOUT && data.seconds_remaining > 0) {
+                                showTimeoutWarning(data.seconds_remaining);
+                            } else if (data.seconds_remaining <= 0) {
+                                window.location.href = '/login?reason=timeout';
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Session status check failed:', error);
+                }
+            }
+
+            // Send heartbeat on activity (throttled)
+            let heartbeatThrottle = null;
+            setInterval(() => {
+                // Only send heartbeat if user was active recently
+                const timeSinceActivity = Date.now() - lastActivity;
+                if (timeSinceActivity < HEARTBEAT_INTERVAL) {
+                    sendHeartbeat();
+                }
+            }, HEARTBEAT_INTERVAL);
+
+            // Periodic session status check
+            setInterval(checkSessionStatus, CHECK_INTERVAL);
+
+            // Initial heartbeat
+            sendHeartbeat();
+
+            console.log('[Session] Activity tracker initialized');
+        })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

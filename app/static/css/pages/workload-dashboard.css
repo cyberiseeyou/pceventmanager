@@ -1,0 +1,335 @@
+/**
+ * Workload Dashboard Page Styles
+ *
+ * Responsive styles for the employee workload dashboard, including
+ * date range selector, Chart.js visualization, and data table.
+ *
+ * Epic 2, Story 2.6: Create Workload Dashboard Frontend View
+ */
+
+/* ============================================================================
+   Container and Header
+   ========================================================================= */
+
+.workload-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-lg, 1.5rem);
+}
+
+.workload-header {
+  text-align: center;
+  margin-bottom: var(--spacing-lg, 1.5rem);
+}
+
+.workload-header h1 {
+  font-size: 2rem;
+  color: var(--pc-blue, #1B9BD8);
+  margin-bottom: var(--spacing-sm, 0.5rem);
+}
+
+.workload-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary, #666);
+  margin-bottom: 0;
+}
+
+/* ============================================================================
+   Date Range Selector
+   ========================================================================= */
+
+.date-range-selector {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm, 0.75rem);
+  margin-bottom: var(--spacing-lg, 1.5rem);
+  flex-wrap: wrap;
+}
+
+.range-btn {
+  padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+  border: 2px solid var(--pc-blue, #1B9BD8);
+  background: white;
+  color: var(--pc-blue, #1B9BD8);
+  border-radius: 4px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.range-btn:hover {
+  background: rgba(27, 155, 216, 0.1);
+}
+
+.range-btn.active {
+  background: var(--pc-blue, #1B9BD8);
+  color: white;
+}
+
+/* ============================================================================
+   Custom Date Range Inputs
+   ========================================================================= */
+
+.custom-range-inputs {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-md, 1rem);
+  margin-bottom: var(--spacing-lg, 1.5rem);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.custom-range-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 0.25rem);
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.custom-range-inputs input[type="date"] {
+  padding: var(--spacing-sm, 0.75rem);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9375rem;
+}
+
+.custom-range-inputs button {
+  padding: var(--spacing-sm, 0.75rem) var(--spacing-lg, 1.5rem);
+}
+
+/* ============================================================================
+   Loading Spinner
+   ========================================================================= */
+
+.spinner {
+  text-align: center;
+  padding: var(--spacing-xl, 3rem);
+}
+
+.spinner-icon {
+  font-size: 3rem;
+  animation: spin-pulse 1s linear infinite;
+}
+
+@keyframes spin-pulse {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 1;
+  }
+}
+
+.spinner p {
+  margin-top: var(--spacing-md, 1rem);
+  color: var(--text-secondary, #666);
+  font-size: 1rem;
+}
+
+/* ============================================================================
+   Chart Container
+   ========================================================================= */
+
+.chart-container {
+  margin-bottom: var(--spacing-xl, 3rem);
+}
+
+.chart-container h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary, #333);
+  margin-bottom: var(--spacing-md, 1rem);
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 400px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: var(--spacing-md, 1rem);
+}
+
+/* ============================================================================
+   Empty State
+   ========================================================================= */
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl, 3rem);
+  background: #f9f9f9;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  margin: var(--spacing-lg, 1.5rem) 0;
+}
+
+.empty-state p {
+  font-size: 1.25rem;
+  color: var(--text-secondary, #666);
+  margin: 0;
+}
+
+/* ============================================================================
+   Data Table
+   ========================================================================= */
+
+.table-container {
+  margin-top: var(--spacing-xl, 3rem);
+}
+
+.table-container h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary, #333);
+  margin-bottom: var(--spacing-md, 1rem);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.data-table thead {
+  background: var(--pc-blue, #1B9BD8);
+  color: white;
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--spacing-md, 1rem);
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.data-table th {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  font-size: 1rem;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(27, 155, 216, 0.05);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================================
+   Status Badges
+   ========================================================================= */
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-normal {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.status-high {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.status-overloaded {
+  background-color: #FEE2E2;
+  color: #991B1B;
+}
+
+/* ============================================================================
+   Mobile Responsive Styles
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .workload-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .date-range-selector {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .range-btn {
+    width: 100%;
+  }
+
+  .chart-wrapper {
+    height: 300px;
+  }
+
+  .data-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: var(--spacing-sm, 0.75rem);
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 375px) {
+  .workload-dashboard {
+    padding: var(--spacing-md, 1rem);
+  }
+
+  .workload-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .chart-wrapper {
+    height: 250px;
+  }
+}
+
+/* ============================================================================
+   Reduced Motion Support
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .range-btn,
+  .spinner-icon {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   Print Styles
+   ========================================================================= */
+
+@media print {
+  .date-range-selector,
+  .custom-range-inputs {
+    display: none;
+  }
+
+  .chart-wrapper {
+    height: auto;
+  }
+}

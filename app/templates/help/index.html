@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Help - Product Connections Scheduler{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>Welcome to the Help Center</h1>
+
+        <p class="help-intro">
+            Welcome to the Product Connections Scheduler Help Center. Here you'll find comprehensive guides
+            to help you get the most out of the scheduler application.
+        </p>
+
+        <div class="help-cards">
+            <a href="{{ url_for('help.getting_started') }}" class="help-card">
+                <div class="help-card-icon">🚀</div>
+                <h3>Getting Started</h3>
+                <p>New to the scheduler? Start here for a quick overview and setup guide.</p>
+            </a>
+
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-card">
+                <div class="help-card-icon">🔑</div>
+                <h3>Walmart Credentials</h3>
+                <p>Learn how to set up and manage your Walmart Retail Link credentials for API integration.</p>
+            </a>
+
+            <a href="{{ url_for('help.employee_management') }}" class="help-card">
+                <div class="help-card-icon">👥</div>
+                <h3>Employee Management</h3>
+                <p>Add, update, and manage employee information, roles, and availability.</p>
+            </a>
+
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-card">
+                <div class="help-card-icon">🤖</div>
+                <h3>Auto Scheduler</h3>
+                <p>Understand how the auto scheduler works and how it assigns events to employees.</p>
+            </a>
+
+            <a href="{{ url_for('help.review_approve') }}" class="help-card">
+                <div class="help-card-icon">✅</div>
+                <h3>Review & Approve Schedules</h3>
+                <p>Learn how to review, edit, and approve or reject auto-generated schedules.</p>
+            </a>
+
+            <a href="{{ url_for('help.daily_validation') }}" class="help-card">
+                <div class="help-card-icon">📋</div>
+                <h3>Daily Validation Dashboard</h3>
+                <p>Monitor daily schedules, rotation assignments, and validation warnings in real-time.</p>
+            </a>
+
+            <a href="{{ url_for('help.printing_reports') }}" class="help-card">
+                <div class="help-card-icon">🖨️</div>
+                <h3>Printing & Reports</h3>
+                <p>Generate and print schedules, paperwork, and reports for employees and events.</p>
+            </a>
+
+            <a href="{{ url_for('help.edr_sync') }}" class="help-card">
+                <div class="help-card-icon">🔄</div>
+                <h3>EDR Sync & Paperwork</h3>
+                <p>Sync sales data from Walmart Retail Link and generate event-specific paperwork.</p>
+            </a>
+
+            <a href="{{ url_for('help.attendance') }}" class="help-card">
+                <div class="help-card-icon">📊</div>
+                <h3>Attendance & Time Off</h3>
+                <p>Track employee attendance, manage time-off requests, and monitor unreported events.</p>
+            </a>
+
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-card">
+                <div class="help-card-icon">📈</div>
+                <h3>Workload Analytics</h3>
+                <p>Analyze team performance, workload distribution, and scheduling trends.</p>
+            </a>
+        </div>
+
+        <div class="help-section">
+            <h2>Need Additional Help?</h2>
+            <p>
+                If you can't find the answer you're looking for in these guides, please contact your system administrator
+                or the Product Connections support team for assistance.
+            </p>
+        </div>
+    </main>
+</div>
+{% endblock %}

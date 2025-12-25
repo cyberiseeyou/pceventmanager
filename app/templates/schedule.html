@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action_type }} Event - Product Connections Scheduler{% endblock %}
+{% block page_title %}{{ action_type }} Event{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/validation.css') }}">
+{% endblock %}
+
+{% block content %}
+    <!-- Page Header -->
+    <div class="page-header" style="text-align: center; margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-md); border-bottom: 2px solid var(--pc-light-blue);">
+        <h1 class="page-title" style="font-size: var(--font-size-h1); font-weight: var(--font-weight-heading); color: var(--pc-navy); margin: 0; letter-spacing: -0.02em;">{{ action_type }} Event</h1>
+        <p style="color: var(--text-muted); margin: var(--spacing-sm) 0 0 0; font-size: var(--font-size-body);">{{ event.project_name }}</p>
+    </div>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <div class="scheduling-form">
+            <div class="event-details">
+                <h2>Event Details</h2>
+                <p><strong>Event Name:</strong> {{ event.project_name }}</p>
+                <p><strong>Valid Date Range:</strong> {{ event.start_datetime.strftime('%Y-%m-%d') }} - {{ event.due_datetime.strftime('%Y-%m-%d') }}</p>
+                <p><strong>Location:</strong> {{ event.store_name or 'N/A' }}</p>
+            </div>
+            
+            <form class="schedule-form" id="scheduling-form" action="/save_schedule" method="POST">
+                <input type="hidden" name="event_id" value="{{ event.id }}">
+                <input type="hidden" name="return_url" value="{{ return_url }}">
+                
+                <div class="form-group">
+                    <label for="scheduled_date">Scheduled Date</label>
+                    <input type="date" 
+                           id="scheduled_date" 
+                           name="scheduled_date" 
+                           required
+                           aria-describedby="date-help">
+                    <small id="date-help" class="form-text">Select a date between {{ event.start_datetime.strftime('%Y-%m-%d') }} and {{ event.due_datetime.strftime('%Y-%m-%d') }}</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="employee_id">Available Employee</label>
+                    <select id="employee_id" name="employee_id" required disabled>
+                        <option value="">Select a date first</option>
+                    </select>
+                    <div id="employee-loading" class="loading-spinner" style="display: none;">Loading employees...</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="start_time">Start Time</label>
+                    <input type="time"
+                           id="start_time"
+                           name="start_time"
+                           required>
+                    <select id="start_time_dropdown"
+                            name="start_time_dropdown"
+                            style="display: none;"
+                            required>
+                        <option value="">Select a time</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-top: var(--spacing-md);">
+                    <label style="display: flex; align-items: center; gap: var(--spacing-sm); cursor: pointer; user-select: none;">
+                        <input type="checkbox"
+                               id="override_constraints"
+                               name="override_constraints"
+                               value="true"
+                               style="width: auto; margin: 0;">
+                        <span style="font-weight: var(--font-weight-body); color: var(--pc-orange);">
+                            Override Scheduling Constraints
+                        </span>
+                    </label>
+                    <small class="form-text" style="margin-left: calc(var(--spacing-sm) + 1em); color: var(--text-muted);">
+                        Enable this to bypass role restrictions, time constraints, and one-Core-per-day limits. Use with caution.
+                    </small>
+                </div>
+
+                <div class="form-actions">
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary" disabled>{{ action_type }}</button>
+                </div>
+            </form>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+    <!-- Pass event dates to JavaScript -->
+    <script>
+        window.eventData = {
+            id: {{ event.id }},
+            startDate: '{{ event.start_datetime.strftime('%Y-%m-%d') }}',
+            endDate: '{{ event.due_datetime.strftime('%Y-%m-%d') }}',
+            eventType: '{{ event.event_type }}'
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <!-- Inline Validation Module (Story 1.4) -->
+    <script type="module" src="{{ url_for('static', filename='js/pages/schedule-form.js') }}"></script>
+{% endblock %}

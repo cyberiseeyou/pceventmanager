@@ -1,0 +1,1731 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Validation Dashboard{% endblock %}
+
+{% block extra_head %}
+<!-- Font Awesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<!-- Bootstrap CSS for tabs and grid -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
+<style>
+    /* Global Transitions and Smooth Animations */
+    * {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Modern Card Shadow System */
+    .card-shadow-sm {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    .card-shadow-md {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .card-shadow-lg {
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-shadow-xl {
+        box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Enhanced Health Score Card */
+    .health-score-card {
+        position: relative;
+        text-align: center;
+        padding: 40px 30px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+        overflow: hidden;
+        box-shadow: 0 20px 25px rgba(139, 92, 246, 0.3);
+    }
+
+    .health-score-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+        animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    .health-score-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 25px 35px rgba(139, 92, 246, 0.4);
+    }
+
+    .health-score-label {
+        font-size: 14px;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .health-score-value {
+        font-size: 72px;
+        font-weight: 800;
+        margin: 15px 0;
+        position: relative;
+        z-index: 1;
+        text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        animation: score-appear 0.6s ease-out;
+    }
+
+    @keyframes score-appear {
+        from {
+            transform: scale(0.5);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .health-score-status {
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 10px;
+        padding: 8px 20px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        display: inline-block;
+        backdrop-filter: blur(10px);
+    }
+
+    .health-score-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+        animation: bounce-in 0.8s ease-out;
+    }
+
+    @keyframes bounce-in {
+        0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+        50% { transform: scale(1.2) rotate(10deg); }
+        100% { transform: scale(1) rotate(0); }
+    }
+
+    /* Enhanced Metric Cards */
+    .metric-card {
+        position: relative;
+        border-left: 4px solid #8b5cf6;
+        padding: 24px;
+        margin-bottom: 0;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), transparent);
+        border-radius: 0 12px 0 100%;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .metric-card h5 {
+        margin: 0 0 12px 0;
+        color: #6b7280;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .metric-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-bottom: 12px;
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        box-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
+    }
+
+    .metric-value {
+        font-size: 42px;
+        font-weight: 800;
+        color: #1f2937;
+        line-height: 1;
+        margin: 10px 0;
+    }
+
+    .metric-label {
+        color: #9ca3af;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    /* Clickable Metric Card */
+    .metric-card-link {
+        display: block;
+        height: 100%;
+    }
+
+    .metric-card-clickable {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .metric-card-clickable::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .metric-card-clickable:hover::after {
+        opacity: 1;
+    }
+
+    .metric-card-clickable:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 16px 28px rgba(239, 68, 68, 0.25);
+        border-color: #dc2626;
+    }
+
+    .metric-card-clickable:hover .metric-value {
+        transform: scale(1.15);
+    }
+
+    .metric-card-clickable:hover .metric-label i {
+        opacity: 1 !important;
+        animation: arrow-bounce 0.6s ease-in-out infinite;
+    }
+
+    @keyframes arrow-bounce {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(6px); }
+    }
+
+    .metric-card-clickable:active {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(239, 68, 68, 0.2);
+    }
+
+    /* Enhanced Event Type Rows with Progress Visualization */
+    .event-type-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        border-radius: 12px;
+        background: white;
+        border: 2px solid #f3f4f6;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .event-type-row::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: linear-gradient(180deg, #8b5cf6, #6366f1);
+    }
+
+    .event-type-row:hover {
+        border-color: #e5e7eb;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transform: translateX(4px);
+    }
+
+    .event-type-name {
+        font-weight: 700;
+        font-size: 16px;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .event-type-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+    }
+
+    .event-counts {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .count-badge {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .count-scheduled {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+
+    .count-unscheduled {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        animation: pulse-warning 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-warning {
+        0%, 100% { box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3); }
+        50% { box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6); }
+    }
+
+    .count-badge i {
+        font-size: 12px;
+    }
+
+    /* Enhanced Rotation Cards with Avatars */
+    .rotation-card {
+        padding: 20px;
+        border-radius: 16px;
+        background: white;
+        border: 2px solid #e5e7eb;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .rotation-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #8b5cf6, #6366f1);
+    }
+
+    .rotation-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .rotation-exception {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    }
+
+    .rotation-exception::before {
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+    }
+
+    .rotation-title {
+        font-size: 12px;
+        color: #6b7280;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+    }
+
+    .rotation-employee {
+        font-size: 22px;
+        font-weight: 800;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .employee-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+        box-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
+    }
+
+    .rotation-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-left: auto;
+    }
+
+    .badge-normal {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-exception {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+        animation: pulse-exception 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-exception {
+        0%, 100% { box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3); }
+        50% { box-shadow: 0 4px 12px rgba(245, 158, 11, 0.6); }
+    }
+
+    /* Enhanced Issue Cards with Better Visual Hierarchy */
+    .issue-card {
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        border-left: 5px solid;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .issue-card::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 80px;
+        height: 80px;
+        opacity: 0.05;
+        font-size: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Clickable Issue Cards */
+    .issue-card-clickable {
+        cursor: pointer;
+    }
+
+    .issue-card-clickable:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .issue-card-clickable:active {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .issue-card-clickable:hover .issue-message i {
+        opacity: 1 !important;
+        animation: arrow-bounce 0.6s ease-in-out infinite;
+    }
+
+    .issue-critical {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border-color: #ef4444;
+    }
+
+    .issue-critical::before {
+        content: '⚠';
+    }
+
+    .issue-critical:hover {
+        box-shadow: 0 8px 16px rgba(239, 68, 68, 0.2);
+    }
+
+    .issue-warning {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border-color: #f59e0b;
+    }
+
+    .issue-warning::before {
+        content: '⚡';
+    }
+
+    .issue-warning:hover {
+        box-shadow: 0 8px 16px rgba(245, 158, 11, 0.2);
+    }
+
+    .issue-info {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+
+    .issue-info::before {
+        content: 'ℹ';
+    }
+
+    .issue-info:hover {
+        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
+    }
+
+    .issue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 12px;
+    }
+
+    .issue-severity-badge {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .severity-critical {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+    }
+
+    .severity-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+    }
+
+    .severity-info {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    .issue-type-label {
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .issue-message {
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #1f2937;
+        font-size: 16px;
+        line-height: 1.5;
+    }
+
+    .issue-action {
+        font-size: 14px;
+        color: #6b7280;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .issue-action::before {
+        content: '→';
+        font-weight: bold;
+        color: #8b5cf6;
+    }
+
+    /* Modern Quick Actions */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+    }
+
+    .quick-action-btn {
+        padding: 20px 24px;
+        text-align: center;
+        border-radius: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .quick-action-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .quick-action-btn:hover::before {
+        left: 100%;
+    }
+
+    .quick-action-btn:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+        text-decoration: none;
+    }
+
+    .quick-action-btn i {
+        font-size: 28px;
+    }
+
+    .btn-primary-action {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary-action:hover {
+        color: white;
+    }
+
+    .btn-secondary-action {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        color: white;
+        border: none;
+    }
+
+    .btn-secondary-action:hover {
+        color: white;
+    }
+
+    /* Modern Section Headers */
+    .section-header {
+        border-bottom: 3px solid #e5e7eb;
+        padding-bottom: 16px;
+        margin-bottom: 24px;
+        position: relative;
+    }
+
+    .section-header::after {
+        content: '';
+        position: absolute;
+        bottom: -3px;
+        left: 0;
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(90deg, #8b5cf6, #6366f1);
+    }
+
+    .section-header h4 {
+        margin: 0;
+        color: #1f2937;
+        font-weight: 800;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .section-header h4 i {
+        color: #8b5cf6;
+    }
+
+    /* Modern Pill-Style Tabs */
+    .nav-tabs {
+        border: none;
+        gap: 8px;
+        background: #f3f4f6;
+        padding: 6px;
+        border-radius: 12px;
+        display: inline-flex;
+    }
+
+    .nav-tabs .nav-item {
+        margin: 0;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-weight: 700;
+        color: #6b7280;
+        background: transparent;
+        transition: all 0.3s;
+    }
+
+    .nav-tabs .nav-link:hover {
+        color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.1);
+    }
+
+    .nav-tabs .nav-link.active {
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        box-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
+    }
+
+    .tab-content {
+        padding: 24px 0;
+        background: transparent;
+        border-radius: 0;
+    }
+
+    /* No Issues Success State */
+    .no-issues-message {
+        text-align: center;
+        padding: 60px 40px;
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border-radius: 16px;
+        border: 2px solid #86efac;
+    }
+
+    .no-issues-icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+        animation: success-bounce 1s ease-out;
+    }
+
+    @keyframes success-bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-20px); }
+        60% { transform: translateY(-10px); }
+    }
+
+    .no-issues-message div {
+        font-size: 20px;
+        font-weight: 700;
+        color: #166534;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .health-score-value {
+            font-size: 56px;
+        }
+
+        .metric-card {
+            margin-bottom: 16px;
+        }
+
+        .quick-actions {
+            grid-template-columns: 1fr;
+        }
+
+        .event-type-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .event-counts {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .nav-tabs {
+            width: 100%;
+            flex-direction: column;
+        }
+
+        .section-header h4 {
+            font-size: 18px;
+        }
+    }
+
+    /* Employee Report Times Section */
+    .employee-report-times-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    .employee-report-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border-left: 4px solid #8b5cf6;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .employee-report-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .employee-report-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), transparent);
+        border-radius: 0 12px 0 100%;
+    }
+
+    .employee-report-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .employee-report-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+        box-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
+    }
+
+    .employee-report-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1f2937;
+        flex: 1;
+    }
+
+    .employee-report-time {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 24px;
+        font-weight: 800;
+        color: #8b5cf6;
+        margin-bottom: 12px;
+    }
+
+    .employee-report-time i {
+        font-size: 20px;
+    }
+
+    .employee-report-details {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .employee-report-detail {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .employee-report-detail i {
+        width: 16px;
+        text-align: center;
+    }
+
+    .employee-attendance-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 8px;
+    }
+
+    .attendance-badge--on_time {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    }
+
+    .attendance-badge--late {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    }
+
+    .attendance-badge--called_in {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+    }
+
+    .attendance-badge--no_call_no_show {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+        animation: pulse-warning 2s ease-in-out infinite;
+    }
+
+    .attendance-badge--not_recorded {
+        background: #f3f4f6;
+        color: #6b7280;
+        border: 2px dashed #d1d5db;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+        font-size: 14px;
+    }
+
+    .no-employees-message {
+        text-align: center;
+        padding: 60px 40px;
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border-radius: 16px;
+        border: 2px solid #d1d5db;
+    }
+
+    .no-employees-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .no-employees-message div {
+        font-size: 16px;
+        font-weight: 600;
+        color: #6b7280;
+    }
+
+    /* Page Background */
+    body {
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    }
+
+    /* Smooth Page Entry Animation */
+    .container-fluid {
+        animation: fade-in 0.6s ease-out;
+    }
+
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Dashboard Header Styling */
+    .dashboard-header {
+        background: white;
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 32px;
+    }
+
+    .dashboard-header h2 {
+        margin: 0;
+        color: #1f2937;
+        font-weight: 800;
+        font-size: 32px;
+    }
+
+    .dashboard-header .text-muted {
+        color: #6b7280 !important;
+        font-size: 16px;
+        margin-top: 4px;
+    }
+
+    /* Date Picker Styling */
+    #validation-date-picker {
+        padding: 10px 14px;
+        border: 2px solid #8b5cf6;
+        border-radius: 10px;
+        font-weight: 600;
+        color: #1f2937;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-family: inherit;
+    }
+
+    #validation-date-picker:hover {
+        border-color: #6366f1;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+        transform: translateY(-2px);
+    }
+
+    #validation-date-picker:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    /* Today Button Styling */
+    .btn-outline-secondary {
+        border: 2px solid #6b7280;
+        color: #6b7280;
+        background: white;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 10px;
+        transition: all 0.3s;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-outline-secondary:hover {
+        background: #6b7280;
+        color: white;
+        border-color: #4b5563;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+    }
+
+    .btn-outline-secondary:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
+    }
+
+    .btn-outline-secondary:active {
+        transform: translateY(0);
+    }
+
+    /* Refresh Button Styling */
+    .btn-outline-primary {
+        border: 2px solid #8b5cf6;
+        color: #8b5cf6;
+        font-weight: 700;
+        padding: 10px 20px;
+        border-radius: 10px;
+        transition: all 0.3s;
+    }
+
+    .btn-outline-primary:hover {
+        background: #8b5cf6;
+        color: white;
+        transform: rotate(180deg);
+    }
+
+    .btn-outline-primary i {
+        transition: transform 0.3s;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="dashboard-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div style="flex: 1;">
+                <h2>Daily Validation Dashboard</h2>
+                <p class="text-muted">{{ day_of_week }}, {{ today.strftime('%B %d, %Y') }}</p>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label for="validation-date-picker" style="font-weight: 600; color: #6b7280; margin: 0; white-space: nowrap;">Select Date:</label>
+                    <input type="date"
+                           id="validation-date-picker"
+                           value="{{ today.strftime('%Y-%m-%d') }}"
+                           onchange="navigateToDate(this.value)"
+                           aria-label="Select validation date">
+                    <button onclick="navigateToToday()" class="btn btn-outline-secondary" aria-label="Go to today" title="Go to today's validation">
+                        <i class="fas fa-calendar-day"></i> Today
+                    </button>
+                </div>
+                <button onclick="location.reload()" class="btn btn-outline-primary" aria-label="Refresh dashboard">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Score and Key Metrics -->
+    <div class="row mb-5">
+        <!-- Health Score -->
+        <div class="col-md-4 mb-4 mb-md-0">
+            <div class="health-score-card" role="region" aria-label="System Health Score">
+                <div class="health-score-icon">
+                    {% if health_score >= 90 %}
+                        ✨
+                    {% elif health_score >= 75 %}
+                        ✅
+                    {% elif health_score >= 60 %}
+                        ⚡
+                    {% else %}
+                        ⚠️
+                    {% endif %}
+                </div>
+                <div class="health-score-label">System Health Score</div>
+                <div class="health-score-value">{{ health_score }}</div>
+                <div class="health-score-status">
+                    {% if health_score >= 90 %}
+                        🎉 Excellent
+                    {% elif health_score >= 75 %}
+                        👍 Good
+                    {% elif health_score >= 60 %}
+                        📊 Fair
+                    {% else %}
+                        🔔 Needs Attention
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="col-md-8">
+            <div class="row">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="metric-card">
+                        <div class="metric-icon" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <h5><i class="fas fa-circle" style="font-size: 6px;"></i> Events Today</h5>
+                        <div class="metric-value">{{ total_events_today }}</div>
+                        <div class="metric-label">Scheduled</div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <a href="{{ url_for('main.unscheduled_events', condition='unstaffed', date_filter='today') }}" class="metric-card-link" style="text-decoration: none; color: inherit;">
+                        <div class="metric-card metric-card-clickable" style="border-color: #ef4444;">
+                            <div class="metric-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <h5><i class="fas fa-circle" style="font-size: 6px;"></i> Unscheduled</h5>
+                            <div class="metric-value" style="color: #ef4444;">{{ total_unscheduled_today }}</div>
+                            <div class="metric-label">
+                                Require Attention
+                                <i class="fas fa-arrow-right" style="font-size: 12px; margin-left: 6px; opacity: 0.6;"></i>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <div class="metric-card" style="border-color: #10b981;">
+                        <div class="metric-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <h5><i class="fas fa-circle" style="font-size: 6px;"></i> Active Staff</h5>
+                        <div class="metric-value" style="color: #10b981;">{{ active_employees }}</div>
+                        <div class="metric-label">Available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="section-header">
+                <h4><i class="fas fa-bolt"></i> Quick Actions</h4>
+            </div>
+            <div class="quick-actions">
+                <a href="/calendar?date={{ today.strftime('%Y-%m-%d') }}" class="quick-action-btn btn-primary-action" aria-label="View selected date's calendar">
+                    <i class="fas fa-calendar-day"></i>
+                    <span>View Calendar for This Date</span>
+                </a>
+                <a href="/schedule/daily/{{ today.strftime('%Y-%m-%d') }}" class="quick-action-btn btn-primary-action" aria-label="View daily schedule">
+                    <i class="fas fa-list-alt"></i>
+                    <span>View Daily Schedule</span>
+                </a>
+                <a href="/auto-schedule" class="quick-action-btn btn-secondary-action" aria-label="Run auto-scheduler">
+                    <i class="fas fa-robot"></i>
+                    <span>Run Auto-Scheduler</span>
+                </a>
+                <a href="/rotations" class="quick-action-btn btn-secondary-action" aria-label="Manage rotations">
+                    <i class="fas fa-sync"></i>
+                    <span>Manage Rotations</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Issues -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="section-header">
+                <h4>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Validation Issues
+                    {% if validation_issues|length > 0 %}
+                        <span style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 4px 12px; border-radius: 12px; font-size: 14px; margin-left: 10px;">{{ validation_issues|length }}</span>
+                    {% else %}
+                        <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 4px 12px; border-radius: 12px; font-size: 14px; margin-left: 10px;">0</span>
+                    {% endif %}
+                </h4>
+            </div>
+
+            {% if validation_issues %}
+                {% for issue in validation_issues %}
+                {% if issue.url %}
+                <a href="{{ issue.url }}" style="text-decoration: none; color: inherit; display: block;">
+                {% endif %}
+                    <div class="issue-card issue-{{ issue.severity }} {% if issue.url %}issue-card-clickable{% endif %}" role="alert" aria-live="polite">
+                        <div class="issue-header">
+                            <span class="issue-severity-badge severity-{{ issue.severity }}">
+                                {% if issue.severity == 'critical' %}
+                                    <i class="fas fa-exclamation-circle"></i>
+                                {% elif issue.severity == 'warning' %}
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                {% else %}
+                                    <i class="fas fa-info-circle"></i>
+                                {% endif %}
+                                {{ issue.severity }}
+                            </span>
+                            <span class="issue-type-label">{{ issue.type }}</span>
+                        </div>
+                        <div class="issue-message">
+                            {{ issue.message }}
+                            {% if issue.url %}
+                                <i class="fas fa-arrow-right" style="font-size: 14px; margin-left: 8px; opacity: 0.6;"></i>
+                            {% endif %}
+                        </div>
+                        <div class="issue-action">{{ issue.action }}</div>
+
+                        {% if issue.details %}
+                        <div class="mt-2">
+                            <small><strong>Details:</strong></small>
+                            <ul class="mb-0" style="font-size: 14px;">
+                                {% for detail in issue.details %}
+                                <li>
+                                    {% if detail.employee_name %}
+                                        {{ detail.employee_name }} - {{ detail.reason or 'No reason provided' }}
+                                    {% elif detail.rotation_type %}
+                                        {{ detail.rotation_type }}: {{ detail.employee_name }} ({{ detail.reason or 'Time off' }})
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% if issue.url %}
+                </a>
+                {% endif %}
+                {% endfor %}
+            {% else %}
+                <div class="no-issues-message">
+                    <div class="no-issues-icon">✅</div>
+                    <div>All validation checks passed! System is healthy.</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Rotation Assignments -->
+    <div class="row mb-5">
+        <div class="col-md-6 mb-4 mb-md-0">
+            <div class="section-header">
+                <h4><i class="fas fa-sync-alt"></i> Today's Rotations</h4>
+            </div>
+
+            <div class="rotation-card {% if juicer_rotation and juicer_rotation.is_exception %}rotation-exception{% endif %}">
+                <div class="rotation-title">Juicer Rotation</div>
+                <div class="rotation-employee">
+                    {% if juicer_rotation %}
+                        <div class="employee-avatar">
+                            {{ juicer_rotation.employee_name[0] if juicer_rotation.employee_name else '?' }}
+                        </div>
+                        <span>{{ juicer_rotation.employee_name }}</span>
+                        <span class="rotation-badge {% if juicer_rotation.is_exception %}badge-exception{% else %}badge-normal{% endif %}">
+                            {% if juicer_rotation.is_exception %}
+                                <i class="fas fa-exclamation-circle"></i> Exception
+                            {% else %}
+                                <i class="fas fa-check-circle"></i> Normal
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <span style="color: #ef4444; font-size: 18px;">⚠️ Not Assigned</span>
+                    {% endif %}
+                </div>
+                {% if juicer_rotation and juicer_rotation.reason %}
+                <div class="mt-3" style="font-size: 14px; color: #6b7280; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+                    <i class="fas fa-info-circle" style="color: #8b5cf6;"></i> <strong>Reason:</strong> {{ juicer_rotation.reason }}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="rotation-card {% if primary_lead_rotation and primary_lead_rotation.is_exception %}rotation-exception{% endif %}">
+                <div class="rotation-title">Primary Lead Rotation</div>
+                <div class="rotation-employee">
+                    {% if primary_lead_rotation %}
+                        <div class="employee-avatar">
+                            {{ primary_lead_rotation.employee_name[0] if primary_lead_rotation.employee_name else '?' }}
+                        </div>
+                        <span>{{ primary_lead_rotation.employee_name }}</span>
+                        <span class="rotation-badge {% if primary_lead_rotation.is_exception %}badge-exception{% else %}badge-normal{% endif %}">
+                            {% if primary_lead_rotation.is_exception %}
+                                <i class="fas fa-exclamation-circle"></i> Exception
+                            {% else %}
+                                <i class="fas fa-check-circle"></i> Normal
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <span style="color: #ef4444; font-size: 18px;">⚠️ Not Assigned</span>
+                    {% endif %}
+                </div>
+                {% if primary_lead_rotation and primary_lead_rotation.reason %}
+                <div class="mt-3" style="font-size: 14px; color: #6b7280; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+                    <i class="fas fa-info-circle" style="color: #8b5cf6;"></i> <strong>Reason:</strong> {{ primary_lead_rotation.reason }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Today's Events by Type -->
+        <div class="col-md-6">
+            <div class="section-header">
+                <h4><i class="fas fa-clipboard-list"></i> Today's Events by Type</h4>
+            </div>
+
+            {% for event_type, key, icon in [
+                ('Core', 'core', 'fa-cube'),
+                ('Juicer', 'juicer', 'fa-blender'),
+                ('Supervisor', 'supervisor', 'fa-user-tie'),
+                ('Digitals', 'digitals', 'fa-laptop'),
+                ('Freeosk', 'freeosk', 'fa-store'),
+                ('Other', 'other', 'fa-ellipsis-h')
+            ] %}
+            <div class="event-type-row">
+                <div class="event-type-name">
+                    <div class="event-type-icon">
+                        <i class="fas {{ icon }}"></i>
+                    </div>
+                    {{ event_type }}
+                </div>
+                <div class="event-counts">
+                    <span class="count-badge count-scheduled">
+                        <i class="fas fa-check"></i> {{ today_events[key].scheduled }}
+                    </span>
+                    {% if today_events[key].unscheduled > 0 %}
+                    <span class="count-badge count-unscheduled">
+                        <i class="fas fa-exclamation"></i> {{ today_events[key].unscheduled }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Employee Report Times -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="section-header">
+                <h4><i class="fas fa-user-clock"></i> Employee Report Times</h4>
+            </div>
+            <div id="employee-report-times" class="employee-report-times-container">
+                <div class="loading-spinner" role="status" aria-live="polite">
+                    <span class="sr-only">Loading employee report times...</span>
+                    Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lookahead Views (Tabs) -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="section-header">
+                <h4><i class="fas fa-calendar-alt"></i> Lookahead Schedule</h4>
+            </div>
+
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link active" data-toggle="tab" href="#tomorrow-tab" role="tab" aria-controls="tomorrow-tab" aria-selected="true">
+                        <i class="fas fa-calendar-day"></i> Tomorrow ({{ tomorrow.strftime('%b %d') }})
+                    </a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link" data-toggle="tab" href="#three-day-tab" role="tab" aria-controls="three-day-tab" aria-selected="false">
+                        <i class="fas fa-calendar-week"></i> 3 Days ({{ three_days_ahead.strftime('%b %d') }})
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- Tomorrow Tab -->
+                <div id="tomorrow-tab" class="tab-pane fade show active" role="tabpanel">
+                    {% for event_type, key, icon in [
+                        ('Core', 'core', 'fa-cube'),
+                        ('Juicer', 'juicer', 'fa-blender'),
+                        ('Supervisor', 'supervisor', 'fa-user-tie'),
+                        ('Digitals', 'digitals', 'fa-laptop'),
+                        ('Freeosk', 'freeosk', 'fa-store'),
+                        ('Other', 'other', 'fa-ellipsis-h')
+                    ] %}
+                    <div class="event-type-row">
+                        <div class="event-type-name">
+                            <div class="event-type-icon">
+                                <i class="fas {{ icon }}"></i>
+                            </div>
+                            {{ event_type }}
+                        </div>
+                        <div class="event-counts">
+                            <span class="count-badge count-scheduled">
+                                <i class="fas fa-check"></i> {{ tomorrow_events[key].scheduled }}
+                            </span>
+                            {% if tomorrow_events[key].unscheduled > 0 %}
+                            <span class="count-badge count-unscheduled">
+                                <i class="fas fa-exclamation"></i> {{ tomorrow_events[key].unscheduled }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- 3 Days Ahead Tab -->
+                <div id="three-day-tab" class="tab-pane fade" role="tabpanel">
+                    {% for event_type, key, icon in [
+                        ('Core', 'core', 'fa-cube'),
+                        ('Juicer', 'juicer', 'fa-blender'),
+                        ('Supervisor', 'supervisor', 'fa-user-tie'),
+                        ('Digitals', 'digitals', 'fa-laptop'),
+                        ('Freeosk', 'freeosk', 'fa-store'),
+                        ('Other', 'other', 'fa-ellipsis-h')
+                    ] %}
+                    <div class="event-type-row">
+                        <div class="event-type-name">
+                            <div class="event-type-icon">
+                                <i class="fas {{ icon }}"></i>
+                            </div>
+                            {{ event_type }}
+                        </div>
+                        <div class="event-counts">
+                            <span class="count-badge count-scheduled">
+                                <i class="fas fa-check"></i> {{ three_day_events[key].scheduled }}
+                            </span>
+                            {% if three_day_events[key].unscheduled > 0 %}
+                            <span class="count-badge count-unscheduled">
+                                <i class="fas fa-exclamation"></i> {{ three_day_events[key].unscheduled }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- jQuery (required for Bootstrap tabs) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
+<!-- Bootstrap JS for tabs -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
+<script>
+/**
+ * Navigate to a different date on the validation dashboard
+ */
+function navigateToDate(dateValue) {
+    if (dateValue) {
+        window.location.href = `/dashboard/daily-validation?date=${dateValue}`;
+    }
+}
+
+/**
+ * Navigate to today's validation dashboard
+ */
+function navigateToToday() {
+    const today = new Date().toISOString().split('T')[0];
+    window.location.href = `/dashboard/daily-validation?date=${today}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Load employee report times
+    loadEmployeeReportTimes();
+
+    // Enhanced health score color coding with animations
+    const healthScore = {{ health_score }};
+    const scoreCard = document.querySelector('.health-score-card');
+
+    if (healthScore >= 90) {
+        scoreCard.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        scoreCard.style.boxShadow = '0 20px 25px rgba(16, 185, 129, 0.4)';
+    } else if (healthScore >= 75) {
+        scoreCard.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)';
+        scoreCard.style.boxShadow = '0 20px 25px rgba(139, 92, 246, 0.4)';
+    } else if (healthScore >= 60) {
+        scoreCard.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+        scoreCard.style.boxShadow = '0 20px 25px rgba(245, 158, 11, 0.4)';
+    } else {
+        scoreCard.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+        scoreCard.style.boxShadow = '0 20px 25px rgba(239, 68, 68, 0.4)';
+    }
+
+    // Smooth scroll to validation issues if any critical ones exist
+    const criticalIssues = document.querySelectorAll('.issue-critical');
+    if (criticalIssues.length > 0 && window.location.hash !== '#issues-viewed') {
+        // Add a subtle notification
+        setTimeout(() => {
+            const issuesSection = document.querySelector('.issue-card');
+            if (issuesSection) {
+                issuesSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Mark as viewed to prevent repeated scrolling
+                window.location.hash = '#issues-viewed';
+            }
+        }, 1000);
+    }
+
+    // Add hover effects to metric cards with number animation
+    const metricCards = document.querySelectorAll('.metric-card');
+    metricCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            const value = this.querySelector('.metric-value');
+            if (value) {
+                value.style.transform = 'scale(1.1)';
+            }
+        });
+        card.addEventListener('mouseleave', function() {
+            const value = this.querySelector('.metric-value');
+            if (value) {
+                value.style.transform = 'scale(1)';
+            }
+        });
+    });
+
+    // Enhanced tab switching with fade effects
+    const tabLinks = document.querySelectorAll('.nav-tabs .nav-link');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            // Add subtle haptic feedback (visual)
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1)';
+            }, 100);
+        });
+    });
+
+    // Auto-refresh dashboard every 5 minutes with notification
+    let refreshCountdown = 5 * 60; // 5 minutes in seconds
+
+    const refreshTimer = setInterval(() => {
+        refreshCountdown--;
+
+        // Show notification 30 seconds before refresh
+        if (refreshCountdown === 30) {
+            const refreshBtn = document.querySelector('.btn-outline-primary');
+            if (refreshBtn) {
+                refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refreshing in 30s...';
+                refreshBtn.style.borderColor = '#f59e0b';
+                refreshBtn.style.color = '#f59e0b';
+            }
+        }
+
+        if (refreshCountdown <= 0) {
+            clearInterval(refreshTimer);
+            location.reload();
+        }
+    }, 1000);
+
+    // Manual refresh button enhancement
+    const refreshBtn = document.querySelector('.btn-outline-primary');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            this.style.pointerEvents = 'none';
+        });
+    }
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Press 'R' to refresh
+        if (e.key === 'r' || e.key === 'R') {
+            if (!e.ctrlKey && !e.metaKey) {
+                location.reload();
+            }
+        }
+        // Press '1' to view selected date's calendar
+        if (e.key === '1') {
+            window.location.href = '/calendar?date={{ today.strftime('%Y-%m-%d') }}';
+        }
+        // Press '2' to view selected date's daily schedule
+        if (e.key === '2') {
+            window.location.href = '/schedule/daily/{{ today.strftime('%Y-%m-%d') }}';
+        }
+        // Press '3' to run auto-scheduler
+        if (e.key === '3') {
+            window.location.href = '/auto-schedule';
+        }
+    });
+
+    // Add tooltip for keyboard shortcuts
+    console.log('%c🎯 Keyboard Shortcuts Available:', 'font-weight: bold; color: #8b5cf6; font-size: 14px;');
+    console.log('%cPress "R" to refresh dashboard', 'color: #6b7280;');
+    console.log('%cPress "1" to view calendar for selected date', 'color: #6b7280;');
+    console.log('%cPress "2" to view daily schedule for selected date', 'color: #6b7280;');
+    console.log('%cPress "3" to run auto-scheduler', 'color: #6b7280;');
+});
+
+/**
+ * Load and display employee report times for selected date
+ */
+async function loadEmployeeReportTimes() {
+    const container = document.getElementById('employee-report-times');
+    if (!container) return;
+
+    const selectedDate = '{{ today.strftime('%Y-%m-%d') }}';
+
+    try {
+        const response = await fetch(`/api/daily-employees/${selectedDate}`);
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Employee report times loaded:', data);
+
+        renderEmployeeReportTimes(data.employees);
+    } catch (error) {
+        console.error('Failed to load employee report times:', error);
+        container.innerHTML = `
+            <div class="no-employees-message">
+                <div class="no-employees-icon">⚠️</div>
+                <div>Failed to load employee report times</div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Render employee report times cards
+ */
+function renderEmployeeReportTimes(employees) {
+    const container = document.getElementById('employee-report-times');
+    if (!container) return;
+
+    // Check if no employees
+    if (!employees || employees.length === 0) {
+        container.innerHTML = `
+            <div class="no-employees-message">
+                <div class="no-employees-icon">📅</div>
+                <div>No employees scheduled for this date</div>
+            </div>
+        `;
+        return;
+    }
+
+    // Build HTML for employee cards
+    let html = '';
+    employees.forEach(employee => {
+        const firstLetter = employee.employee_name ? employee.employee_name[0].toUpperCase() : '?';
+
+        // Determine attendance badge
+        let attendanceBadge = '';
+        if (employee.attendance_status) {
+            const statusLabels = {
+                'on_time': '🟢 On-Time',
+                'late': '🟡 Late',
+                'called_in': '📞 Called-In',
+                'no_call_no_show': '🔴 No-Call-No-Show'
+            };
+            const statusLabel = statusLabels[employee.attendance_status] || employee.attendance_status;
+            attendanceBadge = `
+                <div class="employee-attendance-badge attendance-badge--${employee.attendance_status}">
+                    ${statusLabel}
+                </div>
+            `;
+        } else {
+            attendanceBadge = `
+                <div class="employee-attendance-badge attendance-badge--not_recorded">
+                    ⚪ Not Recorded
+                </div>
+            `;
+        }
+
+        html += `
+            <div class="employee-report-card">
+                <div class="employee-report-header">
+                    <div class="employee-report-avatar">${firstLetter}</div>
+                    <div class="employee-report-name">${escapeHtml(employee.employee_name)}</div>
+                </div>
+                <div class="employee-report-time">
+                    <i class="fas fa-clock"></i>
+                    ${employee.earliest_time}
+                </div>
+                <div class="employee-report-details">
+                    <div class="employee-report-detail">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>${employee.event_count} event${employee.event_count !== 1 ? 's' : ''} today</span>
+                    </div>
+                    <div class="employee-report-detail">
+                        <i class="fas fa-user"></i>
+                        <span>${escapeHtml(employee.employee_id)}</span>
+                    </div>
+                </div>
+                ${attendanceBadge}
+                ${employee.attendance_notes ? `
+                    <div class="employee-report-detail" style="margin-top: 8px; font-style: italic;">
+                        <i class="fas fa-sticky-note"></i>
+                        <span>${escapeHtml(employee.attendance_notes)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+
+{% block title %}Time Off Requests - Product Connections Scheduler{% endblock %}
+
+{% block extra_head %}
+<style>
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    .page-title {
+        font-size: var(--font-size-h1);
+        font-weight: var(--font-weight-heading);
+        color: var(--pc-navy);
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .controls-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-lg);
+        flex-wrap: wrap;
+        gap: var(--spacing-md);
+    }
+
+    .filter-section {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex: 1;
+    }
+
+    .filter-section label {
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .filter-section select {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-body);
+        min-width: 200px;
+    }
+
+    .filter-section select:focus {
+        outline: none;
+        border-color: var(--pc-blue);
+        box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.2);
+    }
+
+    .time-off-list {
+        background: var(--bg-primary);
+        border-radius: var(--border-radius-lg);
+        padding: var(--spacing-lg);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .time-off-request-card {
+        background: var(--bg-secondary);
+        border-left: 4px solid var(--pc-light-blue);
+        border-radius: var(--border-radius-md);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+    .time-off-request-card:hover {
+        box-shadow: var(--shadow-sm);
+        transform: translateX(4px);
+    }
+
+    .time-off-request-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .time-off-info {
+        flex: 1;
+    }
+
+    .time-off-employee {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .time-off-dates {
+        font-size: var(--font-size-small);
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .time-off-reason {
+        font-size: var(--font-size-small);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .time-off-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .btn-delete {
+        background: #fff;
+        border: 1px solid #dc3545;
+        color: #dc3545;
+        padding: 6px 12px;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        font-size: var(--font-size-small);
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .btn-delete:hover {
+        background: #dc3545;
+        color: white;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl);
+        color: var(--text-muted);
+        font-size: var(--font-size-body);
+    }
+
+    /* Modal Styles */
+    /* Modal base styles are handled by modals.css */
+    /* Custom modal enhancements for this page */
+    #add-request-modal .modal-header {
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    #add-request-modal .modal-title {
+        color: var(--pc-navy);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .form-row.full {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: var(--spacing-xs);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-body);
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--pc-blue);
+        box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.2);
+    }
+
+    /* modal-footer styles are in modals.css */
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: var(--border-radius-sm);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .alert-success {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+
+    .alert-error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+
+    @media (max-width: 768px) {
+        .controls-section {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-section {
+            width: 100%;
+        }
+
+        .filter-section select {
+            width: 100%;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Time Off Requests</h1>
+    </div>
+
+    <!-- Flash messages -->
+    <div id="flash-messages"></div>
+
+    <!-- Controls Section -->
+    <div class="controls-section">
+        <div class="filter-section">
+            <label for="employee-filter">Filter by Employee:</label>
+            <select id="employee-filter">
+                <option value="all">All Employees</option>
+            </select>
+        </div>
+        <button id="add-request-btn" class="btn btn-primary">
+            + Add Request
+        </button>
+    </div>
+
+    <!-- Time Off Requests List -->
+    <div class="time-off-list">
+        <div id="requests-container">
+            <div class="empty-state">Loading time off requests...</div>
+        </div>
+    </div>
+
+    <!-- Add Time Off Request Modal -->
+    <div id="add-request-modal" class="modal">
+        <div class="modal-overlay" onclick="closeAddRequestModal()"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Time Off Request</h2>
+                <button class="modal-close" onclick="closeAddRequestModal()" aria-label="Close">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div id="modal-alerts"></div>
+
+                <form id="add-request-form">
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="request-employee">Employee *</label>
+                            <select id="request-employee" required>
+                                <option value="">Select an employee...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="request-start-date">Start Date *</label>
+                            <input type="date" id="request-start-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="request-end-date">End Date *</label>
+                            <input type="date" id="request-end-date" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="request-comments">Comments (Optional)</label>
+                            <textarea id="request-comments" rows="3" placeholder="e.g., Vacation, Personal, Medical"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddRequestModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Global variables
+let allRequests = [];
+let allEmployees = [];
+
+// Initialize page on load
+document.addEventListener('DOMContentLoaded', function() {
+    // Move modal to body to avoid z-index/overflow issues
+    const modal = document.getElementById('add-request-modal');
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+        console.log('Modal moved to body');
+    }
+
+    initializePage();
+});
+
+async function initializePage() {
+    // Load employees
+    await loadEmployees();
+
+    // Load time off requests
+    await loadAllTimeOffRequests();
+
+    // Setup event listeners
+    setupEventListeners();
+
+    // Setup end date default behavior
+    setupDateInputs();
+}
+
+function setupEventListeners() {
+    try {
+        console.log('Setting up event listeners...');
+
+        // Add request button
+        const addBtn = document.getElementById('add-request-btn');
+        if (!addBtn) {
+            console.error('add-request-btn not found');
+            return;
+        }
+        addBtn.addEventListener('click', function() {
+            console.log('Add Request button clicked');
+            openAddRequestModal();
+        });
+
+        // Employee filter
+        const filterSelect = document.getElementById('employee-filter');
+        if (filterSelect) {
+            filterSelect.addEventListener('change', filterRequests);
+        }
+
+        // Add request form submission
+        const form = document.getElementById('add-request-form');
+        if (!form) {
+            console.error('add-request-form not found');
+            return;
+        }
+        form.addEventListener('submit', function(e) {
+            console.log('Form submitted');
+            handleAddRequest(e);
+        });
+
+        // Modal overlay click handler is now in HTML onclick attribute
+
+        console.log('Event listeners set up successfully');
+    } catch (error) {
+        console.error('Error setting up event listeners:', error);
+    }
+}
+
+function setupDateInputs() {
+    const startDateInput = document.getElementById('request-start-date');
+    const endDateInput = document.getElementById('request-end-date');
+
+    // When start date changes, update end date default
+    startDateInput.addEventListener('change', function() {
+        if (!endDateInput.value || endDateInput.value < startDateInput.value) {
+            endDateInput.value = startDateInput.value;
+        }
+    });
+}
+
+async function loadEmployees() {
+    try {
+        const response = await fetch('/api/employees');
+        if (!response.ok) throw new Error('Failed to load employees');
+
+        allEmployees = await response.json();
+
+        // Populate employee filter dropdown
+        const filterSelect = document.getElementById('employee-filter');
+        filterSelect.innerHTML = '<option value="all">All Employees</option>';
+
+        allEmployees
+            .filter(emp => emp.is_active)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = emp.name;
+                filterSelect.appendChild(option);
+            });
+
+        // Populate employee dropdown in modal
+        const modalSelect = document.getElementById('request-employee');
+        modalSelect.innerHTML = '<option value="">Select an employee...</option>';
+
+        allEmployees
+            .filter(emp => emp.is_active)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = emp.name;
+                modalSelect.appendChild(option);
+            });
+    } catch (error) {
+        console.error('Error loading employees:', error);
+        showFlashMessage('Error loading employees', 'error');
+    }
+}
+
+async function loadAllTimeOffRequests() {
+    try {
+        const container = document.getElementById('requests-container');
+        container.innerHTML = '<div class="empty-state">Loading time off requests...</div>';
+
+        // Fetch all time off requests from all employees
+        const requests = [];
+
+        for (const employee of allEmployees) {
+            const response = await fetch(`/api/employees/${employee.id}/time_off`);
+            if (response.ok) {
+                const employeeRequests = await response.json();
+                employeeRequests.forEach(req => {
+                    requests.push({
+                        ...req,
+                        employee_id: employee.id,
+                        employee_name: employee.name
+                    });
+                });
+            }
+        }
+
+        // Sort by date (most recent first) - compare date strings directly
+        requests.sort((a, b) => b.start_date.localeCompare(a.start_date));
+
+        allRequests = requests;
+        displayRequests(requests);
+    } catch (error) {
+        console.error('Error loading time off requests:', error);
+        const container = document.getElementById('requests-container');
+        container.innerHTML = '<div class="alert alert-error">Error loading time off requests</div>';
+    }
+}
+
+function filterRequests() {
+    const filterValue = document.getElementById('employee-filter').value;
+
+    if (filterValue === 'all') {
+        displayRequests(allRequests);
+    } else {
+        const filtered = allRequests.filter(req => req.employee_id === filterValue);
+        displayRequests(filtered);
+    }
+}
+
+function displayRequests(requests) {
+    const container = document.getElementById('requests-container');
+
+    if (requests.length === 0) {
+        container.innerHTML = '<div class="empty-state">No time off requests found</div>';
+        return;
+    }
+
+    container.innerHTML = requests.map(req => createRequestCard(req)).join('');
+}
+
+function createRequestCard(request) {
+    // Parse dates without timezone conversion (use date string directly)
+    const startDate = request.start_date; // Already in YYYY-MM-DD format
+    const endDate = request.end_date;
+
+    // Format dates for display
+    const formatDate = (dateStr) => {
+        const [year, month, day] = dateStr.split('-');
+        return new Date(year, month - 1, day).toLocaleDateString();
+    };
+
+    const dateDisplay = startDate === endDate
+        ? formatDate(startDate)
+        : `${formatDate(startDate)} - ${formatDate(endDate)}`;
+
+    return `
+        <div class="time-off-request-card">
+            <div class="time-off-info">
+                <div class="time-off-employee">${request.employee_name}</div>
+                <div class="time-off-dates">🗓️ ${dateDisplay}</div>
+                ${request.reason ? `<div class="time-off-reason">Comments: ${request.reason}</div>` : ''}
+            </div>
+            <div class="time-off-actions">
+                <button class="btn-delete" onclick="deleteRequest(${request.id})">Delete</button>
+            </div>
+        </div>
+    `;
+}
+
+function openAddRequestModal() {
+    try {
+        console.log('Opening add request modal');
+        const modal = document.getElementById('add-request-modal');
+        if (!modal) {
+            console.error('Modal not found');
+            return;
+        }
+
+        modal.classList.add('modal-open');
+        document.getElementById('add-request-form').reset();
+        document.getElementById('modal-alerts').innerHTML = '';
+
+        // Set default dates to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('request-start-date').value = today;
+        document.getElementById('request-end-date').value = today;
+
+        console.log('Modal opened successfully');
+    } catch (error) {
+        console.error('Error opening modal:', error);
+    }
+}
+
+function closeAddRequestModal() {
+    document.getElementById('add-request-modal').classList.remove('modal-open');
+    document.getElementById('add-request-form').reset();
+    document.getElementById('modal-alerts').innerHTML = '';
+}
+
+async function handleAddRequest(e) {
+    console.log('handleAddRequest called');
+    e.preventDefault();
+
+    const employeeId = document.getElementById('request-employee').value;
+    const startDate = document.getElementById('request-start-date').value;
+    const endDate = document.getElementById('request-end-date').value;
+    const comments = document.getElementById('request-comments').value.trim();
+
+    console.log('Form values:', { employeeId, startDate, endDate, comments });
+
+    if (!employeeId || !startDate || !endDate) {
+        showModalAlert('All required fields must be filled', 'error');
+        return;
+    }
+
+    // Compare dates as strings (YYYY-MM-DD format is lexicographically sortable)
+    if (endDate < startDate) {
+        showModalAlert('End date cannot be before start date', 'error');
+        return;
+    }
+
+    try {
+        console.log('Sending POST request to /api/employees/' + employeeId + '/time_off');
+
+        const response = await fetch(`/api/employees/${employeeId}/time_off`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                start_date: startDate,
+                end_date: endDate,
+                reason: comments
+            })
+        });
+
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+
+        if (!response.ok) {
+            showModalAlert(`Error: ${data.error}`, 'error');
+            return;
+        }
+
+        showFlashMessage('Time off request added successfully!', 'success');
+        closeAddRequestModal();
+
+        // Reload requests
+        await loadAllTimeOffRequests();
+
+        // Reapply filter if active
+        filterRequests();
+    } catch (error) {
+        console.error('Error adding request:', error);
+        showModalAlert('Error adding time off request. Please try again.', 'error');
+    }
+}
+
+async function deleteRequest(requestId) {
+    if (!confirm('Are you sure you want to delete this time off request?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/time_off/${requestId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            showFlashMessage(`Error: ${data.error}`, 'error');
+            return;
+        }
+
+        showFlashMessage('Time off request deleted successfully!', 'success');
+
+        // Reload requests
+        await loadAllTimeOffRequests();
+
+        // Reapply filter if active
+        filterRequests();
+    } catch (error) {
+        console.error('Error deleting request:', error);
+        showFlashMessage('Error deleting time off request. Please try again.', 'error');
+    }
+}
+
+function showModalAlert(message, type) {
+    const alerts = document.getElementById('modal-alerts');
+    alerts.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+
+    // Auto-dismiss success messages after 3 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            alerts.innerHTML = '';
+        }, 3000);
+    }
+}
+
+function showFlashMessage(message, type) {
+    const flashContainer = document.getElementById('flash-messages');
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.textContent = message;
+    flashContainer.appendChild(alertDiv);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}

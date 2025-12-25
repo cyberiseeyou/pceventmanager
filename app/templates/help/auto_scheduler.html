@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Auto Scheduler - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item active">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>🤖 Auto Scheduler</h1>
+
+        <p class="help-intro">
+            The auto scheduler intelligently assigns unscheduled events to available employees
+            based on skills, availability, workload, and rotation assignments.
+        </p>
+
+        <div class="help-section">
+            <h2>How the Auto Scheduler Works</h2>
+            <p>
+                The scheduler uses a sophisticated algorithm to match events with the best-suited employees:
+            </p>
+            <ol>
+                <li>Fetches all unscheduled events from Walmart Retail Link</li>
+                <li>Analyzes each event's requirements (type, location, date, time)</li>
+                <li>Evaluates all active employees for eligibility</li>
+                <li>Assigns events based on priority rules and constraints</li>
+                <li>Creates a proposed schedule for manager review</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Scheduling Constraints</h2>
+            <p>
+                The auto scheduler respects these <strong>hard constraints</strong> (cannot be violated):
+            </p>
+            <ul>
+                <li><strong>Job qualifications:</strong> Employees are only assigned to event types they're qualified for</li>
+                <li><strong>Time off requests:</strong> Never schedules someone on their requested days off</li>
+                <li><strong>Availability windows:</strong> Only schedules within employee's available hours</li>
+                <li><strong>Adult beverage training:</strong> Respects certification requirements for specific events</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Rotation Assignments</h2>
+            <p>
+                The scheduler manages two types of daily rotations:
+            </p>
+
+            <h3>Juicer Rotation</h3>
+            <p>
+                One employee is designated as the "Juicer" for each day of the week (Monday-Friday).
+                Juicer events are automatically assigned to the designated employee for that day.
+            </p>
+
+            <h3>Primary Lead Rotation</h3>
+            <p>
+                Core events are assigned to the designated "Primary Lead" for each day when possible.
+                This ensures consistent coverage and balanced workload distribution.
+            </p>
+
+            <h3>Managing Rotations</h3>
+            <p>
+                To set up or modify rotation assignments:
+            </p>
+            <ol>
+                <li>Navigate to <strong>Settings</strong> from your user dropdown</li>
+                <li>Scroll to the <strong>Rotation Assignments</strong> section</li>
+                <li>Assign employees to each day of the week for both rotation types</li>
+                <li>Click <strong>Save</strong> to apply changes</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Running the Auto Scheduler</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Trigger a Scheduler Run</h3>
+                        <p>
+                            From the Dashboard, click the <strong>Run Auto Scheduler</strong> button.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Wait for Processing</h3>
+                        <p>
+                            The scheduler will process all unscheduled events. This typically takes
+                            30 seconds to 2 minutes depending on the number of events.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Review Results</h3>
+                        <p>
+                            Once complete, you'll see a summary showing:
+                        </p>
+                        <ul>
+                            <li>Total events processed</li>
+                            <li>Events successfully scheduled</li>
+                            <li>Events requiring manual attention</li>
+                            <li>Events that couldn't be scheduled (with reasons)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Navigate to Review Page</h3>
+                        <p>
+                            Click <strong>Review Schedule</strong> to see the proposed assignments
+                            and make any necessary adjustments.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Scheduling Priority</h2>
+            <p>
+                When multiple employees could work an event, the scheduler prioritizes:
+            </p>
+            <ol>
+                <li><strong>Rotation assignments:</strong> Employees assigned to rotations get their designated events first</li>
+                <li><strong>Workload balance:</strong> Prefers employees with fewer scheduled hours</li>
+                <li><strong>Skill level:</strong> Considers job title and certifications</li>
+                <li><strong>Availability fit:</strong> Chooses employees with better time matches</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Understanding Schedule Failures</h2>
+            <p>
+                Some events may fail to schedule automatically. Common reasons include:
+            </p>
+            <ul>
+                <li><strong>No qualified employees available:</strong> No one has the required job title or certifications</li>
+                <li><strong>All employees on time off:</strong> Everyone is unavailable for that date</li>
+                <li><strong>Outside availability windows:</strong> Event time doesn't match any employee's available hours</li>
+                <li><strong>Workload capacity exceeded:</strong> All employees are at maximum hours</li>
+            </ul>
+            <p>
+                Failed events require manual scheduling or employee availability adjustments.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Automatic vs. Manual Runs</h2>
+            <p>
+                The scheduler can run in two modes:
+            </p>
+
+            <h3>Manual Run</h3>
+            <p>
+                Triggered by clicking the button. Use this when you want full control over
+                when scheduling occurs.
+            </p>
+
+            <h3>Automatic Run (Future Feature)</h3>
+            <p>
+                Can be configured to run on a schedule (e.g., daily at 6 AM). The system will
+                automatically process new events and notify you when proposals are ready for review.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>Run the auto scheduler after syncing new events from Walmart</li>
+                <li>Keep rotation assignments current and balanced</li>
+                <li>Review failed events and adjust employee availability if needed</li>
+                <li>Run the scheduler regularly (daily or weekly) to stay ahead of scheduling needs</li>
+                <li>Always review proposals before approving them</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.review_approve') }}" class="next-step-card">
+                    <span class="next-step-icon">✅</span>
+                    <span class="next-step-text">Learn how to review & approve schedules</span>
+                </a>
+                <a href="{{ url_for('main.dashboard') }}" class="next-step-card">
+                    <span class="next-step-icon">🏠</span>
+                    <span class="next-step-text">Return to Dashboard</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

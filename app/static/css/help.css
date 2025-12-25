@@ -1,0 +1,435 @@
+/**
+ * Help System Styles
+ * Comprehensive styling for help pages, documentation, and guides
+ */
+
+/* Help Container Layout */
+.help-container {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: var(--spacing-lg);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Help Sidebar */
+.help-sidebar {
+    background: var(--bg-primary);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-sm);
+    height: fit-content;
+    position: sticky;
+    top: var(--spacing-md);
+}
+
+.help-sidebar h2 {
+    font-size: var(--font-size-h3);
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 2px solid var(--bg-secondary);
+}
+
+/* Help Navigation */
+.help-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.help-nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: var(--border-radius-sm);
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.help-nav-item:hover {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.help-nav-item.active {
+    background-color: var(--secondary-color);
+    color: var(--text-white);
+}
+
+.help-icon {
+    font-size: 1.2rem;
+    display: inline-block;
+    width: 1.5rem;
+    text-align: center;
+}
+
+/* Help Content */
+.help-content {
+    background: var(--bg-primary);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.help-content h1 {
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-lg);
+    text-align: left;
+}
+
+.help-content h2 {
+    color: var(--primary-color);
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 2px solid var(--bg-secondary);
+}
+
+.help-content h3 {
+    color: var(--text-primary);
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.help-intro {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    line-height: 1.8;
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    border-left: 4px solid var(--secondary-color);
+}
+
+/* Help Sections */
+.help-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.help-section ul,
+.help-section ol {
+    margin-left: var(--spacing-lg);
+    margin-top: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.help-section li {
+    margin-bottom: var(--spacing-xs);
+    line-height: 1.6;
+}
+
+.help-section p {
+    margin-bottom: var(--spacing-sm);
+    line-height: 1.6;
+}
+
+.help-section code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: var(--error-color);
+}
+
+/* Help Cards Grid */
+.help-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+}
+
+.help-card {
+    background: var(--bg-secondary);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.help-card:hover {
+    background: var(--bg-primary);
+    border-color: var(--secondary-color);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.help-card-icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.help-card h3 {
+    color: var(--primary-color);
+    margin: 0 0 var(--spacing-sm) 0;
+}
+
+.help-card p {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: var(--font-size-small);
+}
+
+/* Steps List */
+.steps-list {
+    margin: var(--spacing-lg) 0;
+}
+
+.step-item {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.step-item:last-child {
+    border-bottom: none;
+}
+
+.step-number {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: var(--text-white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: var(--font-weight-bold);
+    flex-shrink: 0;
+}
+
+.step-content h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+}
+
+.step-content p,
+.step-content ul {
+    margin-left: 0;
+}
+
+/* Info Boxes */
+.info-box {
+    background: rgba(27, 155, 216, 0.1);
+    border-left: 4px solid var(--info-color);
+    padding: var(--spacing-md);
+    margin: var(--spacing-md) 0;
+    border-radius: var(--border-radius-sm);
+}
+
+.warning-box {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid var(--warning-color);
+    padding: var(--spacing-md);
+    margin: var(--spacing-md) 0;
+    border-radius: var(--border-radius-sm);
+}
+
+.info-box strong,
+.warning-box strong {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
+}
+
+/* Help Links */
+.help-link {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-block;
+    margin-top: var(--spacing-xs);
+}
+
+.help-link:hover {
+    text-decoration: underline;
+    color: var(--primary-color);
+}
+
+.help-link::after {
+    content: " →";
+}
+
+/* Feature List */
+.feature-list {
+    list-style: none;
+    margin-left: 0 !important;
+}
+
+.feature-list li {
+    padding-left: var(--spacing-md);
+    position: relative;
+    margin-bottom: var(--spacing-md);
+}
+
+.feature-list li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--success-color);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+/* Navigation Overview */
+.nav-overview {
+    list-style: none;
+    margin-left: 0 !important;
+}
+
+.nav-overview li {
+    padding: var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Best Practices */
+.best-practices {
+    list-style: none;
+    margin-left: 0 !important;
+}
+
+.best-practices li {
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-sm);
+    border-left: 4px solid var(--success-color);
+}
+
+/* Next Steps Grid */
+.next-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+.next-step-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.next-step-card:hover {
+    background: var(--bg-primary);
+    border-color: var(--secondary-color);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.next-step-icon {
+    font-size: 2rem;
+}
+
+.next-step-text {
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: center;
+}
+
+/* Permission Table */
+.permission-table {
+    overflow-x: auto;
+    margin: var(--spacing-md) 0;
+}
+
+.permission-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+}
+
+.permission-table th {
+    background: var(--primary-color);
+    color: var(--text-white);
+    padding: var(--spacing-sm);
+    text-align: left;
+    font-weight: var(--font-weight-heading);
+}
+
+.permission-table td {
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.permission-table tbody tr:hover {
+    background: var(--bg-secondary);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .help-container {
+        grid-template-columns: 200px 1fr;
+        gap: var(--spacing-md);
+    }
+
+    .help-sidebar {
+        position: static;
+    }
+}
+
+@media (max-width: 768px) {
+    .help-container {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    .help-sidebar {
+        position: static;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .help-content {
+        padding: var(--spacing-md);
+    }
+
+    .help-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .next-steps-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .step-item {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+
+    .help-intro {
+        font-size: 1rem;
+    }
+
+    .permission-table {
+        font-size: var(--font-size-small);
+    }
+}

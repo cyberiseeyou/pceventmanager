@@ -1,0 +1,70 @@
+services:
+  # PostgreSQL Database (Development)
+  db:
+    image: postgres:15-alpine
+    container_name: scheduler-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: scheduler_dev
+      POSTGRES_USER: scheduler_dev
+      POSTGRES_PASSWORD: devpassword
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - scheduler-dev-network
+
+  # Redis (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: scheduler-redis-dev
+    restart: unless-stopped
+    command: redis-server
+    ports:
+      - "6379:6379"
+    networks:
+      - scheduler-dev-network
+
+  # Flask Application (Development with hot-reload)
+  app:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.dev
+    container_name: scheduler-app-dev
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - DATABASE_URL=postgresql://scheduler_dev:devpassword@db:5432/scheduler_dev
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # Mount source code for hot-reload
+      - ../..:/app
+      # Persistent volumes
+      - dev_instance:/app/instance
+      - dev_logs:/app/logs
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - scheduler-dev-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  dev_instance:
+    driver: local
+  dev_logs:
+    driver: local
+
+networks:
+  scheduler-dev-network:
+    driver: bridge

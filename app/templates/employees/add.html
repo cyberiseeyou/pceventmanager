@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}Add Employee - Product Connections Scheduler{% endblock %}
+
+{% block extra_head %}
+<style>
+    .add-employee-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 30px;
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 3px solid var(--pc-blue);
+    }
+
+    .page-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin: 0;
+    }
+
+    .form-card {
+        background: white;
+        padding: 35px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border: 2px solid var(--pc-light-blue);
+    }
+
+    .form-section {
+        margin-bottom: 30px;
+    }
+
+    .form-section-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-row.full {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+
+    .form-group label .required {
+        color: #dc3545;
+        margin-left: 4px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="email"],
+    .form-group input[type="tel"],
+    .form-group select {
+        width: 100%;
+        padding: 10px 14px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.2s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--secondary-color);
+        box-shadow: 0 0 0 3px rgba(27, 155, 216, 0.1);
+    }
+
+    .form-group input:disabled {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+
+    .form-group small {
+        display: block;
+        margin-top: 6px;
+        color: #6c757d;
+        font-size: 12px;
+    }
+
+    .form-group .tooltip-icon {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        background: #6c757d;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 16px;
+        font-size: 11px;
+        cursor: help;
+        margin-left: 6px;
+    }
+
+    /* Checkbox group styling */
+    .checkbox-group {
+        display: flex;
+        gap: 25px;
+        margin: 15px 0;
+        flex-wrap: wrap;
+    }
+
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    /* Weekly availability grid */
+    .availability-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 12px;
+        margin: 20px 0;
+    }
+
+    .availability-day {
+        text-align: center;
+    }
+
+    .availability-day label {
+        display: block;
+        font-weight: bold;
+        color: #6c757d;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+
+    .availability-day input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+    /* Error messages */
+    .error-message {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
+
+    .field-error {
+        color: #dc3545;
+        font-size: 13px;
+        margin-top: 6px;
+        display: block;
+    }
+
+    .form-group.has-error input,
+    .form-group.has-error select {
+        border-color: #dc3545;
+    }
+
+    /* Buttons */
+    .form-actions {
+        display: flex;
+        gap: 15px;
+        justify-content: flex-end;
+        margin-top: 30px;
+        padding-top: 25px;
+        border-top: 2px solid #dee2e6;
+    }
+
+    .btn {
+        padding: 12px 30px;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-primary {
+        background: var(--secondary-color);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #1a7ab8;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #5a6268;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .add-employee-container {
+            padding: 20px;
+        }
+
+        .form-card {
+            padding: 25px 20px;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .availability-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .checkbox-group {
+            flex-direction: column;
+            gap: 15px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="add-employee-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Add New Employee</h1>
+    </div>
+
+    <!-- Form Card -->
+    <div class="form-card">
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+
+            <!-- Display form-level errors -->
+            {% if form.errors %}
+                <div class="error-message">
+                    <strong>Please correct the following errors:</strong>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        {% for field, errors in form.errors.items() %}
+                            {% for error in errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <h2 class="form-section-title">Basic Information</h2>
+
+                <div class="form-row">
+                    <div class="form-group {% if form.name.errors %}has-error{% endif %}">
+                        {{ form.name.label }}<span class="required">*</span>
+                        {{ form.name(class="form-control") }}
+                        {% if form.name.errors %}
+                            {% for error in form.name.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group {% if form.employee_id.errors %}has-error{% endif %}">
+                        {{ form.employee_id.label }}
+                        {{ form.employee_id(class="form-control") }}
+                        <small>Used for Crossmark integration (optional)</small>
+                        {% if form.employee_id.errors %}
+                            {% for error in form.employee_id.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group {% if form.mv_retail_employee_number.errors %}has-error{% endif %}">
+                        {{ form.mv_retail_employee_number.label }}
+                        {{ form.mv_retail_employee_number(class="form-control") }}
+                        <small class="form-text text-muted" title="Only available via Crossmark import">
+                            <i class="bi bi-info-circle"></i> Only available via Crossmark import
+                        </small>
+                        {% if form.mv_retail_employee_number.errors %}
+                            {% for error in form.mv_retail_employee_number.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group {% if form.email.errors %}has-error{% endif %}">
+                        {{ form.email.label }}
+                        {{ form.email(class="form-control") }}
+                        {% if form.email.errors %}
+                            {% for error in form.email.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group {% if form.phone.errors %}has-error{% endif %}">
+                        {{ form.phone.label }}
+                        {{ form.phone(class="form-control") }}
+                        {% if form.phone.errors %}
+                            {% for error in form.phone.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employment Details Section -->
+            <div class="form-section">
+                <h2 class="form-section-title">Employment Details</h2>
+
+                <div class="form-row">
+                    <div class="form-group {% if form.job_title.errors %}has-error{% endif %}">
+                        {{ form.job_title.label }}
+                        {{ form.job_title(class="form-control") }}
+                        {% if form.job_title.errors %}
+                            {% for error in form.job_title.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group {% if form.is_active.errors %}has-error{% endif %}">
+                        {{ form.is_active.label }}
+                        {{ form.is_active(class="form-control") }}
+                        <small>Default: Inactive (set to Active when ready to schedule)</small>
+                        {% if form.is_active.errors %}
+                            {% for error in form.is_active.errors %}
+                                <span class="field-error">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        {{ form.is_supervisor() }}
+                        <span>Supervisor</span>
+                    </label>
+                    <label>
+                        {{ form.adult_beverage_trained() }}
+                        <span>Adult Beverage Trained</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Weekly Availability Section -->
+            <div class="form-section">
+                <h2 class="form-section-title">Weekly Availability</h2>
+                <p style="color: #6c757d; margin-bottom: 20px; font-size: 14px;">
+                    Select the days this employee is typically available to work.
+                    No days are selected by default.
+                </p>
+
+                <div class="availability-grid">
+                    <div class="availability-day">
+                        <label>Mon</label>
+                        {{ form.monday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Tue</label>
+                        {{ form.tuesday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Wed</label>
+                        {{ form.wednesday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Thu</label>
+                        {{ form.thursday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Fri</label>
+                        {{ form.friday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Sat</label>
+                        {{ form.saturday() }}
+                    </div>
+                    <div class="availability-day">
+                        <label>Sun</label>
+                        {{ form.sunday() }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <a href="{{ url_for('employees.employees') }}" class="btn btn-secondary">
+                    Cancel
+                </a>
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

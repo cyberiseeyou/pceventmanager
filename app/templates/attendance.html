@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Calendar - {{ selected_date.strftime('%B %Y') }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/attendance-calendar.css') }}?v={{ config.get('VERSION', '1.0') }}">
+{% endblock %}
+
+{% block content %}
+<div class="attendance-calendar-container" data-selected-date="{{ selected_date.strftime('%Y-%m-%d') }}">
+  <!-- Header Section -->
+  <div class="attendance-header">
+    <div class="header-row">
+      <h1 class="page-title">Employee Attendance Calendar</h1>
+
+      <!-- Employee Selector -->
+      <div class="employee-selector-container">
+        <label for="employee-selector" class="selector-label">View Employee:</label>
+        <select id="employee-selector" class="employee-selector" aria-label="Select employee to view attendance">
+          <option value="">All Employees</option>
+          {% for employee in all_employees %}
+          <option value="{{ employee.id }}" {% if selected_employee and selected_employee.id == employee.id %}selected{% endif %}>
+            {{ employee.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Month Navigation -->
+    <div class="month-navigation">
+      <a href="?date={{ prev_month.strftime('%Y-%m-%d') }}{% if selected_employee %}&employee_id={{ selected_employee.id }}{% endif %}"
+         class="btn-nav btn-nav-prev"
+         aria-label="Previous month">
+        ← {{ prev_month.strftime('%B') }}
+      </a>
+
+      <h2 class="current-month">
+        {{ selected_date.strftime('%B %Y').upper() }}
+      </h2>
+
+      <a href="?date={{ next_month.strftime('%Y-%m-%d') }}{% if selected_employee %}&employee_id={{ selected_employee.id }}{% endif %}"
+         class="btn-nav btn-nav-next"
+         aria-label="Next month">
+        {{ next_month.strftime('%B') }} →
+      </a>
+    </div>
+  </div>
+
+  <!-- Legend Section -->
+  <div class="attendance-legend">
+    <h3 class="legend-title">Attendance Status Legend:</h3>
+    <div class="legend-items">
+      <div class="legend-item">
+        <span class="legend-badge legend-badge--on_time">🟢</span>
+        <span class="legend-label">On-Time</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-badge legend-badge--late">🟡</span>
+        <span class="legend-label">Late</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-badge legend-badge--called_in">📞</span>
+        <span class="legend-label">Called-In</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-badge legend-badge--no_call_no_show">🔴</span>
+        <span class="legend-label">No-Call-No-Show</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-badge legend-badge--no_data">⚪</span>
+        <span class="legend-label">No Data</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Summary -->
+  <div id="attendance-stats" class="attendance-stats">
+    <!-- JavaScript will populate this -->
+    <div class="loading-spinner" role="status" aria-live="polite">
+      <span class="sr-only">Loading statistics...</span>
+      Loading...
+    </div>
+  </div>
+
+  <!-- Calendar Grid -->
+  <div class="calendar-container">
+    <div class="calendar-header">
+      <div class="calendar-day-name">Sunday</div>
+      <div class="calendar-day-name">Monday</div>
+      <div class="calendar-day-name">Tuesday</div>
+      <div class="calendar-day-name">Wednesday</div>
+      <div class="calendar-day-name">Thursday</div>
+      <div class="calendar-day-name">Friday</div>
+      <div class="calendar-day-name">Saturday</div>
+    </div>
+
+    <div id="calendar-grid" class="calendar-grid">
+      <!-- JavaScript will populate this -->
+      <div class="loading-spinner" role="status" aria-live="polite">
+        <span class="sr-only">Loading calendar...</span>
+        Loading calendar...
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Section (for clicked dates) -->
+  <div id="date-detail-container" class="date-detail-container" style="display: none;">
+    <!-- JavaScript will populate this when a date is clicked -->
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Load attendance calendar JavaScript -->
+<script src="{{ url_for('static', filename='js/pages/attendance-calendar.js') }}?v={{ config.get('VERSION', '1.0') }}" defer></script>
+{% endblock %}

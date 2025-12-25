@@ -1,0 +1,383 @@
+/*
+ * Desktop-First Responsive Stylesheet
+ * Implements responsive design with breakpoints at 1024px (tablet) and 768px (mobile)
+ * Base styles are optimized for desktop viewing with full-screen layout
+ */
+
+/* Desktop base styles are in style.css */
+
+/* Tablet breakpoint (max-width: 1024px) */
+@media (max-width: 1024px) {
+    :root {
+        --font-size-h1: 2.5rem;
+        --font-size-h2: 2rem;
+        --font-size-h3: 1.5rem;
+        --font-size-body: 1rem;
+        --font-size-small: 0.9rem;
+    }
+
+    .container {
+        padding: 20px;
+        max-width: 100%;
+    }
+
+    .header-content {
+        padding: 0 var(--spacing-lg);
+    }
+
+    .header-title {
+        font-size: 1.5rem;
+    }
+
+    .header-nav .nav-link {
+        font-size: 0.95rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+
+    .nav-icon {
+        font-size: 1.1rem;
+    }
+
+    .nav-text {
+        font-size: 0.9rem;
+    }
+
+    .main-content {
+        padding: var(--spacing-lg);
+    }
+
+    th, td {
+        padding: 1rem;
+        font-size: 1rem;
+    }
+
+    .header-logo {
+        height: 45px;
+    }
+
+    /* Tablet Navigation - Ensure dropdowns work */
+    .nav-dropdown-menu {
+        min-width: 180px;
+    }
+
+    .nav-dropdown-item {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.95rem;
+    }
+}
+
+/* Mobile breakpoint (max-width: 768px) */
+@media (max-width: 768px) {
+    :root {
+        --font-size-h1: 2rem;
+        --font-size-h2: 1.5rem;
+        --font-size-h3: 1.25rem;
+        --font-size-body: 0.95rem;
+        --font-size-small: 0.875rem;
+    }
+
+    .container {
+        padding: 15px;
+        max-width: 100%;
+    }
+
+    .main-content {
+        padding: var(--spacing-md);
+    }
+
+    /* Mobile Navigation */
+    .hamburger-menu {
+        display: flex;
+        order: -1; /* Show before nav links */
+    }
+
+    .nav-links {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        background: var(--pc-navy);
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 80px 0 20px 0;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+        z-index: 999;
+    }
+
+    .nav-links--open {
+        transform: translateX(0);
+    }
+
+    .header-nav .nav-link {
+        width: 100%;
+        padding: var(--spacing-md) var(--spacing-xl);
+        justify-content: flex-start;
+        border-radius: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 1.1rem;
+    }
+
+    .nav-icon {
+        font-size: 1.5rem;
+        min-width: 32px;
+    }
+
+    .nav-dropdown {
+        width: 100%;
+    }
+
+    .nav-dropdown-menu {
+        position: static;
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        background: rgba(0, 0, 0, 0.2);
+        min-width: 100%;
+    }
+
+    .nav-dropdown--open .nav-dropdown-menu {
+        display: block;
+    }
+
+    .nav-dropdown-item {
+        padding: var(--spacing-sm) var(--spacing-xl);
+        padding-left: calc(var(--spacing-xl) + 48px); /* Indent under parent */
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .nav-dropdown-item:hover,
+    .nav-dropdown-item.active {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    /* Overlay when mobile menu is open */
+    .nav-links--open::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+    }
+
+    /* Calendar-specific responsive adjustments */
+    .calendar-day {
+        min-height: 100px;
+        padding: 4px;
+    }
+
+    .day-number {
+        font-size: 0.9rem;
+        margin-bottom: 2px;
+    }
+
+    .event-badge {
+        font-size: 0.65rem;
+        padding: 2px;
+        min-height: 22px;
+    }
+
+    .unscheduled-warning {
+        font-size: 1rem;
+        top: 2px;
+        right: 2px;
+    }
+
+    /* Header adjustments */
+    .header-content {
+        padding: 0 var(--spacing-md);
+    }
+
+    .header-title {
+        font-size: 1.25rem;
+    }
+
+    .header-nav {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--spacing-xs);
+    }
+
+    .header-nav .nav-link {
+        font-size: 0.75rem;
+        padding: var(--spacing-xs);
+    }
+
+    .header-logo {
+        height: 40px;
+        padding: 4px 6px;
+    }
+
+    /* User dropdown responsive */
+    .user-dropdown-toggle {
+        padding: var(--spacing-xs);
+        font-size: 0.75rem;
+    }
+
+    .user-name {
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-dropdown-menu {
+        min-width: 150px;
+    }
+
+    .dropdown-item {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-small);
+    }
+
+    /* Typography */
+    h1 {
+        font-size: 2rem;
+    }
+
+    /* Tables */
+    table {
+        font-size: 0.875rem;
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    th, td {
+        padding: 0.75rem 0.5rem;
+        white-space: nowrap;
+    }
+
+    /* Buttons */
+    .btn {
+        padding: 12px 16px;
+        font-size: 16px;
+        min-height: 44px;
+    }
+
+    /* Form elements */
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .form-control,
+    input[type="date"],
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+        width: 100%;
+        font-size: 16px;
+        padding: 12px;
+        box-sizing: border-box;
+    }
+
+    /* Touch-friendly checkboxes */
+    input[type="checkbox"] {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* Button groups - stack on mobile */
+    .print-actions,
+    .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .print-actions .btn,
+    .button-group .btn {
+        width: 100%;
+    }
+
+    /* Event action buttons - wrap on mobile */
+    .event-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    .event-actions .btn {
+        flex: 1 1 auto;
+        min-width: 100px;
+        font-size: 14px;
+        padding: 8px 10px;
+    }
+
+    /* Import/Export actions */
+    .actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .import-section,
+    .export-section {
+        justify-content: center;
+    }
+
+    .import-status {
+        margin-left: 0;
+        margin-top: 0.5rem;
+        text-align: center;
+    }
+}
+
+/* Prevent horizontal scroll */
+body {
+    overflow-x: hidden;
+}
+
+/* Touch target enforcement for touch devices */
+@media (hover: none) and (pointer: coarse) {
+    button,
+    a.btn,
+    input[type="submit"],
+    input[type="button"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Prevent double-tap zoom on buttons */
+    button,
+    a.btn {
+        touch-action: manipulation;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (max-height: 500px) and (orientation: landscape) {
+    .container {
+        padding: 10px;
+    }
+
+    .btn {
+        padding: 8px 12px;
+    }
+}
+
+/* Print media - ensure proper formatting */
+@media print {
+    .nav-link,
+    .header-nav,
+    .btn,
+    button {
+        display: none;
+    }
+
+    .container {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    table {
+        page-break-inside: avoid;
+    }
+}

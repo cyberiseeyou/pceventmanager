@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}Workload Analytics - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item active">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>📈 Workload Analytics & Performance Dashboard</h1>
+
+        <p class="help-intro">
+            Analyze team workload distribution, individual employee performance, scheduling trends,
+            and capacity planning using comprehensive analytics and visual dashboards.
+        </p>
+
+        <div class="help-section">
+            <h2>Accessing Analytics</h2>
+            <p>
+                Navigate to <strong>Analytics → Workload Dashboard</strong> from the main menu
+                to access comprehensive performance metrics and visualizations.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Workload Dashboard Overview</h2>
+            <p>
+                The Workload Dashboard provides a bird's-eye view of team capacity and utilization:
+            </p>
+
+            <h3>Key Metrics Displayed:</h3>
+            <ul>
+                <li><strong>Total Scheduled Hours:</strong> Sum of all scheduled event hours</li>
+                <li><strong>Average Hours per Employee:</strong> Team-wide workload distribution</li>
+                <li><strong>Capacity Utilization:</strong> Percentage of available hours used</li>
+                <li><strong>Events Scheduled:</strong> Total number of completed assignments</li>
+                <li><strong>Unscheduled Events:</strong> Remaining events requiring assignment</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Employee Performance Metrics</h2>
+
+            <h3>Individual Employee Stats:</h3>
+            <p>
+                For each employee, the dashboard shows:
+            </p>
+            <ul>
+                <li><strong>Total Events Assigned:</strong> Count of scheduled events</li>
+                <li><strong>Total Hours Worked:</strong> Sum of scheduled hours</li>
+                <li><strong>Attendance Rate:</strong> Percentage of events reported vs. scheduled</li>
+                <li><strong>Event Types Breakdown:</strong> Distribution across event categories</li>
+                <li><strong>Average Events per Week:</strong> Weekly assignment average</li>
+                <li><strong>Utilization Rate:</strong> Scheduled hours vs. available hours</li>
+            </ul>
+
+            <h3>Performance Comparisons:</h3>
+            <p>
+                Compare employees side-by-side to identify:
+            </p>
+            <ul>
+                <li>Workload imbalances</li>
+                <li>High and low performers</li>
+                <li>Capacity constraints</li>
+                <li>Specialization patterns</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Scheduling Trend Analysis</h2>
+
+            <h3>Time-Based Trends:</h3>
+            <p>
+                View scheduling patterns over time with interactive charts:
+            </p>
+            <ul>
+                <li><strong>Daily Event Count:</strong> Events scheduled per day</li>
+                <li><strong>Weekly Hours Trend:</strong> Total hours by week</li>
+                <li><strong>Monthly Breakdown:</strong> Event volume by month</li>
+                <li><strong>Event Type Trends:</strong> How event mix changes over time</li>
+            </ul>
+
+            <h3>Peak Period Identification:</h3>
+            <p>
+                Identify high-volume periods to plan capacity:
+            </p>
+            <ul>
+                <li>Days of week with most events</li>
+                <li>Seasonal patterns</li>
+                <li>Store location clusters</li>
+                <li>Event type concentrations</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Workload Distribution Analysis</h2>
+
+            <h3>Balance Metrics:</h3>
+            <p>
+                Ensure fair workload distribution across the team:
+            </p>
+            <ul>
+                <li><strong>Workload Balance Score:</strong> 0-100 score indicating distribution fairness</li>
+                <li><strong>Standard Deviation:</strong> Variation in hours assigned</li>
+                <li><strong>Over/Under Utilized:</strong> Employees above or below target hours</li>
+            </ul>
+
+            <h3>Visualization Options:</h3>
+            <ul>
+                <li><strong>Bar Charts:</strong> Compare employee hours side-by-side</li>
+                <li><strong>Pie Charts:</strong> Event type distribution</li>
+                <li><strong>Heat Maps:</strong> Activity by day and employee</li>
+                <li><strong>Line Graphs:</strong> Trends over time</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Capacity Planning Tools</h2>
+
+            <h3>Future Capacity Forecasting:</h3>
+            <p>
+                Plan ahead using predictive analytics:
+            </p>
+            <ul>
+                <li>Projected event volume for upcoming weeks</li>
+                <li>Required staffing levels</li>
+                <li>Potential capacity shortfalls</li>
+                <li>Recommended hiring decisions</li>
+            </ul>
+
+            <h3>Availability vs. Demand:</h3>
+            <p>
+                Compare available employee hours to event requirements:
+            </p>
+            <ul>
+                <li><strong>Available Hours:</strong> Total employee availability</li>
+                <li><strong>Required Hours:</strong> Sum of unscheduled event durations</li>
+                <li><strong>Surplus/Deficit:</strong> Capacity gap analysis</li>
+                <li><strong>By Event Type:</strong> Capacity per event category</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Custom Reports</h2>
+
+            <h3>Creating Custom Reports:</h3>
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Select Report Type</h3>
+                        <p>
+                            Choose from template reports or create custom
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Configure Filters</h3>
+                        <ul>
+                            <li>Date range</li>
+                            <li>Employee selection</li>
+                            <li>Event types</li>
+                            <li>Metrics to include</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Choose Visualization</h3>
+                        <p>
+                            Select chart types and layout preferences
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Generate and Export</h3>
+                        <p>
+                            View report and export as PDF, Excel, or save as template
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Key Performance Indicators (KPIs)</h2>
+
+            <h3>Scheduling KPIs:</h3>
+            <ul>
+                <li><strong>Schedule Fill Rate:</strong> % of events successfully scheduled</li>
+                <li><strong>Time to Schedule:</strong> Average days from event creation to assignment</li>
+                <li><strong>Auto-Schedule Success Rate:</strong> % handled by auto scheduler</li>
+                <li><strong>Conflict Rate:</strong> % of schedules with conflicts</li>
+            </ul>
+
+            <h3>Employee KPIs:</h3>
+            <ul>
+                <li><strong>Attendance Rate:</strong> % of attended vs. scheduled events</li>
+                <li><strong>On-Time Reporting:</strong> % of events reported within 24 hours</li>
+                <li><strong>Utilization Rate:</strong> Scheduled hours / Available hours</li>
+                <li><strong>Event Completion Rate:</strong> % of events marked complete</li>
+            </ul>
+
+            <h3>Operational KPIs:</h3>
+            <ul>
+                <li><strong>Coverage Rate:</strong> % of requested time slots filled</li>
+                <li><strong>Rotation Adherence:</strong> % of rotation assignments followed</li>
+                <li><strong>Lead Time:</strong> Average advance notice for scheduling</li>
+                <li><strong>Workload Balance Score:</strong> Fairness of hour distribution</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Using Analytics for Decision Making</h2>
+
+            <h3>Identifying Staffing Needs:</h3>
+            <p>
+                Use analytics to determine if you need to:
+            </p>
+            <ul>
+                <li>Hire additional employees</li>
+                <li>Increase employee availability</li>
+                <li>Cross-train for different event types</li>
+                <li>Adjust rotation assignments</li>
+            </ul>
+
+            <h3>Optimizing Schedules:</h3>
+            <p>
+                Analytics reveal opportunities to:
+            </p>
+            <ul>
+                <li>Better balance workload across team</li>
+                <li>Reduce scheduling conflicts</li>
+                <li>Improve attendance rates</li>
+                <li>Increase auto-scheduler success</li>
+            </ul>
+
+            <h3>Performance Management:</h3>
+            <p>
+                Use data for:
+            </p>
+            <ul>
+                <li>Employee performance reviews</li>
+                <li>Recognition of high performers</li>
+                <li>Coaching and development plans</li>
+                <li>Fair compensation decisions</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Exporting Analytics Data</h2>
+
+            <h3>Export Options:</h3>
+            <ul>
+                <li><strong>PDF Reports:</strong> Professional formatted reports for presentations</li>
+                <li><strong>Excel Spreadsheets:</strong> Raw data for further analysis</li>
+                <li><strong>CSV Files:</strong> Data import into other systems</li>
+                <li><strong>Chart Images:</strong> Individual visualizations as PNG/JPG</li>
+            </ul>
+
+            <h3>Scheduled Reports:</h3>
+            <p>
+                Set up automatic report generation and email delivery:
+            </p>
+            <ol>
+                <li>Configure report parameters and filters</li>
+                <li>Set schedule (daily, weekly, monthly)</li>
+                <li>Add recipient email addresses</li>
+                <li>Save scheduled report</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Review analytics weekly:</strong> Regular review helps identify
+                    trends and issues early
+                </li>
+                <li>
+                    <strong>Monitor workload balance:</strong> Keep balance score above 80 for
+                    fair distribution
+                </li>
+                <li>
+                    <strong>Track attendance trends:</strong> Address declining attendance rates
+                    immediately
+                </li>
+                <li>
+                    <strong>Use forecasting:</strong> Plan staffing 2-4 weeks in advance based
+                    on projected demand
+                </li>
+                <li>
+                    <strong>Share insights:</strong> Communicate key metrics with team regularly
+                </li>
+                <li>
+                    <strong>Set benchmarks:</strong> Establish target KPIs and measure against them
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.attendance') }}" class="next-step-card">
+                    <span class="next-step-icon">📊</span>
+                    <span class="next-step-text">Learn about attendance tracking</span>
+                </a>
+                <a href="{{ url_for('help.employee_management') }}" class="next-step-card">
+                    <span class="next-step-icon">👥</span>
+                    <span class="next-step-text">Manage employee information</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+[Unit]
+Description=Flask Schedule Webapp - Production Service
+Documentation=https://github.com/yourusername/flask-schedule-webapp
+After=network.target postgresql.service redis.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=scheduler
+Group=scheduler
+WorkingDirectory=/opt/scheduler
+Environment="PATH=/opt/scheduler/venv/bin"
+EnvironmentFile=/opt/scheduler/scheduler_app/.env
+
+# Main service execution
+ExecStart=/opt/scheduler/venv/bin/gunicorn --config gunicorn_config.py wsgi:app
+
+# Reload configuration on SIGHUP
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/scheduler/instance /opt/scheduler/scheduler_app/logs
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scheduler-webapp
+
+[Install]
+WantedBy=multi-user.target

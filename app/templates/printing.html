@@ -1,0 +1,2898 @@
+{% extends "base.html" %}
+
+{% block title %}Printing - Schedule Manager{% endblock %}
+
+{% block extra_head %}
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-3">
+                <i class="fas fa-print"></i> Printing Center
+            </h1>
+            <p class="text-muted">Generate and download schedules, reports, and documentation</p>
+        </div>
+    </div>
+
+    <!-- Complete Daily Paperwork Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-pdf"></i> Complete Daily Paperwork
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Generate all paperwork for an entire day in the correct order:</p>
+                    <ul class="text-muted small">
+                        <li>Daily Schedule</li>
+                        <li>Daily Item List</li>
+                        <li>For each Core event: EDR, Instructions, and active templates</li>
+                    </ul>
+
+                    <!-- Active Templates Preview -->
+                    <div class="alert alert-info" id="templates-preview-section" style="display: none;">
+                        <h6 class="mb-2"><i class="fas fa-file-pdf"></i> Active Templates (included for each Core
+                            event):</h6>
+                        <ul id="active-templates-list" class="mb-2 small"></ul>
+                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates" class="small">Manage
+                            Templates in Settings</a>
+                    </div>
+
+                    <div class="alert alert-warning" id="no-templates-warning" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>No templates configured.</strong>
+                        Only EDR and Instructions will be included for each event.
+                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates">Add templates in Settings</a>
+                    </div>
+
+                    <div class="alert alert-danger" id="missing-files-warning" style="display: none;">
+                        <i class="fas fa-exclamation-circle"></i> <strong>Warning:</strong> Some template files are
+                        missing.
+                        <span id="missing-files-list"></span>
+                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates">Fix in Settings</a>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="complete-paperwork-date" class="form-label">Select Date</label>
+                            <input type="date" class="form-control" id="complete-paperwork-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" id="generate-complete-paperwork-btn">
+                            <i class="fas fa-file-archive"></i> Generate Complete Paperwork
+                        </button>
+                        <small class="text-muted ms-2">Requires Walmart credentials in Settings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Single Event Paperwork Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background-color: #17a2b8;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> Single Event Paperwork
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Generate complete paperwork package for a single event:</p>
+                    <ul class="text-muted small">
+                        <li>EDR (Event Detail Report)</li>
+                        <li>Instructions (Sales Tool Manual)</li>
+                        <li>Event Activity Log</li>
+                        <li>Daily Task Checkoff Sheet</li>
+                    </ul>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="event-paperwork-number" class="form-label">Event Number (6 digits)</label>
+                            <input type="text" class="form-control" id="event-paperwork-number"
+                                placeholder="e.g., 123456" maxlength="6" pattern="[0-9]{6}">
+                            <small class="text-muted">Enter the first 6 digits of the event name</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn text-white" style="background-color: #17a2b8;"
+                            id="generate-event-paperwork-btn">
+                            <i class="fas fa-print"></i> Print Event Paperwork
+                        </button>
+                        <small class="text-muted ms-2">Requires Walmart credentials in Settings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Schedules Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-day"></i> Daily Schedules
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">View and print daily schedule reports</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="daily-schedule-date" class="form-label">Select Date</label>
+                            <input type="date" class="form-control" id="daily-schedule-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-success" id="view-daily-schedule-btn">
+                            <i class="fas fa-eye"></i> View Schedule
+                        </button>
+                        <button class="btn btn-primary" id="print-daily-schedule-btn">
+                            <i class="fas fa-print"></i> Print Schedule
+                        </button>
+                    </div>
+                    <!-- Schedule Preview Area -->
+                    <div id="daily-schedule-preview" class="mt-4" style="display: none;">
+                        <hr>
+                        <h6>Schedule Preview</h6>
+                        <div id="daily-schedule-content" class="table-responsive">
+                            <!-- Schedule table will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly & Employee Schedules Section -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-week"></i> Weekly Schedules
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Generate weekly schedule reports (Sunday - Saturday)</p>
+                    <div class="mb-3">
+                        <label for="weekly-schedule-start-date" class="form-label">Week Starting</label>
+                        <input type="date" class="form-control" id="weekly-schedule-start-date">
+                        <small class="text-muted">Select any date - will auto-adjust to Sunday</small>
+                    </div>
+                    <button class="btn btn-info text-white" id="print-weekly-schedule-btn">
+                        <i class="fas fa-print"></i> Print Weekly Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-clock"></i> Employee Schedules
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Bi-weekly schedule for individual employees (2 weeks)</p>
+                    <div class="mb-3">
+                        <label for="employee-schedule-employee" class="form-label">Select Employee</label>
+                        <select class="form-control" id="employee-schedule-employee">
+                            <option value="">-- Select Employee --</option>
+                            <option value="all">ALL EMPLOYEES</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="employee-schedule-start-date" class="form-label">Week Starting</label>
+                        <input type="date" class="form-control" id="employee-schedule-start-date">
+                        <small class="text-muted">Select any date - will auto-adjust to Sunday</small>
+                    </div>
+                    <button class="btn btn-info text-white" id="print-employee-schedule-btn">
+                        <i class="fas fa-print"></i> Print Employee Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instruction Manuals Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-book-open"></i> Instruction Manuals
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Print instruction manuals from Sales Tool URLs</p>
+
+                    <!-- Type Selection -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Print Type</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="instructions-type" id="instructions-single"
+                                    value="single" checked>
+                                <label class="btn btn-outline-secondary" for="instructions-single">
+                                    <i class="fas fa-file"></i> Single Event
+                                </label>
+
+                                <input type="radio" class="btn-check" name="instructions-type" id="instructions-batch"
+                                    value="batch">
+                                <label class="btn btn-outline-secondary" for="instructions-batch">
+                                    <i class="fas fa-layer-group"></i> Batch (Daily)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Single Event Options -->
+                    <div id="instructions-single-options">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="instructions-event-id" class="form-label">Event ID (6 digits)</label>
+                                <input type="text" class="form-control" id="instructions-event-id"
+                                    placeholder="e.g., 123456" maxlength="6" pattern="[0-9]{6}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Batch Options -->
+                    <div id="instructions-batch-options" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="instructions-batch-date" class="form-label">Select Date</label>
+                                <input type="date" class="form-control" id="instructions-batch-date">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button class="btn btn-warning text-dark" id="print-instructions-btn">
+                            <i class="fas fa-print"></i> Print Instructions
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDR Printing Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> EDR Reports
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Print Event Detail Reports (EDRs) from Walmart Retail Link</p>
+
+                    <!-- Type Selection -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Print Type</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="edr-type" id="edr-single" value="single"
+                                    checked>
+                                <label class="btn btn-outline-secondary" for="edr-single">
+                                    <i class="fas fa-file"></i> Single Event
+                                </label>
+
+                                <input type="radio" class="btn-check" name="edr-type" id="edr-batch" value="batch">
+                                <label class="btn btn-outline-secondary" for="edr-batch">
+                                    <i class="fas fa-layer-group"></i> Batch (Daily)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Single Event Options -->
+                    <div id="edr-single-options">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="edr-event-id" class="form-label">Event ID (6 digits)</label>
+                                <input type="text" class="form-control" id="edr-event-id" placeholder="e.g., 123456"
+                                    maxlength="6" pattern="[0-9]{6}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Batch Options -->
+                    <div id="edr-batch-options" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="edr-batch-date" class="form-label">Select Date</label>
+                                <input type="date" class="form-control" id="edr-batch-date">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button class="btn btn-danger" id="print-edr-btn">
+                            <i class="fas fa-print"></i> Print EDRs
+                        </button>
+                        <small class="text-muted ms-2">Requires Walmart credentials in Settings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Item List Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list-ul"></i> Daily Item List
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Extract and list all item numbers from EDRs for a specific date</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="item-list-date" class="form-label">Select Date</label>
+                            <input type="date" class="form-control" id="item-list-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-secondary" id="generate-item-list-btn">
+                            <i class="fas fa-list"></i> Generate Item List
+                        </button>
+                        <small class="text-muted ms-2">Requires Walmart credentials in Settings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div id="loadingMessage" style="white-space: pre-line; font-size: 1.1em;">Processing...</div>
+                <div id="loadingProgress" class="mt-3" style="display: none;">
+                    <div class="progress" style="height: 20px;">
+                        <div id="loadingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small id="loadingProgressText" class="text-muted mt-1 d-block"></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        border: none;
+        margin-bottom: 1.5rem;
+    }
+
+    .card-header {
+        border-bottom: 2px solid rgba(0, 0, 0, .125);
+        padding: 1rem 1.25rem;
+    }
+
+    .card-header h5 {
+        font-weight: 600;
+    }
+
+    .btn-group .btn {
+        border-radius: 0;
+    }
+
+    .btn-group .btn:first-child {
+        border-top-left-radius: 0.25rem;
+        border-bottom-left-radius: 0.25rem;
+    }
+
+    .btn-group .btn:last-child {
+        border-top-right-radius: 0.25rem;
+        border-bottom-right-radius: 0.25rem;
+    }
+
+    #daily-schedule-preview {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+    }
+
+    .table-responsive {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    /* Modal backdrop styling */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1040;
+        width: 100vw;
+        height: 100vh;
+        background-color: #000;
+    }
+
+    .modal-backdrop.fade {
+        opacity: 0;
+    }
+
+    .modal-backdrop.show {
+        opacity: 0.5;
+    }
+
+    .modal {
+        z-index: 1050;
+    }
+
+    body.modal-open {
+        overflow: hidden;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Set default dates to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('daily-schedule-date').value = today;
+        document.getElementById('complete-paperwork-date').value = today;
+        document.getElementById('weekly-schedule-start-date').value = today;
+        document.getElementById('employee-schedule-start-date').value = today;
+        document.getElementById('instructions-batch-date').value = today;
+        document.getElementById('edr-batch-date').value = today;
+        document.getElementById('item-list-date').value = today;
+
+        // Load employees for employee schedule dropdown
+        loadEmployees();
+
+        // Daily Schedule handlers
+        document.getElementById('view-daily-schedule-btn').addEventListener('click', viewDailySchedule);
+        document.getElementById('print-daily-schedule-btn').addEventListener('click', printDailySchedule);
+
+        // Weekly Schedule handlers
+        document.getElementById('print-weekly-schedule-btn').addEventListener('click', printWeeklySchedule);
+
+        // Employee Schedule handlers
+        document.getElementById('print-employee-schedule-btn').addEventListener('click', printEmployeeSchedule);
+
+        // Instructions handlers
+        document.getElementById('print-instructions-btn').addEventListener('click', printInstructions);
+
+        // Instructions type toggle
+        document.querySelectorAll('input[name="instructions-type"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                if (this.value === 'single') {
+                    document.getElementById('instructions-single-options').style.display = 'block';
+                    document.getElementById('instructions-batch-options').style.display = 'none';
+                } else {
+                    document.getElementById('instructions-single-options').style.display = 'none';
+                    document.getElementById('instructions-batch-options').style.display = 'block';
+                }
+            });
+        });
+
+        // EDR handlers
+        document.getElementById('print-edr-btn').addEventListener('click', printEDRs);
+
+        // EDR type toggle
+        document.querySelectorAll('input[name="edr-type"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                if (this.value === 'single') {
+                    document.getElementById('edr-single-options').style.display = 'block';
+                    document.getElementById('edr-batch-options').style.display = 'none';
+                } else {
+                    document.getElementById('edr-single-options').style.display = 'none';
+                    document.getElementById('edr-batch-options').style.display = 'block';
+                }
+            });
+        });
+
+        // Daily Item List handler
+        document.getElementById('generate-item-list-btn').addEventListener('click', generateDailyItemList);
+
+        // Complete Paperwork handler
+        document.getElementById('generate-complete-paperwork-btn').addEventListener('click', generateCompletePaperwork);
+
+        // Single Event Paperwork handler
+        document.getElementById('generate-event-paperwork-btn').addEventListener('click', generateEventPaperwork);
+    });
+
+    function viewDailySchedule() {
+        const date = document.getElementById('daily-schedule-date').value;
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        showLoading('Loading schedule...');
+
+        fetch(`/printing/daily-schedule?date=${date}`)
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    displaySchedulePreview(data.events, data.formatted_date);
+                } else {
+                    alert('Error loading schedule: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error loading schedule');
+            });
+    }
+
+    function displaySchedulePreview(events, formattedDate) {
+        const previewDiv = document.getElementById('daily-schedule-preview');
+        const contentDiv = document.getElementById('daily-schedule-content');
+
+        if (events.length === 0) {
+            contentDiv.innerHTML = '<p class="text-muted">No schedules found for this date.</p>';
+        } else {
+            let tableHTML = `
+            <h6>${formattedDate}</h6>
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Scheduled Time</th>
+                        <th>Event Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+            events.forEach(event => {
+                tableHTML += `
+                <tr>
+                    <td>${event.employee_name}</td>
+                    <td>${event.time}</td>
+                    <td>${event.event_name}</td>
+                </tr>
+            `;
+            });
+
+            tableHTML += '</tbody></table>';
+            contentDiv.innerHTML = tableHTML;
+        }
+
+        previewDiv.style.display = 'block';
+    }
+
+    function printDailySchedule() {
+        const date = document.getElementById('daily-schedule-date').value;
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        showLoading('Loading schedule...');
+
+        fetch(`/printing/daily-schedule?date=${date}`)
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    const printContent = generatePrintableSchedule(data.formatted_date, data.events);
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(printContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 250);
+                } else {
+                    alert('Error loading schedule: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error loading schedule');
+            });
+    }
+
+    function printWeeklySchedule() {
+        const startDate = document.getElementById('weekly-schedule-start-date').value;
+        if (!startDate) {
+            alert('Please select a start date');
+            return;
+        }
+
+        showLoading('Loading weekly schedule...');
+
+        fetch(`/printing/weekly-schedule?start_date=${startDate}`)
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    const printContent = generatePrintableWeeklySchedule(data);
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(printContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 250);
+                } else {
+                    alert('Error loading weekly schedule: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error loading weekly schedule');
+            });
+    }
+
+    function generatePrintableWeeklySchedule(data) {
+        // Check if any day has more than 8 events
+        const maxEventsPerDay = 8;
+        const needsPagination = data.days.some(day => day.events.length > maxEventsPerDay);
+
+        if (needsPagination) {
+            return generatePaginatedWeeklySchedule(data, maxEventsPerDay);
+        }
+
+        // Single page version
+        return generateSinglePageWeeklySchedule(data);
+    }
+
+    function generateSinglePageWeeklySchedule(data) {
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Weekly Schedule - ${data.formatted_range}</title>
+        <style>
+            @page {
+                size: landscape;
+                margin: 0.5in;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 15px;
+                background: white;
+            }
+
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                border-bottom: 3px solid #2E4C73;
+                padding-bottom: 10px;
+            }
+
+            .header-left {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                flex: 1;
+            }
+
+            .logo-img {
+                height: 50px;
+                width: auto;
+            }
+
+            .header-text {
+                flex: 1;
+                text-align: center;
+            }
+
+            .title {
+                font-size: 28px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0 0 5px 0;
+            }
+
+            .date-range {
+                font-size: 16px;
+                color: #666;
+                margin: 0;
+            }
+
+            .walmart-week {
+                background: #2E4C73;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+
+            .week-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .day-box {
+                border: 2px solid #2E4C73;
+                border-radius: 5px;
+                min-height: 520px;
+                max-height: 520px;
+                position: relative;
+                background: white;
+                page-break-inside: avoid;
+                overflow: hidden;
+            }
+
+            .day-header {
+                background: #2E4C73;
+                color: white;
+                padding: 8px;
+                text-align: center;
+                font-weight: bold;
+                font-size: 14px;
+                border-radius: 3px 3px 0 0;
+            }
+
+            .day-number {
+                position: absolute;
+                top: 38px;
+                right: 8px;
+                font-size: 22px;
+                font-weight: bold;
+                color: #1B9BD8;
+            }
+
+            .day-content {
+                padding: 45px 8px 8px 8px;
+                font-size: 10px;
+            }
+
+            .event-entry {
+                margin-bottom: 6px;
+                padding: 4px 6px;
+                background: #f9f9f9;
+                border-left: 3px solid #1B9BD8;
+                border-radius: 3px;
+            }
+
+            .employee-name {
+                font-weight: bold;
+                color: #2E4C73;
+                margin-bottom: 1px;
+                font-size: 11px;
+            }
+
+            .event-time {
+                color: #1B9BD8;
+                font-weight: bold;
+                font-size: 10px;
+            }
+
+            .no-events {
+                text-align: center;
+                color: #999;
+                padding: 20px;
+                font-style: italic;
+            }
+
+            .footer {
+                margin-top: 10px;
+                text-align: center;
+                font-size: 10px;
+                color: #888;
+                border-top: 1px solid #ddd;
+                padding-top: 8px;
+                position: relative;
+            }
+
+            .disclaimer {
+                font-weight: bold;
+                color: #2E4C73;
+                font-size: 11px;
+                margin-bottom: 8px;
+            }
+
+            @media print {
+                body { padding: 10px; }
+                .header { page-break-after: avoid; }
+                @page { margin: 0.5in; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-left">
+                <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
+                <div class="header-text">
+                    <h1 class="title">Employee Weekly Schedule</h1>
+                    <p class="date-range">${data.formatted_range}</p>
+                </div>
+            </div>
+            ${data.walmart_week ? `<div class="walmart-week">${data.walmart_week}</div>` : ''}
+        </div>
+
+        <div class="week-grid">
+            ${data.days.map(day => `
+                <div class="day-box">
+                    <div class="day-header">${day.day_of_week}</div>
+                    <div class="day-number">${day.day_of_month}</div>
+                    <div class="day-content">
+                        ${day.events.length > 0 ? day.events.map(event => `
+                            <div class="event-entry">
+                                <div class="employee-name">${event.employee_name}</div>
+                                <div class="event-time">${event.time}</div>
+                            </div>
+                        `).join('') : '<div class="no-events">No events scheduled</div>'}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <div class="footer">
+            <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p>Product Connections Schedule Manager</p>
+        </div>
+    </body>
+    </html>
+    `;
+    }
+
+    function generatePaginatedWeeklySchedule(data, maxEventsPerDay) {
+        const sharedStyles = `
+        @page {
+            size: landscape;
+            margin: 0.5in;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background: white;
+        }
+
+        .page {
+            page-break-after: always;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 3px solid #2E4C73;
+            padding-bottom: 10px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .logo-img {
+            height: 50px;
+            width: auto;
+        }
+
+        .header-text {
+            flex: 1;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2E4C73;
+            margin: 0 0 5px 0;
+        }
+
+        .date-range {
+            font-size: 16px;
+            color: #666;
+            margin: 0;
+        }
+
+        .walmart-week {
+            background: #2E4C73;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .day-box {
+            border: 2px solid #2E4C73;
+            border-radius: 5px;
+            min-height: 520px;
+            max-height: 520px;
+            position: relative;
+            background: white;
+            overflow: hidden;
+        }
+
+        .day-header {
+            background: #2E4C73;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 3px 3px 0 0;
+        }
+
+        .day-number {
+            position: absolute;
+            top: 38px;
+            right: 8px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #1B9BD8;
+        }
+
+        .day-content {
+            padding: 45px 8px 8px 8px;
+            font-size: 10px;
+        }
+
+        .event-entry {
+            margin-bottom: 6px;
+            padding: 4px 6px;
+            background: #f9f9f9;
+            border-left: 3px solid #1B9BD8;
+            border-radius: 3px;
+        }
+
+        .employee-name {
+            font-weight: bold;
+            color: #2E4C73;
+            margin-bottom: 1px;
+            font-size: 11px;
+        }
+
+        .event-time {
+            color: #1B9BD8;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .no-events {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        .footer {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            color: #888;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
+        }
+
+        .page-number {
+            font-weight: bold;
+            color: #2E4C73;
+            font-size: 12px;
+        }
+
+        .disclaimer {
+            font-weight: bold;
+            color: #2E4C73;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-align: center;
+            flex-basis: 100%;
+        }
+
+        @media print {
+            body { padding: 10px; }
+            .header { page-break-after: avoid; }
+            @page { margin: 0.5in; }
+        }
+    `;
+
+        // Split days into two pages
+        const page1Days = data.days.map(day => ({
+            ...day,
+            events: day.events.slice(0, maxEventsPerDay)
+        }));
+
+        const page2Days = data.days.map(day => ({
+            ...day,
+            events: day.events.slice(maxEventsPerDay)
+        }));
+
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Weekly Schedule - ${data.formatted_range}</title>
+        <style>${sharedStyles}</style>
+    </head>
+    <body>
+        <!-- Page 1 -->
+        <div class="page">
+            <div class="header">
+                <div class="header-left">
+                    <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
+                    <div class="header-text">
+                        <h1 class="title">Employee Weekly Schedule</h1>
+                        <p class="date-range">${data.formatted_range}</p>
+                    </div>
+                </div>
+                ${data.walmart_week ? `<div class="walmart-week">${data.walmart_week}</div>` : ''}
+            </div>
+
+            <div class="week-grid">
+                ${page1Days.map(day => `
+                    <div class="day-box">
+                        <div class="day-header">${day.day_of_week}</div>
+                        <div class="day-number">${day.day_of_month}</div>
+                        <div class="day-content">
+                            ${day.events.length > 0 ? day.events.map(event => `
+                                <div class="event-entry">
+                                    <div class="employee-name">${event.employee_name}</div>
+                                    <div class="event-time">${event.time}</div>
+                                </div>
+                            `).join('') : '<div class="no-events">No events scheduled</div>'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="footer">
+                <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+                <div>
+                    <p style="margin: 0;">Generated on ${new Date().toLocaleString()}</p>
+                    <p style="margin: 0;">Product Connections Schedule Manager</p>
+                </div>
+                <div class="page-number">Page 1 of 2</div>
+            </div>
+        </div>
+
+        <!-- Page 2 -->
+        <div class="page">
+            <div class="header">
+                <div class="header-left">
+                    <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
+                    <div class="header-text">
+                        <h1 class="title">Employee Weekly Schedule</h1>
+                        <p class="date-range">${data.formatted_range}</p>
+                    </div>
+                </div>
+                ${data.walmart_week ? `<div class="walmart-week">${data.walmart_week}</div>` : ''}
+            </div>
+
+            <div class="week-grid">
+                ${page2Days.map(day => `
+                    <div class="day-box">
+                        <div class="day-header">${day.day_of_week}</div>
+                        <div class="day-number">${day.day_of_month}</div>
+                        <div class="day-content">
+                            ${day.events.length > 0 ? day.events.map(event => `
+                                <div class="event-entry">
+                                    <div class="employee-name">${event.employee_name}</div>
+                                    <div class="event-time">${event.time}</div>
+                                </div>
+                            `).join('') : '<div class="no-events">Continued from page 1</div>'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="footer">
+                <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+                <div>
+                    <p style="margin: 0;">Generated on ${new Date().toLocaleString()}</p>
+                    <p style="margin: 0;">Product Connections Schedule Manager</p>
+                </div>
+                <div class="page-number">Page 2 of 2</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    }
+
+    function loadEmployees() {
+        fetch('/printing/employees')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const select = document.getElementById('employee-schedule-employee');
+                    data.employees.forEach(emp => {
+                        const option = document.createElement('option');
+                        option.value = emp.id;
+                        option.textContent = emp.name;
+                        select.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading employees:', error);
+            });
+    }
+
+    function printEmployeeSchedule() {
+        const employeeId = document.getElementById('employee-schedule-employee').value;
+        const startDate = document.getElementById('employee-schedule-start-date').value;
+
+        if (!employeeId) {
+            alert('Please select an employee');
+            return;
+        }
+        if (!startDate) {
+            alert('Please select a start date');
+            return;
+        }
+
+        if (employeeId === 'all') {
+            printAllEmployeeSchedules(startDate);
+        } else {
+            printSingleEmployeeSchedule(employeeId, startDate);
+        }
+    }
+
+    function printSingleEmployeeSchedule(employeeId, startDate) {
+        showLoading('Loading employee schedule...');
+
+        fetch(`/printing/employee-schedule?employee_id=${employeeId}&start_date=${startDate}`)
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    const printContent = generatePrintableEmployeeSchedule(data);
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(printContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 250);
+                } else {
+                    alert('Error loading employee schedule: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error loading employee schedule');
+            });
+    }
+
+    function printAllEmployeeSchedules(startDate) {
+        showLoading('Loading all employee schedules...');
+
+        // First, get the list of employees
+        fetch('/printing/employees')
+            .then(response => response.json())
+            .then(employeesData => {
+                if (!employeesData.success || employeesData.employees.length === 0) {
+                    hideLoading();
+                    alert('No employees found');
+                    return;
+                }
+
+                // Fetch schedule data for each employee
+                const fetchPromises = employeesData.employees.map(emp =>
+                    fetch(`/printing/employee-schedule?employee_id=${emp.id}&start_date=${startDate}`)
+                        .then(response => response.json())
+                );
+
+                return Promise.all(fetchPromises);
+            })
+            .then(scheduleDataArray => {
+                hideLoading();
+
+                if (!scheduleDataArray) return;
+
+                // Filter out any failed requests
+                const validSchedules = scheduleDataArray.filter(data => data.success);
+
+                if (validSchedules.length === 0) {
+                    alert('No schedule data found');
+                    return;
+                }
+
+                // Generate combined printable document
+                const printContent = generateAllEmployeeSchedules(validSchedules);
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(printContent);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => {
+                    printWindow.print();
+                }, 250);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error loading employee schedules');
+            });
+    }
+
+    function generateAllEmployeeSchedules(schedulesArray) {
+        const firstSchedule = schedulesArray[0];
+        const walmartWeeks = firstSchedule.walmart_week1 && firstSchedule.walmart_week2
+            ? `Weeks ${firstSchedule.walmart_week1.replace('Week ', '')} & ${firstSchedule.walmart_week2.replace('Week ', '')}`
+            : '';
+
+        // Generate employee schedule pages
+        const employeePages = schedulesArray.map((data, index) => {
+            const empWalmartWeeks = data.walmart_week1 && data.walmart_week2
+                ? `Weeks ${data.walmart_week1.replace('Week ', '')} & ${data.walmart_week2.replace('Week ', '')}`
+                : '';
+
+            return `
+        <div class="employee-page">
+            <div class="header">
+                <div class="header-left">
+                    <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
+                    <div class="header-text">
+                        <h1 class="employee-name">${data.employee_name}</h1>
+                        <h2 class="title">Bi-Weekly Schedule</h2>
+                        <p class="date-range">${data.formatted_range}</p>
+                    </div>
+                </div>
+                ${empWalmartWeeks ? `<div class="walmart-weeks">${empWalmartWeeks}</div>` : ''}
+            </div>
+
+            <!-- Week 1 -->
+            <div class="week-section">
+                <div class="week-grid">
+                    ${data.week1_days.map(day => `
+                        <div class="day-box">
+                            <div class="day-header">${day.day_of_week}</div>
+                            <div class="day-number">${day.day_of_month}</div>
+                            <div class="day-content">
+                                ${day.is_off ? '<div class="off-day">OFF</div>' : day.events.map(event => `
+                                    <div class="time-entry">${event.time}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- Week 2 -->
+            <div class="week-section">
+                <div class="week-grid">
+                    ${data.week2_days.map(day => `
+                        <div class="day-box">
+                            <div class="day-header">${day.day_of_week}</div>
+                            <div class="day-number">${day.day_of_month}</div>
+                            <div class="day-content">
+                                ${day.is_off ? '<div class="off-day">OFF</div>' : day.events.map(event => `
+                                    <div class="time-entry">${event.time}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="footer">
+                <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+                <div>
+                    <p style="margin: 0;">Generated on ${new Date().toLocaleString()}</p>
+                    <p style="margin: 0;">Product Connections Schedule Manager</p>
+                </div>
+            </div>
+        </div>
+        `;
+        }).join('');
+
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>All Employee Schedules - ${firstSchedule.formatted_range}</title>
+        <style>
+            @page {
+                size: landscape;
+                margin: 0.5in;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 15px;
+                background: white;
+            }
+
+            .employee-page {
+                page-break-after: always;
+            }
+
+            .employee-page:last-child {
+                page-break-after: auto;
+            }
+
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                border-bottom: 3px solid #2E4C73;
+                padding-bottom: 10px;
+            }
+
+            .header-left {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                flex: 1;
+            }
+
+            .logo-img {
+                height: 50px;
+                width: auto;
+            }
+
+            .header-text {
+                flex: 1;
+                text-align: center;
+            }
+
+            .employee-name {
+                font-size: 32px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0 0 5px 0;
+            }
+
+            .title {
+                font-size: 20px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0 0 5px 0;
+            }
+
+            .date-range {
+                font-size: 16px;
+                color: #666;
+                margin: 0;
+            }
+
+            .walmart-weeks {
+                background: #2E4C73;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+
+            .week-section {
+                margin-bottom: 20px;
+            }
+
+            .week-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .day-box {
+                border: 2px solid #2E4C73;
+                border-radius: 5px;
+                min-height: 200px;
+                max-height: 200px;
+                position: relative;
+                background: white;
+                overflow: hidden;
+            }
+
+            .day-header {
+                background: #2E4C73;
+                color: white;
+                padding: 8px;
+                text-align: center;
+                font-weight: bold;
+                font-size: 14px;
+                border-radius: 3px 3px 0 0;
+            }
+
+            .day-number {
+                position: absolute;
+                top: 38px;
+                right: 8px;
+                font-size: 22px;
+                font-weight: bold;
+                color: #1B9BD8;
+            }
+
+            .day-content {
+                padding: 45px 8px 8px 8px;
+                font-size: 12px;
+            }
+
+            .time-entry {
+                margin-bottom: 8px;
+                padding: 6px 8px;
+                background: #e8f4f8;
+                border-left: 3px solid #1B9BD8;
+                border-radius: 3px;
+                font-weight: bold;
+                color: #2E4C73;
+                text-align: center;
+                font-size: 14px;
+            }
+
+            .off-day {
+                text-align: center;
+                color: #999;
+                padding: 20px;
+                font-style: italic;
+                font-weight: bold;
+                font-size: 18px;
+            }
+
+            .footer {
+                margin-top: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 10px;
+                color: #888;
+                border-top: 1px solid #ddd;
+                padding-top: 8px;
+            }
+
+            .disclaimer {
+                font-weight: bold;
+                color: #2E4C73;
+                font-size: 11px;
+                margin-bottom: 8px;
+                text-align: center;
+                flex-basis: 100%;
+            }
+
+            @media print {
+                body { padding: 10px; }
+                .header { page-break-after: avoid; }
+                .week-section { page-break-inside: avoid; }
+                .employee-page { page-break-after: always; }
+                .employee-page:last-child { page-break-after: auto; }
+                @page { margin: 0.5in; }
+            }
+        </style>
+    </head>
+    <body>
+        ${employeePages}
+    </body>
+    </html>
+    `;
+    }
+
+    function generatePrintableEmployeeSchedule(data) {
+        const walmartWeeks = data.walmart_week1 && data.walmart_week2
+            ? `Weeks ${data.walmart_week1.replace('Week ', '')} & ${data.walmart_week2.replace('Week ', '')}`
+            : '';
+
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Employee Schedule - ${data.employee_name}</title>
+        <style>
+            @page {
+                size: landscape;
+                margin: 0.5in;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 15px;
+                background: white;
+            }
+
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                border-bottom: 3px solid #2E4C73;
+                padding-bottom: 10px;
+            }
+
+            .header-left {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                flex: 1;
+            }
+
+            .logo-img {
+                height: 50px;
+                width: auto;
+            }
+
+            .header-text {
+                flex: 1;
+                text-align: center;
+            }
+
+            .employee-name {
+                font-size: 32px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0 0 5px 0;
+            }
+
+            .title {
+                font-size: 20px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0 0 5px 0;
+            }
+
+            .date-range {
+                font-size: 16px;
+                color: #666;
+                margin: 0;
+            }
+
+            .walmart-weeks {
+                background: #2E4C73;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+
+            .week-section {
+                margin-bottom: 20px;
+            }
+
+            .week-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .day-box {
+                border: 2px solid #2E4C73;
+                border-radius: 5px;
+                min-height: 200px;
+                max-height: 200px;
+                position: relative;
+                background: white;
+                overflow: hidden;
+            }
+
+            .day-header {
+                background: #2E4C73;
+                color: white;
+                padding: 8px;
+                text-align: center;
+                font-weight: bold;
+                font-size: 14px;
+                border-radius: 3px 3px 0 0;
+            }
+
+            .day-number {
+                position: absolute;
+                top: 38px;
+                right: 8px;
+                font-size: 22px;
+                font-weight: bold;
+                color: #1B9BD8;
+            }
+
+            .day-content {
+                padding: 45px 8px 8px 8px;
+                font-size: 12px;
+            }
+
+            .time-entry {
+                margin-bottom: 8px;
+                padding: 6px 8px;
+                background: #e8f4f8;
+                border-left: 3px solid #1B9BD8;
+                border-radius: 3px;
+                font-weight: bold;
+                color: #2E4C73;
+                text-align: center;
+                font-size: 14px;
+            }
+
+            .off-day {
+                text-align: center;
+                color: #999;
+                padding: 20px;
+                font-style: italic;
+                font-weight: bold;
+                font-size: 18px;
+            }
+
+            .footer {
+                margin-top: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 10px;
+                color: #888;
+                border-top: 1px solid #ddd;
+                padding-top: 8px;
+            }
+
+            .disclaimer {
+                font-weight: bold;
+                color: #2E4C73;
+                font-size: 11px;
+                margin-bottom: 8px;
+                text-align: center;
+                flex-basis: 100%;
+            }
+
+            @media print {
+                body { padding: 10px; }
+                .header { page-break-after: avoid; }
+                .week-section { page-break-inside: avoid; }
+                @page { margin: 0.5in; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-left">
+                <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
+                <div class="header-text">
+                    <h1 class="employee-name">${data.employee_name}</h1>
+                    <h2 class="title">Bi-Weekly Schedule</h2>
+                    <p class="date-range">${data.formatted_range}</p>
+                </div>
+            </div>
+            ${walmartWeeks ? `<div class="walmart-weeks">${walmartWeeks}</div>` : ''}
+        </div>
+
+        <!-- Week 1 -->
+        <div class="week-section">
+            <div class="week-grid">
+                ${data.week1_days.map(day => `
+                    <div class="day-box">
+                        <div class="day-header">${day.day_of_week}</div>
+                        <div class="day-number">${day.day_of_month}</div>
+                        <div class="day-content">
+                            ${day.is_off ? '<div class="off-day">OFF</div>' : day.events.map(event => `
+                                <div class="time-entry">${event.time}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- Week 2 -->
+        <div class="week-section">
+            <div class="week-grid">
+                ${data.week2_days.map(day => `
+                    <div class="day-box">
+                        <div class="day-header">${day.day_of_week}</div>
+                        <div class="day-number">${day.day_of_month}</div>
+                        <div class="day-content">
+                            ${day.is_off ? '<div class="off-day">OFF</div>' : day.events.map(event => `
+                                <div class="time-entry">${event.time}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+            <div>
+                <p style="margin: 0;">Generated on ${new Date().toLocaleString()}</p>
+                <p style="margin: 0;">Product Connections Schedule Manager</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    }
+
+    function printInstructions() {
+        const type = document.querySelector('input[name="instructions-type"]:checked').value;
+
+        if (type === 'single') {
+            printSingleInstruction();
+        } else {
+            printBatchInstructions();
+        }
+    }
+
+    function printSingleInstruction() {
+        const eventId = document.getElementById('instructions-event-id').value.trim();
+
+        if (!eventId) {
+            alert('Please enter an event ID');
+            return;
+        }
+
+        if (!/^\d{6}$/.test(eventId)) {
+            alert('Event ID must be exactly 6 digits');
+            return;
+        }
+
+        // Open window immediately during user action to avoid popup blocker
+        const printWindow = window.open('about:blank', '_blank');
+        if (printWindow) {
+            printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Loading Instruction Manual</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #2E4C73 0%, #1B9BD8 100%);
+                    }
+
+                    .container {
+                        text-align: center;
+                        background: white;
+                        padding: 50px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        max-width: 500px;
+                    }
+
+                    .logo {
+                        width: 250px;
+                        margin-bottom: 30px;
+                    }
+
+                    .spinner {
+                        width: 60px;
+                        height: 60px;
+                        margin: 30px auto;
+                        border: 6px solid #e0e0e0;
+                        border-top: 6px solid #2E4C73;
+                        border-radius: 50%;
+                        animation: spin 1s linear infinite;
+                    }
+
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+
+                    h1 {
+                        color: #2E4C73;
+                        font-size: 24px;
+                        margin: 20px 0 10px 0;
+                    }
+
+                    p {
+                        color: #666;
+                        font-size: 16px;
+                        margin: 0;
+                    }
+
+                    .status {
+                        color: #1B9BD8;
+                        font-weight: bold;
+                        margin-top: 20px;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo">
+                    <div class="spinner"></div>
+                    <h1>Loading Instruction Manual</h1>
+                    <p>Please wait while we retrieve your document...</p>
+                    <p class="status">Fetching manual for event ${eventId}...</p>
+                </div>
+            </body>
+            </html>
+        `);
+        }
+
+        showLoading('Loading instruction manual...');
+
+        fetch(`/printing/event-instructions?event_id=${eventId}`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    // Redirect the already-opened window to the PDF URL
+                    if (printWindow) {
+                        printWindow.location.href = data.url;
+                        printWindow.focus();
+                    }
+                } else {
+                    if (printWindow) printWindow.close();
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                if (printWindow) printWindow.close();
+                console.error('Error:', error);
+                const errorMsg = typeof error === 'object' && error.error ? error.error : 'Error loading instruction manual';
+                alert(errorMsg);
+            });
+    }
+
+    function printBatchInstructions() {
+        const date = document.getElementById('instructions-batch-date').value;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        // Open window immediately during user action to avoid popup blocker
+        const printWindow = window.open('about:blank', '_blank');
+        if (printWindow) {
+            printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Loading Instruction Manuals</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #2E4C73 0%, #1B9BD8 100%);
+                    }
+
+                    .container {
+                        text-align: center;
+                        background: white;
+                        padding: 50px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        max-width: 500px;
+                    }
+
+                    .logo {
+                        width: 250px;
+                        margin-bottom: 30px;
+                    }
+
+                    .spinner {
+                        width: 60px;
+                        height: 60px;
+                        margin: 30px auto;
+                        border: 6px solid #e0e0e0;
+                        border-top: 6px solid #2E4C73;
+                        border-radius: 50%;
+                        animation: spin 1s linear infinite;
+                    }
+
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+
+                    h1 {
+                        color: #2E4C73;
+                        font-size: 24px;
+                        margin: 20px 0 10px 0;
+                    }
+
+                    p {
+                        color: #666;
+                        font-size: 16px;
+                        margin: 0;
+                    }
+
+                    .status {
+                        color: #1B9BD8;
+                        font-weight: bold;
+                        margin-top: 20px;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo">
+                    <div class="spinner"></div>
+                    <h1>Gathering Instruction Manuals</h1>
+                    <p>Please wait while we prepare your documents...</p>
+                    <p class="status" id="status">Initializing...</p>
+                </div>
+            </body>
+            </html>
+        `);
+        }
+
+        showLoading('Loading instruction manuals for all CORE events...');
+
+        fetch(`/printing/event-instructions?date=${date}`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (data.count === 0) {
+                        hideLoading();
+                        if (printWindow) printWindow.close();
+                        alert('No CORE events with instruction manuals found for this date');
+                        return null;
+                    }
+
+                    // Update status in popup window
+                    if (printWindow && printWindow.document.getElementById('status')) {
+                        printWindow.document.getElementById('status').textContent = `Found ${data.count} manual(s). Merging documents...`;
+                    }
+
+                    // Update loading message
+                    showLoading('Merging PDFs... This may take a moment.');
+
+                    // Send request to merge PDFs
+                    const urls = data.events.map(e => e.url);
+                    const eventNames = data.events.map(e => e.event_name);
+
+                    return fetch('/printing/event-instructions/merge', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            urls: urls,
+                            event_names: eventNames
+                        })
+                    });
+                } else {
+                    hideLoading();
+                    if (printWindow) printWindow.close();
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                    return null;
+                }
+            })
+            .then(response => {
+                if (!response) return;
+
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+
+                // Get the PDF blob
+                return response.blob();
+            })
+            .then(blob => {
+                if (!blob) return;
+
+                hideLoading();
+
+                // Create a URL for the blob and redirect the window
+                const url = URL.createObjectURL(blob);
+                if (printWindow) {
+                    printWindow.location.href = url;
+                    printWindow.focus();
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                if (printWindow) printWindow.close();
+                console.error('Error:', error);
+                alert(error.error || 'Error loading instruction manuals');
+            });
+    }
+
+    // EDR authentication state
+    let edrAuthenticated = false;
+
+    function printEDRs() {
+        const type = document.querySelector('input[name="edr-type"]:checked').value;
+
+        // Check if already authenticated
+        if (edrAuthenticated) {
+            if (type === 'single') {
+                printSingleEDR();
+            } else {
+                printBatchEDRs();
+            }
+            return;
+        }
+
+        // Need to authenticate first
+        authenticateWalmartEDR(() => {
+            if (type === 'single') {
+                printSingleEDR();
+            } else {
+                printBatchEDRs();
+            }
+        });
+    }
+
+    function authenticateWalmartEDR(callback) {
+        // Main entry point - start the MFA request flow
+        requestAndAuthenticateMFA(callback);
+    }
+
+    function requestAndAuthenticateMFA(callback) {
+        // Step 1: Request MFA code
+        showLoading('📱 Requesting MFA code...\n\nPlease wait while we send a verification code to your phone.');
+
+        fetch('/printing/edr/request-mfa', {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+
+                if (!data.success) {
+                    alert(data.error || 'Failed to request MFA code');
+                    return;
+                }
+
+                // Calculate expiration time for display
+                const expiresIn = data.expires_in_seconds || 300;
+                const expiresMinutes = Math.floor(expiresIn / 60);
+
+                // Step 2: Prompt user for MFA code with expiration warning
+                const mfaCode = prompt(`📲 MFA Code Sent!\n\nA 6-digit verification code has been sent to your phone.\n\n⏱️ Note: This code expires in ${expiresMinutes} minutes.\n\nPlease enter the code:`);
+
+                if (!mfaCode || mfaCode.trim() === '') {
+                    alert('Authentication cancelled');
+                    return;
+                }
+
+                // Validate MFA code format
+                if (!/^\d{6}$/.test(mfaCode.trim())) {
+                    alert('MFA code must be exactly 6 digits');
+                    return;
+                }
+
+                // Step 3: Complete authentication with MFA code
+                showLoading('🔐 Verifying MFA code...\n\nPlease wait while we authenticate with Walmart.');
+
+                fetch('/printing/edr/authenticate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mfa_code: mfaCode.trim()
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        hideLoading();
+
+                        if (!data.success) {
+                            // Check for specific error codes that allow retry
+                            if (data.error_code === 'mfa_expired' || data.error_code === 'session_expired') {
+                                // Code expired - offer to request a new one
+                                if (confirm(data.error + '\n\nWould you like to request a new code?')) {
+                                    requestAndAuthenticateMFA(callback);
+                                }
+                                return;
+                            }
+
+                            if (data.error_code === 'mfa_invalid') {
+                                // Invalid code - offer to try again with a new code
+                                if (confirm(data.error + '\n\nWould you like to request a new code?')) {
+                                    requestAndAuthenticateMFA(callback);
+                                }
+                                return;
+                            }
+
+                            // Generic error
+                            alert(data.error || 'Authentication failed');
+                            return;
+                        }
+
+                        // Mark as authenticated
+                        edrAuthenticated = true;
+
+                        // Execute the callback
+                        if (callback) {
+                            callback();
+                        }
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        console.error('Error:', error);
+                        alert('Authentication failed: ' + (error.error || error.message || 'Unknown error'));
+                    });
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Failed to request MFA code: ' + (error.error || error.message || 'Unknown error'));
+            });
+    }
+
+
+    function printSingleEDR() {
+        // TODO: Implement single EDR printing
+        alert('Single EDR printing is not yet implemented. Please use batch printing by date instead.');
+    }
+
+    function printBatchEDRs() {
+        const date = document.getElementById('edr-batch-date').value;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        // Show loading modal on main page - don't open print window until we have PDF data
+        showLoading('Retrieving EDRs from Walmart...');
+
+        // Call the printing EDR batch download endpoint
+        fetch('/printing/edr/batch-download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                date: date
+            })
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response content-type:', response.headers.get('content-type'));
+
+                if (!response.ok) {
+                    // Try to parse as JSON for error message
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.error || 'Failed to retrieve EDRs');
+                        } catch (e) {
+                            throw new Error(text || 'Failed to retrieve EDRs');
+                        }
+                    });
+                }
+
+                // Check if response is actually a PDF
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    // Server returned JSON, probably an error
+                    return response.json().then(json => {
+                        throw new Error(json.error || json.message || 'Unexpected JSON response');
+                    });
+                }
+
+                return response.blob();
+            })
+            .then(blob => {
+                console.log('Received blob:', blob.type, blob.size, 'bytes');
+
+                if (blob.size === 0) {
+                    hideLoading();
+                    alert('No EDR data was generated. The response was empty.');
+                    return;
+                }
+
+                // Create URL for the PDF blob
+                const url = URL.createObjectURL(blob);
+
+                // Hide loading
+                hideLoading();
+
+                // Open PDF directly in a new tab for proper printing
+                const pdfWindow = window.open(url, '_blank');
+
+                if (pdfWindow) {
+                    // The PDF opens in the browser's built-in PDF viewer
+                    // User can use Ctrl+P or the print button in the PDF viewer
+                    alert('EDR Report generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.');
+                } else {
+                    // Popup was blocked, try download instead
+                    alert('Popup was blocked. Downloading the PDF instead...');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `EDR_Reports_${date}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error retrieving EDRs:', error);
+                alert('Error retrieving EDRs: ' + (error.message || error.error || error));
+            });
+    }
+
+    function generateDailyItemList() {
+        const date = document.getElementById('item-list-date').value;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        // Check if already authenticated
+        if (!edrAuthenticated) {
+            // Need to authenticate first
+            authenticateWalmartEDR(() => {
+                generateDailyItemListAfterAuth(date);
+            });
+        } else {
+            generateDailyItemListAfterAuth(date);
+        }
+    }
+
+    function generateDailyItemListAfterAuth(date) {
+        // Show loading modal
+        showLoading('Retrieving items from EDRs...');
+
+        // Call the daily items list endpoint
+        fetch('/printing/edr/daily-items-list', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                date: date
+            })
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response content-type:', response.headers.get('content-type'));
+
+                if (!response.ok) {
+                    // Try to parse as JSON for error message
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.error || 'Failed to generate item list');
+                        } catch (e) {
+                            throw new Error(text || 'Failed to generate item list');
+                        }
+                    });
+                }
+
+                // Check if response is actually a PDF
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    // Server returned JSON, probably an error
+                    return response.json().then(json => {
+                        throw new Error(json.error || json.message || 'Unexpected JSON response');
+                    });
+                }
+
+                return response.blob();
+            })
+            .then(blob => {
+                console.log('Received blob:', blob.type, blob.size, 'bytes');
+
+                if (blob.size === 0) {
+                    hideLoading();
+                    alert('No item data was generated. The response was empty.');
+                    return;
+                }
+
+                // Create URL for the PDF blob
+                const url = URL.createObjectURL(blob);
+
+                // Hide loading before opening the PDF window
+                hideLoading();
+
+                // Small delay to ensure loading modal is fully removed, then open print window
+                setTimeout(() => {
+                    // Now open the print window with the PDF
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                        // Write HTML that will load the PDF and trigger print dialog
+                        printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Daily Item List - Print</title>
+                        <style>
+                            body, html {
+                                margin: 0;
+                                padding: 0;
+                                height: 100%;
+                                overflow: hidden;
+                            }
+                            iframe {
+                                width: 100%;
+                                height: 100%;
+                                border: none;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <iframe id="pdfFrame" src="${url}"></iframe>
+                        <script>
+                            // Wait for PDF to load, then trigger print
+                            document.getElementById('pdfFrame').onload = function() {
+                                setTimeout(function() {
+                                    window.print();
+                                }, 500);
+                            };
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                        printWindow.document.close();
+                    } else {
+                        // Fallback: open in new window with print trigger
+                        const newWindow = window.open(url, '_blank');
+                        if (newWindow) {
+                            newWindow.onload = function () {
+                                setTimeout(function () {
+                                    newWindow.print();
+                                }, 500);
+                            };
+                        }
+                    }
+                }, 300); // 300ms delay to ensure modal is hidden
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error generating item list:', error);
+                alert('Error generating item list: ' + (error.message || error.error || error));
+            });
+    }
+
+    function generateCompletePaperwork() {
+        const date = document.getElementById('complete-paperwork-date').value;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        // First, get the event count for the date to show in progress messages
+        showLoading('📋 Checking events for this date...');
+
+        fetch(`/printing/core-events-count?date=${date}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    hideLoading();
+                    alert('Error checking events: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+
+                const eventCount = data.count;
+                const events = data.events;
+
+                if (eventCount === 0) {
+                    hideLoading();
+                    alert('No Core events found for this date.');
+                    return;
+                }
+
+                // Store event info for progress updates
+                window.paperworkEventCount = eventCount;
+                window.paperworkEvents = events;
+
+                hideLoading();
+
+                // Check if already authenticated
+                if (!edrAuthenticated) {
+                    // Need to authenticate first
+                    authenticateWalmartEDR(() => {
+                        generateCompletePaperworkAfterAuth(date, eventCount, events);
+                    });
+                } else {
+                    generateCompletePaperworkAfterAuth(date, eventCount, events);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error checking events:', error);
+                alert('Error checking events: ' + (error.message || 'Unknown error'));
+            });
+    }
+
+    function generateCompletePaperworkAfterAuth(date, eventCount, events) {
+        // Use stored values if not passed (for backward compatibility)
+        eventCount = eventCount || window.paperworkEventCount || 0;
+        events = events || window.paperworkEvents || [];
+
+        // Show loading modal with progress bar
+        const eventList = events.map(e => e.number).join(', ');
+        showLoading(`📄 <strong>Generating Complete Paperwork</strong>\n\nPreparing documents for ${eventCount} event(s)...\n<small class="text-muted">Events: ${eventList}</small>`, true);
+
+        // Simulate progress updates as we wait for the server
+        let progressStep = 0;
+        const progressSteps = [
+            { pct: 10, msg: '📅 Generating daily schedule...' },
+            { pct: 20, msg: '📋 Creating item list...' }
+        ];
+
+        // Add steps for each event
+        events.forEach((event, idx) => {
+            const stepPct = 20 + ((idx + 1) / eventCount) * 70;
+            progressSteps.push({
+                pct: Math.round(stepPct),
+                msg: `📝 Processing event ${idx + 1} of ${eventCount} (${event.number})...`
+            });
+        });
+
+        progressSteps.push({ pct: 95, msg: '📎 Merging all documents...' });
+        progressSteps.push({ pct: 100, msg: '✅ Finalizing PDF...' });
+
+        // Start progress simulation
+        const progressInterval = setInterval(() => {
+            if (progressStep < progressSteps.length) {
+                const step = progressSteps[progressStep];
+                updateLoadingProgress(step.pct, 100, step.msg);
+                progressStep++;
+            }
+        }, 2000); // Update every 2 seconds
+
+        // Call the complete paperwork endpoint
+        fetch('/printing/complete-paperwork', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                date: date
+            })
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response content-type:', response.headers.get('content-type'));
+
+                if (!response.ok) {
+                    // Try to parse as JSON for error message
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.error || 'Failed to generate complete paperwork');
+                        } catch (e) {
+                            throw new Error(text || 'Failed to generate complete paperwork');
+                        }
+                    });
+                }
+
+                // Check if response is actually a PDF
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    // Server returned JSON, probably an error
+                    return response.json().then(json => {
+                        throw new Error(json.error || json.message || 'Unexpected JSON response');
+                    });
+                }
+
+                return response.blob();
+            })
+            .then(blob => {
+                // Stop progress simulation
+                clearInterval(progressInterval);
+
+                console.log('Received blob:', blob.type, blob.size, 'bytes');
+
+                if (blob.size === 0) {
+                    hideLoading();
+                    alert('No paperwork was generated. The response was empty.');
+                    return;
+                }
+
+                // Create URL for the PDF blob
+                const url = URL.createObjectURL(blob);
+
+                // Update progress to show completion
+                updateLoadingProgress(100, 100, '✅ Complete! Opening PDF...');
+
+                // Hide loading after a brief delay
+                setTimeout(() => {
+                    hideLoading();
+
+                    // Open PDF directly in a new tab - this allows the browser's native PDF viewer
+                    // to handle printing correctly with proper page count
+                    const pdfWindow = window.open(url, '_blank');
+
+                    if (pdfWindow) {
+                        // The PDF opens in the browser's built-in PDF viewer
+                        // User can use Ctrl+P or the print button in the PDF viewer
+                        // This shows the correct page count unlike iframe embedding
+                        alert('PDF generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.');
+                    } else {
+                        // Popup was blocked, try download instead
+                        alert('Popup was blocked. Downloading the PDF instead...');
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Complete_Paperwork_${date}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+                }, 500);
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                hideLoading();
+                console.error('Error generating complete paperwork:', error);
+                alert('Error generating complete paperwork: ' + (error.message || error.error || error));
+            });
+    }
+
+    // Load and display active templates on page load
+    function loadActiveTemplates() {
+        fetch('/api/paperwork-templates/')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Failed to load templates:', data.error);
+                    return;
+                }
+
+                const activeTemplates = data.templates.filter(t => t.is_active);
+                const missingFiles = data.templates.filter(t => t.is_active && !t.file_exists);
+
+                // Show appropriate alert
+                if (activeTemplates.length === 0) {
+                    document.getElementById('no-templates-warning').style.display = 'block';
+                } else {
+                    // Show active templates list
+                    const list = document.getElementById('active-templates-list');
+                    list.innerHTML = activeTemplates.map(t => {
+                        const icon = t.file_exists ? '✓' : '⚠';
+                        const style = t.file_exists ? '' : 'color: red;';
+                        return `<li style="${style}">${icon} ${t.name}</li>`;
+                    }).join('');
+                    document.getElementById('templates-preview-section').style.display = 'block';
+
+                    // Show missing files warning if any
+                    if (missingFiles.length > 0) {
+                        const missingList = missingFiles.map(t => t.name).join(', ');
+                        document.getElementById('missing-files-list').textContent = missingList;
+                        document.getElementById('missing-files-warning').style.display = 'block';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading templates:', error);
+            });
+    }
+
+    // Call on page load
+    document.addEventListener('DOMContentLoaded', loadActiveTemplates);
+
+    function generateEventPaperwork() {
+        const eventNumber = document.getElementById('event-paperwork-number').value.trim();
+
+        if (!eventNumber) {
+            alert('Please enter an event number');
+            return;
+        }
+
+        // Validate event number format (6 digits)
+        if (!/^\d{6}$/.test(eventNumber)) {
+            alert('Event number must be exactly 6 digits');
+            return;
+        }
+
+        // Check if already authenticated
+        if (!edrAuthenticated) {
+            // Need to authenticate first
+            authenticateWalmartEDR(() => {
+                generateEventPaperworkAfterAuth(eventNumber);
+            });
+        } else {
+            generateEventPaperworkAfterAuth(eventNumber);
+        }
+    }
+
+    function generateEventPaperworkAfterAuth(eventNumber) {
+        // Show loading modal
+        showLoading(`📝 <strong>Generating Event Paperwork</strong>\n\nProcessing event ${eventNumber}...\n<small class="text-muted">Fetching EDR, Instructions, and templates</small>`);
+
+        // Call the event paperwork endpoint
+        fetch('/printing/event-paperwork', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                event_number: eventNumber
+            })
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response content-type:', response.headers.get('content-type'));
+
+                if (!response.ok) {
+                    // Try to parse as JSON for error message
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.error || 'Failed to generate event paperwork');
+                        } catch (e) {
+                            throw new Error(text || 'Failed to generate event paperwork');
+                        }
+                    });
+                }
+
+                // Check if response is actually a PDF
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    // Server returned JSON, probably an error
+                    return response.json().then(json => {
+                        throw new Error(json.error || json.message || 'Unexpected JSON response');
+                    });
+                }
+
+                return response.blob();
+            })
+            .then(blob => {
+                console.log('Received blob:', blob.type, blob.size, 'bytes');
+
+                if (blob.size === 0) {
+                    hideLoading();
+                    alert('No paperwork was generated. The response was empty.');
+                    return;
+                }
+
+                // Create URL for the PDF blob
+                const url = URL.createObjectURL(blob);
+
+                // Hide loading
+                hideLoading();
+
+                // Open PDF directly in a new tab for proper printing
+                const pdfWindow = window.open(url, '_blank');
+
+                if (pdfWindow) {
+                    // The PDF opens in the browser's built-in PDF viewer
+                    alert(`Event ${eventNumber} paperwork generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.`);
+                } else {
+                    // Popup was blocked, try download instead
+                    alert('Popup was blocked. Downloading the PDF instead...');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Event_${eventNumber}_Paperwork.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error generating event paperwork:', error);
+                alert('Error generating event paperwork: ' + (error.message || error.error || error));
+            });
+    }
+
+    function generatePrintableSchedule(dateStr, printableEvents) {
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Core Events Schedule - ${dateStr}</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 40px;
+                background: white;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 3px solid #2E4C73;
+                padding-bottom: 20px;
+            }
+            .date-title {
+                font-size: 24px;
+                font-weight: bold;
+                color: #2E4C73;
+                margin: 0;
+            }
+            .subtitle {
+                font-size: 16px;
+                color: #666;
+                margin: 5px 0 0 0;
+            }
+            .schedule-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+            }
+            .schedule-table th {
+                background: #2E4C73;
+                color: white;
+                padding: 12px;
+                text-align: left;
+                font-weight: bold;
+                font-size: 14px;
+                border: 1px solid #ddd;
+            }
+            .schedule-table td {
+                padding: 10px 12px;
+                border: 1px solid #ddd;
+                font-size: 13px;
+            }
+            .schedule-table tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+            .schedule-table tr:hover {
+                background-color: #f0f0f0;
+            }
+            .employee-name {
+                font-weight: bold;
+                color: #2E4C73;
+            }
+            .event-time {
+                font-weight: bold;
+                color: #1B9BD8;
+            }
+            .event-name {
+                color: #333;
+            }
+            .footer {
+                margin-top: 40px;
+                text-align: center;
+                font-size: 12px;
+                color: #888;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+            }
+            @media print {
+                body { margin: 20px; }
+                .header { page-break-after: avoid; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1 class="date-title">${dateStr}</h1>
+            <p class="subtitle">Daily Schedule</p>
+        </div>
+
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th style="width: 30%;">Employee Name</th>
+                    <th style="width: 20%;">Scheduled Time</th>
+                    <th style="width: 50%;">Event Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${printableEvents.map(event => `
+                    <tr>
+                        <td class="employee-name">${event.employee_name}</td>
+                        <td class="event-time">${event.time}</td>
+                        <td class="event-name">${event.event_name}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <p class="disclaimer">Important: Schedules are subject to change. Always verify current assignments in AMP.</p>
+            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p>Product Connections Schedule Manager</p>
+        </div>
+    </body>
+    </html>
+    `;
+    }
+
+    function showLoading(message, showProgress = false) {
+        document.getElementById('loadingMessage').innerHTML = message;
+        const modalElement = document.getElementById('loadingModal');
+        const progressElement = document.getElementById('loadingProgress');
+
+        // Show or hide progress bar
+        progressElement.style.display = showProgress ? 'block' : 'none';
+        if (!showProgress) {
+            document.getElementById('loadingProgressBar').style.width = '0%';
+            document.getElementById('loadingProgressText').textContent = '';
+        }
+
+        modalElement.style.display = 'block';
+        modalElement.classList.add('show');
+        document.body.classList.add('modal-open');
+
+        // Add backdrop
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+    }
+
+    function updateLoadingProgress(current, total, message) {
+        const percentage = Math.round((current / total) * 100);
+        document.getElementById('loadingProgressBar').style.width = percentage + '%';
+        document.getElementById('loadingProgressText').textContent = message || `${current} of ${total}`;
+    }
+
+    function updateLoadingMessage(message) {
+        document.getElementById('loadingMessage').innerHTML = message;
+    }
+
+    function hideLoading() {
+        const modalElement = document.getElementById('loadingModal');
+        modalElement.style.display = 'none';
+        modalElement.classList.remove('show');
+        document.body.classList.remove('modal-open');
+
+        // Reset progress bar
+        document.getElementById('loadingProgress').style.display = 'none';
+        document.getElementById('loadingProgressBar').style.width = '0%';
+        document.getElementById('loadingProgressText').textContent = '';
+
+        // Remove backdrop
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+    }
+
+    // Helper function to get CSRF token from cookie
+    function getCsrfToken() {
+        const token = document.cookie.split('; ')
+            .find(row => row.startsWith('csrf_token='))
+            ?.split('=')[1];
+        return token || '';
+    }
+</script>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

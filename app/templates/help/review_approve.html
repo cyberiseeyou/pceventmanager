@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Review & Approve - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item active">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>✅ Review & Approve Schedules</h1>
+
+        <p class="help-intro">
+            After the auto scheduler creates proposed schedules, you can review, edit, and approve
+            them before submitting to Walmart's system. This guide explains the review workflow.
+        </p>
+
+        <div class="help-section">
+            <h2>Accessing the Review Page</h2>
+            <p>
+                There are two ways to access schedule proposals for review:
+            </p>
+            <ul>
+                <li>Click <strong>Review Schedule</strong> from the Dashboard notification</li>
+                <li>Navigate directly to the Auto Scheduler review page from the menu</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Understanding the Review Page</h2>
+            <p>
+                The review page organizes proposed schedules into three categories:
+            </p>
+
+            <h3>✓ Newly Scheduled Events</h3>
+            <p>
+                Events that were successfully assigned to employees. These are ready for approval
+                unless you want to make changes.
+            </p>
+
+            <h3>↔ Swaps/Bumped Events</h3>
+            <p>
+                Events where an employee was reassigned from one event to another to optimize the schedule.
+                Review these carefully to ensure the changes make sense.
+            </p>
+
+            <h3>✗ Failed Events</h3>
+            <p>
+                Events that couldn't be scheduled automatically. Each includes a reason for the failure,
+                such as "No qualified employees available" or "All employees on time off."
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Reviewing Proposed Schedules</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Review Each Category</h3>
+                        <p>
+                            Go through newly scheduled events, swaps, and failures. Each event shows:
+                        </p>
+                        <ul>
+                            <li>Event name and type</li>
+                            <li>Assigned employee</li>
+                            <li>Scheduled date and time</li>
+                            <li>Location/store information</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Check for Conflicts</h3>
+                        <p>
+                            Look for potential issues:
+                        </p>
+                        <ul>
+                            <li>Employee assigned to multiple events on the same day</li>
+                            <li>Travel time between locations</li>
+                            <li>Workload imbalances</li>
+                            <li>Rotation assignment mismatches</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Make Edits if Needed</h3>
+                        <p>
+                            Click the <strong>Edit</strong> button next to any event to modify:
+                        </p>
+                        <ul>
+                            <li>Assigned employee</li>
+                            <li>Date and time</li>
+                        </ul>
+                        <p>
+                            The system will validate your changes against hard constraints
+                            (time off, availability, job qualifications).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>View Daily Preview</h3>
+                        <p>
+                            Use the daily preview tab to see all events grouped by date.
+                            This helps identify scheduling conflicts and workload distribution.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Editing Pending Schedules</h2>
+            <p>
+                When you edit a pending schedule, the system will:
+            </p>
+            <ul>
+                <li>Validate the employee is qualified for the event type</li>
+                <li>Check the employee is available on that date/time</li>
+                <li>Verify the employee doesn't have time off requested</li>
+                <li>Detect conflicts with other pending schedules</li>
+            </ul>
+            <p>
+                If there are conflicts, warning messages will appear below both conflicting events.
+                For example:
+            </p>
+            <div class="info-box">
+                <strong>Schedule Conflict:</strong> John Doe is also proposed to be scheduled to
+                Supervisor - Walmart #5832 on Monday, January 15, 2025.
+            </div>
+            <p>
+                You can still approve schedules with conflicts, but you'll receive a confirmation warning.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Approving Schedules</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Click "Approve Schedule"</h3>
+                        <p>
+                            When you're satisfied with all assignments, click the
+                            <strong>Approve Schedule</strong> button.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Confirm Approval</h3>
+                        <p>
+                            A confirmation dialog will appear. If there are conflicts, you'll
+                            be warned. Confirm to proceed.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>API Submission</h3>
+                        <p>
+                            The system will:
+                        </p>
+                        <ul>
+                            <li>Submit each approved schedule to Walmart's Crossmark API</li>
+                            <li>Update event status to "Scheduled"</li>
+                            <li>Create local schedule records</li>
+                            <li>Auto-schedule supervisor events for Core events</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Review Results</h3>
+                        <p>
+                            You'll see a summary showing:
+                        </p>
+                        <ul>
+                            <li>Number of events successfully submitted</li>
+                            <li>Number of API submission failures (if any)</li>
+                            <li>Details of any failed submissions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Rejecting Schedules</h2>
+            <p>
+                If you're not satisfied with the proposed schedule, you can reject it:
+            </p>
+            <ol>
+                <li>Click the <strong>Reject Schedule</strong> button</li>
+                <li>Confirm the rejection</li>
+                <li>All pending schedules will be discarded</li>
+                <li>You can then modify employee availability or rotations and run the auto scheduler again</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Handling API Submission Failures</h2>
+            <p>
+                Sometimes events fail to submit to Walmart's API. Common reasons include:
+            </p>
+            <ul>
+                <li><strong>Missing external IDs:</strong> Employee or event doesn't have a Crossmark ID</li>
+                <li><strong>API timeout:</strong> Network issues or Walmart system unavailability</li>
+                <li><strong>Planning constraints:</strong> Walmart's system rejected the scheduling attempt</li>
+                <li><strong>Session expired:</strong> Authentication needs to be renewed</li>
+            </ul>
+            <p>
+                Failed events remain in "Unscheduled" status and can be rescheduled after resolving the issue.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Supervisor Event Auto-Scheduling</h2>
+            <p>
+                When a Core event is successfully scheduled, the system automatically:
+            </p>
+            <ol>
+                <li>Finds the corresponding Supervisor event for that location and date</li>
+                <li>Schedules a supervisor to that event</li>
+                <li>Submits it to the API</li>
+            </ol>
+            <p>
+                This ensures Core events always have supervisor coverage without manual intervention.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>Always review the daily preview to check for workload balance</li>
+                <li>Address scheduling conflicts before approving</li>
+                <li>Verify travel distances between events on the same day</li>
+                <li>Check that rotation employees are correctly assigned</li>
+                <li>Review failed events and update employee availability if needed</li>
+                <li>Don't approve schedules with unresolved conflicts unless necessary</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('main.dashboard') }}" class="next-step-card">
+                    <span class="next-step-icon">🏠</span>
+                    <span class="next-step-text">Return to Dashboard</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

@@ -1,0 +1,347 @@
+/**
+ * Modal Component Styles
+ *
+ * Styles for reusable modal dialog component.
+ * Follows BEM methodology for naming.
+ *
+ * Epic 1, Story 1.6: Create Shared Modal Component Foundation
+ * Task 6: Create Modal CSS Styles
+ *
+ * BEM Structure:
+ * - .modal__overlay - Full-screen overlay backdrop
+ * - .modal__container - Modal dialog box
+ * - .modal__container--small/medium/large - Size modifiers
+ * - .modal__header - Modal header with title and close button
+ * - .modal__title - Modal title
+ * - .modal__close - Close button
+ * - .modal__body - Modal body content
+ * - .modal__footer - Modal footer (for custom content)
+ */
+
+/* ============================================================================
+   Overlay (Backdrop)
+   ========================================================================= */
+
+.modal__overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.modal__overlay--open {
+  opacity: 1;
+}
+
+/* ============================================================================
+   Container (Modal Box)
+   ========================================================================= */
+
+.modal__container {
+  background-color: white;
+  border-radius: var(--border-radius, 8px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transform: scale(0.95);
+  transition: transform 0.2s ease-out;
+  overflow: hidden;
+}
+
+.modal__overlay--open .modal__container {
+  transform: scale(1);
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Size Modifiers */
+.modal__container--small {
+  width: 400px;
+}
+
+.modal__container--medium {
+  width: 600px;
+}
+
+.modal__container--large {
+  width: 800px;
+}
+
+/* ============================================================================
+   Header
+   ========================================================================= */
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: var(--font-size-h2, 1.5rem);
+  font-weight: var(--font-weight-heading, 600);
+  color: var(--pc-navy, #003366);
+  line-height: 1.2;
+}
+
+.modal__close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  line-height: 1;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  margin-left: var(--spacing-md, 1rem);
+}
+
+.modal__close:hover {
+  background-color: #f8f9fa;
+  color: #212529;
+}
+
+.modal__close:focus {
+  outline: 2px solid var(--focus-color, #007bff);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Body
+   ========================================================================= */
+
+.modal__body {
+  padding: var(--spacing-lg, 1.5rem);
+  overflow-y: auto;
+  flex: 1;
+  color: #212529;
+  line-height: 1.6;
+}
+
+.modal__body p {
+  margin-bottom: var(--spacing-sm, 0.75rem);
+}
+
+.modal__body p:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================================
+   Footer (Optional)
+   ========================================================================= */
+
+.modal__footer {
+  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 0.75rem);
+  flex-shrink: 0;
+}
+
+.modal__footer button {
+  padding: var(--spacing-xs, 0.5rem) var(--spacing-md, 1rem);
+  border-radius: var(--border-radius, 4px);
+  font-weight: var(--font-weight-heading, 600);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.modal__footer button:hover {
+  transform: translateY(-1px);
+}
+
+.modal__footer button:active {
+  transform: translateY(0);
+}
+
+/* ============================================================================
+   Mobile Responsive (375px minimum)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .modal__container {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+
+  /* All sizes become full-width on mobile */
+  .modal__container--small,
+  .modal__container--medium,
+  .modal__container--large {
+    width: 95vw;
+  }
+
+  .modal__header {
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+  }
+
+  .modal__title {
+    font-size: 1.25rem;
+  }
+
+  .modal__body {
+    padding: var(--spacing-md, 1rem);
+  }
+
+  .modal__footer {
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+    flex-direction: column;
+  }
+
+  .modal__footer button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 375px) {
+  .modal__container {
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .modal__title {
+    font-size: 1.125rem;
+  }
+
+  .modal__close {
+    width: 28px;
+    height: 28px;
+    font-size: 1.75rem;
+  }
+
+  .modal__body {
+    padding: var(--spacing-sm, 0.75rem);
+  }
+}
+
+/* ============================================================================
+   Accessibility Enhancements
+   ========================================================================= */
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .modal__overlay {
+    background-color: rgba(0, 0, 0, 0.75);
+  }
+
+  .modal__container {
+    border: 2px solid #000;
+  }
+
+  .modal__header,
+  .modal__footer {
+    border-color: #000;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .modal__overlay,
+  .modal__container {
+    transition: none;
+  }
+
+  .modal__overlay--open .modal__container {
+    animation: none;
+  }
+
+  .modal__close,
+  .modal__footer button {
+    transition: none;
+  }
+}
+
+/* Focus visible (keyboard navigation) */
+.modal__container:focus-visible {
+  outline: 3px solid var(--focus-color, #007bff);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Print Styles
+   ========================================================================= */
+
+@media print {
+  .modal__overlay {
+    display: none;
+  }
+}
+
+/* ============================================================================
+   Utility Classes
+   ========================================================================= */
+
+/* Hide content from screen readers when modal is closed */
+.modal__overlay[aria-hidden="true"] {
+  display: none;
+}
+
+/* Loading state for modal body */
+.modal__body--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.modal__body--loading::before {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top-color: var(--pc-blue, #007bff);
+  border-radius: 50%;
+  animation: modalSpinner 0.8s linear infinite;
+}
+
+@keyframes modalSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error state for modal body */
+.modal__body--error {
+  text-align: center;
+  color: #dc3545;
+}
+
+/* Success state for modal body */
+.modal__body--success {
+  text-align: center;
+  color: #28a745;
+}

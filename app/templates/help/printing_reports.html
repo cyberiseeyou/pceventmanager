@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block title %}Printing & Reports - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item active">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>🖨️ Printing & Reports</h1>
+
+        <p class="help-intro">
+            Generate and print professional schedules, reports, and documentation for employees,
+            managers, and field events. The printing system supports multiple formats and
+            customization options.
+        </p>
+
+        <div class="help-section">
+            <h2>Accessing the Printing Center</h2>
+            <p>
+                Navigate to <strong>Printing</strong> from the main navigation menu to access
+                all printing and report generation options.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Available Print Options</h2>
+
+            <h3>1. Daily Schedule</h3>
+            <p>
+                Print a comprehensive daily schedule showing all events for a specific date.
+            </p>
+            <p><strong>Use cases:</strong></p>
+            <ul>
+                <li>Morning briefings and team meetings</li>
+                <li>Posted schedules in office or warehouse</li>
+                <li>Quick reference for managers</li>
+            </ul>
+            <p><strong>What's included:</strong></p>
+            <ul>
+                <li>Event name and type</li>
+                <li>Assigned employee</li>
+                <li>Event time and location</li>
+                <li>Store number and address</li>
+                <li>Event status</li>
+            </ul>
+
+            <h3>2. Weekly Schedule</h3>
+            <p>
+                Generate a full week view (Monday-Sunday) of all scheduled events.
+            </p>
+            <p><strong>Use cases:</strong></p>
+            <ul>
+                <li>Weekly planning sessions</li>
+                <li>Employee schedule distribution</li>
+                <li>Capacity and workload planning</li>
+            </ul>
+            <p><strong>What's included:</strong></p>
+            <ul>
+                <li>All events organized by day</li>
+                <li>Daily event counts and summaries</li>
+                <li>Rotation assignments per day</li>
+                <li>Color-coded by event type</li>
+            </ul>
+
+            <h3>3. Employee Schedule</h3>
+            <p>
+                Print an individual employee's personal schedule.
+            </p>
+            <p><strong>Use cases:</strong></p>
+            <ul>
+                <li>Providing employees their assignments</li>
+                <li>Travel planning and route optimization</li>
+                <li>Individual performance tracking</li>
+            </ul>
+            <p><strong>What's included:</strong></p>
+            <ul>
+                <li>Employee name and contact info</li>
+                <li>All assigned events with details</li>
+                <li>Total hours scheduled</li>
+                <li>Event locations with map links</li>
+            </ul>
+
+            <h3>4. Event Paperwork</h3>
+            <p>
+                Generate event-specific documentation including instructions and sales data.
+            </p>
+            <p><strong>Use cases:</strong></p>
+            <ul>
+                <li>Field event preparation</li>
+                <li>Demo and sampling events</li>
+                <li>Juicer events with product data</li>
+            </ul>
+            <p><strong>What's included:</strong></p>
+            <ul>
+                <li>Event instructions and notes</li>
+                <li>EDR sales tools data</li>
+                <li>Product item lists</li>
+                <li>QR codes for attendance</li>
+            </ul>
+
+            <h3>5. Complete Daily Paperwork</h3>
+            <p>
+                Comprehensive documentation package for all events on a specific date.
+            </p>
+            <p><strong>Use cases:</strong></p>
+            <ul>
+                <li>Full team distribution before event days</li>
+                <li>Archival and record-keeping</li>
+                <li>Compliance documentation</li>
+            </ul>
+            <p><strong>What's included:</strong></p>
+            <ul>
+                <li>All event paperwork merged into one PDF</li>
+                <li>Daily summary and overview</li>
+                <li>Employee assignments by event</li>
+                <li>Complete EDR data for all events</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>How to Print Schedules</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Navigate to Printing</h3>
+                        <p>
+                            Click <strong>Printing</strong> in the main navigation menu.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Select Print Type</h3>
+                        <p>
+                            Choose the type of report you want to generate from the available options.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Configure Options</h3>
+                        <p>
+                            Depending on the print type, configure:
+                        </p>
+                        <ul>
+                            <li>Date or date range</li>
+                            <li>Employee selection (for employee schedules)</li>
+                            <li>Event types to include</li>
+                            <li>Format options (PDF, web view, etc.)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Generate and Download</h3>
+                        <p>
+                            Click <strong>Generate</strong> to create the report. Once complete,
+                            download the PDF or print directly from your browser.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Generating Complete Paperwork</h2>
+            <p>
+                The Complete Daily Paperwork feature requires EDR data integration. Before generating:
+            </p>
+
+            <ol>
+                <li>Ensure Walmart Retail Link credentials are configured</li>
+                <li>Run EDR sync to fetch latest sales data</li>
+                <li>Verify events have valid store numbers and product UPCs</li>
+                <li>Select the date for paperwork generation</li>
+                <li>Click "Generate Complete Paperwork"</li>
+            </ol>
+
+            <p>
+                The system will:
+            </p>
+            <ul>
+                <li>Fetch EDR data for each event's store location</li>
+                <li>Generate sales tools reports</li>
+                <li>Create item lists and instructions</li>
+                <li>Merge all documents into a single PDF</li>
+                <li>Add QR codes for attendance tracking</li>
+            </ul>
+
+            <div class="info-box">
+                <strong>Processing Time:</strong> Complete paperwork generation can take 3-7 minutes
+                depending on the number of events. EDR caching speeds up subsequent generations.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Print Customization Options</h2>
+
+            <h3>Layout Options:</h3>
+            <ul>
+                <li><strong>Portrait/Landscape:</strong> Choose page orientation</li>
+                <li><strong>Font Size:</strong> Adjust text size for readability</li>
+                <li><strong>Color/Black & White:</strong> Select color output or grayscale</li>
+                <li><strong>Headers/Footers:</strong> Include or exclude page headers and footers</li>
+            </ul>
+
+            <h3>Content Options:</h3>
+            <ul>
+                <li><strong>Include Contact Info:</strong> Show employee phone numbers and emails</li>
+                <li><strong>Show Event Status:</strong> Display event status (Scheduled, Submitted, etc.)</li>
+                <li><strong>Include Maps:</strong> Add location maps and directions</li>
+                <li><strong>EDR Data Level:</strong> Full, summary, or none</li>
+            </ul>
+
+            <h3>Saving Custom Configurations:</h3>
+            <p>
+                You can save custom print configurations as templates in Settings for quick reuse.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Printing from Calendar View</h2>
+            <p>
+                You can also print schedules directly from the Calendar view:
+            </p>
+            <ol>
+                <li>Navigate to the Calendar page</li>
+                <li>Select your desired date range</li>
+                <li>Click the <strong>Print</strong> button in the top-right corner</li>
+                <li>Choose quick print options</li>
+                <li>Print directly or save as PDF</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Batch Printing</h2>
+            <p>
+                Generate multiple reports at once using batch printing:
+            </p>
+
+            <h3>Employee Schedule Batch:</h3>
+            <ul>
+                <li>Select multiple employees from a list</li>
+                <li>System generates individual schedules for each</li>
+                <li>Downloads as a single ZIP file with separate PDFs</li>
+            </ul>
+
+            <h3>Weekly Batch:</h3>
+            <ul>
+                <li>Generate paperwork for entire week at once</li>
+                <li>Each day gets a separate PDF</li>
+                <li>Organized in folders by date</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>QR Code Integration</h2>
+            <p>
+                Event paperwork includes QR codes for easy attendance tracking:
+            </p>
+
+            <h3>How QR Codes Work:</h3>
+            <ol>
+                <li>Each event gets a unique QR code on its paperwork</li>
+                <li>Employees scan the QR code when they arrive at the event</li>
+                <li>System automatically logs attendance and start time</li>
+                <li>Scan again at event completion to log end time</li>
+            </ol>
+
+            <h3>QR Code Instructions Page:</h3>
+            <p>
+                The system includes a dedicated QR instruction page that explains:
+            </p>
+            <ul>
+                <li>How to scan QR codes using a smartphone</li>
+                <li>What information is captured</li>
+                <li>Troubleshooting scanning issues</li>
+                <li>Alternative attendance reporting methods</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Export Options</h2>
+            <p>
+                Beyond printing, you can export data in multiple formats:
+            </p>
+
+            <h3>PDF Export:</h3>
+            <ul>
+                <li>Professional formatted documents</li>
+                <li>Suitable for printing and sharing</li>
+                <li>Maintains formatting across all devices</li>
+            </ul>
+
+            <h3>Excel Export:</h3>
+            <ul>
+                <li>Spreadsheet format for data analysis</li>
+                <li>Editable cells for manual adjustments</li>
+                <li>Import into other systems</li>
+            </ul>
+
+            <h3>CSV Export:</h3>
+            <ul>
+                <li>Plain text comma-separated values</li>
+                <li>Universal compatibility</li>
+                <li>Import into any spreadsheet or database</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Troubleshooting</h2>
+
+            <h3>Print Preview is Blank</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Ensure pop-ups are not blocked in your browser</li>
+                <li>Try a different browser (Chrome or Firefox recommended)</li>
+                <li>Check that events exist for the selected date</li>
+            </ul>
+
+            <h3>PDFs Not Downloading</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Check your browser's download settings and folder</li>
+                <li>Disable browser extensions that may block downloads</li>
+                <li>Ensure sufficient disk space</li>
+            </ul>
+
+            <h3>Paperwork Missing EDR Data</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Run EDR sync before generating paperwork</li>
+                <li>Verify Walmart Retail Link credentials are configured</li>
+                <li>Check that events have valid store numbers</li>
+            </ul>
+
+            <h3>Slow Paperwork Generation</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Pre-run EDR sync to populate cache</li>
+                <li>Generate paperwork during off-peak hours</li>
+                <li>Reduce the number of events in a single batch</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Generate paperwork in advance:</strong> Create paperwork 1-2 days
+                    before events to allow time for review and reprints if needed
+                </li>
+                <li>
+                    <strong>Use batch printing:</strong> Generate multiple schedules at once
+                    to save time
+                </li>
+                <li>
+                    <strong>Keep templates updated:</strong> Regularly review print templates
+                    to ensure they meet current needs
+                </li>
+                <li>
+                    <strong>Test QR codes:</strong> Scan QR codes after generation to verify
+                    they work correctly
+                </li>
+                <li>
+                    <strong>Archive PDFs:</strong> Save generated PDFs for record-keeping
+                    and audit purposes
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.edr_sync') }}" class="next-step-card">
+                    <span class="next-step-icon">🔄</span>
+                    <span class="next-step-text">Learn about EDR sync</span>
+                </a>
+                <a href="{{ url_for('main.dashboard') }}" class="next-step-card">
+                    <span class="next-step-icon">🏠</span>
+                    <span class="next-step-text">Return to Dashboard</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

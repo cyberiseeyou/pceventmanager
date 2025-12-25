@@ -1,0 +1,794 @@
+{% extends "base.html" %}
+
+{% block title %}Unreported Events - Product Connections Scheduler{% endblock %}
+{% block page_title %}Scheduler{% endblock %}
+
+{% block extra_head %}
+<style>
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    .page-title {
+        font-size: var(--font-size-h1);
+        font-weight: var(--font-weight-heading);
+        color: var(--pc-navy);
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+        font-size: var(--font-size-small);
+        color: var(--text-secondary);
+        margin-top: var(--spacing-xs);
+    }
+
+    .events-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--bg-primary);
+        border-radius: var(--border-radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .events-table thead {
+        background: var(--pc-navy);
+        color: white;
+    }
+
+    .events-table th {
+        padding: var(--spacing-md);
+        text-align: left;
+        font-weight: var(--font-weight-heading);
+        font-size: var(--font-size-small);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .events-table tbody tr {
+        border-bottom: 1px solid rgba(46, 76, 115, 0.1);
+        transition: background-color 0.2s ease;
+    }
+
+    .events-table tbody tr:hover {
+        background-color: var(--bg-secondary);
+    }
+
+    .events-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .events-table td {
+        padding: var(--spacing-md);
+        vertical-align: top;
+    }
+
+    .event-name {
+        font-weight: var(--font-weight-heading);
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .event-type {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: var(--border-radius-sm);
+        font-size: 11px;
+        font-weight: var(--font-weight-medium);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .event-type-core {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .event-type-supervisor {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .event-type-juicer {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .event-type-digital {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .event-type-freeosk {
+        background: #fce4ec;
+        color: #c2185b;
+    }
+
+    .event-type-other {
+        background: #f5f5f5;
+        color: #616161;
+    }
+
+    .days-overdue {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: var(--border-radius-sm);
+        font-weight: var(--font-weight-bold);
+        font-size: var(--font-size-small);
+    }
+
+    .days-overdue-1-3 {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .days-overdue-4-7 {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .days-overdue-8plus {
+        background: #d32f2f;
+        color: white;
+    }
+
+    .date-info {
+        font-size: var(--font-size-small);
+        color: var(--text-secondary);
+    }
+
+    .date-label {
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xxl);
+        color: var(--text-secondary);
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: var(--spacing-md);
+        color: var(--pc-light-blue);
+    }
+
+    .empty-state-message {
+        font-size: var(--font-size-body);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .summary-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md);
+        background: var(--bg-secondary);
+        border-radius: var(--border-radius-md);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .summary-count {
+        font-size: var(--font-size-h3);
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+    }
+
+    .btn-reissue {
+        padding: 6px 12px;
+        background: var(--pc-blue);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-small);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .btn-reissue:hover {
+        background: var(--pc-navy);
+    }
+
+    .btn-unschedule {
+        padding: 6px 12px;
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-small);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        margin-left: var(--spacing-xs);
+    }
+
+    .btn-unschedule:hover {
+        background: #c82333;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: var(--spacing-xs);
+        flex-wrap: wrap;
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: var(--border-radius-md);
+        padding: var(--spacing-lg);
+        max-width: 500px;
+        width: 90%;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .modal-header {
+        font-size: var(--font-size-h3);
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .modal-body {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .form-group {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .form-label {
+        display: block;
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .form-control {
+        width: 100%;
+        padding: var(--spacing-sm);
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-body);
+    }
+
+    .form-checkbox {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--spacing-sm);
+    }
+
+    .btn-secondary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+        background: #5a6268;
+    }
+
+    .btn-primary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--pc-blue);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+    }
+
+    .btn-primary:hover {
+        background: var(--pc-navy);
+    }
+
+    .event-info-text {
+        background: var(--bg-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        margin-bottom: var(--spacing-md);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Unreported Events</h1>
+    <p class="page-subtitle">Events from the last 2 weeks that need to be reported</p>
+</div>
+
+{% if total_count > 0 %}
+<div class="summary-bar">
+    <div class="summary-count">{{ total_count }} event{{ 's' if total_count != 1 else '' }} pending report</div>
+</div>
+
+<table class="events-table">
+    <thead>
+        <tr>
+            <th>Event Details</th>
+            <th>Scheduled Employee</th>
+            <th>Scheduled Date & Time</th>
+            <th>Event Period</th>
+            <th>Days Overdue</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in unreported_events %}
+        <tr>
+            <td>
+                <div class="event-name">{{ item.event.project_name }}</div>
+                <span class="event-type event-type-{{ item.event.event_type.lower().replace(' ', '-') }}">
+                    {{ item.event.event_type }}
+                </span>
+            </td>
+            <td>
+                <strong>{{ item.employee.name }}</strong>
+            </td>
+            <td>
+                <div><span class="date-label">Date:</span> {{ item.schedule_date.strftime('%m/%d/%Y') }}</div>
+                <div class="date-info">{{ item.schedule_time }}</div>
+            </td>
+            <td>
+                <div><span class="date-label">Start:</span> {{ item.event.start_datetime.strftime('%m/%d/%Y') }}</div>
+                <div><span class="date-label">Due:</span> {{ item.event.due_datetime.strftime('%m/%d/%Y') }}</div>
+            </td>
+            <td>
+                {% if item.days_overdue <= 3 %} <span class="days-overdue days-overdue-1-3">{{ item.days_overdue }}
+                    day{{ 's' if item.days_overdue != 1 else '' }}</span>
+                    {% elif item.days_overdue <= 7 %} <span class="days-overdue days-overdue-4-7">{{ item.days_overdue
+                        }} days</span>
+                        {% else %}
+                        <span class="days-overdue days-overdue-8plus">{{ item.days_overdue }} days</span>
+                        {% endif %}
+            </td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-reissue" data-schedule-id="{{ item.schedule.id }}"
+                        data-event-name="{{ item.event.project_name|escape }}"
+                        data-event-type="{{ item.event.event_type }}" data-employee-id="{{ item.employee.id }}"
+                        data-employee-name="{{ item.employee.name|escape }}"
+                        data-schedule-date="{{ item.schedule_date.strftime('%Y-%m-%d') }}"
+                        data-schedule-time="{{ item.schedule.schedule_datetime.strftime('%H:%M') }}"
+                        data-expiration-date="{{ (item.event.due_datetime + timedelta(days=1)).strftime('%Y-%m-%d') }}">
+                        Reissue
+                    </button>
+                    <button class="btn-unschedule" data-schedule-id="{{ item.schedule.id }}"
+                        data-event-name="{{ item.event.project_name|escape }}"
+                        data-employee-name="{{ item.employee.name|escape }}" onclick="unscheduleEvent(this)">
+                        Unschedule
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">✓</div>
+    <div class="empty-state-message">All events from the last 2 weeks have been reported!</div>
+    <p class="date-info">No unreported events found.</p>
+</div>
+{% endif %}
+
+<!-- Reissue Modal -->
+<div id="reissueModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">Reissue Event</div>
+        <div class="modal-body">
+            <div class="event-info-text" id="eventInfo"></div>
+
+            <form id="reissueForm">
+                <input type="hidden" id="scheduleId" name="schedule_id">
+                <input type="hidden" id="eventType" name="event_type">
+
+                <div class="form-group">
+                    <label class="form-label" for="employeeSelect">Assign To Employee:</label>
+                    <select id="employeeSelect" name="employee_id" class="form-control" required>
+                        <!-- Will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="scheduleDate">Schedule Date:</label>
+                    <input type="date" id="scheduleDate" name="schedule_date" class="form-control" required>
+                    <small class="form-help">Select the date for the rescheduled event</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="scheduleTime">Schedule Time:</label>
+                    <select id="scheduleTime" name="schedule_time" class="form-control" required>
+                        <option value="">Loading times...</option>
+                    </select>
+                    <small class="form-help">Select a core timeslot for the event</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="expirationDate">Expiration Date:</label>
+                    <input type="date" id="expirationDate" name="expiration_date" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="includeResponses" name="include_responses">
+                        <span>Include Previous Responses</span>
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeReissueModal()">Cancel</button>
+            <button type="button" class="btn-primary" onclick="submitReissue(event)">Reissue Event</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentScheduleId = null;
+    let currentEmployeeId = null;
+    let currentEventType = null;
+    let availableTimeslots = [];
+
+    // Add event listeners to all reissue buttons when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function () {
+        const reissueButtons = document.querySelectorAll('.btn-reissue');
+        reissueButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                const scheduleId = this.dataset.scheduleId;
+                const eventName = this.dataset.eventName;
+                const eventType = this.dataset.eventType;
+                const employeeId = this.dataset.employeeId;
+                const employeeName = this.dataset.employeeName;
+                const scheduleDate = this.dataset.scheduleDate;
+                const scheduleTime = this.dataset.scheduleTime;
+                const expirationDate = this.dataset.expirationDate;
+
+                openReissueModal(scheduleId, eventName, eventType, employeeId, employeeName, scheduleDate, scheduleTime, expirationDate);
+            });
+        });
+    });
+
+    async function loadTimeslots(eventType) {
+        try {
+            // Load timeslots based on event type with date for counts
+            const dateInput = document.getElementById('scheduleDate');
+            const selectedDate = dateInput ? dateInput.value : '';
+            let url = `/api/event-allowed-times/${encodeURIComponent(eventType || 'Core')}`;
+            if (selectedDate) {
+                url += `?date=${encodeURIComponent(selectedDate)}`;
+            }
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.allowed_times && data.allowed_times.length > 0) {
+                    // Use time_details if available (includes counts)
+                    if (data.time_details && data.time_details.length > 0) {
+                        availableTimeslots = data.time_details.map((detail, index) => ({
+                            slot: index + 1,
+                            start: detail.value,
+                            label: detail.label  // e.g. "9:45 AM (2 scheduled)"
+                        }));
+                    } else {
+                        // Fallback to allowed_times
+                        availableTimeslots = data.allowed_times.map((time, index) => ({
+                            slot: index + 1,
+                            start: time,
+                            label: formatTimeLabel(time)
+                        }));
+                    }
+                    console.log(`Loaded ${eventType} timeslots:`, availableTimeslots);
+                    return;
+                }
+            }
+            // Fallback to core slots if no specific times found
+            await loadCoreTimeslots();
+        } catch (error) {
+            console.error('Failed to load timeslots:', error);
+            await loadCoreTimeslots();
+        }
+    }
+
+    async function loadCoreTimeslots() {
+        try {
+            const response = await fetch('/api/event-time-settings');
+            if (response.ok) {
+                const data = await response.json();
+                availableTimeslots = data.core_slots || [];
+                console.log('Loaded core timeslots:', availableTimeslots);
+            }
+        } catch (error) {
+            console.error('Failed to load core timeslots:', error);
+            // Fallback timeslots
+            availableTimeslots = [
+                { slot: 1, start: '09:45', label: '9:45 AM' },
+                { slot: 2, start: '10:30', label: '10:30 AM' },
+                { slot: 3, start: '11:00', label: '11:00 AM' },
+                { slot: 4, start: '11:30', label: '11:30 AM' }
+            ];
+        }
+    }
+
+    function populateTimeslotDropdown(selectedTime) {
+        const select = document.getElementById('scheduleTime');
+        select.innerHTML = '';
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a time...';
+        select.appendChild(defaultOption);
+
+        // Add timeslot options
+        availableTimeslots.forEach(slot => {
+            const option = document.createElement('option');
+            // Handle different data formats
+            const startTime = slot.start || slot.start_time;
+            const label = slot.label || formatTimeLabel(startTime);
+
+            option.value = startTime;
+            option.textContent = `Slot ${slot.slot}: ${label}`;
+
+            // Pre-select if matches
+            if (startTime === selectedTime || startTime === selectedTime + ':00') {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        // If no match found and we have a selected time, add it as custom option
+        if (selectedTime && !select.value) {
+            const customOption = document.createElement('option');
+            customOption.value = selectedTime;
+            customOption.textContent = `Current: ${formatTimeLabel(selectedTime)}`;
+            customOption.selected = true;
+            select.insertBefore(customOption, select.options[1]);
+        }
+    }
+
+    function formatTimeLabel(time24) {
+        if (!time24) return '';
+        const [hours, minutes] = time24.split(':');
+        const h = parseInt(hours);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${minutes} ${ampm}`;
+    }
+
+    async function openReissueModal(scheduleId, eventName, eventType, employeeId, employeeName, scheduleDate, scheduleTime, expirationDate) {
+        currentScheduleId = scheduleId;
+        currentEmployeeId = employeeId;
+        currentEventType = eventType;
+
+        // Set event info
+        document.getElementById('eventInfo').innerHTML = `
+        <strong>Event:</strong> ${eventName}<br>
+        <strong>Type:</strong> ${eventType}<br>
+        <strong>Currently Scheduled To:</strong> ${employeeName}
+    `;
+
+        // Set form values
+        document.getElementById('scheduleId').value = scheduleId;
+        document.getElementById('eventType').value = eventType;
+        document.getElementById('scheduleDate').value = scheduleDate;
+        document.getElementById('expirationDate').value = expirationDate;
+        document.getElementById('includeResponses').checked = false;
+
+        // Show loading state for time dropdown
+        const timeSelect = document.getElementById('scheduleTime');
+        timeSelect.innerHTML = '<option value="">Loading times...</option>';
+
+        // Load timeslots based on event type, then populate
+        await loadTimeslots(eventType);
+        populateTimeslotDropdown(scheduleTime);
+
+        // Load employees
+        loadEmployees(employeeId);
+
+        // Show modal
+        document.getElementById('reissueModal').classList.add('active');
+    }
+
+    function closeReissueModal() {
+        document.getElementById('reissueModal').classList.remove('active');
+    }
+
+    async function loadEmployees(defaultEmployeeId) {
+        try {
+            const response = await fetch('/api/employees');
+            const employees = await response.json();
+
+            const select = document.getElementById('employeeSelect');
+            select.innerHTML = '';
+
+            // Filter for active employees only
+            const activeEmployees = employees.filter(emp => emp.is_active);
+
+            activeEmployees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = emp.name;
+                if (String(emp.id) === String(defaultEmployeeId)) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Failed to load employees:', error);
+            alert('Failed to load employees. Please try again.');
+        }
+    }
+
+    async function submitReissue(evt) {
+        const scheduleId = document.getElementById('scheduleId').value;
+        const employeeSelect = document.getElementById('employeeSelect');
+        const employeeId = employeeSelect.value;
+        const employeeName = employeeSelect.options[employeeSelect.selectedIndex]?.text || '';
+        const scheduleDate = document.getElementById('scheduleDate').value;
+        const scheduleTime = document.getElementById('scheduleTime').value;
+        const expirationDate = document.getElementById('expirationDate').value;
+        const includeResponses = document.getElementById('includeResponses').checked;
+
+        if (!employeeId || !scheduleDate || !scheduleTime || !expirationDate) {
+            alert('Please fill in all required fields (Employee, Date, Time, and Expiration Date).');
+            return;
+        }
+
+        // Log what we're sending for debugging
+        console.log('Reissue request:', {
+            schedule_id: scheduleId,
+            employee_id: employeeId,
+            employee_name: employeeName,
+            schedule_date: scheduleDate,
+            schedule_time: scheduleTime,
+            expiration_date: expirationDate,
+            selected_index: employeeSelect.selectedIndex
+        });
+
+        try {
+            // Disable submit button to prevent double-submission
+            const submitButton = evt?.target || document.querySelector('.modal-footer .btn-primary');
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Reissuing...';
+            }
+
+            const requestBody = {
+                schedule_id: parseInt(scheduleId),
+                employee_id: employeeId,  // Keep as string - employee IDs can be alphanumeric
+                schedule_date: scheduleDate,
+                schedule_time: scheduleTime,
+                include_responses: includeResponses,
+                expiration_date: expirationDate
+            };
+
+            console.log('Sending to API:', requestBody);
+
+            const response = await fetch('/api/reissue-event', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message || 'Event reissued successfully!');
+                closeReissueModal();
+                // Reload page to show updated status
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to reissue event'));
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Reissue Event';
+                }
+            }
+        } catch (error) {
+            console.error('Failed to reissue event:', error);
+            alert('Failed to reissue event. Please try again.');
+            const btn = document.querySelector('.modal-footer .btn-primary');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Reissue Event';
+            }
+        }
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('reissueModal').addEventListener('click', function (e) {
+        if (e.target === this) {
+            closeReissueModal();
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeReissueModal();
+        }
+    });
+
+    // Unschedule event function
+    async function unscheduleEvent(button) {
+        const scheduleId = button.dataset.scheduleId;
+        const eventName = button.dataset.eventName;
+        const employeeName = button.dataset.employeeName;
+
+        // Confirm with the user
+        const confirmMessage = `Are you sure you want to unschedule this event?\n\nEvent: ${eventName}\nEmployee: ${employeeName}\n\nThis will remove the employee assignment from this event.`;
+
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            // Disable button to prevent double-clicks
+            button.disabled = true;
+            button.textContent = 'Unscheduling...';
+
+            const response = await fetch(`/api/event/${scheduleId}/unschedule`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message || 'Event unscheduled successfully!');
+                // Reload page to show updated list
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to unschedule event'));
+                button.disabled = false;
+                button.textContent = 'Unschedule';
+            }
+        } catch (error) {
+            console.error('Failed to unschedule event:', error);
+            alert('Failed to unschedule event. Please try again.');
+            button.disabled = false;
+            button.textContent = 'Unschedule';
+        }
+    }
+</script>
+{% endblock %}

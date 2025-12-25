@@ -1,0 +1,151 @@
+/**
+ * Dashboard Page Styles
+ *
+ * Additional styles for dashboard-specific components,
+ * particularly the Schedule Now buttons on unscheduled event cards.
+ *
+ * Epic 2, Story 2.2: Add Schedule Now Buttons to Dashboard
+ */
+
+/* ============================================================================
+   Schedule Now Button Styles
+   ========================================================================= */
+
+.schedule-now-btn {
+  /* Button already inherits base .btn styles from schedule-modal.css */
+  /* These are dashboard-specific enhancements */
+
+  position: relative;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  transition: all 0.3s ease;
+}
+
+.schedule-now-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.schedule-now-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Loading state styles */
+.schedule-now-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.schedule-now-btn .btn-text {
+  display: inline;
+}
+
+.schedule-now-btn .btn-spinner {
+  display: none;
+  margin-left: 0.5rem;
+  animation: spin-pulse 1s linear infinite;
+}
+
+/* Spinner animation */
+@keyframes spin-pulse {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   Enhanced Unscheduled Item Styles
+   ========================================================================= */
+
+.unscheduled-item {
+  /* Enhanced hover state when button is present */
+  transition: all 0.25s ease;
+}
+
+.unscheduled-item:hover {
+  border-color: var(--pc-blue, #1B9BD8);
+  box-shadow: 0 4px 16px rgba(27, 155, 216, 0.15);
+}
+
+.unscheduled-item:has(.schedule-now-btn:hover) {
+  /* Highlight entire card when button is hovered */
+  border-color: #007bff;
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.2);
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .schedule-now-btn {
+    font-size: 0.875rem;
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+    min-height: 44px; /* Touch-friendly minimum */
+  }
+
+  .schedule-now-btn .btn-text {
+    display: inline;
+  }
+
+  .schedule-now-btn .btn-spinner {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 375px) {
+  .schedule-now-btn {
+    font-size: 0.8125rem;
+  }
+}
+
+/* ============================================================================
+   Reduced Motion Support
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-now-btn {
+    transition: none;
+  }
+
+  .schedule-now-btn .btn-spinner {
+    animation: none;
+  }
+
+  .unscheduled-item {
+    transition: none;
+  }
+}
+
+/* ============================================================================
+   High Contrast Mode Support
+   ========================================================================= */
+
+@media (prefers-contrast: high) {
+  .schedule-now-btn {
+    border-width: 2px;
+  }
+
+  .schedule-now-btn:focus {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
+/* ============================================================================
+   Print Styles
+   ========================================================================= */
+
+@media print {
+  .schedule-now-btn {
+    display: none; /* Hide interactive buttons in print */
+  }
+}

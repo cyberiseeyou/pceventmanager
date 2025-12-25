@@ -1,0 +1,692 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Management - Product Connections Scheduler{% endblock %}
+
+{% block extra_head %}
+<style>
+    .employee-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+        margin-bottom: 40px;
+    }
+
+    .employee-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .employee-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .employee-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    .employee-name {
+        font-size: 18px;
+        font-weight: bold;
+        margin: 0;
+        color: var(--primary-color);
+    }
+
+    .employee-id {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 4px;
+    }
+
+    .employee-badge {
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-right: 5px;
+        display: inline-block;
+        white-space: nowrap;
+    }
+
+    .badge-lead-event-specialist {
+        background: #FF69B4;
+    }
+
+    .badge-club-supervisor {
+        background: #00FFFF;
+        color: #000;
+    }
+
+    .badge-juicer-barista {
+        background: #ff9800;
+    }
+
+    .badge-event-specialist {
+        background: #28a745;
+    }
+
+    .badge-ab-trained {
+        background: #007bff;
+    }
+
+    .badge-inactive {
+        background: #dc3545;
+    }
+
+    .availability-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+        margin: 15px 0;
+    }
+
+    .day-cell {
+        text-align: center;
+        padding: 6px 4px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .day-available {
+        background: #28a745;
+        color: white;
+    }
+
+    .day-unavailable {
+        background: #dc3545;
+        color: white;
+    }
+
+    .day-header {
+        background: #6c757d;
+        color: white;
+        font-weight: bold;
+    }
+
+    .employee-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+        gap: 10px;
+    }
+
+    .employee-actions-left {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .employee-actions-right {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 3px solid var(--pc-blue);
+    }
+
+    .section-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin: 0;
+    }
+
+    .section-actions {
+        display: flex;
+        gap: 15px;
+    }
+
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal.active,
+    .modal.modal-open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        position: relative;
+        background-color: #fefefe;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        max-width: 700px;
+        transform: scale(0.95);
+        transition: transform 200ms ease;
+        z-index: 1001;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal.modal-open .modal-content {
+        transform: scale(1);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        color: var(--primary-color);
+    }
+
+    .close-modal {
+        font-size: 28px;
+        font-weight: bold;
+        color: #aaa;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .close-modal:hover,
+    .close-modal:focus {
+        color: #000;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .form-row.full {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--secondary-color);
+        box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.2);
+    }
+
+    /* Fix checkbox styling - NORMAL SIZE */
+    .checkbox-group {
+        display: flex;
+        gap: 20px;
+        margin: 15px 0;
+        align-items: center;
+    }
+
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    /* Availability checkboxes in form */
+    .availability-form-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin: 15px 0;
+    }
+
+    .availability-form-cell {
+        text-align: center;
+    }
+
+    .availability-form-cell label {
+        display: block;
+        font-weight: bold;
+        color: #6c757d;
+        margin-bottom: 8px;
+        font-size: 12px;
+    }
+
+    .availability-form-cell input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid #dee2e6;
+    }
+
+    /* Import Employees Modal */
+    .import-employee-list {
+        max-height: 400px;
+        overflow-y: auto;
+        margin: 20px 0;
+    }
+
+    .import-employee-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        background: #f8f9fa;
+    }
+
+    .import-employee-item:hover {
+        background: #e9ecef;
+    }
+
+    .import-employee-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-right: 12px;
+        cursor: pointer;
+    }
+
+    .import-employee-info {
+        flex: 1;
+    }
+
+    .import-employee-name {
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+
+    .import-employee-id {
+        font-size: 12px;
+        color: #6c757d;
+    }
+
+    .import-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+
+    .alert-error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+
+    .alert-warning {
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+    }
+
+    .alert-info {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+    }
+
+    .loading::after {
+        content: '...';
+        animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { content: '.'; }
+        40% { content: '..'; }
+        60%, 100% { content: '...'; }
+    }
+
+    /* Employee Statistics */
+    .employee-stats {
+        margin-top: 40px;
+        padding: 25px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        border: 2px solid var(--pc-light-blue);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .stats-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin: 0 0 20px 0;
+        text-align: center;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--pc-blue);
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+    }
+
+    .stat-item {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .stat-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-color: var(--secondary-color);
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        line-height: 1;
+    }
+
+    /* Responsive stats */
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Page Header -->
+    <div class="page-header" style="text-align: center; margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-md); border-bottom: 2px solid var(--pc-light-blue);">
+        <h1 class="page-title" style="font-size: var(--font-size-h1); font-weight: var(--font-weight-heading); color: var(--pc-navy); margin: 0; letter-spacing: -0.02em;">Employee Management</h1>
+    </div>
+
+    <!-- Flash messages -->
+    <div id="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Employees Section -->
+    <div class="section-header">
+        <h2 class="section-title">Employees</h2>
+        <div class="section-actions">
+            <button type="button" id="add-employee-btn" class="btn btn-primary">
+                <span style="margin-right: 5px;">+</span> Add Employee
+            </button>
+            <button type="button" id="import-employees-btn" class="btn btn-secondary">
+                <span style="margin-right: 5px;">⬇</span> Import Employees
+            </button>
+        </div>
+    </div>
+
+    <!-- Employees Grid -->
+    <div id="employees-grid" class="employee-grid">
+        <div class="loading">Loading employees</div>
+    </div>
+
+    <!-- Employee Statistics -->
+    <div class="employee-stats">
+        <h3 class="stats-title">Employee Summary</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-label">Total Employees</div>
+                <div class="stat-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Juicer Baristas</div>
+                <div class="stat-value" id="stat-juicers">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Event Specialists</div>
+                <div class="stat-value" id="stat-es">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Lead Event Specialists</div>
+                <div class="stat-value" id="stat-leads">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">AB Trained</div>
+                <div class="stat-value" id="stat-ab">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Employee Modal -->
+    <div id="add-employee-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Employee</h2>
+                <button class="close-modal" onclick="closeAddEmployeeModal()">&times;</button>
+            </div>
+
+            <div id="modal-alerts"></div>
+
+            <form id="add-employee-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="employee-id">Employee ID</label>
+                        <input type="text" id="employee-id" placeholder="e.g., US814117">
+                        <small style="color: #6c757d;">Used for Crossmark integration</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="employee-name">Name *</label>
+                        <input type="text" id="employee-name" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="employee-email">Email</label>
+                        <input type="email" id="employee-email">
+                    </div>
+                    <div class="form-group">
+                        <label for="employee-phone">Phone</label>
+                        <input type="tel" id="employee-phone">
+                    </div>
+                </div>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="job-title">Job Title *</label>
+                        <select id="job-title" required>
+                            <option value="Event Specialist">Event Specialist</option>
+                            <option value="Lead Event Specialist">Lead Event Specialist</option>
+                            <option value="Club Supervisor">Club Supervisor</option>
+                            <option value="Juicer Barista">Juicer Barista</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="is-active" checked>
+                        <span>Active</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="adult-beverage-trained">
+                        <span>Adult Beverage Trained</span>
+                    </label>
+                </div>
+
+                <h4 style="margin-top: 20px; margin-bottom: 10px; color: var(--primary-color);">Weekly Availability</h4>
+                <div class="availability-form-grid">
+                    <div class="availability-form-cell">
+                        <label>Mon</label>
+                        <input type="checkbox" id="avail-monday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Tue</label>
+                        <input type="checkbox" id="avail-tuesday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Wed</label>
+                        <input type="checkbox" id="avail-wednesday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Thu</label>
+                        <input type="checkbox" id="avail-thursday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Fri</label>
+                        <input type="checkbox" id="avail-friday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Sat</label>
+                        <input type="checkbox" id="avail-saturday" checked>
+                    </div>
+                    <div class="availability-form-cell">
+                        <label>Sun</label>
+                        <input type="checkbox" id="avail-sunday" checked>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeAddEmployeeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Employees Modal -->
+    <div id="import-employees-modal" class="modal">
+        <div class="modal-content" style="max-width: 580px; border-radius: 12px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div class="modal-header" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 20px 24px; border-bottom: none;">
+                <div>
+                    <h2 style="margin: 0; font-size: 20px; font-weight: 600;">Sync & Import Employees</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">Synchronize with MVRetail database</p>
+                </div>
+                <button class="close-modal" onclick="closeImportEmployeesModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 6px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+            </div>
+
+            <div id="import-modal-alerts" style="padding: 0 20px;"></div>
+
+            <div id="import-employee-list" style="padding: 20px; max-height: 450px; overflow-y: auto;">
+                <div style="text-align: center; padding: 40px 20px;">
+                    <div style="width: 48px; height: 48px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                    <div style="color: #64748b; font-size: 14px;">Loading employees from MVRetail...</div>
+                </div>
+                <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+            </div>
+
+            <div class="modal-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-outline" onclick="closeImportEmployeesModal()" style="padding: 10px 20px; border: 1px solid #cbd5e1; background: white; color: #475569; border-radius: 6px; font-weight: 500; cursor: pointer;">Close</button>
+                <button type="button" class="btn btn-primary" onclick="importSelectedEmployees()" style="padding: 10px 20px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: none;">Import Selected</button>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/employees.js') }}"></script>
+{% endblock %}

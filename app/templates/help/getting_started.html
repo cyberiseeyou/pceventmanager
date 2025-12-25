@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Getting Started - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item active">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>🚀 Getting Started</h1>
+
+        <p class="help-intro">
+            Welcome to the Product Connections Scheduler! This guide will help you get up and running quickly.
+        </p>
+
+        <div class="help-section">
+            <h2>What is the Scheduler?</h2>
+            <p>
+                The Product Connections Scheduler is an automated scheduling system designed to efficiently assign
+                field events to your team of employees. It integrates with Walmart's Retail Link system to manage
+                Core events, Digitals, Juicers, and Supervisor events.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Quick Start Checklist</h2>
+            <p>Follow these steps to get started with the scheduler:</p>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Set Up Walmart Credentials</h3>
+                        <p>
+                            Configure your Walmart Retail Link credentials in the Settings page to enable
+                            API integration and event synchronization.
+                        </p>
+                        <a href="{{ url_for('help.walmart_credentials') }}" class="help-link">
+                            Learn how to set up credentials →
+                        </a>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Add Your Employees</h3>
+                        <p>
+                            Import or manually add your team members with their roles, certifications,
+                            availability, and time-off schedules.
+                        </p>
+                        <a href="{{ url_for('help.employee_management') }}" class="help-link">
+                            Learn about employee management →
+                        </a>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Sync Events from Walmart</h3>
+                        <p>
+                            Use the manual sync button or let the automatic sync fetch unscheduled events
+                            from Walmart Retail Link.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Run the Auto Scheduler</h3>
+                        <p>
+                            Let the auto scheduler intelligently assign events to employees based on their
+                            availability, skills, and workload.
+                        </p>
+                        <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-link">
+                            Learn how the auto scheduler works →
+                        </a>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h3>Review and Approve Schedules</h3>
+                        <p>
+                            Review the proposed schedules, make any necessary adjustments, and approve
+                            to submit them to Walmart's system.
+                        </p>
+                        <a href="{{ url_for('help.review_approve') }}" class="help-link">
+                            Learn about the review process →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Key Features</h2>
+            <ul class="feature-list">
+                <li>
+                    <strong>Automatic Event Synchronization:</strong>
+                    Pulls unscheduled events from Walmart Retail Link automatically
+                </li>
+                <li>
+                    <strong>Intelligent Scheduling:</strong>
+                    Assigns events based on employee skills, availability, and workload
+                </li>
+                <li>
+                    <strong>Rotation Management:</strong>
+                    Manages daily rotations for Juicers and Primary Leads
+                </li>
+                <li>
+                    <strong>Conflict Detection:</strong>
+                    Prevents scheduling conflicts and respects time-off requests
+                </li>
+                <li>
+                    <strong>Review Workflow:</strong>
+                    Allows managers to review and adjust schedules before submission
+                </li>
+                <li>
+                    <strong>Daily Validation Dashboard:</strong>
+                    Real-time monitoring of daily schedules with validation warnings and alerts
+                </li>
+                <li>
+                    <strong>EDR Integration:</strong>
+                    Syncs sales data from Walmart Retail Link for event-specific paperwork
+                </li>
+                <li>
+                    <strong>Attendance Tracking:</strong>
+                    Track employee attendance via QR codes and manual entry
+                </li>
+                <li>
+                    <strong>Time Off Management:</strong>
+                    Manage employee time-off requests and availability overrides
+                </li>
+                <li>
+                    <strong>Workload Analytics:</strong>
+                    Comprehensive analytics for team performance and capacity planning
+                </li>
+                <li>
+                    <strong>Printing & Reports:</strong>
+                    Generate professional schedules and paperwork packages
+                </li>
+                <li>
+                    <strong>API Integration:</strong>
+                    Automatically submits approved schedules back to Walmart's system
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Navigation Overview</h2>
+            <p>The main navigation bar provides access to all key features:</p>
+
+            <ul class="nav-overview">
+                <li>
+                    <strong>Dashboard:</strong> Overview of scheduling status, pending actions, and quick stats
+                </li>
+                <li>
+                    <strong>Daily Validation:</strong> Real-time monitoring of daily schedules with warnings
+                </li>
+                <li>
+                    <strong>Events:</strong> View and manage unscheduled events
+                </li>
+                <li>
+                    <strong>Unreported Events:</strong> Track events that haven't been reported yet
+                </li>
+                <li>
+                    <strong>Calendar:</strong> Visual calendar view of all scheduled events
+                </li>
+                <li>
+                    <strong>Attendance Calendar:</strong> Employee attendance tracking and history
+                </li>
+                <li>
+                    <strong>Employee Management:</strong> Add and manage team members, availability, time off
+                </li>
+                <li>
+                    <strong>Auto Scheduler:</strong> Automated scheduling with review and approval workflow
+                </li>
+                <li>
+                    <strong>Workload Analytics:</strong> Team performance and capacity planning dashboards
+                </li>
+                <li>
+                    <strong>Printing:</strong> Print schedules, paperwork, and generate reports
+                </li>
+                <li>
+                    <strong>Settings (in user dropdown):</strong> Configure system settings, credentials, and integrations
+                </li>
+                <li>
+                    <strong>Admin:</strong> Database sync, EDR configuration, and system management
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <p>
+                Now that you understand the basics, dive deeper into specific topics using the navigation
+                menu on the left, or explore these common tasks:
+            </p>
+
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.walmart_credentials') }}" class="next-step-card">
+                    <span class="next-step-icon">🔑</span>
+                    <span class="next-step-text">Set up Walmart credentials</span>
+                </a>
+                <a href="{{ url_for('help.employee_management') }}" class="next-step-card">
+                    <span class="next-step-icon">👥</span>
+                    <span class="next-step-text">Add your first employee</span>
+                </a>
+                <a href="{{ url_for('help.auto_scheduler_guide') }}" class="next-step-card">
+                    <span class="next-step-icon">🤖</span>
+                    <span class="next-step-text">Learn about auto scheduling</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

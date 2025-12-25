@@ -1,0 +1,2561 @@
+/* daily-view.css - Daily Schedule View Page Styles */
+
+/**
+ * Daily View Container
+ *
+ * Main container for daily schedule view with max-width constraint
+ * and centered layout.
+ */
+.daily-view-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-lg, 24px);
+}
+
+/**
+ * Daily View Header
+ *
+ * Contains back button, date navigation, and role assignments.
+ * White background with subtle shadow for visual separation.
+ */
+.daily-view-header {
+  background: var(--bg-secondary, #FFFFFF);
+  border-radius: var(--border-radius-md, 8px);
+  padding: var(--spacing-lg, 24px);
+  margin-bottom: var(--spacing-lg, 24px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/**
+ * Back Button
+ *
+ * Navigation link to return to monthly calendar view.
+ */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  color: var(--color-primary, #3B82F6);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--border-radius-sm, 4px);
+  transition: background-color 150ms ease;
+}
+
+.btn-back:hover {
+  background-color: var(--color-neutral-100, #F3F4F6);
+}
+
+.btn-back:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+.btn-back .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/**
+ * Date Navigation
+ *
+ * Horizontal layout with prev/next arrows and centered date display.
+ */
+.date-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md, 16px);
+  margin: var(--spacing-md, 16px) 0;
+}
+
+/**
+ * Daily Date Display
+ *
+ * Large, bold date text as primary heading.
+ * Size: 36px per PRD specification
+ */
+.daily-date {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-neutral-900, #111827);
+  margin: 0;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/**
+ * Navigation Buttons (Prev/Next)
+ *
+ * Circular buttons with arrows for day navigation.
+ * Size: 48x48px for adequate touch target.
+ */
+.btn-nav {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-neutral-100, #F3F4F6);
+  border-radius: 50%;
+  color: var(--color-neutral-700, #374151);
+  text-decoration: none;
+  font-size: 24px;
+  line-height: 1;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.btn-nav:hover {
+  background: var(--color-neutral-200, #E5E7EB);
+  transform: scale(1.05);
+}
+
+.btn-nav:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+/**
+ * Role Assignments
+ *
+ * Display Juicer and Primary Lead assignments in horizontal layout.
+ */
+.role-assignments {
+  display: flex;
+  gap: var(--spacing-xl, 32px);
+  margin-top: var(--spacing-md, 16px);
+  flex-wrap: wrap;
+}
+
+.role-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  font-size: 16px;
+  color: var(--color-neutral-600, #6B7280);
+}
+
+.role-icon {
+  font-size: 20px;
+  margin-right: var(--spacing-xs, 4px);
+}
+
+.role-label {
+  font-weight: 400;
+}
+
+.role-value {
+  color: var(--color-neutral-900, #111827);
+  font-weight: 600;
+}
+
+/**
+ * No Assignment State
+ *
+ * Red italic text for missing role assignments with assign link.
+ */
+.no-assignment {
+  color: var(--color-error, #EF4444);
+  font-style: italic;
+  margin-right: var(--spacing-xs, 4px);
+}
+
+.link-subtle {
+  color: var(--color-primary, #3B82F6);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.link-subtle:hover {
+  text-decoration: underline;
+}
+
+/**
+ * Daily View Content
+ *
+ * Main content area for event cards and scheduling actions.
+ * To be populated by subsequent stories.
+ */
+.daily-view-content {
+  padding: var(--spacing-md, 16px);
+}
+
+.placeholder-content {
+  padding: var(--spacing-xl, 32px);
+  text-align: center;
+  color: var(--color-neutral-500, #9CA3AF);
+  font-style: italic;
+}
+
+/**
+ * Mobile Responsive Styles
+ *
+ * Breakpoints: 375px (small mobile), 768px (tablet), 1024px (desktop)
+ * [Source: docs/architecture/front-end-architecture.md:1436-1440]
+ */
+
+/* Tablet and below (< 768px) */
+@media (max-width: 767px) {
+  .daily-view-container {
+    padding: var(--spacing-md, 16px);
+  }
+
+  .daily-view-header {
+    padding: var(--spacing-md, 16px);
+  }
+
+  .daily-date {
+    font-size: 24px;
+  }
+
+  .btn-nav {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .role-assignments {
+    flex-direction: column;
+    gap: var(--spacing-sm, 8px);
+  }
+
+  .date-navigation {
+    gap: var(--spacing-sm, 8px);
+  }
+}
+
+/* Small mobile (< 375px) */
+@media (max-width: 374px) {
+  .daily-date {
+    font-size: 20px;
+  }
+
+  .btn-back .btn-text {
+    display: none;
+    /* Show icon only on very small screens */
+  }
+
+  .role-item {
+    font-size: 14px;
+  }
+}
+
+/**
+ * Accessibility Enhancements
+ *
+ * WCAG 2.1 AA Compliance [Source: docs/architecture/front-end-architecture.md:422-500]
+ */
+
+/* High contrast focus indicators */
+@media (prefers-contrast: high) {
+
+  .btn-back:focus,
+  .btn-nav:focus,
+  .link-subtle:focus {
+    outline-width: 3px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .btn-nav:hover {
+    transform: none;
+  }
+
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Screen reader only utility class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ==========================================================================
+   Daily Summary Section Styles (Story 3.2)
+   ========================================================================== */
+
+/**
+ * Dashboard Section
+ * Container for summary and timeslot widgets
+ */
+.dashboard-section {
+  background: var(--color-neutral-50, #FFFFFF);
+  border-radius: var(--border-radius-md, 8px);
+  padding: var(--spacing-lg, 24px);
+  margin-bottom: var(--spacing-lg, 24px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+  margin: 0 0 var(--spacing-md, 16px) 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+}
+
+/**
+ * Section Header with Filter
+ */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md, 16px);
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.section-header .section-title {
+  margin-bottom: 0;
+}
+
+/**
+ * Event Type Filter
+ */
+.event-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+}
+
+.filter-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-neutral-600, #6B7280);
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  border-radius: var(--border-radius-sm, 4px);
+  background: white;
+  font-size: 14px;
+  color: var(--color-neutral-700, #374151);
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #3B82F6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/**
+ * Section Controls Container
+ * Holds view toggle and filter
+ */
+.section-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+  flex-wrap: wrap;
+}
+
+/**
+ * View Toggle Button Group
+ */
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  border-radius: var(--border-radius-sm, 4px);
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  padding: 6px 12px;
+  background: white;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-neutral-600, #6B7280);
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.view-toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--color-neutral-300, #D1D5DB);
+}
+
+.view-toggle-btn:hover {
+  background: var(--color-neutral-100, #F3F4F6);
+}
+
+.view-toggle-btn.active {
+  background: var(--color-primary, #3B82F6);
+  color: white;
+}
+
+.toggle-icon {
+  font-size: 14px;
+}
+
+@media (max-width: 767px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .section-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .view-toggle {
+    justify-content: center;
+  }
+
+  .event-filter {
+    width: 100%;
+  }
+
+  .filter-select {
+    flex: 1;
+  }
+}
+
+/**
+ * Event Summary Component
+ * Displays event counts by type
+ */
+.event-summary {
+  display: grid;
+  gap: var(--spacing-md, 16px);
+}
+
+.event-summary__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+}
+
+.event-summary__total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-md, 16px);
+  background: var(--color-neutral-100, #F3F4F6);
+  border-radius: var(--border-radius-sm, 4px);
+}
+
+.event-summary__count {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--color-primary, #3B82F6);
+  line-height: 1;
+}
+
+.event-summary__label {
+  font-size: 14px;
+  color: var(--color-neutral-600, #6B7280);
+  margin-top: var(--spacing-xs, 4px);
+}
+
+.event-summary__types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--spacing-sm, 8px);
+}
+
+/**
+ * Event Type Item
+ * Individual event type count display
+ */
+.event-type-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-sm, 8px);
+  border: 1px solid var(--color-neutral-200, #E5E7EB);
+  border-radius: var(--border-radius-sm, 4px);
+  background: var(--color-neutral-50, #FFFFFF);
+}
+
+.event-type-item__icon {
+  font-size: 24px;
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.event-type-item__label {
+  font-size: 12px;
+  color: var(--color-neutral-600, #6B7280);
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.event-type-item__count {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-neutral-900, #111827);
+}
+
+/**
+ * Timeslot Grid
+ * 2x2 grid layout for core timeslots
+ */
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md, 16px);
+}
+
+/**
+ * Timeslot Block
+ * Individual timeslot coverage display with color coding
+ */
+.timeslot-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--spacing-md, 16px);
+  border-radius: var(--border-radius-md, 8px);
+  text-align: center;
+  cursor: help;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  min-height: 120px;
+}
+
+.timeslot-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.timeslot-block__time {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: var(--spacing-sm, 8px);
+  text-align: center;
+  width: 100%;
+  padding-bottom: var(--spacing-xs, 4px);
+  border-bottom: 1px solid currentColor;
+  opacity: 0.7;
+}
+
+.timeslot-block__count {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.timeslot-block__label {
+  font-size: 14px;
+  margin-top: var(--spacing-xs, 4px);
+}
+
+/**
+ * Employee List in Timeslot
+ * Shows employee names instead of just count
+ */
+.timeslot-block__employees {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: center;
+}
+
+.timeslot-block__employee {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeslot-block__empty {
+  font-size: 14px;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/**
+ * Timeslot Status Color Coding
+ * Green (optimal): 3+ employees
+ * Yellow (low): 1-2 employees
+ * Red (empty): 0 employees
+ */
+.timeslot-block--optimal {
+  background: #D1FAE5;
+  /* Green-100 */
+  color: #065F46;
+  /* Green-800 */
+  border: 2px solid #10B981;
+  /* Green-500 */
+}
+
+.timeslot-block--low {
+  background: #FEF3C7;
+  /* Yellow-100 */
+  color: #92400E;
+  /* Yellow-800 */
+  border: 2px solid #F59E0B;
+  /* Yellow-500 */
+}
+
+.timeslot-block--empty {
+  background: #FEE2E2;
+  /* Red-100 */
+  color: #991B1B;
+  /* Red-800 */
+  border: 2px solid #DC2626;
+  /* Red-500 */
+}
+
+/**
+ * Loading Spinner
+ * Temporary loading state while data loads
+ */
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl, 32px);
+  color: var(--color-neutral-500, #9CA3AF);
+  font-style: italic;
+}
+
+/**
+ * Error Message
+ * Display API errors gracefully
+ */
+.error-message {
+  padding: var(--spacing-md, 16px);
+  background: #FEE2E2;
+  color: #991B1B;
+  border-radius: var(--border-radius-sm, 4px);
+  border-left: 4px solid #DC2626;
+}
+
+/* ==========================================================================
+   Responsive Styles (Story 3.2)
+   ========================================================================== */
+
+/**
+ * Tablet and below (< 768px)
+ * Maintain 2x2 grid for timeslots on mobile per AC 7
+ */
+@media (max-width: 767px) {
+  .dashboard-section {
+    padding: var(--spacing-md, 16px);
+    margin-bottom: var(--spacing-md, 16px);
+  }
+
+  .event-summary__count {
+    font-size: 36px;
+  }
+
+  .event-summary__types {
+    grid-template-columns: repeat(2, 1fr);
+    /* 2 columns on mobile */
+  }
+
+  /* Timeslot grid remains 2x2 on mobile per requirements */
+  .timeslot-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm, 8px);
+  }
+
+  .timeslot-block {
+    padding: var(--spacing-md, 16px);
+  }
+
+  .timeslot-block__time {
+    font-size: 14px;
+  }
+
+  .timeslot-block__count {
+    font-size: 32px;
+  }
+
+  .timeslot-block__label {
+    font-size: 12px;
+  }
+}
+
+/**
+ * Small mobile (< 375px)
+ * Further reduce font sizes
+ */
+@media (max-width: 374px) {
+  .event-summary__count {
+    font-size: 28px;
+  }
+
+  .timeslot-block__count {
+    font-size: 24px;
+  }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements (Story 3.2)
+   ========================================================================== */
+
+/**
+ * High Contrast Mode
+ * Enhanced focus indicators for accessibility
+ */
+@media (prefers-contrast: high) {
+  .timeslot-block:focus {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
+/**
+ * Reduced Motion
+ * Respect user preference for reduced animations
+ */
+@media (prefers-reduced-motion: reduce) {
+  .timeslot-block:hover {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Event Cards Section Styles (Story 3.3)
+   ========================================================================== */
+
+/**
+ * Event Cards Container - Card View (default)
+ * Two-column grid layout for compact display
+ */
+.event-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+/**
+ * Event Cards Container - List View
+ * Single column table-like layout
+ */
+.event-cards.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/**
+ * List View Header Row
+ */
+.event-list-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 100px 100px;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-neutral-100, #F3F4F6);
+  border-bottom: 2px solid var(--color-neutral-300, #D1D5DB);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--color-neutral-600, #6B7280);
+}
+
+/**
+ * List View Event Row
+ */
+.event-list-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 100px 100px;
+  gap: 8px;
+  padding: 6px 10px;
+  background: white;
+  border-bottom: 1px solid var(--color-neutral-200, #E5E7EB);
+  font-size: 12px;
+  align-items: center;
+  transition: background 150ms ease;
+}
+
+.event-list-row:hover {
+  background: var(--color-neutral-50, #F9FAFB);
+}
+
+.event-list-row[data-event-type="Supervisor"] {
+  background: linear-gradient(90deg, #f1f5f9 0%, white 20%);
+  border-left: 3px solid #6366f1;
+}
+
+.event-list-row[data-event-type="Core"] {
+  font-weight: 500;
+}
+
+.event-list-row__time {
+  font-weight: 600;
+  color: var(--color-neutral-700, #374151);
+  white-space: nowrap;
+}
+
+.event-list-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-neutral-900, #111827);
+}
+
+.event-list-row__employee {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-list-row__type {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--color-neutral-100, #F3F4F6);
+  text-align: center;
+}
+
+.event-list-row__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.event-list-row__actions .btn-sm {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/**
+ * Event Card Component - Card View
+ * Ultra-compact card for maximum density
+ */
+.event-card {
+  background: var(--color-neutral-50, #FFFFFF);
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 150ms ease;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+/* Supervisor events get a visual indicator to show relationship with Core */
+.event-card[data-event-type="Supervisor"] {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-left: 3px solid #6366f1;
+}
+
+.event-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.event-card:focus-within {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+/**
+ * Event Card Header
+ * Contains employee name and overdue badge
+ */
+.event-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.employee-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-neutral-900, #111827);
+}
+
+.badge-overdue {
+  background: #FEE2E2;
+  color: #991B1B;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/**
+ * Event Card Details
+ * Contains time, event info - ultra compact
+ */
+.event-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 10px;
+  color: var(--color-neutral-600, #6B7280);
+  margin-bottom: 4px;
+}
+
+.event-time {
+  font-weight: 600;
+  color: var(--color-neutral-700, #374151);
+  font-size: 11px;
+}
+
+.event-info {
+  color: var(--color-neutral-900, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-type-display,
+.event-dates {
+  font-size: 9px;
+  color: var(--color-neutral-500, #9CA3AF);
+}
+
+.link-sales-tool {
+  color: var(--color-primary, #3B82F6);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.link-sales-tool:hover {
+  color: #2563EB;
+  text-decoration: underline;
+}
+
+.link-sales-tool:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-sm, 4px);
+}
+
+/**
+ * Event Card Status
+ * Reporting status badge - compact
+ */
+.event-card__status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--color-neutral-600, #6B7280);
+}
+
+.status-badge {
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.status-submitted {
+  background: #D1FAE5;
+  /* Green-100 */
+  color: #065F46;
+  /* Green-800 */
+}
+
+.status-scheduled {
+  background: #FEF3C7;
+  /* Yellow-100 */
+  color: #92400E;
+  /* Yellow-800 */
+}
+
+/**
+ * Event Divider - Hidden in compact mode
+ */
+.event-divider {
+  display: none;
+}
+
+/**
+ * Event Card Actions
+ * Compact action buttons
+ */
+.event-card__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.btn-reschedule {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--color-primary, #3B82F6);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.btn-reschedule:hover {
+  background: #2563EB;
+}
+
+.btn-reschedule:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+/**
+ * Dropdown Menu Component
+ * More actions dropdown - compact
+ */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-toggle {
+  padding: 4px 8px;
+  background: var(--color-neutral-200, #E5E7EB);
+  color: var(--color-neutral-700, #374151);
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 150ms ease;
+  white-space: nowrap;
+}
+
+.dropdown-toggle:hover {
+  background: var(--color-neutral-300, #D1D5DB);
+}
+
+.dropdown-toggle:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: var(--spacing-xs, 4px);
+  background: white;
+  border: 1px solid var(--color-neutral-200, #E5E7EB);
+  border-radius: var(--border-radius-md, 8px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  z-index: 10;
+}
+
+.dropdown-open .dropdown-menu {
+  display: block;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--color-neutral-700, #374151);
+  cursor: pointer;
+  transition: background 150ms ease;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background: var(--color-neutral-100, #F3F4F6);
+}
+
+.dropdown-item:focus {
+  background: var(--color-neutral-100, #F3F4F6);
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: -2px;
+}
+
+/**
+ * Event Divider
+ * Visual separator between card sections
+ */
+.event-divider {
+  height: 1px;
+  background: var(--color-neutral-200, #E5E7EB);
+  margin: var(--spacing-sm, 12px) 0;
+}
+
+/**
+ * Empty State
+ * Displayed when no events scheduled
+ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl, 48px) var(--spacing-lg, 24px);
+  text-align: center;
+}
+
+.empty-state__message {
+  font-size: 16px;
+  color: var(--color-neutral-600, #6B7280);
+  margin: 0;
+}
+
+/* ==========================================================================
+   Responsive Styles for Event Cards (Story 3.3)
+   ========================================================================== */
+
+/**
+ * Tablet and mobile (< 768px)
+ * Stack to single column, adjust spacing
+ */
+@media (max-width: 767px) {
+  .event-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card {
+    padding: var(--spacing-sm, 10px);
+  }
+
+  .event-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs, 4px);
+  }
+
+  .employee-name {
+    font-size: 14px;
+  }
+
+  .event-card__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn-reschedule,
+  .dropdown-toggle {
+    width: 100%;
+  }
+
+  .dropdown-menu {
+    right: auto;
+    left: 0;
+    width: 100%;
+  }
+}
+
+/**
+ * Small mobile (< 375px)
+ * Further reduce font sizes and spacing
+ */
+@media (max-width: 374px) {
+  .employee-name {
+    font-size: 14px;
+  }
+
+  .event-card__details {
+    font-size: 12px;
+  }
+
+  .status-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements for Event Cards (Story 3.3)
+   ========================================================================== */
+
+/**
+ * High Contrast Mode
+ */
+@media (prefers-contrast: high) {
+  .event-card:focus-within {
+    outline-width: 3px;
+  }
+
+  .btn-reschedule:focus,
+  .dropdown-toggle:focus,
+  .dropdown-item:focus,
+  .link-sales-tool:focus {
+    outline-width: 3px;
+  }
+}
+
+/**
+ * Reduced Motion for Event Cards
+ */
+@media (prefers-reduced-motion: reduce) {
+  .event-card:hover {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Confirmation Modal Styles (Story 3.5)
+   ========================================================================== */
+
+/**
+ * Modal Base Styles
+ * Full-screen overlay modal for confirmations
+ */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+}
+
+.modal.modal-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.modal-container {
+  position: relative;
+  background: white;
+  border-radius: var(--border-radius-md, 8px);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: modalFadeIn 200ms ease-out;
+}
+
+.modal-container--small {
+  max-width: 400px;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg, 24px);
+  border-bottom: 1px solid var(--color-neutral-200, #E5E7EB);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-neutral-500, #9CA3AF);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 150ms ease;
+}
+
+.modal-close:hover {
+  background: var(--color-neutral-100, #F3F4F6);
+  color: var(--color-neutral-900, #111827);
+}
+
+.modal-close:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+.modal-body {
+  padding: var(--spacing-lg, 24px);
+}
+
+.modal-message {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-neutral-700, #374151);
+}
+
+.modal-footer {
+  padding: var(--spacing-lg, 24px);
+  border-top: 1px solid var(--color-neutral-200, #E5E7EB);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 12px);
+}
+
+/* ==========================================================================
+   Toast Notification Styles (Story 3.5)
+   ========================================================================== */
+
+/**
+ * Toast Notification
+ * Temporary notifications for user feedback
+ */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 24px;
+  border-radius: var(--border-radius-sm, 4px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  font-size: 14px;
+  font-weight: 500;
+  animation: slideInRight 200ms ease-out;
+}
+
+.notification-success {
+  background: #10B981;
+  /* Green-500 */
+  color: white;
+}
+
+.notification-error {
+  background: #DC2626;
+  /* Red-600 */
+  color: white;
+}
+
+.notification-warning {
+  background: #F59E0B;
+  /* Yellow-500 */
+  color: #78350F;
+  /* Yellow-900 */
+}
+
+.notification-info {
+  background: #3B82F6;
+  /* Blue-500 */
+  color: white;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   Responsive Styles for Modal and Notifications (Story 3.5)
+   ========================================================================== */
+
+/**
+ * Mobile (< 768px)
+ */
+@media (max-width: 767px) {
+  .modal-container {
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .modal-body {
+    max-height: calc(100vh - 180px);
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+  }
+
+  .notification {
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements for Modal (Story 3.5)
+   ========================================================================== */
+
+/**
+ * High Contrast Mode
+ */
+@media (prefers-contrast: high) {
+  .modal-close:focus {
+    outline-width: 3px;
+  }
+}
+
+/**
+ * Reduced Motion
+ */
+@media (prefers-reduced-motion: reduce) {
+
+  .notification,
+  .modal-container {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Attendance Section Styles (Story 4.2)
+   ========================================================================== */
+
+/**
+ * Event Card Attendance Section
+ * Quick attendance recording dropdown integrated into event cards
+ */
+.event-card__attendance {
+  padding-top: 12px;
+}
+
+.attendance-label {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--color-neutral-700, #374151);
+  font-size: 14px;
+}
+
+/**
+ * Attendance Dropdown
+ * Dropdown menu for selecting attendance status
+ */
+.attendance-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-attendance {
+  background: var(--color-neutral-100, #F3F4F6);
+  color: var(--color-neutral-700, #374151);
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  padding: 8px 16px;
+  border-radius: var(--border-radius-sm, 6px);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+
+.btn-attendance:hover {
+  background: var(--color-neutral-200, #E5E7EB);
+  border-color: var(--color-neutral-400, #9CA3AF);
+}
+
+.btn-attendance:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+.attendance-dropdown.dropdown-open .dropdown-menu {
+  display: block;
+}
+
+.attendance-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/**
+ * Recorded Attendance Display
+ * Shows recorded attendance status with edit capability
+ */
+.attendance-recorded {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.attendance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.attendance-badge--on_time {
+  background: #D1FAE5;
+  /* Green-100 */
+  color: #065F46;
+  /* Green-800 */
+  border: 1px solid #10B981;
+  /* Green-500 */
+}
+
+.attendance-badge--late {
+  background: #FEF3C7;
+  /* Yellow-100 */
+  color: #92400E;
+  /* Yellow-800 */
+  border: 1px solid #F59E0B;
+  /* Yellow-500 */
+}
+
+.attendance-badge--called_in {
+  background: #FED7AA;
+  /* Orange-200 */
+  color: #9A3412;
+  /* Orange-800 */
+  border: 1px solid #FB923C;
+  /* Orange-400 */
+}
+
+.attendance-badge--no_call_no_show {
+  background: #FEE2E2;
+  /* Red-100 */
+  color: #991B1B;
+  /* Red-800 */
+  border: 1px solid #DC2626;
+  /* Red-600 */
+}
+
+.attendance-notes-preview {
+  font-size: 13px;
+  color: var(--color-neutral-600, #6B7280);
+  font-style: italic;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-edit-attendance {
+  font-size: 13px;
+  color: var(--color-primary, #3B82F6);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.btn-edit-attendance:hover {
+  color: #2563EB;
+  text-decoration: underline;
+}
+
+.btn-edit-attendance:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/**
+ * Attendance Note Modal
+ * Medium-sized modal for adding attendance notes
+ */
+.modal-container--medium {
+  max-width: 500px;
+}
+
+.form-group {
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: var(--spacing-xs, 8px);
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+  font-size: 14px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  border-radius: var(--border-radius-sm, 4px);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--color-primary, #3B82F6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-help {
+  display: block;
+  margin-top: var(--spacing-xs, 4px);
+  font-size: 12px;
+  color: var(--color-neutral-500, #9CA3AF);
+}
+
+/* ==========================================================================
+   Responsive Styles for Attendance (Story 4.2)
+   ========================================================================== */
+
+/**
+ * Mobile (< 768px)
+ * Stack attendance elements vertically
+ */
+@media (max-width: 767px) {
+  .attendance-recorded {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .attendance-notes-preview {
+    max-width: 100%;
+  }
+
+  .btn-attendance {
+    width: 100%;
+  }
+
+  .attendance-dropdown .dropdown-menu {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements for Attendance (Story 4.2)
+   ========================================================================== */
+
+/**
+ * High Contrast Mode
+ */
+@media (prefers-contrast: high) {
+
+  .btn-attendance:focus,
+  .btn-edit-attendance:focus {
+    outline-width: 3px;
+  }
+
+  .attendance-badge {
+    border-width: 2px;
+  }
+}
+
+/**
+ * Reduced Motion
+ */
+@media (prefers-reduced-motion: reduce) {
+
+  .btn-attendance,
+  .btn-edit-attendance {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Employee Attendance List Styles (Separate from Events)
+   ========================================================================== */
+
+/**
+ * Attendance Table Container
+ * Displays all scheduled employees with their attendance status
+ */
+.attendance-list {
+  width: 100%;
+}
+
+.attendance-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/**
+ * Attendance Row
+ * Individual row for each scheduled employee
+ */
+.attendance-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background: var(--color-neutral-50, #FFFFFF);
+  border: 1px solid var(--color-neutral-200, #E5E7EB);
+  border-radius: var(--border-radius-sm, 6px);
+  transition: box-shadow 150ms ease;
+}
+
+.attendance-row:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/**
+ * Employee Info Section
+ */
+.attendance-row__employee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-icon {
+  font-size: 20px;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+  font-size: 16px;
+}
+
+/**
+ * Status Section
+ */
+.attendance-row__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.attendance-badge--no-record {
+  background: var(--color-neutral-100, #F3F4F6);
+  color: var(--color-neutral-600, #6B7280);
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+}
+
+.attendance-badge--excused_absence {
+  background: #DBEAFE;
+  /* Blue-100 */
+  color: #1E40AF;
+  /* Blue-800 */
+  border: 1px solid #3B82F6;
+  /* Blue-500 */
+}
+
+.attendance-notes {
+  font-size: 13px;
+  color: var(--color-neutral-600, #6B7280);
+  font-style: italic;
+  cursor: help;
+}
+
+.employee-start-time {
+  font-size: 13px;
+  color: var(--color-neutral-500, #9CA3AF);
+  font-weight: 400;
+}
+
+/**
+ * Actions Section
+ */
+.attendance-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 180px;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.btn-edit-attendance-row {
+  background: var(--color-neutral-200, #E5E7EB);
+  color: var(--color-neutral-700, #374151);
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  border-radius: var(--border-radius-sm, 4px);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+
+.btn-edit-attendance-row:hover {
+  background: var(--color-neutral-300, #D1D5DB);
+}
+
+.btn-edit-attendance-row:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Responsive Styles for Attendance List
+   ========================================================================== */
+
+/**
+ * Mobile (< 768px)
+ * Stack attendance row elements vertically
+ */
+@media (max-width: 767px) {
+  .attendance-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .attendance-row__status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .attendance-row__actions {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .btn-edit-attendance-row,
+  .attendance-dropdown {
+    width: 100%;
+  }
+
+  .attendance-dropdown .btn-sm {
+    width: 100%;
+  }
+}
+
+/**
+ * Small mobile (< 375px)
+ */
+@media (max-width: 374px) {
+  .attendance-row {
+    padding: 12px;
+  }
+
+  .employee-name {
+    font-size: 14px;
+  }
+}
+
+/* ==========================================================================
+   Story 3.7: Change Employee Modal Styles
+   ========================================================================== */
+
+/**
+ * Current Assignment Display
+ * Shows the currently assigned employee before change
+ */
+.current-assignment {
+  margin-bottom: var(--spacing-lg, 24px);
+  padding: var(--spacing-md, 16px);
+  background: var(--pc-light-blue, #E8F4F9);
+  border-radius: var(--border-radius-sm, 4px);
+  border-left: 4px solid var(--pc-blue, #1B9BD8);
+}
+
+.current-employee-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  font-size: 16px;
+  margin-top: var(--spacing-xs, 4px);
+}
+
+.employee-icon {
+  font-size: 20px;
+}
+
+/**
+ * Form Help Text
+ */
+.form-help {
+  margin-top: var(--spacing-xs, 4px);
+  font-size: 13px;
+  color: var(--text-muted, #6C757D);
+  font-style: italic;
+}
+
+.form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-neutral-300, #D1D5DB);
+  border-radius: var(--border-radius-sm, 4px);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+  background: white;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #3B82F6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/**
+ * Modal Container Sizes
+ */
+.modal-container--small {
+  max-width: 400px;
+}
+
+.modal-container--medium {
+  max-width: 550px;
+}
+
+.modal-container--large {
+  max-width: 800px;
+}
+
+/**
+ * Screen Reader Only Utility
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/**
+ * Conflict List Styling
+ */
+.conflict-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--spacing-sm, 8px) 0 0 0;
+}
+
+.conflict-list li {
+  padding: var(--spacing-xs, 4px) 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs, 4px);
+}
+
+.conflict-error {
+  color: var(--error-color, #DC3545);
+}
+
+.conflict-warning {
+  color: var(--warning-color, #FFC107);
+}
+
+.conflict-list .icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+/**
+ * Loading Spinner for Modal
+ */
+.modal .loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md, 16px);
+  color: var(--text-muted, #6C757D);
+  font-style: italic;
+  font-size: 14px;
+}
+
+/**
+ * Responsive Adjustments for Change Employee Modal
+ */
+@media (max-width: 767px) {
+
+  .modal-container--medium,
+  .modal-container--large {
+    max-width: 100%;
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .current-assignment {
+    padding: var(--spacing-sm, 12px);
+  }
+
+  .current-employee-display {
+    font-size: 14px;
+  }
+
+  .employee-icon {
+    font-size: 18px;
+  }
+}
+
+/**
+ * Accessibility Enhancements
+ */
+@media (prefers-contrast: high) {
+  .current-assignment {
+    border-left-width: 6px;
+  }
+
+  .conflict-list li {
+    border-left: 3px solid currentColor;
+    padding-left: var(--spacing-sm, 8px);
+  }
+}
+
+/**
+ * Reduced Motion Support
+ */
+@media (prefers-reduced-motion: reduce) {
+  .modal-container {
+    animation: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   Story 3.8: Trade Event Modal Styles
+   ========================================================================== */
+
+/**
+ * Trade Source Event Section
+ * Displays the current event being traded from
+ */
+.trade-source-event {
+  margin-bottom: var(--spacing-lg, 24px);
+}
+
+.trade-section-title {
+  margin: 0 0 var(--spacing-md, 12px) 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-neutral-700, #374151);
+}
+
+/**
+ * Trade Event Card
+ * Individual card for source and target events
+ */
+.trade-event-card {
+  padding: var(--spacing-md, 16px);
+  border: 2px solid var(--color-neutral-200, #E5E7EB);
+  border-radius: var(--border-radius-md, 8px);
+  background: white;
+  cursor: pointer;
+  transition: all 150ms ease;
+  position: relative;
+}
+
+.trade-event-card--source {
+  background: var(--pc-light-blue, #E8F4F9);
+  border-color: var(--pc-blue, #1B9BD8);
+  cursor: default;
+}
+
+.trade-event-card:not(.trade-event-card--source):hover {
+  border-color: var(--color-primary, #3B82F6);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.trade-event-card--selected {
+  border-color: var(--color-primary, #3B82F6);
+  background: #EFF6FF;
+  /* Blue-50 */
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.trade-event-employee {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-neutral-900, #111827);
+  margin-bottom: var(--spacing-xs, 6px);
+}
+
+.trade-event-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-neutral-600, #6B7280);
+  margin-bottom: var(--spacing-xs, 6px);
+}
+
+.trade-event-name {
+  font-size: 14px;
+  color: var(--color-neutral-700, #374151);
+}
+
+/**
+ * Trade Event Check Mark
+ * Displayed when event is selected
+ */
+.trade-event-check {
+  position: absolute;
+  top: var(--spacing-sm, 10px);
+  right: var(--spacing-sm, 10px);
+  font-size: 24px;
+  color: var(--color-primary, #3B82F6);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.trade-event-card--selected .trade-event-check {
+  opacity: 1;
+}
+
+/**
+ * Trade Divider
+ * Visual separator between source and target events
+ */
+.trade-divider {
+  position: relative;
+  height: 1px;
+  background: var(--color-neutral-200, #E5E7EB);
+  margin: var(--spacing-xl, 32px) 0;
+  text-align: center;
+}
+
+.trade-divider-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 0 var(--spacing-md, 16px);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-neutral-500, #9CA3AF);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/**
+ * Trade Target Events Section
+ */
+.trade-target-events {
+  margin-top: var(--spacing-lg, 24px);
+}
+
+.trade-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 12px);
+  max-height: 400px;
+  overflow-y: auto;
+  padding: var(--spacing-xs, 4px);
+}
+
+.trade-events-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.trade-events-list::-webkit-scrollbar-track {
+  background: var(--color-neutral-100, #F3F4F6);
+  border-radius: 4px;
+}
+
+.trade-events-list::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300, #D1D5DB);
+  border-radius: 4px;
+}
+
+.trade-events-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-400, #9CA3AF);
+}
+
+/* ==========================================================================
+   Responsive Styles for Trade Modal (Story 3.8)
+   ========================================================================== */
+
+/**
+ * Mobile (< 768px)
+ */
+@media (max-width: 767px) {
+  .trade-event-card {
+    padding: var(--spacing-sm, 12px);
+  }
+
+  .trade-event-employee {
+    font-size: 14px;
+  }
+
+  .trade-event-time,
+  .trade-event-name {
+    font-size: 13px;
+  }
+
+  .trade-events-list {
+    max-height: 300px;
+  }
+
+  .trade-divider {
+    margin: var(--spacing-lg, 24px) 0;
+  }
+}
+
+/* ==========================================================================
+   Accessibility Enhancements for Trade Modal (Story 3.8)
+   ========================================================================== */
+
+/**
+ * High Contrast Mode
+ */
+@media (prefers-contrast: high) {
+  .trade-event-card--selected {
+    border-width: 3px;
+  }
+
+  .trade-event-card:focus {
+    outline: 3px solid var(--color-primary, #3B82F6);
+    outline-offset: 2px;
+  }
+}
+
+/**
+ * Reduced Motion
+ */
+@media (prefers-reduced-motion: reduce) {
+  .trade-event-card {
+    transition: none;
+  }
+
+  .trade-event-check {
+    transition: none;
+  }
+}
+
+/**
+ * Keyboard Focus Styles
+ */
+.trade-event-card:focus {
+  outline: 2px solid var(--color-primary, #3B82F6);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   8-Block Shift System Styles (NEW)
+   ========================================================================== */
+
+/**
+ * Shift Block Container
+ * Uses 4x2 grid for 8 blocks
+ */
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md, 16px);
+}
+
+/**
+ * Individual Shift Block Card
+ */
+.shift-block {
+  background: var(--color-neutral-50, #FFFFFF);
+  border-radius: var(--border-radius-md, 8px);
+  padding: var(--spacing-md, 16px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  min-height: 200px;
+}
+
+.shift-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/**
+ * Shift Block Status Variants
+ */
+.shift-block--filled {
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  border: 2px solid #10B981;
+}
+
+.shift-block--empty {
+  background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+  border: 2px solid #9CA3AF;
+  opacity: 0.7;
+}
+
+/**
+ * Shift Block Header
+ */
+.shift-block__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-sm, 8px);
+  margin-bottom: var(--spacing-sm, 8px);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.shift-block__number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-neutral-700, #374151);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.shift-block__time-primary {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary, #3B82F6);
+}
+
+/**
+ * Shift Block Times Section
+ */
+.shift-block__times {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--spacing-xs, 4px) 0;
+  margin-bottom: var(--spacing-sm, 8px);
+  font-size: 12px;
+}
+
+.shift-block__time-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.shift-block__time-label {
+  color: var(--color-neutral-500, #9CA3AF);
+  font-weight: 500;
+}
+
+.shift-block__time-value {
+  color: var(--color-neutral-700, #374151);
+  font-weight: 600;
+}
+
+/**
+ * Shift Block Employees Section
+ */
+.shift-block__employees-section {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding-top: var(--spacing-sm, 8px);
+}
+
+.shift-block__employee {
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.shift-block__employee-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-neutral-900, #111827);
+  cursor: pointer;
+  display: block;
+  padding: 4px 0;
+  transition: color 150ms ease;
+}
+
+.shift-block__employee-name:hover {
+  color: var(--color-primary, #3B82F6);
+}
+
+.shift-block__employee-name.expanded {
+  color: var(--color-primary, #3B82F6);
+}
+
+.shift-block__employee-name.expanded::after {
+  content: " ▼";
+  font-size: 10px;
+}
+
+.shift-block__employee-name:not(.expanded)::after {
+  content: " ▶";
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.shift-block__no-employees {
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-neutral-400, #9CA3AF);
+  font-style: italic;
+  padding: var(--spacing-sm, 8px) 0;
+}
+
+/**
+ * Event Detail Dropdown (within shift block)
+ */
+.shift-block__event-detail {
+  margin-top: var(--spacing-xs, 4px);
+  padding: var(--spacing-sm, 8px);
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 4px;
+  border-left: 3px solid var(--color-primary, #3B82F6);
+  font-size: 12px;
+}
+
+.event-detail__row {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  margin-bottom: 4px;
+}
+
+.event-detail__row:last-child {
+  margin-bottom: 0;
+}
+
+.event-detail__label {
+  font-weight: 600;
+  color: var(--color-neutral-600, #6B7280);
+  min-width: 70px;
+}
+
+/**
+ * Status Badges for Event Details
+ */
+.status-badge--scheduled {
+  background: #FEF3C7;
+  color: #92400E;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge--submitted {
+  background: #D1FAE5;
+  color: #065F46;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge--staffed {
+  background: #DBEAFE;
+  color: #1E40AF;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/**
+ * Responsive Styles for 8-Block System
+ */
+@media (max-width: 1200px) {
+  .timeslot-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-sm, 8px);
+  }
+}
+
+@media (max-width: 992px) {
+  .timeslot-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .shift-block {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 576px) {
+  .timeslot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shift-block {
+    min-height: auto;
+  }
+
+  .shift-block__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs, 4px);
+  }
+
+  .shift-block__times {
+    font-size: 11px;
+  }
+}
+
+/**
+ * Print Styles for Shift Blocks
+ */
+@media print {
+  .shift-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .shift-block--empty {
+    opacity: 0.5;
+  }
+
+  .shift-block__employee-name:after {
+    display: none;
+  }
+
+  .shift-block__event-detail {
+    display: block !important;
+  }
+}

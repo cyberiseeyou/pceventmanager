@@ -1,0 +1,603 @@
+/**
+ * Validation Styles
+ *
+ * Styles for inline form validation messages, icons, and states.
+ * Part of Epic 1, Story 1.4: Add Inline Conflict Warnings
+ *
+ * WCAG 2.1 AA Compliant:
+ * - Sufficient color contrast (4.5:1 minimum)
+ * - Icons supplement color, not replace it
+ * - Semantic HTML with ARIA labels
+ */
+
+/* ============================================================================
+   Validation Summary (Global)
+   ========================================================================= */
+
+.validation-summary {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius);
+  border: 2px solid;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Success State */
+.validation-summary.validation-success {
+  background-color: #d4edda; /* Light green */
+  border-color: #28a745; /* Green */
+  color: #155724; /* Dark green text */
+}
+
+.validation-summary.validation-success .icon-success {
+  color: #28a745;
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+/* Warning State */
+.validation-summary.validation-warning {
+  background-color: #fff3cd; /* Light yellow */
+  border-color: #ffc107; /* Yellow */
+  color: #856404; /* Dark yellow text */
+}
+
+.validation-summary.validation-warning .icon-warning {
+  color: #ffc107;
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+/* Error/Conflict State */
+.validation-summary.validation-conflict,
+.validation-summary.validation-error {
+  background-color: #f8d7da; /* Light red */
+  border-color: #dc3545; /* Red */
+  color: #721c24; /* Dark red text */
+}
+
+.validation-summary.validation-conflict .icon-error,
+.validation-summary.validation-error .icon-error {
+  color: #dc3545;
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+/* Loading State */
+.validation-summary.validation-loading {
+  background-color: #d1ecf1; /* Light blue */
+  border-color: #17a2b8; /* Blue */
+  color: #0c5460; /* Dark blue text */
+}
+
+.validation-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.validation-loading .spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #17a2b8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================
+   Validation Message Content
+   ========================================================================= */
+
+.validation-summary .message {
+  flex: 1;
+}
+
+.validation-summary .message strong {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: var(--font-weight-heading);
+}
+
+.validation-summary .message small {
+  display: block;
+  margin-top: var(--spacing-xs);
+  font-size: 0.875em;
+  opacity: 0.9;
+}
+
+/* Conflict List */
+.conflict-list {
+  margin: var(--spacing-sm) 0;
+  padding-left: var(--spacing-md);
+  list-style: none;
+}
+
+.conflict-list li {
+  margin-bottom: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+  position: relative;
+}
+
+.conflict-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+.conflict-list li strong {
+  display: inline;
+  font-weight: var(--font-weight-heading);
+  text-transform: capitalize;
+}
+
+.conflict-list li small {
+  display: block;
+  margin-top: 0.25em;
+  margin-left: 0;
+  font-style: italic;
+}
+
+/* ============================================================================
+   Field-Level Validation Messages
+   ========================================================================= */
+
+.validation-message {
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius);
+  font-size: 0.875em;
+  display: none; /* Hidden by default, shown via JS */
+}
+
+.validation-message.show {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.validation-message.error {
+  background-color: #f8d7da;
+  border: 1px solid #dc3545;
+  color: #721c24;
+}
+
+.validation-message.warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+}
+
+.validation-message.success {
+  background-color: #d4edda;
+  border: 1px solid #28a745;
+  color: #155724;
+}
+
+/* ============================================================================
+   Icons
+   ========================================================================= */
+
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.icon-success::before {
+  content: '✓';
+}
+
+.icon-warning::before {
+  content: '⚠';
+}
+
+.icon-error::before {
+  content: '✕';
+}
+
+/* ============================================================================
+   Retry Button
+   ========================================================================= */
+
+.btn-retry {
+  margin-left: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--border-radius);
+  color: inherit;
+  font-size: 0.875em;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-retry:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.btn-retry:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ============================================================================
+   Form State Indicators
+   ========================================================================= */
+
+/* Highlight form fields with validation issues */
+.form-group.has-error input,
+.form-group.has-error select {
+  border-color: #dc3545;
+}
+
+.form-group.has-warning input,
+.form-group.has-warning select {
+  border-color: #ffc107;
+}
+
+.form-group.has-success input,
+.form-group.has-success select {
+  border-color: #28a745;
+}
+
+/* Focus states maintain validation colors */
+.form-group.has-error input:focus,
+.form-group.has-error select:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.form-group.has-warning input:focus,
+.form-group.has-warning select:focus {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+}
+
+.form-group.has-success input:focus,
+.form-group.has-success select:focus {
+  border-color: #28a745;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* ============================================================================
+   Submit Button States
+   ========================================================================= */
+
+button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--bg-disabled);
+}
+
+button[type="submit"]:disabled:hover {
+  background-color: var(--bg-disabled);
+  transform: none;
+}
+
+/* ============================================================================
+   Story 1.5: Enhanced Conflict Details & Employee Suggestions
+   ========================================================================= */
+
+/* Conflict Item Details */
+.conflict-item {
+  margin-bottom: var(--spacing-sm);
+}
+
+.conflict-header {
+  margin-bottom: 0.25rem;
+}
+
+.conflict-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  padding-left: var(--spacing-sm);
+  font-size: 0.9em;
+}
+
+.conflict-event, .conflict-time {
+  display: block;
+}
+
+.view-conflict-link {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: normal;
+}
+
+.view-conflict-link:hover {
+  text-decoration: none;
+}
+
+.conflict-detail {
+  display: block;
+  margin-top: 0.25rem;
+  padding-left: var(--spacing-sm);
+}
+
+/* Conflict Actions */
+.conflict-actions {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.btn-schedule-anyway {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background-color: #ffc107;
+  border: 1px solid #d39e00;
+  border-radius: var(--border-radius);
+  color: #856404;
+  font-weight: var(--font-weight-heading);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-schedule-anyway:hover {
+  background-color: #e0a800;
+  transform: translateY(-1px);
+}
+
+.btn-schedule-anyway:active {
+  transform: translateY(0);
+}
+
+.conflict-actions small {
+  display: block;
+  margin-top: var(--spacing-xs);
+}
+
+/* Employee Suggestions */
+.employee-suggestions {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: var(--border-radius);
+}
+
+.suggestions-header {
+  margin-bottom: var(--spacing-sm);
+  color: #495057;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.suggestion-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm);
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: var(--border-radius);
+  transition: box-shadow 0.2s ease;
+}
+
+.suggestion-card:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.suggestion-info strong {
+  color: #212529;
+  font-size: 1em;
+}
+
+.suggestion-info small {
+  color: #6c757d;
+  font-size: 0.875em;
+}
+
+.suggestion-reason {
+  font-style: italic;
+  color: #495057 !important;
+}
+
+.btn-use-employee {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: #28a745;
+  border: 1px solid #1e7e34;
+  border-radius: var(--border-radius);
+  color: white;
+  font-size: 0.875em;
+  font-weight: var(--font-weight-heading);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-use-employee:hover {
+  background-color: #218838;
+  transform: translateY(-1px);
+}
+
+.btn-use-employee:active {
+  transform: translateY(0);
+}
+
+.suggestions-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  color: #6c757d;
+}
+
+.suggestions-loading .spinner {
+  width: 1em;
+  height: 1em;
+}
+
+.suggestions-empty,
+.suggestions-error {
+  display: block;
+  padding: var(--spacing-sm);
+  color: #6c757d;
+  font-style: italic;
+}
+
+.suggestions-error {
+  color: #dc3545;
+}
+
+/* ============================================================================
+   Mobile Responsive (375px minimum)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .validation-summary {
+    padding: var(--spacing-sm);
+    font-size: 0.875em;
+  }
+
+  .validation-summary .icon {
+    font-size: 1.25em;
+  }
+
+  .conflict-list {
+    padding-left: var(--spacing-sm);
+  }
+
+  .conflict-list li {
+    margin-bottom: var(--spacing-sm);
+    line-height: 1.4;
+  }
+
+  .btn-retry {
+    display: block;
+    margin-left: 0;
+    margin-top: var(--spacing-xs);
+    width: 100%;
+  }
+}
+
+@media (max-width: 375px) {
+  .validation-summary {
+    padding: var(--spacing-xs);
+    font-size: 0.8125em;
+  }
+
+  .validation-summary .icon {
+    font-size: 1.125em;
+  }
+
+  .conflict-list li small {
+    font-size: 0.9em;
+  }
+}
+
+/* ============================================================================
+   Accessibility Enhancements
+   ========================================================================= */
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .validation-summary {
+    border-width: 3px;
+  }
+
+  .validation-summary.validation-success {
+    background-color: #c3f1d1;
+    border-color: #1e7e34;
+  }
+
+  .validation-summary.validation-warning {
+    background-color: #ffe8a1;
+    border-color: #d39e00;
+  }
+
+  .validation-summary.validation-conflict,
+  .validation-summary.validation-error {
+    background-color: #f5c6cb;
+    border-color: #bd2130;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .validation-summary {
+    animation: none;
+  }
+
+  .validation-message.show {
+    animation: none;
+  }
+
+  .validation-loading .spinner {
+    animation: none;
+    border-top-color: transparent;
+  }
+}
+
+/* Focus visible (keyboard navigation) */
+.validation-summary:focus-visible {
+  outline: 3px solid var(--focus-color, #007bff);
+  outline-offset: 2px;
+}
+
+/* Screen reader only text */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Administration - Product Connections Scheduler{% endblock %}
+{% block page_title %}Sync Administration{% endblock %}
+
+{% block extra_head %}
+<style>
+    .admin-section {
+        background: var(--bg-primary);
+        border-radius: var(--border-radius-lg);
+        padding: var(--spacing-xl);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .admin-section h3 {
+        color: var(--pc-navy);
+        margin: 0 0 var(--spacing-md) 0;
+        font-size: var(--font-size-h3);
+    }
+
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .config-item {
+        background: #f8f9fa;
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        border-left: 4px solid var(--pc-blue);
+    }
+
+    .config-label {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .config-value {
+        color: var(--text-secondary);
+        font-family: monospace;
+        background: white;
+        padding: var(--spacing-xs);
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .sync-log {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: var(--border-radius);
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+
+    .log-entry {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .log-entry:last-child {
+        border-bottom: none;
+    }
+
+    .log-level-error { background-color: #fee; color: #c33; }
+    .log-level-warning { background-color: #ffc; color: #960; }
+    .log-level-info { background-color: #eff; color: #036; }
+    .log-level-debug { background-color: #f9f9f9; color: #666; }
+
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: var(--spacing-xs);
+    }
+
+    .status-healthy { background-color: #27ae60; }
+    .status-unhealthy { background-color: #e74c3c; }
+    .status-disabled { background-color: #95a5a6; }
+    .status-pending { background-color: #f39c12; }
+
+    .action-buttons {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+        margin-top: var(--spacing-md);
+    }
+
+    .btn-danger {
+        background-color: #e74c3c;
+        color: white;
+        border: none;
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .btn-danger:hover {
+        background-color: #c0392b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Configuration Overview -->
+    <div class="admin-section">
+        <h3>Configuration Overview</h3>
+        <div class="config-grid">
+            <div class="config-item">
+                <div class="config-label">Sync Enabled</div>
+                <div class="config-value" id="sync-enabled-status">Loading...</div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">External API URL</div>
+                <div class="config-value" id="api-url-status">Loading...</div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">Login Credentials</div>
+                <div class="config-value" id="credentials-status">Loading...</div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">Sync Interval</div>
+                <div class="config-value" id="sync-interval-status">Loading...</div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">API Connection</div>
+                <div class="config-value" id="api-connection-status">
+                    <span class="status-indicator status-pending"></span>Checking...
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">Last Sync</div>
+                <div class="config-value" id="last-sync-status">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Statistics -->
+    <div class="admin-section">
+        <h3>Sync Statistics</h3>
+        <div id="sync-statistics" class="config-grid">
+            <div class="loading-indicator" style="text-align: center; padding: 2rem;">
+                Loading sync statistics...
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Actions -->
+    <div class="admin-section">
+        <h3>Sync Actions</h3>
+        <div class="action-buttons">
+            <button onclick="triggerFullSync()" class="btn btn-primary" id="full-sync-btn">
+                Full Synchronization
+            </button>
+            <button onclick="syncEmployees()" class="btn btn-outline" id="sync-employees-btn">
+                Sync Employees Only
+            </button>
+            <button onclick="syncEvents()" class="btn btn-outline" id="sync-events-btn">
+                Sync Events Only
+            </button>
+            <button onclick="syncSchedules()" class="btn btn-outline" id="sync-schedules-btn">
+                Sync Schedules Only
+            </button>
+            <button onclick="resetSyncStatus()" class="btn btn-danger" id="reset-sync-btn">
+                Reset All Sync Status
+            </button>
+        </div>
+    </div>
+
+    <!-- Sync Log -->
+    <div class="admin-section">
+        <h3>Recent Sync Activity</h3>
+        <div id="sync-log" class="sync-log">
+            <div class="loading-indicator" style="text-align: center; padding: 2rem;">
+                Loading sync logs...
+            </div>
+        </div>
+        <div class="action-buttons">
+            <button onclick="refreshLog()" class="btn btn-outline">Refresh Log</button>
+            <button onclick="clearLog()" class="btn btn-outline">Clear Log</button>
+            <a href="{{ url_for('api_tester') }}" class="btn btn-primary">🛠️ API Testing Tool</a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load admin data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfigurationStatus();
+    loadSyncStatistics();
+    loadSyncLog();
+});
+
+function loadConfigurationStatus() {
+    fetch('/api/sync/health')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('sync-enabled-status').textContent = data.sync_enabled ? 'Enabled' : 'Disabled';
+
+            const apiUrl = '{{ config.get("EXTERNAL_API_BASE_URL", "Not configured") }}';
+            document.getElementById('api-url-status').textContent = apiUrl === '' ? 'Not configured' : apiUrl;
+
+            const hasCredentials = '{{ "Yes" if config.get("EXTERNAL_API_USERNAME") and config.get("EXTERNAL_API_PASSWORD") else "No" }}';
+            document.getElementById('credentials-status').textContent = hasCredentials === 'Yes' ? 'Configured' : 'Not configured';
+
+            const syncInterval = '{{ config.get("SYNC_INTERVAL_MINUTES", "15") }}';
+            document.getElementById('sync-interval-status').textContent = `${syncInterval} minutes`;
+
+            // API connection status
+            const connectionDiv = document.getElementById('api-connection-status');
+            const status = data.external_api?.status || 'unknown';
+            const statusClasses = {
+                'healthy': 'status-healthy',
+                'unhealthy': 'status-unhealthy',
+                'disabled': 'status-disabled'
+            };
+
+            connectionDiv.innerHTML = `
+                <span class="status-indicator ${statusClasses[status] || 'status-pending'}"></span>
+                ${status.charAt(0).toUpperCase() + status.slice(1)}
+                ${data.external_api?.message ? ` - ${data.external_api.message}` : ''}
+            `;
+        })
+        .catch(error => {
+            console.error('Failed to load configuration:', error);
+            document.getElementById('api-connection-status').innerHTML =
+                '<span class="status-indicator status-unhealthy"></span>Error loading status';
+        });
+}
+
+function loadSyncStatistics() {
+    fetch('/api/sync/status')
+        .then(response => response.json())
+        .then(data => {
+            const statsDiv = document.getElementById('sync-statistics');
+
+            if (!data.sync_enabled) {
+                statsDiv.innerHTML = `
+                    <div class="config-item">
+                        <div class="config-label">Status</div>
+                        <div class="config-value">Sync is disabled</div>
+                    </div>
+                `;
+                return;
+            }
+
+            statsDiv.innerHTML = `
+                <div class="config-item">
+                    <div class="config-label">Employees</div>
+                    <div class="config-value">
+                        ${data.employees.synced} synced, ${data.employees.pending} pending, ${data.employees.failed} failed
+                    </div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Events</div>
+                    <div class="config-value">
+                        ${data.events.synced} synced, ${data.events.pending} pending, ${data.events.failed} failed
+                    </div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Schedules</div>
+                    <div class="config-value">
+                        ${data.schedules.synced} synced, ${data.schedules.pending} pending, ${data.schedules.failed} failed
+                    </div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Last Update</div>
+                    <div class="config-value">${formatSyncDate(data.timestamp)}</div>
+                </div>
+            `;
+
+            // Update last sync status
+            const lastSyncs = [
+                data.employees.last_sync,
+                data.events.last_sync,
+                data.schedules.last_sync
+            ].filter(Boolean).sort().reverse();
+
+            document.getElementById('last-sync-status').textContent =
+                lastSyncs.length > 0 ? formatSyncDate(lastSyncs[0]) : 'Never';
+        })
+        .catch(error => {
+            console.error('Failed to load sync statistics:', error);
+            document.getElementById('sync-statistics').innerHTML =
+                '<div class="error-message">Failed to load sync statistics</div>';
+        });
+}
+
+function loadSyncLog() {
+    // Simulated log entries - in a real implementation, these would come from server logs
+    const logEntries = [
+        { timestamp: new Date().toISOString(), level: 'info', message: 'Sync system initialized' },
+        { timestamp: new Date(Date.now() - 60000).toISOString(), level: 'info', message: 'API health check passed' },
+        { timestamp: new Date(Date.now() - 120000).toISOString(), level: 'warning', message: 'API response slow (2.3s)' }
+    ];
+
+    const logDiv = document.getElementById('sync-log');
+    logDiv.innerHTML = logEntries.map(entry => `
+        <div class="log-entry log-level-${entry.level}">
+            <strong>${new Date(entry.timestamp).toLocaleTimeString()}</strong>
+            [${entry.level.toUpperCase()}] ${entry.message}
+        </div>
+    `).join('');
+}
+
+function triggerFullSync() {
+    const btn = document.getElementById('full-sync-btn');
+    const originalText = btn.textContent;
+
+    btn.disabled = true;
+    btn.textContent = 'Syncing...';
+
+    fetch('/api/sync/trigger', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            const details = [];
+            if (data.employees) details.push(`Employees: ${data.employees.synced} synced, ${data.employees.errors} errors`);
+            if (data.events) details.push(`Events: ${data.events.synced} synced, ${data.events.errors} errors`);
+            if (data.schedules) details.push(`Schedules: ${data.schedules.synced} synced, ${data.schedules.errors} errors`);
+
+            alert(`Full sync ${data.status}!\n\n${details.join('\n')}`);
+
+            // Refresh statistics
+            loadSyncStatistics();
+        })
+        .catch(error => {
+            console.error('Sync failed:', error);
+            alert(`Sync failed: ${error.message}`);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        });
+}
+
+function syncEmployees() {
+    alert('Employee-only sync not implemented yet. Use Full Synchronization for now.');
+}
+
+function syncEvents() {
+    alert('Event-only sync not implemented yet. Use Full Synchronization for now.');
+}
+
+function syncSchedules() {
+    alert('Schedule-only sync not implemented yet. Use Full Synchronization for now.');
+}
+
+function resetSyncStatus() {
+    if (!confirm('Are you sure you want to reset all sync status? This will mark all records as pending for sync.')) {
+        return;
+    }
+
+    alert('Reset sync status functionality not implemented yet.');
+}
+
+function refreshLog() {
+    loadSyncLog();
+}
+
+function clearLog() {
+    document.getElementById('sync-log').innerHTML =
+        '<div style="text-align: center; padding: 2rem; color: #999;">Log cleared</div>';
+}
+
+function formatSyncDate(dateStr) {
+    if (!dateStr) return 'Never';
+
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return date.toLocaleString();
+}
+</script>
+{% endblock %}

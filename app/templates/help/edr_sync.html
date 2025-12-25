@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}EDR Sync & Paperwork - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item active">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>🔄 EDR Sync & Paperwork Generation</h1>
+
+        <p class="help-intro">
+            The EDR (Electronic Data Reports) Sync system integrates with Walmart Retail Link to fetch
+            product sales data and automatically generate event-specific paperwork including sales tools,
+            item lists, and complete daily documentation packages.
+        </p>
+
+        <div class="help-section">
+            <h2>What is EDR?</h2>
+            <p>
+                EDR (Electronic Data Reports) are sales performance reports from Walmart Retail Link that show:
+            </p>
+            <ul>
+                <li>Product sales data by UPC and store location</li>
+                <li>Inventory levels and on-hand quantities</li>
+                <li>Product information including descriptions and prices</li>
+                <li>Historical sales trends</li>
+            </ul>
+            <p>
+                This data is essential for event specialists to prepare for demonstrations, understand
+                product performance, and focus on high-priority items.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Setting Up EDR Access</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Configure Walmart Retail Link Credentials</h3>
+                        <p>
+                            First, ensure your Walmart Retail Link credentials are configured in Settings.
+                        </p>
+                        <a href="{{ url_for('help.walmart_credentials') }}" class="help-link">
+                            Learn how to set up Walmart credentials →
+                        </a>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Set Up MFA Authentication (If Required)</h3>
+                        <p>
+                            If your Walmart Retail Link account uses Multi-Factor Authentication:
+                        </p>
+                        <ul>
+                            <li>Navigate to Settings → EDR Configuration</li>
+                            <li>Enter your MFA credential ID (provided by Walmart)</li>
+                            <li>Save the settings</li>
+                        </ul>
+                        <div class="info-box">
+                            <strong>Note:</strong> The system will prompt for your MFA code during
+                            the first EDR sync attempt.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Test EDR Connection</h3>
+                        <p>
+                            Use the "Test EDR Connection" button in Settings to verify the system
+                            can successfully authenticate and fetch report data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Manual EDR Sync</h2>
+            <p>
+                To manually sync EDR data for upcoming events:
+            </p>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Navigate to Sync Page</h3>
+                        <p>
+                            Go to <strong>Admin → Database Sync</strong> from the main navigation.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Click "Sync EDR Data"</h3>
+                        <p>
+                            The system will fetch EDR data for all events within the configured date range
+                            (typically 1 month before to 1 month ahead of today).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Wait for Completion</h3>
+                        <p>
+                            EDR sync can take 2-5 minutes depending on the number of events and stores.
+                            A progress indicator shows the status.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Review Results</h3>
+                        <p>
+                            Once complete, you'll see a summary showing:
+                        </p>
+                        <ul>
+                            <li>Number of events processed</li>
+                            <li>EDR data successfully fetched</li>
+                            <li>Any errors or missing data</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Automatic EDR Caching</h2>
+            <p>
+                The system automatically caches EDR data to improve performance and reduce API calls:
+            </p>
+            <ul>
+                <li>
+                    <strong>Cache Duration:</strong> EDR data is cached for 24 hours by default
+                </li>
+                <li>
+                    <strong>Automatic Refresh:</strong> Cache refreshes daily at midnight
+                </li>
+                <li>
+                    <strong>On-Demand Updates:</strong> You can manually trigger updates anytime
+                </li>
+                <li>
+                    <strong>Event-Specific Caching:</strong> Each store/event has its own cached data
+                </li>
+            </ul>
+            <div class="info-box">
+                <strong>Performance Tip:</strong> EDR caching significantly speeds up paperwork
+                generation. The first generation may be slow, but subsequent generations use cached data.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Generating Event Paperwork</h2>
+            <p>
+                The system can generate comprehensive paperwork packages for scheduled events:
+            </p>
+
+            <h3>What's Included in Paperwork:</h3>
+            <ul>
+                <li><strong>Sales Tools Report:</strong> Product-specific EDR data and sales performance</li>
+                <li><strong>Daily Item List:</strong> List of products to demo or feature</li>
+                <li><strong>Event Instructions:</strong> Custom instructions and notes for the event</li>
+                <li><strong>Store Information:</strong> Location details, contact info, and directions</li>
+                <li><strong>QR Codes:</strong> Quick-scan codes for attendance reporting</li>
+            </ul>
+
+            <h3>How to Generate Paperwork:</h3>
+            <ol>
+                <li>Navigate to <strong>Printing → Daily Paperwork</strong></li>
+                <li>Select the date for paperwork generation</li>
+                <li>Choose which events to include (or select all)</li>
+                <li>Click <strong>Generate Complete Paperwork</strong></li>
+                <li>System fetches EDR data, merges documents, and creates PDF</li>
+                <li>Download the generated PDF package</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Managing Paperwork Templates</h2>
+            <p>
+                You can customize paperwork templates to match your specific needs:
+            </p>
+
+            <h3>Accessing Template Management:</h3>
+            <p>
+                Navigate to <strong>Settings → Paperwork Templates</strong>
+            </p>
+
+            <h3>Available Template Types:</h3>
+            <ul>
+                <li><strong>Event Instructions Template:</strong> Custom instructions for specific event types</li>
+                <li><strong>Daily Item List Template:</strong> Format for product lists</li>
+                <li><strong>Sales Tools Header:</strong> Branding and header information</li>
+                <li><strong>Store Information Template:</strong> Layout for store details</li>
+            </ul>
+
+            <h3>Creating a Custom Template:</h3>
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Click "Add Template"</h3>
+                        <p>
+                            In the Paperwork Templates section, click the <strong>Add Template</strong> button.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Configure Template Settings</h3>
+                        <ul>
+                            <li>Template name and description</li>
+                            <li>Template type (select from dropdown)</li>
+                            <li>Associated event type (optional)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Add Template Content</h3>
+                        <p>
+                            Use the rich text editor to create your template content. You can use
+                            template variables like:
+                        </p>
+                        <ul>
+                            <li><code>{{event_name}}</code> - Event name</li>
+                            <li><code>{{store_number}}</code> - Store location number</li>
+                            <li><code>{{employee_name}}</code> - Assigned employee</li>
+                            <li><code>{{event_date}}</code> - Event date</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Save and Preview</h3>
+                        <p>
+                            Save the template and use the preview function to see how it will
+                            appear in generated paperwork.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Printing Options</h2>
+            <p>
+                The Printing section provides multiple output formats:
+            </p>
+
+            <h3>Available Print Options:</h3>
+            <ul>
+                <li>
+                    <strong>Daily Schedule:</strong> Simple schedule listing for a specific date
+                </li>
+                <li>
+                    <strong>Weekly Schedule:</strong> Full week view of all scheduled events
+                </li>
+                <li>
+                    <strong>Employee-Specific Schedule:</strong> Individual employee's schedule
+                </li>
+                <li>
+                    <strong>Complete Daily Paperwork:</strong> Full documentation package with EDR data
+                </li>
+                <li>
+                    <strong>Event-Specific Paperwork:</strong> Paperwork for a single event
+                </li>
+            </ul>
+
+            <h3>Print Quality Settings:</h3>
+            <p>
+                Configure print quality in Settings:
+            </p>
+            <ul>
+                <li><strong>Standard (Fast):</strong> Basic formatting, quick generation</li>
+                <li><strong>High Quality:</strong> Enhanced formatting with full EDR integration</li>
+                <li><strong>Custom:</strong> Configure specific elements to include/exclude</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Troubleshooting EDR Sync</h2>
+
+            <h3>EDR Sync Fails with Authentication Error</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify Walmart Retail Link credentials are correct in Settings</li>
+                <li>If using MFA, ensure MFA credential ID is configured</li>
+                <li>Check that your Retail Link account has active access</li>
+                <li>Try logging into Retail Link manually to verify credentials</li>
+            </ul>
+
+            <h3>EDR Data Not Appearing in Paperwork</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Ensure EDR sync has completed successfully for the event date range</li>
+                <li>Check that the event has a valid store number</li>
+                <li>Verify the product UPCs are correct in the event data</li>
+                <li>Try manually refreshing EDR data for specific events</li>
+            </ul>
+
+            <h3>Paperwork Generation is Slow</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Run EDR sync before generating paperwork to populate cache</li>
+                <li>Reduce the number of events in a single paperwork generation</li>
+                <li>Use "Standard" print quality for faster generation</li>
+                <li>Generate paperwork during off-peak hours</li>
+            </ul>
+
+            <h3>MFA Code Not Working</h3>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Ensure you're using the MFA code from your authenticator app</li>
+                <li>Check that your device time is synchronized correctly</li>
+                <li>Try generating a new MFA code if the current one expired</li>
+                <li>Contact Walmart support to verify MFA is properly configured</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Sync EDR data daily:</strong> Run EDR sync each morning to ensure
+                    fresh data is available for paperwork generation
+                </li>
+                <li>
+                    <strong>Generate paperwork in advance:</strong> Create paperwork 1-2 days
+                    before events to allow time for review
+                </li>
+                <li>
+                    <strong>Keep templates updated:</strong> Regularly review and update paperwork
+                    templates to reflect current best practices
+                </li>
+                <li>
+                    <strong>Cache management:</strong> Let the system handle cache automatically
+                    unless you need immediate fresh data
+                </li>
+                <li>
+                    <strong>Verify EDR data accuracy:</strong> Spot-check EDR data periodically
+                    to ensure sync is working correctly
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.printing_reports') }}" class="next-step-card">
+                    <span class="next-step-icon">🖨️</span>
+                    <span class="next-step-text">Learn about printing options</span>
+                </a>
+                <a href="{{ url_for('help.walmart_credentials') }}" class="next-step-card">
+                    <span class="next-step-icon">🔑</span>
+                    <span class="next-step-text">Configure Walmart credentials</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

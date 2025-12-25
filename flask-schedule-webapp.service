@@ -1,0 +1,22 @@
+[Unit]
+Description=Flask Schedule Webapp (Gunicorn)
+Documentation=https://github.com/your-repo/flask-schedule-webapp
+After=network.target
+
+[Service]
+Type=notify
+User=elliot
+Group=elliot
+WorkingDirectory=/home/elliot/flask-schedule-webapp
+Environment="PATH=/home/elliot/flask-schedule-webapp/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/home/elliot/flask-schedule-webapp/.env
+ExecStart=/home/elliot/flask-schedule-webapp/.venv/bin/gunicorn --config gunicorn_config.py wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

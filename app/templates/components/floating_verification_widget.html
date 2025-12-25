@@ -1,0 +1,540 @@
+<!-- Floating Schedule Verification Widget -->
+<style>
+/* Floating Widget Styles */
+.verification-float-btn {
+    position: fixed;
+    bottom: 90px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--pc-navy) 0%, var(--pc-blue) 100%);
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 4px 20px rgba(46, 76, 115, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    z-index: 999;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.verification-float-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(27, 155, 216, 0.4);
+}
+
+.verification-float-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 4px 20px rgba(46, 76, 115, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 30px rgba(27, 155, 216, 0.5);
+    }
+}
+
+.verification-float-panel {
+    position: fixed;
+    bottom: 160px;
+    right: 30px;
+    width: 420px;
+    max-height: 600px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    display: none;
+    flex-direction: column;
+    z-index: 998;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+.verification-float-panel.active {
+    display: flex;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.verification-panel-header {
+    background: linear-gradient(135deg, var(--pc-navy) 0%, var(--pc-blue) 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.verification-panel-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.verification-panel-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.verification-panel-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+.verification-panel-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 500px;
+}
+
+.verification-date-picker {
+    margin-bottom: 20px;
+}
+
+.verification-date-label {
+    display: block;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.verification-date-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--pc-light-blue);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.verification-date-input:focus {
+    outline: none;
+    border-color: var(--pc-blue);
+    box-shadow: 0 0 0 3px rgba(27, 155, 216, 0.1);
+}
+
+.verification-run-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--pc-blue);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 20px;
+}
+
+.verification-run-btn:hover {
+    background: var(--pc-navy);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(27, 155, 216, 0.3);
+}
+
+.verification-run-btn:active {
+    transform: translateY(0);
+}
+
+.verification-loading {
+    text-align: center;
+    padding: 40px 20px;
+    display: none;
+}
+
+.verification-loading.active {
+    display: block;
+}
+
+.verification-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--pc-light-blue);
+    border-top-color: var(--pc-navy);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.verification-loading-text {
+    margin-top: 15px;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.verification-results {
+    display: none;
+}
+
+.verification-results.active {
+    display: block;
+}
+
+.verification-status-badge {
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-bottom: 20px;
+    border: 2px solid;
+    line-height: 1.5;
+}
+
+.verification-section {
+    margin-bottom: 20px;
+}
+
+.verification-section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.verification-issue {
+    background: var(--bg-secondary);
+    border-left: 4px solid;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.verification-issue:hover {
+    background: var(--bg-primary);
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.verification-issue.critical {
+    border-left-color: #c0392b;
+    background: rgba(192, 57, 43, 0.05);
+}
+
+.verification-issue.warning {
+    border-left-color: #e67e22;
+    background: rgba(230, 126, 34, 0.05);
+}
+
+.verification-issue.info {
+    border-left-color: var(--pc-blue);
+    background: rgba(27, 155, 216, 0.05);
+}
+
+.verification-issue-message {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.verification-issue-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.verification-issue-action {
+    font-size: 0.85rem;
+    color: var(--pc-navy);
+    font-style: italic;
+}
+
+.verification-initial {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.verification-initial-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .verification-float-panel {
+        right: 10px;
+        left: 10px;
+        width: auto;
+        bottom: 140px;
+    }
+
+    .verification-float-btn {
+        right: 15px;
+        bottom: 75px;
+    }
+}
+</style>
+
+<!-- Floating Button -->
+<button class="verification-float-btn" id="verificationFloatBtn" title="Schedule Verification" aria-label="Open schedule verification">
+    🔍
+</button>
+
+<!-- Floating Panel -->
+<div class="verification-float-panel" id="verificationFloatPanel">
+    <!-- Header -->
+    <div class="verification-panel-header">
+        <h3 class="verification-panel-title">
+            <span>🔍</span>
+            Schedule Verification
+        </h3>
+        <button class="verification-panel-close" id="verificationPanelClose" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Body -->
+    <div class="verification-panel-body">
+        <!-- Date Picker -->
+        <div class="verification-date-picker">
+            <label class="verification-date-label" for="float-verification-date">
+                Select Date to Verify:
+            </label>
+            <input type="date"
+                   id="float-verification-date"
+                   class="verification-date-input">
+        </div>
+
+        <!-- Run Button -->
+        <button class="verification-run-btn" id="floatVerificationRunBtn">
+            Verify Schedule
+        </button>
+
+        <!-- Loading State -->
+        <div class="verification-loading" id="floatVerificationLoading">
+            <div class="verification-spinner"></div>
+            <p class="verification-loading-text">Running verification...</p>
+        </div>
+
+        <!-- Initial State -->
+        <div class="verification-initial" id="floatVerificationInitial">
+            <div class="verification-initial-icon">📋</div>
+            <p>Select a date and click "Verify Schedule" to check for scheduling issues.</p>
+        </div>
+
+        <!-- Results -->
+        <div class="verification-results" id="floatVerificationResults">
+            <!-- Status Badge -->
+            <div class="verification-status-badge" id="floatVerificationStatusBadge"></div>
+
+            <!-- Critical Issues -->
+            <div class="verification-section" id="floatVerificationCriticalSection" style="display: none;">
+                <h4 class="verification-section-title" style="color: #c0392b;">
+                    <span>🚨</span> Critical Issues
+                </h4>
+                <div id="floatVerificationCriticalList"></div>
+            </div>
+
+            <!-- Warnings -->
+            <div class="verification-section" id="floatVerificationWarningsSection" style="display: none;">
+                <h4 class="verification-section-title" style="color: #e67e22;">
+                    <span>⚠️</span> Warnings
+                </h4>
+                <div id="floatVerificationWarningsList"></div>
+            </div>
+
+            <!-- Info -->
+            <div class="verification-section" id="floatVerificationInfoSection" style="display: none;">
+                <h4 class="verification-section-title" style="color: var(--pc-blue);">
+                    <span>ℹ️</span> Information
+                </h4>
+                <div id="floatVerificationInfoList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Elements
+    const floatBtn = document.getElementById('verificationFloatBtn');
+    const floatPanel = document.getElementById('verificationFloatPanel');
+    const closeBtn = document.getElementById('verificationPanelClose');
+    const runBtn = document.getElementById('floatVerificationRunBtn');
+    const dateInput = document.getElementById('float-verification-date');
+    const loading = document.getElementById('floatVerificationLoading');
+    const initial = document.getElementById('floatVerificationInitial');
+    const results = document.getElementById('floatVerificationResults');
+
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    if (dateInput) {
+        dateInput.value = today;
+    }
+
+    // Toggle panel
+    floatBtn.addEventListener('click', () => {
+        floatPanel.classList.toggle('active');
+    });
+
+    closeBtn.addEventListener('click', () => {
+        floatPanel.classList.remove('active');
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!floatPanel.contains(e.target) && !floatBtn.contains(e.target)) {
+            floatPanel.classList.remove('active');
+        }
+    });
+
+    // Run verification
+    runBtn.addEventListener('click', async () => {
+        const selectedDate = dateInput.value;
+
+        if (!selectedDate) {
+            alert('Please select a date');
+            return;
+        }
+
+        // Show loading
+        initial.style.display = 'none';
+        results.classList.remove('active');
+        loading.classList.add('active');
+
+        try {
+            const response = await fetch(`/auto-schedule/api/verify-date?date=${selectedDate}`);
+
+            if (!response.ok) {
+                throw new Error(`Verification failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Hide loading, show results
+            loading.classList.remove('active');
+            results.classList.add('active');
+
+            // Display results
+            displayFloatVerificationResults(data, selectedDate);
+        } catch (error) {
+            console.error('Verification error:', error);
+            loading.classList.remove('active');
+            initial.style.display = 'block';
+            alert('Error running verification: ' + error.message);
+        }
+    });
+
+    function displayFloatVerificationResults(data, selectedDate) {
+        const criticalCount = data.critical_issues ? data.critical_issues.length : 0;
+        const warningCount = data.warnings ? data.warnings.length : 0;
+        const infoCount = data.info ? data.info.length : 0;
+
+        // Format date
+        const dateObj = new Date(selectedDate + 'T00:00:00');
+        const formattedDate = dateObj.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        // Update status badge
+        const statusBadge = document.getElementById('floatVerificationStatusBadge');
+        const floatBtnIcon = floatBtn;
+
+        if (criticalCount > 0) {
+            statusBadge.style.background = 'rgba(192, 57, 43, 0.1)';
+            statusBadge.style.borderColor = '#c0392b';
+            statusBadge.style.color = '#c0392b';
+            statusBadge.innerHTML = `🚨 ${criticalCount} Critical Issue${criticalCount !== 1 ? 's' : ''} Found`;
+            floatBtnIcon.innerHTML = '🚨';
+        } else if (warningCount > 0) {
+            statusBadge.style.background = 'rgba(230, 126, 34, 0.1)';
+            statusBadge.style.borderColor = '#e67e22';
+            statusBadge.style.color = '#e67e22';
+            statusBadge.innerHTML = `⚠️ ${warningCount} Warning${warningCount !== 1 ? 's' : ''}`;
+            floatBtnIcon.innerHTML = '⚠️';
+        } else {
+            statusBadge.style.background = 'rgba(39, 174, 96, 0.1)';
+            statusBadge.style.borderColor = '#27ae60';
+            statusBadge.style.color = '#27ae60';
+            statusBadge.innerHTML = `✅ All schedules verified<br><small style="font-size: 0.85rem; font-weight: normal;">${formattedDate}</small>`;
+            floatBtnIcon.innerHTML = '✅';
+        }
+
+        // Display critical issues
+        const criticalSection = document.getElementById('floatVerificationCriticalSection');
+        const criticalList = document.getElementById('floatVerificationCriticalList');
+        if (criticalCount > 0) {
+            criticalSection.style.display = 'block';
+            criticalList.innerHTML = data.critical_issues.map(issue =>
+                formatFloatVerificationIssue(issue, 'critical')
+            ).join('');
+        } else {
+            criticalSection.style.display = 'none';
+        }
+
+        // Display warnings
+        const warningsSection = document.getElementById('floatVerificationWarningsSection');
+        const warningsList = document.getElementById('floatVerificationWarningsList');
+        if (warningCount > 0) {
+            warningsSection.style.display = 'block';
+            warningsList.innerHTML = data.warnings.map(issue =>
+                formatFloatVerificationIssue(issue, 'warning')
+            ).join('');
+        } else {
+            warningsSection.style.display = 'none';
+        }
+
+        // Display info
+        const infoSection = document.getElementById('floatVerificationInfoSection');
+        const infoList = document.getElementById('floatVerificationInfoList');
+        if (infoCount > 0) {
+            infoSection.style.display = 'block';
+            infoList.innerHTML = data.info.map(issue =>
+                formatFloatVerificationIssue(issue, 'info')
+            ).join('');
+        } else {
+            infoSection.style.display = 'none';
+        }
+    }
+
+    function formatFloatVerificationIssue(issue, severity) {
+        return `
+            <div class="verification-issue ${severity}">
+                <div class="verification-issue-message">${issue.message}</div>
+                ${issue.details ? `<div class="verification-issue-details">${issue.details}</div>` : ''}
+                ${issue.action ? `<div class="verification-issue-action">💡 ${issue.action}</div>` : ''}
+            </div>
+        `;
+    }
+})();
+</script>

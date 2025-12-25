@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Verification{% endblock %}
+
+{% block extra_css %}
+<style>
+    .verification-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .verification-header {
+        margin-bottom: 30px;
+    }
+
+    .verification-header h1 {
+        font-size: 28px;
+        color: #1a1a1a;
+        margin-bottom: 10px;
+    }
+
+    .verification-header p {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .verification-controls {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .controls-group {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+    }
+
+    .form-group {
+        flex: 1;
+        max-width: 300px;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #0066cc;
+        box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    }
+
+    .btn-verify {
+        padding: 10px 24px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-verify:hover {
+        background: #0052a3;
+    }
+
+    .btn-verify:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    /* Results Container */
+    .verification-results {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .results-hidden {
+        display: none;
+    }
+
+    /* Status Summary */
+    .status-summary {
+        margin-bottom: 24px;
+        padding: 20px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .status-summary.status-pass {
+        background: #e8f5e9;
+        border: 2px solid #4caf50;
+    }
+
+    .status-summary.status-warning {
+        background: #fff3e0;
+        border: 2px solid #ff9800;
+    }
+
+    .status-summary.status-fail {
+        background: #ffebee;
+        border: 2px solid #f44336;
+    }
+
+    .status-icon {
+        font-size: 48px;
+    }
+
+    .status-content h2 {
+        margin: 0 0 8px 0;
+        font-size: 22px;
+    }
+
+    .status-content p {
+        margin: 0;
+        color: #666;
+        font-size: 14px;
+    }
+
+    /* Summary Stats */
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        background: #f8f9fa;
+        padding: 16px;
+        border-radius: 6px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1a1a1a;
+    }
+
+    /* Issues List */
+    .issues-section {
+        margin-top: 24px;
+    }
+
+    .issues-section h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: #1a1a1a;
+    }
+
+    .issues-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .issue-card {
+        background: white;
+        border-left: 4px solid;
+        padding: 16px;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .issue-card.severity-critical {
+        border-left-color: #f44336;
+        background: #ffebee;
+    }
+
+    .issue-card.severity-warning {
+        border-left-color: #ff9800;
+        background: #fff3e0;
+    }
+
+    .issue-card.severity-info {
+        border-left-color: #2196f3;
+        background: #e3f2fd;
+    }
+
+    .issue-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .issue-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .issue-content {
+        flex: 1;
+    }
+
+    .issue-rule {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .issue-message {
+        font-size: 14px;
+        color: #1a1a1a;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .issue-details {
+        margin-top: 12px;
+        padding: 12px;
+        background: rgba(255,255,255,0.7);
+        border-radius: 4px;
+        font-size: 13px;
+        color: #555;
+    }
+
+    .issue-details-toggle {
+        background: none;
+        border: none;
+        color: #0066cc;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 4px 0;
+        margin-top: 8px;
+        text-decoration: underline;
+    }
+
+    .issue-details-toggle:hover {
+        color: #0052a3;
+    }
+
+    .details-content {
+        display: none;
+        margin-top: 8px;
+    }
+
+    .details-content.show {
+        display: block;
+    }
+
+    /* Loading State */
+    .loading-spinner {
+        text-align: center;
+        padding: 40px;
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #0066cc;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+
+    .empty-state-icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+    }
+
+    .empty-state-message {
+        font-size: 16px;
+        color: #666;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .controls-group {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .form-group {
+            max-width: 100%;
+        }
+
+        .summary-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="verification-container">
+    <div class="verification-header">
+        <h1>📋 Schedule Verification</h1>
+        <p>Verify schedules for any date to identify potential issues before they become problems.</p>
+    </div>
+
+    <!-- Verification Controls -->
+    <div class="verification-controls">
+        <div class="controls-group">
+            <div class="form-group">
+                <label for="verify-date" class="form-label">Select Date to Verify</label>
+                <input
+                    type="date"
+                    id="verify-date"
+                    class="form-input"
+                    value="{{ default_date }}"
+                    required>
+            </div>
+            <button id="btn-verify" class="btn-verify">
+                🔍 Verify Schedule
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Container -->
+    <div id="verification-results" class="verification-results results-hidden">
+        <!-- Results will be dynamically inserted here -->
+    </div>
+
+    <!-- Initial Empty State -->
+    <div id="empty-state" class="empty-state">
+        <div class="empty-state-icon">📅</div>
+        <p class="empty-state-message">Select a date and click "Verify Schedule" to begin</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pages/schedule-verification.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[Schedule Verification] DOM loaded, checking for class...');
+        if (typeof ScheduleVerification === 'undefined') {
+            console.error('[Schedule Verification] ScheduleVerification class not found! Script may not have loaded.');
+            return;
+        }
+        try {
+            const verifier = new ScheduleVerification();
+            console.log('[Schedule Verification] Instance created successfully');
+        } catch (error) {
+            console.error('[Schedule Verification] Error creating instance:', error);
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Product Connections Scheduler</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='img/favicon-48x48.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <meta name="description" content="Secure login for Product Connections Scheduler - Crossmark MVRetail Integration">
+</head>
+
+<body class="login-body">
+    <!-- Login Container -->
+    <div class="login-container">
+        <!-- Header Section -->
+        <div class="login-header">
+            <div class="login-logo-container">
+                <img src="{{ url_for('static', filename='img/PC-Logo_Primary_Full-Color-1024x251.png') }}"
+                    alt="Product Connections" class="login-logo">
+            </div>
+            <h1 class="login-title">Scheduler Login</h1>
+            <p class="login-subtitle">Access your scheduling dashboard</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="login-form-container">
+            <form id="loginForm" class="login-form" method="POST" action="{{ url_for('auth.login') }}">
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="username" class="form-label">
+                        <span class="label-text">Username</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <div class="input-container">
+                        <input type="text" id="username" name="username" class="form-input"
+                            placeholder="Enter your Crossmark username" required autocomplete="username"
+                            aria-describedby="username-help" maxlength="50">
+                    </div>
+                    <small id="username-help" class="form-help">Use your Crossmark MVRetail credentials</small>
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="password" class="form-label">
+                        <span class="label-text">Password</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <div class="input-container">
+                        <input type="password" id="password" name="password" class="form-input"
+                            placeholder="Enter your password" required autocomplete="current-password"
+                            aria-describedby="password-help" minlength="8">
+                        <button type="button" class="password-toggle" aria-label="Show password" tabindex="-1">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" class="eye-open">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" class="eye-closed" style="display: none;">
+                                <path
+                                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                                <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                        </button>
+                    </div>
+                    <small id="password-help" class="form-help">Your Crossmark account password</small>
+                </div>
+
+                <!-- Remember Me & Forgot Password -->
+                <div class="form-row">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="remember" name="remember" class="checkbox-input">
+                        <label for="remember" class="checkbox-label">Remember me on this device</label>
+                    </div>
+                    <a href="#" class="forgot-password" id="forgotPasswordLink">I forgot my username or password</a>
+                </div>
+
+                <!-- Error Messages -->
+                <div id="errorContainer" class="error-container" style="display: none;">
+                    <div class="error-message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                        <span id="errorMessage"></span>
+                    </div>
+                </div>
+
+                <!-- Session Timeout Info Message -->
+                <div id="timeoutContainer" class="info-container" style="display: none;">
+                    <div class="info-message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="16" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                        <span>Your session expired due to inactivity. Please log in again.</span>
+                    </div>
+                </div>
+
+                <!-- Success Message -->
+                <div id="successContainer" class="success-container" style="display: none;">
+                    <div class="success-message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="20,6 9,17 4,12" />
+                        </svg>
+                        <span id="successMessage">Login successful! Redirecting...</span>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="loginButton" class="login-button">
+                    <span class="button-text">Sign In</span>
+                    <div class="button-loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <span>Authenticating...</span>
+                    </div>
+                </button>
+            </form>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <p class="footer-text">
+                Powered by <strong>Crossmark MVRetail</strong> Integration
+            </p>
+            <p class="footer-links">
+                <a href="#" class="footer-link" id="helpLink">Help</a>
+                <span class="footer-separator">•</span>
+                <a href="#" class="footer-link" id="privacyLink">Privacy</a>
+                <span class="footer-separator">•</span>
+                <a href="#" class="footer-link" id="termsLink">Terms</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Background Elements -->
+    <div class="login-background">
+        <div class="bg-shape shape-1"></div>
+        <div class="bg-shape shape-2"></div>
+        <div class="bg-shape shape-3"></div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container modal-container-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">Help & Support</h2>
+                <button type="button" class="modal-close" aria-label="Close modal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body modal-body-scroll">
+                <div class="help-section">
+                    <h3>Getting Started</h3>
+                    <p>Welcome to the Product Connections Scheduler! This application helps you manage your scheduling
+                        tasks through integration with Crossmark MVRetail.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Login Credentials</h3>
+                    <p>Use your existing Crossmark MVRetail username and password to log in. These are the same
+                        credentials you use to access the MVRetail platform.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Forgot Your Credentials?</h3>
+                    <p>If you've forgotten your username or password, click the "I forgot my username or password" link
+                        on the login page. Enter your email address and recovery instructions will be sent to you.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Browser Requirements</h3>
+                    <ul>
+                        <li>Google Chrome (recommended)</li>
+                        <li>Mozilla Firefox</li>
+                        <li>Microsoft Edge</li>
+                        <li>Safari</li>
+                    </ul>
+                    <p>Please ensure JavaScript is enabled and cookies are allowed for the best experience.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Need More Help?</h3>
+                    <p>For additional support, please contact your supervisor or the Product Connections support team.
+                    </p>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn modal-btn-primary modal-btn-close">Got It</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container modal-container-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">Privacy Policy</h2>
+                <button type="button" class="modal-close" aria-label="Close modal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body modal-body-scroll">
+                <p class="policy-updated">Last Updated: November 2024</p>
+
+                <div class="policy-section">
+                    <h3>1. Information We Collect</h3>
+                    <p>The Product Connections Scheduler collects and processes the following information:</p>
+                    <ul>
+                        <li><strong>Authentication Data:</strong> Your Crossmark MVRetail username and password are used
+                            solely for authentication purposes and are transmitted securely to the Crossmark API.</li>
+                        <li><strong>Scheduling Data:</strong> Event schedules, assignments, and related work information
+                            retrieved from Crossmark MVRetail.</li>
+                        <li><strong>Usage Data:</strong> Basic usage information to improve application performance and
+                            user experience.</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>2. How We Use Your Information</h3>
+                    <p>Your information is used to:</p>
+                    <ul>
+                        <li>Authenticate your access to the scheduling system</li>
+                        <li>Display your personalized schedule and assignments</li>
+                        <li>Synchronize data with Crossmark MVRetail</li>
+                        <li>Improve application functionality and performance</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>3. Data Security</h3>
+                    <p>We implement appropriate security measures to protect your information:</p>
+                    <ul>
+                        <li>All data transmissions are encrypted using HTTPS/TLS</li>
+                        <li>Passwords are never stored locally - authentication is handled by Crossmark</li>
+                        <li>Session data is securely managed and expires after periods of inactivity</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>4. Data Sharing</h3>
+                    <p>We do not sell or share your personal information with third parties. Data is only transmitted to
+                        Crossmark MVRetail as required for the scheduling functionality.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>5. Your Rights</h3>
+                    <p>You have the right to:</p>
+                    <ul>
+                        <li>Access your scheduling data through the application</li>
+                        <li>Request information about how your data is processed</li>
+                        <li>Contact your supervisor regarding data concerns</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>6. Contact</h3>
+                    <p>For privacy-related inquiries, please contact your Product Connections supervisor or Crossmark
+                        representative.</p>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn modal-btn-primary modal-btn-close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms of Service Modal -->
+    <div id="termsModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container modal-container-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">Terms of Service</h2>
+                <button type="button" class="modal-close" aria-label="Close modal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body modal-body-scroll">
+                <p class="policy-updated">Last Updated: November 2024</p>
+
+                <div class="policy-section">
+                    <h3>1. Acceptance of Terms</h3>
+                    <p>By accessing and using the Product Connections Scheduler, you agree to be bound by these Terms of
+                        Service. If you do not agree to these terms, please do not use this application.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>2. Authorized Use</h3>
+                    <p>This application is intended for authorized Product Connections employees and contractors only.
+                        You must:</p>
+                    <ul>
+                        <li>Use only your own Crossmark MVRetail credentials</li>
+                        <li>Keep your login credentials confidential</li>
+                        <li>Not share access with unauthorized individuals</li>
+                        <li>Use the application only for legitimate work purposes</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>3. User Responsibilities</h3>
+                    <p>You are responsible for:</p>
+                    <ul>
+                        <li>Maintaining the confidentiality of your account</li>
+                        <li>All activities that occur under your account</li>
+                        <li>Reporting any unauthorized access immediately</li>
+                        <li>Ensuring accurate information in your schedule entries</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>4. Prohibited Activities</h3>
+                    <p>You may not:</p>
+                    <ul>
+                        <li>Attempt to gain unauthorized access to the system</li>
+                        <li>Interfere with or disrupt the application's functionality</li>
+                        <li>Use automated tools to access the system without authorization</li>
+                        <li>Modify, copy, or distribute application content</li>
+                    </ul>
+                </div>
+
+                <div class="policy-section">
+                    <h3>5. Data Accuracy</h3>
+                    <p>While we strive to maintain accurate scheduling data, you should verify all schedule information
+                        through official Crossmark MVRetail channels for critical decisions.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>6. Service Availability</h3>
+                    <p>We aim to provide reliable access to the scheduler but cannot guarantee uninterrupted service.
+                        Maintenance windows and updates may require temporary downtime.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>7. Limitation of Liability</h3>
+                    <p>The Product Connections Scheduler is provided "as is" without warranties. We are not liable for
+                        any indirect, incidental, or consequential damages arising from your use of this application.
+                    </p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>8. Changes to Terms</h3>
+                    <p>We reserve the right to modify these terms at any time. Continued use of the application after
+                        changes constitutes acceptance of the new terms.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h3>9. Contact</h3>
+                    <p>For questions about these terms, please contact your Product Connections supervisor.</p>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn modal-btn-primary modal-btn-close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title">Account Recovery</h2>
+                <button type="button" class="modal-close" id="modalClose" aria-label="Close modal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Enter your email address and we'll send you instructions to recover your
+                    username or reset your password.</p>
+                <form id="forgotPasswordForm" class="modal-form">
+                    <div class="form-group">
+                        <label for="recoveryEmail" class="form-label">
+                            <span class="label-text">Email Address</span>
+                            <span class="label-required">*</span>
+                        </label>
+                        <input type="email" id="recoveryEmail" name="email" class="form-input"
+                            placeholder="Enter your email address" required autocomplete="email">
+                    </div>
+                    <div id="recoveryMessage" class="recovery-message" style="display: none;"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn modal-btn-secondary" id="modalCancel">Cancel</button>
+                        <button type="submit" class="modal-btn modal-btn-primary" id="recoverySubmit">
+                            <span class="btn-text">Send Recovery Email</span>
+                            <div class="btn-loading" style="display: none;">
+                                <div class="spinner-small"></div>
+                            </div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+</body>
+
+</html>

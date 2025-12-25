@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Validation - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item active">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>📋 Daily Validation Dashboard</h1>
+
+        <p class="help-intro">
+            The Daily Validation Dashboard provides a comprehensive overview of your daily schedule
+            with real-time validation warnings, event type breakdowns, rotation assignments, and
+            unscheduled events requiring attention.
+        </p>
+
+        <div class="help-section">
+            <h2>Accessing the Daily Validation Dashboard</h2>
+            <p>
+                Navigate to <strong>Dashboard → Daily Validation</strong> from the main navigation menu.
+                The dashboard defaults to today's date but allows you to view any date.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Understanding the Dashboard Layout</h2>
+            <p>
+                The dashboard is organized into several key sections:
+            </p>
+
+            <h3>📅 Date Selector</h3>
+            <p>
+                Use the date picker at the top to view validation information for any date.
+                Quick navigation buttons allow you to move between days or jump to today.
+            </p>
+
+            <h3>📊 Event Type Summary</h3>
+            <p>
+                This section shows a breakdown of all scheduled events by type:
+            </p>
+            <ul>
+                <li><strong>Setup Events:</strong> Store setup and preparation events</li>
+                <li><strong>Demo Events:</strong> Product demonstration events</li>
+                <li><strong>Juicer Events:</strong> Juice bar and tasting events</li>
+                <li><strong>Core Events:</strong> Standard retail events</li>
+                <li><strong>Other Events:</strong> Miscellaneous event types</li>
+            </ul>
+            <p>
+                Each event type displays the count and a quick-view list of assigned employees.
+            </p>
+
+            <h3>🔄 Rotation Assignments</h3>
+            <p>
+                Shows which employees are assigned to rotating positions for the selected date:
+            </p>
+            <ul>
+                <li><strong>Juicer Assignment:</strong> Employee designated for Juicer events</li>
+                <li><strong>Primary Lead Assignment:</strong> Employee handling primary Core events</li>
+            </ul>
+            <div class="info-box">
+                <strong>Note:</strong> Rotation assignments are set weekly and help ensure
+                consistent coverage and balanced workload distribution.
+            </div>
+
+            <h3>⚠️ Validation Warnings</h3>
+            <p>
+                This critical section displays any scheduling issues detected for the day:
+            </p>
+            <ul>
+                <li><strong>Scheduling Conflicts:</strong> Employees assigned to overlapping events</li>
+                <li><strong>Availability Violations:</strong> Events scheduled outside employee availability hours</li>
+                <li><strong>Time Off Conflicts:</strong> Employees scheduled during requested time off</li>
+                <li><strong>Missing Rotations:</strong> Rotation positions not filled</li>
+                <li><strong>Qualification Mismatches:</strong> Employees assigned to events they're not qualified for</li>
+            </ul>
+            <div class="warning-box">
+                <strong>⚠️ Action Required:</strong> Address all validation warnings before the
+                event date to prevent scheduling failures and employee conflicts.
+            </div>
+
+            <h3>📋 Unscheduled Events</h3>
+            <p>
+                Lists all events for the selected date that haven't been assigned to employees yet.
+                Events are color-coded by priority:
+            </p>
+            <ul>
+                <li><strong style="color: #dc3545;">High Priority (Red):</strong> Due within 24 hours</li>
+                <li><strong style="color: #fd7e14;">Medium Priority (Orange):</strong> Due within 48 hours</li>
+                <li><strong style="color: #ffc107;">Low Priority (Yellow):</strong> Due within 72 hours</li>
+                <li><strong style="color: #28a745;">Normal (Green):</strong> More than 72 hours out</li>
+            </ul>
+            <p>
+                Quick action buttons allow you to schedule events directly from this view.
+            </p>
+
+            <h3>👀 3-Day Ahead View</h3>
+            <p>
+                The bottom section provides a preview of the next 3 days of scheduled events,
+                helping you plan ahead and identify potential capacity issues.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Using Validation Warnings</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Review All Warnings</h3>
+                        <p>
+                            Read each warning message carefully. Warnings include details about
+                            the affected employee, event, and specific issue.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Click to View Details</h3>
+                        <p>
+                            Click on a warning to jump directly to the affected schedule or event
+                            for immediate resolution.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Resolve the Issue</h3>
+                        <p>
+                            Common resolutions:
+                        </p>
+                        <ul>
+                            <li><strong>Scheduling Conflicts:</strong> Reschedule one of the conflicting events</li>
+                            <li><strong>Availability Violations:</strong> Adjust the event time or choose a different employee</li>
+                            <li><strong>Time Off Conflicts:</strong> Reassign to an available employee</li>
+                            <li><strong>Missing Rotations:</strong> Assign employees to rotation positions in Settings</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Refresh to Verify</h3>
+                        <p>
+                            After making changes, refresh the dashboard to confirm warnings are resolved.
+                            The warning count should decrease as issues are fixed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Quick Actions from the Dashboard</h2>
+            <p>
+                The Daily Validation Dashboard provides several quick actions:
+            </p>
+
+            <ul>
+                <li>
+                    <strong>Schedule Event Button:</strong> Directly schedule unscheduled events
+                    without leaving the dashboard
+                </li>
+                <li>
+                    <strong>View Employee Details:</strong> Click employee names to see their
+                    full schedule and availability
+                </li>
+                <li>
+                    <strong>Edit Schedule:</strong> Click on scheduled events to modify assignments
+                </li>
+                <li>
+                    <strong>Filter by Event Type:</strong> Toggle event types to focus on specific categories
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Check daily:</strong> Review the Daily Validation Dashboard every morning
+                    to catch and resolve issues early
+                </li>
+                <li>
+                    <strong>Resolve warnings immediately:</strong> Don't let validation warnings accumulate.
+                    Address them as soon as they appear.
+                </li>
+                <li>
+                    <strong>Use the 3-day preview:</strong> Regularly check upcoming days to plan for
+                    capacity issues or high-volume periods
+                </li>
+                <li>
+                    <strong>Monitor unscheduled events:</strong> Keep the unscheduled event count at zero
+                    to avoid last-minute scheduling emergencies
+                </li>
+                <li>
+                    <strong>Verify rotation assignments:</strong> Confirm rotation employees are correctly
+                    assigned before the start of each week
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Understanding Warning Severity</h2>
+            <p>
+                Validation warnings are categorized by severity:
+            </p>
+
+            <div class="permission-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Description</th>
+                            <th>Action Required</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color: #dc3545;">Critical</strong></td>
+                            <td>Hard constraint violations (time off conflicts, double-booking)</td>
+                            <td>Must fix before event date</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #fd7e14;">High</strong></td>
+                            <td>Qualification mismatches, missing rotations</td>
+                            <td>Fix within 24 hours</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #ffc107;">Medium</strong></td>
+                            <td>Availability edge cases, workload imbalances</td>
+                            <td>Review and adjust if possible</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #17a2b8;">Low</strong></td>
+                            <td>Optimization suggestions, minor concerns</td>
+                            <td>Optional improvements</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Troubleshooting</h2>
+
+            <h3>Warnings Don't Disappear After Fixing</h3>
+            <p>
+                If warnings persist after you've resolved the issue:
+            </p>
+            <ul>
+                <li>Refresh the page (F5 or click refresh button)</li>
+                <li>Clear your browser cache</li>
+                <li>Verify the fix was actually saved (check the schedule record)</li>
+                <li>Contact support if warnings persist incorrectly</li>
+            </ul>
+
+            <h3>Missing Events on Dashboard</h3>
+            <p>
+                If events aren't appearing:
+            </p>
+            <ul>
+                <li>Verify you've selected the correct date</li>
+                <li>Run a database sync from Settings to fetch latest events</li>
+                <li>Check that events haven't been filtered out by your current view settings</li>
+            </ul>
+
+            <h3>Rotation Assignments Not Showing</h3>
+            <p>
+                If rotation assignments appear blank:
+            </p>
+            <ul>
+                <li>Navigate to Settings → Rotation Assignments</li>
+                <li>Ensure employees are assigned to each day of the week</li>
+                <li>Save rotation settings and refresh the dashboard</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('dashboard.daily_validation') }}" class="next-step-card">
+                    <span class="next-step-icon">📋</span>
+                    <span class="next-step-text">Go to Daily Validation Dashboard</span>
+                </a>
+                <a href="{{ url_for('help.review_approve') }}" class="next-step-card">
+                    <span class="next-step-icon">✅</span>
+                    <span class="next-step-text">Learn about reviewing schedules</span>
+                </a>
+                <a href="{{ url_for('help.help_home') }}" class="next-step-card">
+                    <span class="next-step-icon">📚</span>
+                    <span class="next-step-text">Back to Help Home</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

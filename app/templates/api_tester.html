@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}API Testing Tool - Product Connections Scheduler{% endblock %}
+{% block page_title %}API Testing & Request Capture{% endblock %}
+
+{% block extra_head %}
+<style>
+    .test-section {
+        background: var(--bg-primary);
+        border-radius: var(--border-radius-lg);
+        padding: var(--spacing-xl);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .test-form {
+        display: grid;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .form-row label {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .form-row input, .form-row select, .form-row textarea {
+        padding: var(--spacing-sm);
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+        font-family: monospace;
+    }
+
+    .response-section {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: var(--border-radius);
+        padding: var(--spacing-md);
+        margin-top: var(--spacing-md);
+    }
+
+    .response-content {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: var(--spacing-sm);
+        font-family: monospace;
+        font-size: 0.9em;
+        max-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+
+    .status-success { color: #27ae60; }
+    .status-error { color: #e74c3c; }
+    .status-warning { color: #f39c12; }
+
+    .cookie-display {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: var(--border-radius);
+        padding: var(--spacing-sm);
+        font-family: monospace;
+        font-size: 0.9em;
+        word-break: break-all;
+    }
+
+    .instructions {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="instructions">
+        <h3>🛠️ API Testing Instructions</h3>
+        <p>This tool helps us capture the exact HTTP requests needed for your scheduling system integration:</p>
+        <ol>
+            <li><strong>First:</strong> Test the login to capture your PHPSESSID cookie</li>
+            <li><strong>Then:</strong> Use the authenticated session to test other endpoints</li>
+            <li><strong>Copy:</strong> The working requests so we can implement them in the sync system</li>
+        </ol>
+    </div>
+
+    <!-- Login Test Section -->
+    <div class="test-section">
+        <h3>🔐 Login Authentication Test</h3>
+        <form id="login-form" class="test-form">
+            <div class="form-row">
+                <label for="login-url">Login URL:</label>
+                <input type="url" id="login-url" name="login_url" placeholder="https://your-system.com/login.php" required>
+            </div>
+            <div class="form-row">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" placeholder="Your username" required>
+            </div>
+            <div class="form-row">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" placeholder="Your password" required>
+            </div>
+            <div class="form-row">
+                <label></label>
+                <button type="submit" class="btn btn-primary">Test Login</button>
+            </div>
+        </form>
+
+        <div id="login-response" class="response-section" style="display: none;">
+            <h4>Login Response:</h4>
+            <div id="login-status"></div>
+            <div id="session-cookie" class="cookie-display" style="margin-top: 10px;"></div>
+            <div id="login-details" class="response-content"></div>
+        </div>
+    </div>
+
+    <!-- Generic API Test Section -->
+    <div class="test-section">
+        <h3>🌐 API Endpoint Tester</h3>
+        <form id="api-test-form" class="test-form">
+            <div class="form-row">
+                <label for="method">Method:</label>
+                <select id="method" name="method">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label for="endpoint-url">Endpoint URL:</label>
+                <input type="url" id="endpoint-url" name="endpoint_url" placeholder="https://your-system.com/api/events" required>
+            </div>
+            <div class="form-row">
+                <label for="custom-headers">Headers (JSON):</label>
+                <textarea id="custom-headers" name="headers" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
+            </div>
+            <div class="form-row">
+                <label for="request-data">Request Data:</label>
+                <textarea id="request-data" name="data" rows="5" placeholder='{"key": "value"} or form data'></textarea>
+            </div>
+            <div class="form-row">
+                <label for="use-session">Use Session:</label>
+                <input type="checkbox" id="use-session" name="use_session" checked>
+            </div>
+            <div class="form-row">
+                <label></label>
+                <button type="submit" class="btn btn-primary">Test Request</button>
+            </div>
+        </form>
+
+        <div id="api-response" class="response-section" style="display: none;">
+            <h4>API Response:</h4>
+            <div id="api-status"></div>
+            <div id="api-details" class="response-content"></div>
+        </div>
+    </div>
+
+    <!-- Request History -->
+    <div class="test-section">
+        <h3>📝 Request History & Code Generation</h3>
+        <div id="request-history">
+            <p>Successful requests will appear here with generated code...</p>
+        </div>
+        <button onclick="clearHistory()" class="btn btn-outline">Clear History</button>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sessionCookie = null;
+
+// Handle login form
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(e.target);
+    const loginData = Object.fromEntries(formData.entries());
+
+    document.getElementById('login-response').style.display = 'block';
+    document.getElementById('login-status').innerHTML = '<span class="status-warning">⏳ Testing login...</span>';
+
+    try {
+        const response = await fetch('/api/test/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(loginData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            sessionCookie = result.session_id;
+            document.getElementById('login-status').innerHTML = '<span class="status-success">✅ Login successful!</span>';
+            document.getElementById('session-cookie').textContent = `PHPSESSID: ${result.session_id}`;
+            document.getElementById('login-details').textContent = JSON.stringify(result, null, 2);
+
+            // Add to history
+            addToHistory('LOGIN', loginData.login_url, result);
+        } else {
+            document.getElementById('login-status').innerHTML = '<span class="status-error">❌ Login failed</span>';
+            document.getElementById('login-details').textContent = JSON.stringify(result, null, 2);
+        }
+    } catch (error) {
+        document.getElementById('login-status').innerHTML = '<span class="status-error">❌ Request failed</span>';
+        document.getElementById('login-details').textContent = `Error: ${error.message}`;
+    }
+});
+
+// Handle API test form
+document.getElementById('api-test-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(e.target);
+    const testData = Object.fromEntries(formData.entries());
+
+    // Parse JSON fields
+    try {
+        if (testData.headers) {
+            testData.headers = JSON.parse(testData.headers);
+        }
+    } catch (e) {
+        alert('Invalid JSON in headers field');
+        return;
+    }
+
+    if (testData.use_session && !sessionCookie) {
+        alert('Please login first to get a session cookie');
+        return;
+    }
+
+    document.getElementById('api-response').style.display = 'block';
+    document.getElementById('api-status').innerHTML = '<span class="status-warning">⏳ Testing request...</span>';
+
+    try {
+        const requestData = {
+            ...testData,
+            session_id: testData.use_session ? sessionCookie : null
+        };
+
+        const response = await fetch('/api/test/request', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('api-status').innerHTML = '<span class="status-success">✅ Request successful!</span>';
+            document.getElementById('api-details').textContent = JSON.stringify(result, null, 2);
+
+            // Add to history
+            addToHistory(testData.method, testData.endpoint_url, result);
+        } else {
+            document.getElementById('api-status').innerHTML = '<span class="status-error">❌ Request failed</span>';
+            document.getElementById('api-details').textContent = JSON.stringify(result, null, 2);
+        }
+    } catch (error) {
+        document.getElementById('api-status').innerHTML = '<span class="status-error">❌ Request failed</span>';
+        document.getElementById('api-details').textContent = `Error: ${error.message}`;
+    }
+});
+
+function addToHistory(method, url, result) {
+    const historyDiv = document.getElementById('request-history');
+    const timestamp = new Date().toLocaleTimeString();
+
+    const historyItem = document.createElement('div');
+    historyItem.style.marginBottom = '20px';
+    historyItem.style.padding = '15px';
+    historyItem.style.backgroundColor = '#f8f9fa';
+    historyItem.style.border = '1px solid #e9ecef';
+    historyItem.style.borderRadius = '8px';
+
+    historyItem.innerHTML = `
+        <h4 style="margin: 0 0 10px 0; color: #27ae60;">${method} - ${timestamp}</h4>
+        <p><strong>URL:</strong> ${url}</p>
+        <details>
+            <summary><strong>Response Data</strong></summary>
+            <pre style="background: white; padding: 10px; border-radius: 4px; margin-top: 10px; overflow-x: auto;">${JSON.stringify(result, null, 2)}</pre>
+        </details>
+    `;
+
+    if (historyDiv.firstChild && historyDiv.firstChild.tagName !== 'P') {
+        historyDiv.insertBefore(historyItem, historyDiv.firstChild);
+    } else {
+        historyDiv.innerHTML = '';
+        historyDiv.appendChild(historyItem);
+    }
+}
+
+function clearHistory() {
+    document.getElementById('request-history').innerHTML = '<p>Request history cleared...</p>';
+}
+</script>
+{% endblock %}

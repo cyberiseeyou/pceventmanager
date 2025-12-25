@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Rotation Assignments - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+.rotation-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.rotation-section {
+    background: white;
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.rotation-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #3498db;
+}
+
+.rotation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.rotation-day {
+    display: flex;
+    flex-direction: column;
+}
+
+.rotation-day label {
+    font-weight: 600;
+    color: #34495e;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.rotation-day select {
+    padding: 10px;
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+}
+
+.rotation-day select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.button-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.btn-primary {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+}
+
+.btn-secondary {
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-secondary:hover {
+    background-color: #7f8c8d;
+}
+
+.alert {
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.help-text {
+    color: #7f8c8d;
+    font-size: 14px;
+    margin-top: 10px;
+    font-style: italic;
+}
+
+#message-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 400px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rotation-container">
+    <h1>Weekly Rotation Assignments</h1>
+    <p class="help-text">Configure weekly rotation assignments for Juicers and Primary Leads. These assignments will be used by the auto-scheduler.</p>
+
+    <div id="message-container"></div>
+
+    <!-- Juicer Rotation -->
+    <div class="rotation-section">
+        <h2>Primary Juicer Rotation</h2>
+        <p class="help-text">Assign a Juicer Barista for each day of the week. Juicer events will be scheduled to these employees.</p>
+
+        <div class="rotation-grid">
+            {% for day_index in range(7) %}
+            <div class="rotation-day">
+                <label for="juicer-{{ day_index }}">{{ day_names[day_index] }}</label>
+                <select id="juicer-{{ day_index }}" name="juicer-{{ day_index }}" data-rotation-type="juicer" data-day="{{ day_index }}">
+                    <option value="">-- Select Juicer --</option>
+                    {% for employee in juicers %}
+                    <option value="{{ employee.id }}"
+                        {% if rotations.juicer.get(day_index) == employee.id %}selected{% endif %}>
+                        {{ employee.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Primary Lead Rotation -->
+    <div class="rotation-section">
+        <h2>Primary Lead Rotation</h2>
+        <p class="help-text">Assign a Lead Event Specialist for each day. Digital Setups, Refreshes, and Freeosk events will be scheduled to these leads.</p>
+
+        <div class="rotation-grid">
+            {% for day_index in range(7) %}
+            <div class="rotation-day">
+                <label for="primary_lead-{{ day_index }}">{{ day_names[day_index] }}</label>
+                <select id="primary_lead-{{ day_index }}" name="primary_lead-{{ day_index }}" data-rotation-type="primary_lead" data-day="{{ day_index }}">
+                    <option value="">-- Select Lead --</option>
+                    {% for employee in leads %}
+                    <option value="{{ employee.id }}"
+                        {% if rotations.primary_lead.get(day_index) == employee.id %}selected{% endif %}>
+                        {{ employee.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="button-group">
+        <button type="button" class="btn-primary" id="save-rotations">Save Rotations</button>
+        <button type="button" class="btn-secondary" id="reset-rotations">Reset</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messageContainer = document.getElementById('message-container');
+
+    function showMessage(message, type = 'success') {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+        messageContainer.appendChild(alertDiv);
+
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
+
+    // Save rotations
+    document.getElementById('save-rotations').addEventListener('click', async function() {
+        const rotations = {
+            juicer: {},
+            primary_lead: {}
+        };
+
+        // Collect all rotation assignments
+        document.querySelectorAll('select[data-rotation-type]').forEach(select => {
+            const type = select.dataset.rotationType;
+            const day = select.dataset.day;
+            const value = select.value;
+
+            if (value) {
+                rotations[type][day] = value;
+            }
+        });
+
+        try {
+            const response = await fetch('{{ url_for("rotations.save_rotations") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(rotations)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showMessage('Rotations saved successfully!', 'success');
+            } else {
+                showMessage('Error: ' + (data.error || data.errors.join(', ')), 'error');
+            }
+        } catch (error) {
+            showMessage('Failed to save rotations: ' + error.message, 'error');
+        }
+    });
+
+    // Reset rotations
+    document.getElementById('reset-rotations').addEventListener('click', function() {
+        if (confirm('Reset all rotation assignments to their last saved values?')) {
+            location.reload();
+        }
+    });
+});
+</script>
+{% endblock %}

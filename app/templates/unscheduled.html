@@ -1,0 +1,922 @@
+{% extends "base.html" %}
+
+{% block title %}Events - Product Connections Scheduler{% endblock %}
+{% block page_title %}Scheduler{% endblock %}
+
+{% block extra_head %}
+<style>
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 2px solid var(--pc-light-blue);
+    }
+    
+    .page-title {
+        font-size: var(--font-size-h1);
+        font-weight: var(--font-weight-heading);
+        color: var(--pc-navy);
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+    
+    .filter-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-lg);
+        gap: var(--spacing-md);
+    }
+    
+    .filter-section {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        background: var(--bg-secondary);
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius-md);
+        border: 1px solid rgba(46, 76, 115, 0.1);
+    }
+    
+    .actions-section {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+    
+    .events-grid {
+        display: grid;
+        gap: var(--spacing-md);
+    }
+    
+    .event-card {
+        background: var(--bg-primary);
+        border: 1px solid rgba(46, 76, 115, 0.1);
+        border-radius: var(--border-radius-md);
+        padding: var(--spacing-md);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
+    }
+    
+    .event-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    
+    .event-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .event-title {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-heading);
+        color: var(--text-primary);
+        margin: 0;
+        flex: 1;
+        margin-right: var(--spacing-sm);
+    }
+    
+    .event-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: var(--spacing-sm);
+        padding-top: var(--spacing-sm);
+    }
+    
+    .event-actions {
+        display: flex;
+        gap: var(--spacing-xs);
+        border-top: 1px solid var(--pc-light-blue);
+    }
+    
+    .event-dates {
+        font-size: var(--font-size-small);
+        color: var(--text-muted);
+    }
+    
+    .no-events {
+        text-align: center;
+        padding: var(--spacing-xl);
+        background: var(--bg-secondary);
+        border-radius: var(--border-radius-md);
+        color: var(--text-muted);
+        border: 2px dashed rgba(46, 76, 115, 0.2);
+    }
+    
+    .no-events-icon {
+        font-size: 3rem;
+        margin-bottom: var(--spacing-md);
+        opacity: 0.5;
+    }
+    
+    .import-status {
+        margin-left: var(--spacing-sm);
+        font-size: var(--font-size-small);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+    }
+    
+    .import-status.success {
+        background: rgba(40, 167, 69, 0.1);
+        color: var(--success-color);
+    }
+    
+    .import-status.error {
+        background: rgba(220, 53, 69, 0.1);
+        color: var(--error-color);
+    }
+    
+    .import-status.loading {
+        background: rgba(27, 155, 216, 0.1);
+        color: var(--pc-blue);
+    }
+    
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    
+    .action-modal {
+        background: var(--bg-primary);
+        border-radius: var(--border-radius-lg);
+        padding: var(--spacing-xl);
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+    }
+    
+    .action-modal h3 {
+        margin-top: 0;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--pc-light-blue);
+        padding-bottom: var(--spacing-sm);
+    }
+    
+    .form-group {
+        margin-bottom: var(--spacing-md);
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: var(--spacing-xs);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+    }
+    
+    .form-group input, .form-group select {
+        width: 100%;
+        padding: var(--spacing-sm);
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius-sm);
+        box-sizing: border-box;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+        justify-content: flex-end;
+        margin-top: var(--spacing-lg);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid #ddd;
+    }
+    
+    .modal-close {
+        position: absolute;
+        top: var(--spacing-md);
+        right: var(--spacing-md);
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: var(--text-muted);
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .modal-close:hover {
+        color: var(--text-primary);
+    }
+    
+    .validation-error-item {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid #dc3545;
+        border-radius: var(--border-radius-sm);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .validation-error-title {
+        font-weight: var(--font-weight-bold);
+        color: #dc3545;
+        margin-bottom: var(--spacing-xs);
+    }
+    
+    .validation-error-details {
+        font-size: var(--font-size-small);
+        color: var(--text-muted);
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .validation-error-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+    
+    .btn-fix {
+        background: #ffc107;
+        color: #000;
+        border: none;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        font-size: var(--font-size-small);
+    }
+    
+    .btn-fix:hover {
+        background: #e0a800;
+    }
+    
+    .hidden {
+        display: none !important;
+    }
+
+    /* Universal Search Styles */
+    .universal-search-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .search-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .universal-search-input {
+        width: 100%;
+        padding: 12px 40px 12px 16px;
+        border: 2px solid #e1e5e9;
+        border-radius: 25px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .universal-search-input:focus {
+        border-color: var(--pc-light-blue);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+    }
+
+    .search-icon {
+        position: absolute;
+        right: 15px;
+        color: #666;
+        pointer-events: none;
+    }
+
+    .search-filters {
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background: #f8f9fa;
+        border-radius: var(--border-radius-md);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+        border: 1px solid #e1e5e9;
+    }
+
+    .filter-label {
+        font-weight: var(--font-weight-bold);
+        color: var(--text-secondary);
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    .mini-filter {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius-sm);
+        font-size: 14px;
+        background: white;
+        min-width: 120px;
+    }
+
+    .context-section {
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .context-buttons {
+        display: flex;
+        gap: 4px;
+        background: #f8f9fa;
+        padding: 4px;
+        border-radius: 20px;
+        border: 1px solid #e1e5e9;
+    }
+
+    .context-btn {
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .context-btn:hover {
+        background: rgba(74, 144, 226, 0.1);
+    }
+
+    .context-btn.active {
+        background: var(--pc-light-blue);
+        color: white;
+    }
+
+    /* Search Results Styles */
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #e1e5e9;
+        border-radius: var(--border-radius-md);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 2px;
+    }
+
+    .search-result-section {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .search-result-section:last-child {
+        border-bottom: none;
+    }
+
+    .search-section-title {
+        font-size: 12px;
+        font-weight: bold;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-xs);
+        text-transform: uppercase;
+    }
+
+    .search-result-item {
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        margin-bottom: 2px;
+    }
+
+    .search-result-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .search-result-title {
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+    }
+
+    .search-result-details {
+        font-size: 12px;
+        color: var(--text-secondary);
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .priority-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 4px;
+    }
+
+    .priority-critical { background-color: #ff4444; }
+    .priority-urgent { background-color: #ffaa00; }
+    .priority-normal { background-color: #00dd00; }
+
+    .priority-badge-large {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        z-index: 10;
+    }
+
+    .days-remaining-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: var(--border-radius-sm);
+        font-size: 11px;
+        font-weight: bold;
+        margin-left: var(--spacing-xs);
+    }
+
+    .days-critical {
+        background-color: rgba(255, 68, 68, 0.15);
+        color: #ff4444;
+        border: 1px solid #ff4444;
+    }
+
+    .days-urgent {
+        background-color: rgba(255, 170, 0, 0.15);
+        color: #cc8800;
+        border: 1px solid #ffaa00;
+    }
+
+    .days-normal {
+        background-color: rgba(0, 221, 0, 0.15);
+        color: #00aa00;
+        border: 1px solid #00dd00;
+    }
+
+    /* Enhanced Event Cards with Priority */
+    .event-card-header {
+        position: relative;
+    }
+
+    .priority-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+    /* Condition Tabs */
+    .condition-tabs {
+        display: flex;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-lg);
+        border-bottom: 2px solid var(--pc-light-blue);
+        padding-bottom: 0;
+    }
+
+    .tab-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-weight: var(--font-weight-bold);
+        transition: all 0.2s ease;
+        margin-bottom: -2px;
+    }
+
+    .tab-btn:hover {
+        color: var(--pc-blue);
+        background: rgba(27, 155, 216, 0.05);
+    }
+
+    .tab-btn.active {
+        color: var(--pc-navy);
+        border-bottom-color: var(--pc-navy);
+        background: rgba(46, 76, 115, 0.05);
+    }
+
+    /* Event Condition Badge */
+    .event-condition {
+        display: inline-block;
+        padding: 2px 8px;
+        background: var(--pc-light-blue);
+        color: white;
+        border-radius: var(--border-radius-sm);
+        font-size: var(--font-size-small);
+        font-weight: var(--font-weight-bold);
+    }
+
+    .event-info {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        margin: var(--spacing-sm) 0;
+        font-size: var(--font-size-small);
+    }
+
+    .event-store {
+        color: var(--text-muted);
+    }
+
+    .schedule-info-box {
+        background: rgba(27, 155, 216, 0.08);
+        border-left: 3px solid var(--pc-blue);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        margin-top: var(--spacing-xs);
+    }
+
+    .schedule-item {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: 4px 0;
+        color: var(--text-primary);
+    }
+
+    .schedule-employee {
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+    }
+
+    .schedule-time {
+        color: var(--pc-blue);
+        font-weight: 500;
+    }
+
+    .events-stats {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-radius: var(--border-radius-sm);
+        margin-bottom: var(--spacing-md);
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Unscheduled Events</h1>
+    </div>
+
+    <!-- Condition Tabs -->
+    <div class="condition-tabs">
+        <a href="{{ url_for('main.unscheduled_events', condition='scheduled') }}"
+           class="tab-btn {% if condition == 'scheduled' %}active{% endif %}">
+            📅 Scheduled
+        </a>
+        <a href="{{ url_for('main.unscheduled_events', condition='unstaffed') }}"
+           class="tab-btn {% if condition == 'unstaffed' %}active{% endif %}">
+            ⚠️ Unscheduled
+        </a>
+        <a href="{{ url_for('main.unscheduled_events', condition='submitted') }}"
+           class="tab-btn {% if condition == 'submitted' %}active{% endif %}">
+            ✅ Submitted
+        </a>
+        <a href="{{ url_for('main.unscheduled_events', condition='paused') }}"
+           class="tab-btn {% if condition == 'paused' %}active{% endif %}">
+            ⏸️ Paused
+        </a>
+        <a href="{{ url_for('main.unscheduled_events', condition='reissued') }}"
+           class="tab-btn {% if condition == 'reissued' %}active{% endif %}">
+            🔄 Reissued
+        </a>
+    </div>
+    
+    <!-- Smart Search and Filter -->
+    <div class="filter-actions">
+        <div class="search-section" style="flex: 1;">
+            <form id="search-form" action="{{ url_for('main.unscheduled_events') }}" method="GET" style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                <input type="hidden" name="condition" value="{{ condition }}">
+                <input type="hidden" name="date_filter" value="{{ date_filter if date_filter else '' }}">
+                <div class="universal-search-container" style="flex: 1;">
+                    <div class="search-input-wrapper">
+                        <input type="text"
+                               name="search"
+                               id="smart-search"
+                               placeholder="Search: 123456, JOHN DOE, s:10/28/25, sc:10/28/25 to 11/2/25..."
+                               class="universal-search-input"
+                               autocomplete="off"
+                               value="{{ request.args.get('search', '') }}">
+                        <div class="search-icon">🔍</div>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                        <strong>Search Tips:</strong> Combine with commas: <em>123456, JOHN DOE, s:10/28/25</em> •
+                        <strong>Date prefixes:</strong> <em>s:</em> (start), <em>sc:</em> (scheduled), <em>e:</em> or <em>d:</em> (due) •
+                        <strong>Date ranges:</strong> <em>s:10/28/25 to 11/2/25</em> •
+                        UPPERCASE = Employee • Numbers = Event #
+                    </div>
+                </div>
+                <select name="event_type" class="mini-filter" onchange="this.form.submit()">
+                    <option value="">All Types</option>
+                    {% for event_type in event_types %}
+                        <option value="{{ event_type }}" {% if event_type == selected_event_type %}selected{% endif %}>
+                            {{ event_type }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary">Search</button>
+                {% if request.args.get('search') or selected_event_type %}
+                    <a href="{{ url_for('main.unscheduled_events', condition=condition, date_filter=date_filter if date_filter else '') }}"
+                       class="btn btn-outline">Clear</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Filters Display -->
+    {% if request.args.get('search') or date_filter or selected_event_type %}
+    <div class="events-stats" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #3b82f6;">
+        <strong>🔍 Active Filters:</strong>
+        {% if request.args.get('search') %}
+            <span style="background: white; padding: 4px 12px; border-radius: 12px; margin-left: 8px; display: inline-block;">
+                Search: <strong>{{ request.args.get('search') }}</strong>
+            </span>
+        {% endif %}
+        {% if date_filter %}
+            <span style="background: white; padding: 4px 12px; border-radius: 12px; margin-left: 8px; display: inline-block;">
+                Date: <strong>{{ date_filter_display }}</strong>
+            </span>
+        {% endif %}
+        {% if selected_event_type %}
+            <span style="background: white; padding: 4px 12px; border-radius: 12px; margin-left: 8px; display: inline-block;">
+                Type: <strong>{{ selected_event_type }}</strong>
+            </span>
+        {% endif %}
+        <span style="margin-left: 8px; color: #3b82f6;">
+            (Showing {{ events|length }} result{% if events|length != 1 %}s{% endif %})
+        </span>
+    </div>
+    {% endif %}
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages" style="margin-bottom: var(--spacing-lg);">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Events Display -->
+    {% if events %}
+        <div class="events-grid">
+            {% for event in events %}
+            <div class="event-card">
+                <div class="event-number" style="font-size: var(--font-size-small); color: var(--text-muted); margin-bottom: 4px;">
+                    📋 Event #{{ event.project_ref_num }}
+                </div>
+                <div class="event-card-header">
+                    <h3 class="event-title">{{ event.project_name }}</h3>
+                    <div style="display: flex; align-items: center; gap: var(--spacing-xs);">
+                        <span class="event-type-badge event-type-{{ event.event_type.lower() }}">
+                            {{ event.event_type }}
+                        </span>
+                        {% if event.priority %}
+                        <span class="days-remaining-badge days-{{ event.priority }}">
+                            {% if event.days_remaining <= 0 %}
+                                🔴 DUE NOW
+                            {% elif event.days_remaining == 1 %}
+                                ⚠️ 1 day
+                            {% elif event.days_remaining <= 7 %}
+                                ⏰ {{ event.days_remaining }} days
+                            {% else %}
+                                ✓ {{ event.days_remaining }} days
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if event.priority_color %}
+                    <div class="priority-badge-large priority-{{ event.priority }}" title="{{ event.priority|capitalize }} priority"></div>
+                    {% endif %}
+                </div>
+
+                <div class="event-info">
+                    <div class="event-dates">
+                        📅 {{ event.start_datetime.strftime('%Y-%m-%d') }} - {{ event.due_datetime.strftime('%Y-%m-%d') }}
+                    </div>
+                    {% if event.schedule_info %}
+                        <div class="schedule-info-box">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--pc-blue); font-weight: bold; margin-bottom: 4px;">
+                                📋 Schedule Details
+                            </div>
+                            {% for schedule in event.schedule_info %}
+                                <div class="schedule-item">
+                                    <span>👤</span>
+                                    <span class="schedule-employee">{{ schedule.employee_name }}</span>
+                                    <span style="color: var(--text-muted);">•</span>
+                                    <span>📅</span>
+                                    <span class="schedule-time">{{ schedule.schedule_datetime.strftime('%m/%d/%Y') }}</span>
+                                    <span style="color: var(--text-muted);">at</span>
+                                    <span>⏰</span>
+                                    <span class="schedule-time">{{ schedule.schedule_time }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="event-meta">
+                    <div class="event-actions">
+                        {% if condition == 'scheduled' %}
+                            <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
+                                Reschedule Event
+                            </a>
+                            <button onclick="confirmUnscheduleEvent({{ event.id }}, '{{ event.project_name|replace("'", "\\'") }}')"
+                                    class="btn btn-danger btn-sm">
+                                Unschedule
+                            </button>
+                        {% elif condition == 'submitted' %}
+                            <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
+                                Reissue Event
+                            </a>
+                        {% elif condition == 'reissued' %}
+                            <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
+                                Reschedule Event
+                            </a>
+                        {% else %}
+                            {# Unscheduled events - no remove button, only schedule options #}
+                            <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
+                                Schedule Manually
+                            </a>
+                            <button onclick="autoScheduleEvent({{ event.id }}, '{{ event.project_name|replace("'", "\\'") }}')" class="btn btn-info btn-sm">
+                                Auto Schedule
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="no-events">
+            <div class="no-events-icon">📅</div>
+            <h3>No {{ condition_display }} Events</h3>
+            <p>{% if selected_event_type %}No {{ selected_event_type }} events available.{% else %}No {{ condition_display.lower() }} events are available.{% endif %}</p>
+            {% if selected_event_type %}
+                <a href="{{ url_for('main.unscheduled_events') }}" class="btn btn-outline" style="margin-top: var(--spacing-md);">View All Events</a>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!-- Export Validation Modal -->
+    <div class="modal-backdrop" id="validation-modal" style="display: none;">
+        <div class="action-modal" style="max-width: 700px;">
+            <button class="modal-close" onclick="closeValidationModal()">&times;</button>
+            <h3>Schedule Validation Errors</h3>
+            <p>The following events have scheduling errors that must be fixed before exporting:</p>
+            
+            <div id="validation-errors-list" style="max-height: 400px; overflow-y: auto; margin: var(--spacing-md) 0;">
+                <!-- Validation errors will be populated here -->
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeValidationModal()">Cancel Export</button>
+                <button type="button" class="btn btn-primary" onclick="proceedWithValidExport()" id="export-valid-btn">Export Valid Events Only</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reschedule Modal (reused from calendar) -->
+    <div class="modal-backdrop" id="reschedule-modal" style="display: none;">
+        <div class="action-modal">
+            <button class="modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+            <h3>Reschedule Event</h3>
+            <form id="reschedule-form">
+                <input type="hidden" id="reschedule-schedule-id">
+                <div class="form-group">
+                    <label>Event:</label>
+                    <div id="reschedule-event-info"></div>
+                </div>
+                <div class="form-group">
+                    <label>Error:</label>
+                    <div id="reschedule-error-info" style="color: #dc3545; font-weight: bold;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="reschedule-date">New Date:</label>
+                    <input type="date" id="reschedule-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="reschedule-time">New Time:</label>
+                    <input type="time" id="reschedule-time" required>
+                    <select id="reschedule-time-dropdown" class="hidden">
+                        <option value="">Select a time</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reschedule-employee">Employee:</label>
+                    <select id="reschedule-employee" required>
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Reschedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/search.js') }}"></script>
+<script>
+function autoScheduleEvent(eventId, eventName) {
+    // Show loading indicator on the button
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Scheduling...';
+
+    fetch(`/api/auto_schedule_event/${eventId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show brief success message then reload
+            btn.textContent = '✓ Scheduled';
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-success');
+            setTimeout(() => window.location.reload(), 500);
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    })
+    .catch(error => {
+        alert('Error auto-scheduling event: ' + error);
+        btn.disabled = false;
+        btn.textContent = originalText;
+    });
+}
+
+function confirmUnscheduleEvent(eventId, eventName) {
+    if (confirm(`Unschedule the event "${eventName}"?\n\nThis will remove the schedule assignment and move the event back to unscheduled.`)) {
+        unscheduleEvent(eventId);
+    }
+}
+
+function unscheduleEvent(eventId) {
+    fetch(`/api/unschedule_event/${eventId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Event unscheduled successfully');
+            window.location.reload();
+        } else {
+            alert('Error unscheduling event: ' + (data.message || data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while unscheduling the event.');
+    });
+}
+
+// Add return URL to all schedule event links
+document.addEventListener('DOMContentLoaded', function() {
+    // Get current URL with all query parameters
+    const currentUrl = window.location.href;
+
+    // Find all "Schedule" links and add return_url parameter
+    const scheduleLinks = document.querySelectorAll('a[href*="/schedule/"]');
+    scheduleLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        const separator = href.includes('?') ? '&' : '?';
+        link.setAttribute('href', href + separator + 'return_url=' + encodeURIComponent(currentUrl));
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Analytics - Product Connections Scheduler{% endblock %}
+
+{% block content %}
+<div class="analytics-container">
+    <h2>Employee Scheduling Analytics</h2>
+
+    <!-- Week Selector -->
+    <div class="week-selector" style="margin: 20px 0;">
+        <label for="week-start" style="font-weight: bold;">Week Starting:</label>
+        <input type="date" id="week-start" value="{{ week_start }}" style="padding: 8px; margin: 0 10px;">
+        <button onclick="loadWeekStats()" class="btn btn-primary">Refresh</button>
+    </div>
+
+    <!-- Employee Statistics Table -->
+    <table class="analytics-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="background: #2E4C73; color: white;">
+                <th style="padding: 12px; text-align: left;">Employee Name</th>
+                <th style="padding: 12px; text-align: center;">Days Scheduled</th>
+                <th style="padding: 12px; text-align: center;">Total Events</th>
+                <th style="padding: 12px; text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in employee_stats %}
+            <tr style="{% if loop.index % 2 == 0 %}background: #f9f9f9;{% endif %}">
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ stat.employee_name }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.days_scheduled }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.total_events }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                    <button onclick="window.open('/api/print_employee_schedule/{{ stat.employee_id }}/{{ week_start }}', '_blank')"
+                            class="btn btn-sm btn-success">
+                        Print Schedule
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="padding: 20px; text-align: center; color: #666;">
+                    No employee schedules found for this week
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Print Actions -->
+    <div class="print-actions" style="margin-top: 30px;">
+        <button class="btn btn-primary" onclick="window.open('/api/print_weekly_summary/{{ week_start }}', '_blank')">
+            Print Weekly Summary (All Employees)
+        </button>
+    </div>
+</div>
+
+<script>
+function loadWeekStats() {
+    const weekStart = document.getElementById('week-start').value;
+    window.location.href = `/employees/analytics?week_start=${weekStart}`;
+}
+</script>
+
+<style>
+.analytics-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background: #2E4C73;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1a2f4a;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+</style>
+{% endblock %}

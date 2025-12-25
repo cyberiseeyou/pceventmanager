@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Workload Dashboard{% endblock %}
+
+{% block content %}
+<!-- Epic 2, Story 2.6: Create Workload Dashboard Frontend View -->
+<div class="container workload-dashboard">
+  <div class="workload-header">
+    <h1>Employee Workload Dashboard</h1>
+    <p class="workload-subtitle">View and analyze employee scheduling distribution</p>
+  </div>
+
+  <!-- Date Range Selector -->
+  <div class="date-range-selector">
+    <button class="range-btn active" data-range="this-week">This Week</button>
+    <button class="range-btn" data-range="last-week">Last Week</button>
+    <button class="range-btn" data-range="this-month">This Month</button>
+    <button class="range-btn" data-range="custom">Custom Range</button>
+  </div>
+
+  <!-- Custom Date Range Inputs (hidden by default) -->
+  <div id="custom-range-inputs" class="custom-range-inputs" style="display:none;">
+    <label for="start-date">Start Date:
+      <input type="date" id="start-date">
+    </label>
+    <label for="end-date">End Date:
+      <input type="date" id="end-date">
+    </label>
+    <button id="apply-custom-range" class="btn btn-primary">Apply</button>
+  </div>
+
+  <!-- Loading Spinner -->
+  <div id="loading-spinner" class="spinner" style="display:none;">
+    <div class="spinner-icon">⏳</div>
+    <p>Loading workload data...</p>
+  </div>
+
+  <!-- Chart Container -->
+  <div class="chart-container" style="display:none;">
+    <h2>Events Per Employee</h2>
+    <div class="chart-wrapper">
+      <canvas id="workload-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div id="empty-state" class="empty-state" style="display:none;">
+    <p>📭 No scheduled events in selected date range.</p>
+  </div>
+
+  <!-- Data Table -->
+  <div class="table-container" style="display:none;">
+    <h2>Detailed Workload Data</h2>
+    <table id="workload-table" class="data-table">
+      <thead>
+        <tr>
+          <th>Employee Name</th>
+          <th>Event Count</th>
+          <th>Total Hours</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Populated via JavaScript -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Chart.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- Workload Dashboard CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/workload-dashboard.css') }}">
+
+<!-- Workload Dashboard JavaScript -->
+<script type="module" src="{{ url_for('static', filename='js/pages/workload-dashboard.js') }}"></script>
+{% endblock %}

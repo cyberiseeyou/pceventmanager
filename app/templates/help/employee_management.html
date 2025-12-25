@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Management - Help{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/help.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="help-container">
+    <aside class="help-sidebar">
+        <h2>Help Topics</h2>
+        <nav class="help-nav">
+            <a href="{{ url_for('help.getting_started') }}" class="help-nav-item">
+                <span class="help-icon">🚀</span>
+                Getting Started
+            </a>
+            <a href="{{ url_for('help.walmart_credentials') }}" class="help-nav-item">
+                <span class="help-icon">🔑</span>
+                Walmart Credentials
+            </a>
+            <a href="{{ url_for('help.employee_management') }}" class="help-nav-item active">
+                <span class="help-icon">👥</span>
+                Employee Management
+            </a>
+            <a href="{{ url_for('help.auto_scheduler_guide') }}" class="help-nav-item">
+                <span class="help-icon">🤖</span>
+                Auto Scheduler
+            </a>
+            <a href="{{ url_for('help.review_approve') }}" class="help-nav-item">
+                <span class="help-icon">✅</span>
+                Review & Approve
+            </a>
+            <a href="{{ url_for('help.daily_validation') }}" class="help-nav-item">
+                <span class="help-icon">📋</span>
+                Daily Validation
+            </a>
+            <a href="{{ url_for('help.printing_reports') }}" class="help-nav-item">
+                <span class="help-icon">🖨️</span>
+                Printing & Reports
+            </a>
+            <a href="{{ url_for('help.edr_sync') }}" class="help-nav-item">
+                <span class="help-icon">🔄</span>
+                EDR Sync & Paperwork
+            </a>
+            <a href="{{ url_for('help.attendance') }}" class="help-nav-item">
+                <span class="help-icon">📊</span>
+                Attendance & Time Off
+            </a>
+            <a href="{{ url_for('help.workload_analytics') }}" class="help-nav-item">
+                <span class="help-icon">📈</span>
+                Workload Analytics
+            </a>
+        </nav>
+    </aside>
+
+    <main class="help-content">
+        <h1>👥 Employee Management</h1>
+
+        <p class="help-intro">
+            Effective employee management is key to successful automated scheduling. This guide explains
+            how to add, update, and manage your team members in the scheduler.
+        </p>
+
+        <div class="help-section">
+            <h2>Accessing Employee Management</h2>
+            <p>
+                Click on <strong>Employee Management</strong> in the main navigation bar to access
+                the employee roster and management tools.
+            </p>
+        </div>
+
+        <div class="help-section">
+            <h2>Adding a New Employee</h2>
+
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Click "Add Employee"</h3>
+                        <p>
+                            On the Employee Management page, click the <strong>Add Employee</strong> button.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Fill in Basic Information</h3>
+                        <p><strong>Required fields:</strong></p>
+                        <ul>
+                            <li><strong>Employee ID:</strong> Unique identifier (usually from Crossmark)</li>
+                            <li><strong>Name:</strong> Employee's full name</li>
+                            <li><strong>Email:</strong> Contact email address</li>
+                            <li><strong>Phone:</strong> Contact phone number</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Set Job Title and Permissions</h3>
+                        <p><strong>Available job titles:</strong></p>
+                        <ul>
+                            <li><strong>Club Supervisor:</strong> Can work all event types</li>
+                            <li><strong>Lead Event Specialist:</strong> Can work Supervisor, Freeosk, and Digital events</li>
+                            <li><strong>Juicer Barista:</strong> Can work Juicer and general events</li>
+                            <li><strong>Event Specialist:</strong> Can work Core and general events</li>
+                        </ul>
+                        <p>
+                            <strong>Certifications:</strong>
+                        </p>
+                        <ul>
+                            <li><strong>Is Supervisor:</strong> Check if employee has supervisor status</li>
+                            <li><strong>Adult Beverage Trained:</strong> Required for certain event types</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Set Availability</h3>
+                        <p>
+                            Define weekly availability for each day:
+                        </p>
+                        <ul>
+                            <li>Check days the employee is available to work</li>
+                            <li>Set start and end times for each day</li>
+                            <li>Leave unchecked for days off</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h3>Save Employee</h3>
+                        <p>
+                            Click <strong>Save</strong> to add the employee to your roster.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Understanding Job Titles and Permissions</h2>
+            <p>
+                Job titles determine which types of events an employee can be assigned to:
+            </p>
+
+            <div class="permission-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Job Title</th>
+                            <th>Can Work Event Types</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Club Supervisor</strong></td>
+                            <td>All event types (Core, Supervisor, Digitals, Freeosk, Juicer)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Lead Event Specialist</strong></td>
+                            <td>Supervisor, Freeosk, Digitals, Core, Other</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Juicer Barista</strong></td>
+                            <td>Juicer, Core, Other</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Event Specialist</strong></td>
+                            <td>Core, Other</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Managing Time Off Requests</h2>
+            <p>
+                To add time off for an employee:
+            </p>
+            <ol>
+                <li>Click on the employee's name in the roster</li>
+                <li>Navigate to the <strong>Time Off</strong> tab</li>
+                <li>Click <strong>Add Time Off</strong></li>
+                <li>Enter the start and end dates</li>
+                <li>Add an optional reason/note</li>
+                <li>Click <strong>Save</strong></li>
+            </ol>
+            <div class="info-box">
+                <strong>Note:</strong> The auto scheduler will NOT assign events to employees during their
+                requested time off periods.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Updating Employee Information</h2>
+            <p>
+                To edit an existing employee:
+            </p>
+            <ol>
+                <li>Find the employee in the roster</li>
+                <li>Click the <strong>Edit</strong> button next to their name</li>
+                <li>Make your changes</li>
+                <li>Click <strong>Save</strong> to update</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h2>Deactivating Employees</h2>
+            <p>
+                To deactivate an employee (rather than delete):
+            </p>
+            <ol>
+                <li>Edit the employee's information</li>
+                <li>Uncheck the <strong>Is Active</strong> checkbox</li>
+                <li>Save the changes</li>
+            </ol>
+            <div class="info-box">
+                <strong>Why deactivate instead of delete?</strong><br>
+                Deactivating preserves historical data and past schedules while preventing
+                the employee from being assigned to future events.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Importing Employees from Crossmark</h2>
+            <p>
+                If you have Walmart Retail Link credentials configured, you can import employees
+                directly from Crossmark:
+            </p>
+            <ol>
+                <li>Click the <strong>Import from Crossmark</strong> button</li>
+                <li>The system will fetch available representatives from the API</li>
+                <li>Review the imported employees</li>
+                <li>Adjust job titles, availability, and permissions as needed</li>
+            </ol>
+            <div class="warning-box">
+                <strong>Important:</strong> Imported employees may need manual adjustment of
+                availability hours and job titles to match your organization's structure.
+            </div>
+        </div>
+
+        <div class="help-section">
+            <h2>Best Practices</h2>
+            <ul class="best-practices">
+                <li>
+                    <strong>Keep information current:</strong> Regularly update employee availability,
+                    certifications, and contact information.
+                </li>
+                <li>
+                    <strong>Use accurate job titles:</strong> Ensure job titles correctly reflect
+                    each employee's capabilities and certifications.
+                </li>
+                <li>
+                    <strong>Enter all time off:</strong> Always add time-off requests immediately
+                    to prevent scheduling conflicts.
+                </li>
+                <li>
+                    <strong>Maintain external IDs:</strong> Keep Crossmark/Walmart employee IDs
+                    up to date for proper API integration.
+                </li>
+                <li>
+                    <strong>Regular audits:</strong> Periodically review your employee roster
+                    to ensure all information is accurate.
+                </li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h2>Next Steps</h2>
+            <div class="next-steps-grid">
+                <a href="{{ url_for('help.auto_scheduler_guide') }}" class="next-step-card">
+                    <span class="next-step-icon">🤖</span>
+                    <span class="next-step-text">Learn about auto scheduling</span>
+                </a>
+                <a href="{{ url_for('employees.employees') }}" class="next-step-card">
+                    <span class="next-step-icon">👥</span>
+                    <span class="next-step-text">Go to Employee Management</span>
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

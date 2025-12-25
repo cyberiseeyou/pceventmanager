@@ -1,0 +1,284 @@
+"""
+Auto-Scheduler models for rotation management and scheduling workflow
+Supports the propose-then-approve auto-scheduling system
+"""
+from datetime import datetime
+from enum import Enum
+
+
+class EventType(str, Enum):
+    """Event type classifications for scheduling rules"""
+    CORE = "Core"
+    SUPERVISOR = "Supervisor"
+    DIGITAL_SETUP = "Digital Setup"
+    DIGITAL_REFRESH = "Digital Refresh"
+    DIGITAL_TEARDOWN = "Digital Teardown"
+    FREEOSK = "Freeosk"
+    DIGITALS = "Digitals"  # Generic digital events
+    OTHER = "Other"
+    JUICER = "Juicer"
+
+
+class RotationType(str, Enum):
+    """Rotation assignment types"""
+    JUICER = "juicer"
+    PRIMARY_LEAD = "primary_lead"
+
+
+class RunType(str, Enum):
+    """Scheduler run trigger types"""
+    AUTOMATIC = "automatic"
+    MANUAL = "manual"
+
+
+class RunStatus(str, Enum):
+    """Scheduler run execution status"""
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CRASHED = "crashed"
+
+
+class PendingScheduleStatus(str, Enum):
+    """Status of pending schedule proposals"""
+    PROPOSED = "proposed"
+    USER_EDITED = "user_edited"
+    APPROVED = "approved"
+    API_SUBMITTED = "api_submitted"
+    API_FAILED = "api_failed"
+
+
+def create_auto_scheduler_models(db):
+    """
+    Factory function to create auto-scheduler models with db instance
+
+    Returns:
+        tuple: (RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException)
+    """
+
+    class RotationAssignment(db.Model):
+        """
+        Weekly rotation assignments for Juicers and Primary Leads
+
+        Defines which employee is assigned to rotation duties for each day of the week.
+        These assignments are persistent week-to-week unless manually changed.
+        """
+        __tablename__ = 'rotation_assignments'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        day_of_week = db.Column(db.Integer, nullable=False)  # 0=Monday, 6=Sunday
+        rotation_type = db.Column(db.String(20), nullable=False)  # 'juicer' or 'primary_lead'
+        employee_id = db.Column(db.String, db.ForeignKey('employees.id'), nullable=False)
+
+        # Relationships
+        employee = db.relationship('Employee', backref='rotation_assignments')
+
+        # Constraints
+        __table_args__ = (
+            db.UniqueConstraint('day_of_week', 'rotation_type', name='uq_rotation'),
+            db.CheckConstraint('day_of_week >= 0 AND day_of_week <= 6', name='ck_valid_day'),
+            db.CheckConstraint(
+                "rotation_type IN ('juicer', 'primary_lead')",
+                name='ck_valid_rotation_type'
+            ),
+        )
+
+        def __repr__(self):
+            days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+            return f'<RotationAssignment {days[self.day_of_week]} {self.rotation_type}: {self.employee_id}>'
+
+
+    class SchedulerRunHistory(db.Model):
+        """
+        History and status tracking for auto-scheduler runs
+
+        Each time the scheduler runs (automatically or manually), a record is created
+        to track execution status, results, and approval workflow.
+        """
+        __tablename__ = 'scheduler_run_history'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        run_type = db.Column(db.String(20), nullable=False)  # 'automatic' or 'manual'
+        started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+        completed_at = db.Column(db.DateTime, nullable=True)
+
+        # Run results
+        status = db.Column(db.String(20), nullable=False, default='running')
+        # 'running', 'completed', 'failed', 'crashed', 'rejected'
+        total_events_processed = db.Column(db.Integer, default=0)
+        events_scheduled = db.Column(db.Integer, default=0)
+        events_requiring_swaps = db.Column(db.Integer, default=0)
+        events_failed = db.Column(db.Integer, default=0)
+
+        error_message = db.Column(db.Text, nullable=True)
+
+        # Approval tracking
+        approved_at = db.Column(db.DateTime, nullable=True)
+        approved_by_user = db.Column(db.String, nullable=True)  # Future: user ID when auth added
+
+        # Relationships
+        pending_schedules = db.relationship(
+            'PendingSchedule',
+            backref='scheduler_run',
+            cascade='all, delete-orphan',
+            lazy='dynamic'
+        )
+
+        # Constraints
+        __table_args__ = (
+            db.CheckConstraint(
+                "run_type IN ('automatic', 'manual')",
+                name='ck_valid_run_type'
+            ),
+            db.CheckConstraint(
+                "status IN ('running', 'completed', 'failed', 'crashed', 'rejected')",
+                name='ck_valid_status'
+            ),
+        )
+
+        def __repr__(self):
+            return f'<SchedulerRunHistory {self.id}: {self.status} at {self.started_at}>'
+
+
+    class PendingSchedule(db.Model):
+        """
+        Proposed schedule assignments awaiting user approval
+
+        Generated by the auto-scheduler, these represent proposed event assignments.
+        Users can review, edit, and approve before schedules are committed and submitted to API.
+        """
+        __tablename__ = 'pending_schedules'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        scheduler_run_id = db.Column(
+            db.Integer,
+            db.ForeignKey('scheduler_run_history.id', ondelete='CASCADE'),
+            nullable=False
+        )
+        event_ref_num = db.Column(
+            db.Integer,
+            db.ForeignKey('events.project_ref_num'),
+            nullable=False
+        )
+        employee_id = db.Column(
+            db.String,
+            db.ForeignKey('employees.id'),
+            nullable=True  # Can be NULL when scheduling fails
+        )
+        schedule_datetime = db.Column(db.DateTime, nullable=True)  # Can be NULL when scheduling fails
+        schedule_time = db.Column(db.Time, nullable=True)  # Can be NULL when scheduling fails
+
+        # Status tracking
+        status = db.Column(db.String(20), default='proposed')
+        # 'proposed', 'user_edited', 'approved', 'api_submitted', 'api_failed'
+
+        # Conflict/swap tracking
+        is_swap = db.Column(db.Boolean, default=False)  # True if this requires bumping another event
+        bumped_event_ref_num = db.Column(
+            db.Integer,
+            db.ForeignKey('events.project_ref_num'),
+            nullable=True
+        )
+        swap_reason = db.Column(db.Text, nullable=True)
+
+        # Failure tracking
+        failure_reason = db.Column(db.Text, nullable=True)
+        api_error_details = db.Column(db.Text, nullable=True)
+        api_submitted_at = db.Column(db.DateTime, nullable=True)
+
+        # Timestamps
+        created_at = db.Column(db.DateTime, default=datetime.utcnow)
+        updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        event = db.relationship(
+            'Event',
+            foreign_keys=[event_ref_num],
+            backref='pending_schedules'
+        )
+        employee = db.relationship('Employee', backref='pending_schedules')
+        bumped_event = db.relationship(
+            'Event',
+            foreign_keys=[bumped_event_ref_num]
+        )
+
+        # Indexes
+        __table_args__ = (
+            db.Index('idx_pending_schedules_run', 'scheduler_run_id'),
+            db.Index('idx_pending_schedules_status', 'status'),
+            db.CheckConstraint(
+                "status IN ('proposed', 'user_edited', 'approved', 'api_submitted', 'api_failed')",
+                name='ck_valid_pending_status'
+            ),
+        )
+
+        def __repr__(self):
+            return f'<PendingSchedule {self.id}: Event {self.event_ref_num} → {self.employee_id}>'
+
+
+    class ScheduleException(db.Model):
+        """
+        One-time rotation exceptions for specific dates
+
+        When a rotation-assigned employee is unavailable (vacation, time-off),
+        an exception can be created to assign a different employee for that specific date only.
+        The standing rotation remains unchanged.
+        """
+        __tablename__ = 'schedule_exceptions'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        exception_date = db.Column(db.Date, nullable=False)
+        rotation_type = db.Column(db.String(20), nullable=False)  # 'juicer' or 'primary_lead'
+        employee_id = db.Column(db.String, db.ForeignKey('employees.id'), nullable=False)
+
+        reason = db.Column(db.Text, nullable=True)
+        created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+        # Relationships
+        employee = db.relationship('Employee', backref='schedule_exceptions')
+
+        # Constraints
+        __table_args__ = (
+            db.UniqueConstraint('exception_date', 'rotation_type', name='uq_exception'),
+            db.CheckConstraint(
+                "rotation_type IN ('juicer', 'primary_lead')",
+                name='ck_valid_exception_type'
+            ),
+        )
+
+        def __repr__(self):
+            return f'<ScheduleException {self.exception_date} {self.rotation_type}: {self.employee_id}>'
+
+    class EventSchedulingOverride(db.Model):
+        """
+        Per-event override to control auto-scheduler behavior
+
+        Allows marking specific events as "do not auto-schedule" or changing
+        their scheduling priority. Useful for VIP events, complex events that
+        require manual assignment, or events with special requirements.
+
+        FR38: Scenario 8 - Auto-Scheduler Event Type Filtering
+        """
+        __tablename__ = 'event_scheduling_overrides'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        event_ref_num = db.Column(
+            db.Integer,
+            db.ForeignKey('events.project_ref_num'),
+            nullable=False,
+            unique=True  # One override per event
+        )
+        allow_auto_schedule = db.Column(db.Boolean, nullable=False, default=True)
+        override_reason = db.Column(db.Text, nullable=True)
+        set_by = db.Column(db.String(100), nullable=True)
+        set_at = db.Column(db.DateTime, default=datetime.utcnow)
+        updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        event = db.relationship('Event', backref='scheduling_override')
+
+        def __repr__(self):
+            status = "allowed" if self.allow_auto_schedule else "blocked"
+            return f'<EventSchedulingOverride Event {self.event_ref_num}: {status}>'
+
+    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride
