@@ -25,7 +25,18 @@ class ShiftBlockConfig:
     
     Active blocks (1-8): Used for scheduling new Core events
     Legacy slots (1-4): Display-only for backward compatibility
+    
+    Block Assignment Order:
+    - First 8 events: Sequential order 1, 2, 3, 4, 5, 6, 7, 8
+    - Overflow (9+ events): Priority order 1, 3, 5, 7, 2, 4, 6, 8
     """
+    
+    # Sequential order for first 8 assignments
+    BLOCK_SEQUENTIAL_ORDER = [1, 2, 3, 4, 5, 6, 7, 8]
+    
+    # Priority order for overflow assignments (9+ events on same day)
+    # Odd blocks first (different arrive times), then even blocks
+    BLOCK_OVERFLOW_ORDER = [1, 3, 5, 7, 2, 4, 6, 8]
     
     # Cache for loaded blocks
     _blocks_cache: Optional[List[Dict]] = None
@@ -117,6 +128,8 @@ class ShiftBlockConfig:
         """
         Get shift blocks not yet assigned for a specific date.
         
+        Only considers Core events when determining which blocks are assigned.
+        
         Args:
             target_date: Date to check
             db_session: SQLAlchemy session (optional, will use registry if not provided)
@@ -132,45 +145,89 @@ class ShiftBlockConfig:
             try:
                 from app.models.registry import get_db, get_models
                 db_session = get_db().session
-                Schedule = get_models()['Schedule']
+                models = get_models()
+                Schedule = models['Schedule']
+                Event = models['Event']
             except Exception as e:
                 logger.error(f"Error getting database session: {e}")
                 return list(range(1, 9))  # Return all blocks if can't check
+        else:
+            # Get Event model if we have Schedule
+            try:
+                from app.models.registry import get_models
+                Event = get_models()['Event']
+            except Exception:
+                logger.error("Could not get Event model")
+                return list(range(1, 9))
         
-        # Query assigned blocks for this date
+        # Query assigned blocks for this date - ONLY for Core events
         start_of_day = datetime.combine(target_date, time(0, 0))
         end_of_day = datetime.combine(target_date, time(23, 59, 59))
         
-        assigned_blocks = db_session.query(Schedule.shift_block).filter(
+        # Join with Event to filter by Core events only
+        assigned_blocks = db_session.query(Schedule.shift_block).join(
+            Event, Schedule.event_ref_num == Event.project_ref_num
+        ).filter(
             Schedule.schedule_datetime >= start_of_day,
             Schedule.schedule_datetime <= end_of_day,
-            Schedule.shift_block.isnot(None)
+            Schedule.shift_block.isnot(None),
+            Event.event_type == 'Core'  # Only Core events use shift blocks
         ).distinct().all()
         
         assigned_set = {b[0] for b in assigned_blocks if b[0] is not None}
-        all_blocks = set(range(1, 9))
+        num_assigned = len(assigned_set)
         
-        return sorted(list(all_blocks - assigned_set))
+        logger.debug(f"Found {num_assigned} Core events with shift blocks on {target_date}: {assigned_set}")
+        
+        # First 8 assignments: use sequential order 1, 2, 3, 4, 5, 6, 7, 8
+        # After all 8 are assigned (overflow): use priority order 1, 3, 5, 7, 2, 4, 6, 8
+        if num_assigned < 8:
+            # Still filling initial 8 - return available in sequential order
+            available = [b for b in cls.BLOCK_SEQUENTIAL_ORDER if b not in assigned_set]
+        else:
+            # Overflow - all 8 blocks used at least once, use priority order for 9+ events
+            available = list(cls.BLOCK_OVERFLOW_ORDER)
+        
+        return available
     
     @classmethod
-    def assign_next_available_block(cls, schedule, target_date) -> Optional[int]:
+    def assign_next_available_block(cls, schedule, target_date, primary_lead_id=None) -> Optional[int]:
         """
         Assign the next available shift block to a schedule and update the database.
+        
+        The Primary Lead Event Specialist (if specified) always gets block 1.
+        Other employees get blocks 2, 3, 4, etc.
         
         Args:
             schedule: Schedule model instance to update
             target_date: Date of the schedule
+            primary_lead_id: Optional employee ID of the Primary Lead (gets block 1)
             
         Returns:
             Assigned block number (1-8) or None if all full
         """
         from datetime import datetime
         
+        # If this employee is the Primary Lead, they get block 1
+        if primary_lead_id and schedule.employee_id == primary_lead_id:
+            schedule.shift_block = 1
+            schedule.shift_block_assigned_at = datetime.utcnow()
+            logger.info(f"Assigned shift block 1 to Primary Lead schedule {schedule.id}")
+            return 1
+        
         available = cls.get_available_blocks(target_date)
         
         if not available:
             logger.warning(f"No available shift blocks for {target_date}")
             return None
+        
+        # If there's a primary lead, don't give block 1 to non-primary-lead employees
+        # (reserve block 1 for the primary lead even if they haven't been processed yet)
+        if primary_lead_id and 1 in available:
+            available = [b for b in available if b != 1]
+            if not available:
+                logger.warning(f"No available shift blocks for non-primary-lead on {target_date}")
+                return None
         
         # Get the first available block
         block_num = available[0]
@@ -187,7 +244,8 @@ class ShiftBlockConfig:
         """
         Get the schedule datetime for a specific block on a given date.
         
-        Uses the block's on_floor time as the schedule time.
+        Uses the block's ARRIVE time as the schedule time (the time stored in MVRetail).
+        The on_floor time is only used for display on EDRs.
         
         Args:
             target_date: Date for the schedule
@@ -202,7 +260,7 @@ class ShiftBlockConfig:
         if not block:
             return None
         
-        return datetime.combine(target_date, block['on_floor'])
+        return datetime.combine(target_date, block['arrive'])
     
     # ===== Legacy Slots (1-4) - Display Only =====
     
@@ -322,6 +380,29 @@ class ShiftBlockConfig:
         
         return None
     
+    @classmethod
+    def find_block_by_arrive_time(cls, arrive_time: time) -> Optional[Dict]:
+        """
+        Find an active shift block by its arrive time (the scheduling time).
+        
+        This is the primary lookup method since arrive time is stored in MVRetail.
+        
+        Args:
+            arrive_time: The arrive time to match
+            
+        Returns:
+            Matching block dict or None if no match. If multiple blocks share the
+            same arrive time, returns the first one in priority order.
+        """
+        # Search in sequential order to get the correct block
+        for block_num in cls.BLOCK_SEQUENTIAL_ORDER:
+            block = cls.get_block(block_num)
+            if block and (block['arrive'].hour == arrive_time.hour and
+                         block['arrive'].minute == arrive_time.minute):
+                return block
+        
+        return None
+    
     # ===== Utility Methods =====
     
     @classmethod
@@ -400,5 +481,20 @@ def find_legacy_slot_by_time(schedule_time: time) -> Optional[Dict]:
 
 
 def find_block_by_time(on_floor_time: time) -> Optional[Dict]:
-    """Find active block by on_floor time."""
+    """Find active block by on_floor time (legacy compatibility)."""
     return ShiftBlockConfig.find_block_by_on_floor_time(on_floor_time)
+
+
+def find_block_by_arrive_time(arrive_time: time) -> Optional[Dict]:
+    """Find active block by arrive time (primary scheduling time)."""
+    return ShiftBlockConfig.find_block_by_arrive_time(arrive_time)
+
+
+def get_block_sequential_order() -> List[int]:
+    """Get the sequential block order for first 8 assignments: 1,2,3,4,5,6,7,8."""
+    return ShiftBlockConfig.BLOCK_SEQUENTIAL_ORDER
+
+
+def get_block_overflow_order() -> List[int]:
+    """Get the overflow block order for 9+ assignments: 1,3,5,7,2,4,6,8."""
+    return ShiftBlockConfig.BLOCK_OVERFLOW_ORDER

@@ -1,5 +1,5 @@
 [Unit]
-Description=Flask Schedule Webapp (Gunicorn)
+Description=PC Event Manager (Gunicorn)
 Documentation=https://github.com/your-repo/flask-schedule-webapp
 After=network.target
 

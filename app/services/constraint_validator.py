@@ -286,6 +286,11 @@ class ConstraintValidator:
             ).first()
 
             if existing_event:
+                # Only CORE and Juicer Production events cause scheduling conflicts
+                # Other event types (Supervisor, Freeosk, Digitals, etc.) don't block scheduling
+                if existing_event.event_type not in ['Core', 'Juicer Production']:
+                    continue
+
                 existing_duration = existing_event.estimated_time or existing_event.get_default_duration(existing_event.event_type)
                 existing_end = existing.schedule_datetime + timedelta(minutes=existing_duration)
 
@@ -333,6 +338,11 @@ class ConstraintValidator:
                     ).first()
 
                     if pending_event:
+                        # Only CORE and Juicer Production events cause scheduling conflicts
+                        # Other event types (Supervisor, Freeosk, Digitals, etc.) don't block scheduling
+                        if pending_event.event_type not in ['Core', 'Juicer Production']:
+                            continue
+
                         pending_duration = pending_event.estimated_time or pending_event.get_default_duration(pending_event.event_type)
                         pending_end = pending.schedule_datetime + timedelta(minutes=pending_duration)
 

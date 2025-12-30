@@ -5,6 +5,7 @@ Handles employee management, availability, and time off operations
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta
+from sqlalchemy import func
 
 # Create blueprint
 employees_bp = Blueprint('employees', __name__)
@@ -404,6 +405,67 @@ def manage_employee_time_off(employee_id):
             if overlapping:
                 return jsonify({'error': f'Time off request overlaps with existing request from {overlapping.start_date} to {overlapping.end_date}'}), 400
 
+            # Check for conflicting scheduled events
+            Schedule = current_app.config['Schedule']
+            Event = current_app.config['Event']
+            
+            conflicting_schedules = Schedule.query.filter(
+                Schedule.employee_id == employee_id,
+                func.date(Schedule.schedule_datetime) >= start_date,
+                func.date(Schedule.schedule_datetime) <= end_date
+            ).all()
+            
+            # If conflicts exist and user hasn't confirmed unschedule, return warning
+            if conflicting_schedules and not data.get('unschedule_conflicts', False):
+                conflicts = []
+                for sched in conflicting_schedules:
+                    event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+                    conflicts.append({
+                        'schedule_id': sched.id,
+                        'event_name': event.project_name if event else 'Unknown Event',
+                        'event_type': event.event_type if event else 'Unknown',
+                        'date': sched.schedule_datetime.strftime('%Y-%m-%d'),
+                        'time': sched.schedule_datetime.strftime('%I:%M %p')
+                    })
+                return jsonify({
+                    'warning': 'Employee has scheduled events during this time off period',
+                    'conflicts': conflicts,
+                    'can_unschedule': True
+                }), 409
+            
+            # If user confirmed unschedule, handle conflicting schedules
+            if conflicting_schedules and data.get('unschedule_conflicts', False):
+                from app.integrations.external_api.session_api_service import session_api as external_api
+                
+                unscheduled_events = []
+                for sched in conflicting_schedules:
+                    event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+                    
+                    # Call Crossmark API to unschedule if external_id exists
+                    if sched.external_id:
+                        try:
+                            if external_api.ensure_authenticated():
+                                api_result = external_api.unschedule_mplan_event(str(sched.external_id))
+                                if not api_result.get('success'):
+                                    current_app.logger.warning(
+                                        f"Failed to unschedule in Crossmark: {api_result.get('message')}"
+                                    )
+                        except Exception as api_error:
+                            current_app.logger.error(f"Crossmark API error: {str(api_error)}")
+                    
+                    # Update event status
+                    if event:
+                        event.is_scheduled = False
+                        event.condition = 'Unstaffed'
+                        unscheduled_events.append(event.project_name)
+                    
+                    # Delete the schedule
+                    db.session.delete(sched)
+                
+                current_app.logger.info(
+                    f"Unscheduled {len(unscheduled_events)} events for {employee.name} due to time-off request"
+                )
+
             # Create new time off request
             time_off_request = EmployeeTimeOff(
                 employee_id=employee_id,
@@ -414,10 +476,16 @@ def manage_employee_time_off(employee_id):
 
             db.session.add(time_off_request)
             db.session.commit()
+            
+            # Build response message
+            message = f'Time off request added for {employee.name} from {start_date} to {end_date}'
+            if conflicting_schedules and data.get('unschedule_conflicts', False):
+                message += f'. {len(conflicting_schedules)} event(s) were unscheduled.'
 
             return jsonify({
-                'message': f'Time off request added for {employee.name} from {start_date} to {end_date}',
-                'id': time_off_request.id
+                'message': message,
+                'id': time_off_request.id,
+                'events_unscheduled': len(conflicting_schedules) if conflicting_schedules and data.get('unschedule_conflicts', False) else 0
             })
 
         except ValueError:

@@ -1595,8 +1595,79 @@ def reschedule():
                                 f"Supervisor event not scheduled. Scheduling at {supervisor_new_datetime.isoformat()}"
                             )
                             
-                            # Use same employee as the Core event
-                            supervisor_rep_id = rep_id
+                            # Find Club Supervisor first, then Primary Lead fallback
+                            # Priority: Club Supervisor → Primary Lead Event Specialist (from rotation)
+                            target_date = supervisor_new_datetime.date()
+                            day_of_week = target_date.weekday()
+                            day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                            day_column = day_names[day_of_week]
+                            
+                            supervisor_employee = None
+                            
+                            # Try Club Supervisor first
+                            club_supervisor = Employee.query.filter_by(
+                                job_title='Club Supervisor',
+                                is_active=True
+                            ).first()
+                            
+                            if club_supervisor:
+                                # Check time off
+                                time_off = EmployeeTimeOff.query.filter(
+                                    EmployeeTimeOff.employee_id == club_supervisor.id,
+                                    EmployeeTimeOff.start_date <= target_date,
+                                    EmployeeTimeOff.end_date >= target_date
+                                ).first()
+                                
+                                if not time_off:
+                                    # Check weekly availability
+                                    weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                                        employee_id=club_supervisor.id
+                                    ).first()
+                                    
+                                    is_available = True
+                                    if weekly_avail:
+                                        is_available = getattr(weekly_avail, day_column, True)
+                                    
+                                    if is_available:
+                                        supervisor_employee = club_supervisor
+                                        current_app.logger.info(f"Supervisor event will be assigned to Club Supervisor: {club_supervisor.name}")
+                            
+                            # Fallback to Primary Lead for that day if Club Supervisor not available
+                            if not supervisor_employee:
+                                from app.services.rotation_manager import RotationManager
+                                rotation_manager = RotationManager(db.session)
+                                
+                                # Get the Primary Lead assigned for this specific date
+                                primary_lead = rotation_manager.get_rotation_employee(supervisor_new_datetime, 'primary_lead')
+                                
+                                if primary_lead:
+                                    # Check time off
+                                    time_off = EmployeeTimeOff.query.filter(
+                                        EmployeeTimeOff.employee_id == primary_lead.id,
+                                        EmployeeTimeOff.start_date <= target_date,
+                                        EmployeeTimeOff.end_date >= target_date
+                                    ).first()
+                                    
+                                    if not time_off:
+                                        # Check weekly availability
+                                        weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                                            employee_id=primary_lead.id
+                                        ).first()
+                                        
+                                        is_available = True
+                                        if weekly_avail:
+                                            is_available = getattr(weekly_avail, day_column, True)
+                                        
+                                        if is_available:
+                                            supervisor_employee = primary_lead
+                                            current_app.logger.info(f"Supervisor event will be assigned to Primary Lead: {primary_lead.name}")
+                            
+                            if not supervisor_employee:
+                                current_app.logger.warning("No Club Supervisor or Primary Lead available for Supervisor event. Using Core employee as fallback.")
+                                # Fallback to Core employee
+                                supervisor_employee = Employee.query.filter_by(id=new_employee_id).first()
+                            
+                            supervisor_rep_id = str(supervisor_employee.external_id) if supervisor_employee and supervisor_employee.external_id else None
                             supervisor_mplan_id = str(supervisor_event.external_id) if supervisor_event.external_id else None
                             supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
 
@@ -1617,17 +1688,18 @@ def reschedule():
                                     # Create new Supervisor schedule
                                     supervisor_schedule = Schedule(
                                         event_ref_num=supervisor_event.project_ref_num,
-                                        employee_id=new_employee_id,
+                                        employee_id=supervisor_employee.id,
                                         schedule_datetime=supervisor_new_datetime
                                     )
                                     db.session.add(supervisor_schedule)
                                     
                                     supervisor_event.is_scheduled = True
+                                    supervisor_event.condition = 'Scheduled'
                                     supervisor_event.sync_status = 'synced'
                                     supervisor_event.last_synced = datetime.utcnow()
                                     
                                     current_app.logger.info(
-                                        f"✅ Successfully auto-scheduled Supervisor event {supervisor_event.project_ref_num}"
+                                        f"✅ Successfully auto-scheduled Supervisor event {supervisor_event.project_ref_num} to {supervisor_employee.name}"
                                     )
                                 else:
                                     current_app.logger.warning(f"Failed to schedule Supervisor: {supervisor_api_result.get('message')}")
@@ -1758,7 +1830,11 @@ def reschedule_event_with_validation(schedule_id):
         }
 
         validator = ConstraintValidator(db.session, models)
-        validation_result = validator.validate_assignment(event, employee, new_datetime)
+        # Exclude current schedule from conflict checking - otherwise it flags itself as a conflict
+        validation_result = validator.validate_assignment(
+            event, employee, new_datetime, 
+            exclude_schedule_ids=[schedule_id]
+        )
 
         # Check for conflicts (only block if override is not set)
         if not validation_result.is_valid and not override_conflicts:
@@ -1864,12 +1940,14 @@ def reschedule_event_with_validation(schedule_id):
                 from app.utils.event_helpers import is_core_event_redesign, get_supervisor_status
 
                 supervisor_rescheduled = False
-                if is_core_event_redesign(event):
-                    logger.info(f"CORE event detected: {event.project_name}. Checking for paired Supervisor...")
+                # Check both event_type and project name pattern for Core detection
+                is_core = event.event_type == 'Core' or is_core_event_redesign(event)
+                if is_core:
+                    logger.info(f"CORE event detected (type={event.event_type}): {event.project_name}. Checking for paired Supervisor...")
 
                     supervisor_status = get_supervisor_status(event)
 
-                    if supervisor_status['exists'] and supervisor_status['is_scheduled']:
+                    if supervisor_status['exists']:
                         supervisor_event = supervisor_status['event']
                         logger.info(
                             f"Found paired Supervisor: {supervisor_event.project_name} (ID: {supervisor_event.project_ref_num})"
@@ -1880,117 +1958,124 @@ def reschedule_event_with_validation(schedule_id):
                         supervisor_times = EventTimeSettings.get_supervisor_times()
                         supervisor_start_time = supervisor_times['start']
                         supervisor_new_datetime = datetime.combine(new_datetime.date(), supervisor_start_time)
+                        
+                        logger.info(f"Scheduling Supervisor at {supervisor_new_datetime.isoformat()}")
 
-                        # Find Supervisor's schedule
+                        # Find Supervisor's existing schedule (if any)
                         Schedule = current_app.config['Schedule']
                         Employee = current_app.config['Employee']
+                        EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+                        EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+                        
                         supervisor_schedule = Schedule.query.filter_by(
                             event_ref_num=supervisor_event.project_ref_num
                         ).first()
 
-                        if supervisor_schedule:
-                            # Get Supervisor employee
-                            supervisor_employee = db.session.get(Employee, supervisor_schedule.employee_id)
-
-                            if supervisor_employee:
-                                # Prepare Supervisor API data
-                                supervisor_rep_id = str(supervisor_employee.external_id) if supervisor_employee.external_id else None
-                                supervisor_mplan_id = str(supervisor_event.external_id) if supervisor_event.external_id else None
-                                supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
-
-                                # Validate Supervisor API fields
-                                if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
-                                    # Calculate Supervisor end datetime
-                                    supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
-                                    supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
-
-                                    # Call Crossmark API for Supervisor
-                                    logger.info(
-                                        f"Calling Crossmark API for Supervisor: "
-                                        f"rep_id={supervisor_rep_id}, mplan_id={supervisor_mplan_id}, "
-                                        f"start={supervisor_new_datetime.isoformat()}"
-                                    )
-
-                                    supervisor_api_result = external_api.schedule_mplan_event(
-                                        rep_id=supervisor_rep_id,
-                                        mplan_id=supervisor_mplan_id,
-                                        location_id=supervisor_location_id,
-                                        start_datetime=supervisor_new_datetime,
-                                        end_datetime=supervisor_end_datetime,
-                                        planning_override=True
-                                    )
-
-                                    if not supervisor_api_result.get('success'):
-                                        error_msg = supervisor_api_result.get('message', 'Unknown API error')
-                                        logger.error(f"Supervisor API call failed: {error_msg}")
-                                        raise Exception(f"Failed to reschedule Supervisor in Crossmark: {error_msg}")
-
-                                    # Update Supervisor schedule
-                                    supervisor_schedule.schedule_datetime = supervisor_new_datetime
-
-                                    # Update Supervisor event sync status
+                        # Find Club Supervisor first, then Primary Lead fallback
+                        target_date = supervisor_new_datetime.date()
+                        day_of_week = target_date.weekday()
+                        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                        day_column = day_names[day_of_week]
+                        
+                        supervisor_employee = None
+                        
+                        # Try Club Supervisor first
+                        club_supervisor = Employee.query.filter_by(
+                            job_title='Club Supervisor',
+                            is_active=True
+                        ).first()
+                        
+                        if club_supervisor:
+                            time_off = EmployeeTimeOff.query.filter(
+                                EmployeeTimeOff.employee_id == club_supervisor.id,
+                                EmployeeTimeOff.start_date <= target_date,
+                                EmployeeTimeOff.end_date >= target_date
+                            ).first()
+                            
+                            if not time_off:
+                                weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                                    employee_id=club_supervisor.id
+                                ).first()
+                                is_available = True
+                                if weekly_avail:
+                                    is_available = getattr(weekly_avail, day_column, True)
+                                if is_available:
+                                    supervisor_employee = club_supervisor
+                                    logger.info(f"Supervisor will be assigned to Club Supervisor: {club_supervisor.name}")
+                        
+                        # Fallback to Primary Lead for that day
+                        if not supervisor_employee:
+                            from app.services.rotation_manager import RotationManager
+                            rotation_manager = RotationManager(db.session)
+                            primary_lead = rotation_manager.get_rotation_employee(supervisor_new_datetime, 'primary_lead')
+                            
+                            if primary_lead:
+                                time_off = EmployeeTimeOff.query.filter(
+                                    EmployeeTimeOff.employee_id == primary_lead.id,
+                                    EmployeeTimeOff.start_date <= target_date,
+                                    EmployeeTimeOff.end_date >= target_date
+                                ).first()
+                                
+                                if not time_off:
+                                    weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                                        employee_id=primary_lead.id
+                                    ).first()
+                                    is_available = True
+                                    if weekly_avail:
+                                        is_available = getattr(weekly_avail, day_column, True)
+                                    if is_available:
+                                        supervisor_employee = primary_lead
+                                        logger.info(f"Supervisor will be assigned to Primary Lead: {primary_lead.name}")
+                        
+                        if not supervisor_employee:
+                            logger.warning("No Club Supervisor or Primary Lead available. Using Core employee as fallback.")
+                            supervisor_employee = db.session.get(Employee, schedule.employee_id)
+                        
+                        if supervisor_employee:
+                            supervisor_rep_id = str(supervisor_employee.external_id) if supervisor_employee.external_id else None
+                            supervisor_mplan_id = str(supervisor_event.external_id) if supervisor_event.external_id else None
+                            supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
+                            
+                            if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
+                                supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
+                                supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
+                                
+                                logger.info(f"Calling Crossmark API for Supervisor: rep_id={supervisor_rep_id}, mplan_id={supervisor_mplan_id}")
+                                
+                                supervisor_api_result = external_api.schedule_mplan_event(
+                                    rep_id=supervisor_rep_id,
+                                    mplan_id=supervisor_mplan_id,
+                                    location_id=supervisor_location_id,
+                                    start_datetime=supervisor_new_datetime,
+                                    end_datetime=supervisor_end_datetime,
+                                    planning_override=True
+                                )
+                                
+                                if supervisor_api_result.get('success'):
+                                    if supervisor_schedule:
+                                        # Update existing schedule
+                                        supervisor_schedule.schedule_datetime = supervisor_new_datetime
+                                        supervisor_schedule.employee_id = supervisor_employee.id
+                                    else:
+                                        # Create new Schedule record
+                                        new_supervisor_schedule = Schedule(
+                                            event_ref_num=supervisor_event.project_ref_num,
+                                            employee_id=supervisor_employee.id,
+                                            schedule_datetime=supervisor_new_datetime
+                                        )
+                                        db.session.add(new_supervisor_schedule)
+                                    
+                                    supervisor_event.is_scheduled = True
+                                    supervisor_event.condition = 'Scheduled'
                                     supervisor_event.sync_status = 'synced'
                                     supervisor_event.last_synced = datetime.utcnow()
-
+                                    
                                     supervisor_rescheduled = True
-                                    logger.info(
-                                        f"✅ Successfully auto-rescheduled Supervisor event {supervisor_event.project_ref_num} "
-                                        f"to {supervisor_new_datetime.isoformat()}"
-                                    )
-                    elif supervisor_status['exists'] and not supervisor_status['is_scheduled']:
-                        # Supervisor exists but is not scheduled - schedule it now
-                        supervisor_event = supervisor_status['event']
-                        
-                        # Calculate supervisor datetime using configured time from settings
-                        from app.services.event_time_settings import EventTimeSettings
-                        supervisor_times = EventTimeSettings.get_supervisor_times()
-                        supervisor_start_time = supervisor_times['start']
-                        supervisor_new_datetime = datetime.combine(new_datetime.date(), supervisor_start_time)
-                        
-                        logger.info(
-                            f"Supervisor event not scheduled. Scheduling at {supervisor_new_datetime.isoformat()}"
-                        )
-                        
-                        # Use same employee as the Core event (use rep_id from Core)
-                        supervisor_rep_id = str(employee.external_id) if employee.external_id else None
-                        supervisor_mplan_id = str(supervisor_event.external_id) if supervisor_event.external_id else None
-                        supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
-
-                        if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
-                            supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
-                            supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
-
-                            supervisor_api_result = external_api.schedule_mplan_event(
-                                rep_id=supervisor_rep_id,
-                                mplan_id=supervisor_mplan_id,
-                                location_id=supervisor_location_id,
-                                start_datetime=supervisor_new_datetime,
-                                end_datetime=supervisor_end_datetime,
-                                planning_override=True
-                            )
-
-                            if supervisor_api_result.get('success'):
-                                # Create new Supervisor schedule
-                                supervisor_schedule = Schedule(
-                                    event_ref_num=supervisor_event.project_ref_num,
-                                    employee_id=new_employee_id if new_employee_id else schedule.employee_id,
-                                    schedule_datetime=supervisor_new_datetime
-                                )
-                                db.session.add(supervisor_schedule)
-                                
-                                supervisor_event.is_scheduled = True
-                                supervisor_event.condition = 'Scheduled'
-                                supervisor_event.sync_status = 'synced'
-                                supervisor_event.last_synced = datetime.utcnow()
-                                
-                                supervisor_rescheduled = True  # Using same flag to indicate Supervisor was handled
-                                logger.info(
-                                    f"✅ Successfully auto-scheduled Supervisor event {supervisor_event.project_ref_num}"
-                                )
+                                    logger.info(f"✅ Supervisor {supervisor_event.project_ref_num} scheduled to {supervisor_employee.name} at {supervisor_new_datetime.isoformat()}")
+                                else:
+                                    logger.warning(f"Failed to schedule Supervisor: {supervisor_api_result.get('message')}")
                             else:
-                                logger.warning(f"Failed to schedule Supervisor: {supervisor_api_result.get('message')}")
-                        else:
-                            logger.warning("Supervisor API fields incomplete. Skipping.")
+                                logger.warning(f"Supervisor API fields incomplete. rep_id={supervisor_rep_id}, mplan_id={supervisor_mplan_id}, location_id={supervisor_location_id}")
 
             # COMMIT TRANSACTION
             db.session.commit()

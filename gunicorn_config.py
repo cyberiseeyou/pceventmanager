@@ -15,7 +15,10 @@ bind = os.getenv('GUNICORN_BIND', '0.0.0.0:8000')
 backlog = int(os.getenv('GUNICORN_BACKLOG', '2048'))
 
 # Worker Processes
-workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
+# NOTE: Using 1 worker because EDR authentication uses global state (edr_authenticator)
+# that needs to persist across MFA request and validation. With multiple workers,
+# the MFA request could be handled by one worker and authentication by another.
+workers = int(os.getenv('GUNICORN_WORKERS', '1'))
 worker_class = os.getenv('GUNICORN_WORKER_CLASS', 'gevent')  # gevent for async I/O
 worker_connections = int(os.getenv('GUNICORN_WORKER_CONNECTIONS', '1000'))
 max_requests = int(os.getenv('GUNICORN_MAX_REQUESTS', '10000'))

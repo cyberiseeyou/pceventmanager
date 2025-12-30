@@ -61,8 +61,8 @@ def init_notification_routes(db, models):
 
             if upcoming_unscheduled > 0:
                 # Create date range search for unscheduled events in next 2 weeks
-                # Format: s:MM-DD to MM-DD (start date range)
-                start_search = f"s:{today.strftime('%m-%d')} to {two_weeks_out.strftime('%m-%d')}"
+                # Format: s:MM-DD-YYYY to MM-DD-YYYY (start date range in month-day-year format)
+                start_search = f"s:{today.strftime('%m-%d-%Y')} to {two_weeks_out.strftime('%m-%d-%Y')}"
                 notifications['warning'].append({
                     'id': 'upcoming_unscheduled',
                     'type': 'unscheduled_events',
@@ -176,18 +176,33 @@ def init_notification_routes(db, models):
                 })
 
             # Check 7: Auto-scheduler notifications (if there are pending schedules)
+            # Only count pending schedules from ACTIVE runs (completed but not approved/rejected)
+            SchedulerRunHistory = models.get('SchedulerRunHistory')
             PendingSchedule = models.get('PendingSchedule')
-            if PendingSchedule:
-                pending_approvals = PendingSchedule.query.filter_by(status='proposed').count()
-                if pending_approvals > 0:
-                    notifications['info'].append({
-                        'id': 'pending_approvals',
-                        'type': 'auto_scheduler_pending',
-                        'title': f'{pending_approvals} Pending Approval(s)',
-                        'message': f'{pending_approvals} auto-scheduled event(s) await your approval',
-                        'action_url': '/auto-schedule',
-                        'action_text': 'Review Schedules'
-                    })
+            if SchedulerRunHistory and PendingSchedule:
+                # First, check if there are any active scheduler runs awaiting approval
+                active_runs = db.session.query(SchedulerRunHistory).filter(
+                    SchedulerRunHistory.approved_at.is_(None),
+                    SchedulerRunHistory.status == 'completed'
+                ).all()
+                
+                if active_runs:
+                    # Count pending schedules from these active runs only
+                    active_run_ids = [run.id for run in active_runs]
+                    pending_approvals = db.session.query(PendingSchedule).filter(
+                        PendingSchedule.scheduler_run_id.in_(active_run_ids),
+                        PendingSchedule.status == 'proposed'
+                    ).count()
+                    
+                    if pending_approvals > 0:
+                        notifications['info'].append({
+                            'id': 'pending_approvals',
+                            'type': 'auto_scheduler_pending',
+                            'title': f'{pending_approvals} Pending Approval(s)',
+                            'message': f'{pending_approvals} auto-scheduled event(s) await your approval',
+                            'action_url': '/auto-schedule',
+                            'action_text': 'Review Schedules'
+                        })
 
             # Calculate total count
             notifications['count'] = (

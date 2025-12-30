@@ -10,10 +10,14 @@ This service generates comprehensive daily paperwork packages including:
 
 import os
 import tempfile
+import logging
 import requests
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import List, Dict, Optional, Any
+
+# Set up logging (avoid print() which can cause BrokenPipeError in WSGI servers)
+logger = logging.getLogger(__name__)
 
 # Import EDR components
 from app.integrations.edr import EDRReportGenerator
@@ -155,7 +159,7 @@ class DailyPaperworkGenerator:
             return None
 
         except Exception as e:
-            print(f"⚠️ Failed to generate barcode for {item_number}: {e}")
+            logger.warning(f" Failed to generate barcode for {item_number}: {e}")
             return None
 
     def get_events_for_date(self, target_date: datetime.date) -> List[Any]:
@@ -341,7 +345,7 @@ class DailyPaperworkGenerator:
 
                     # Debug logging for first few items
                     if len(items_list) < 3:
-                        print(f"DEBUG: Item {item_nbr}: upcNbr='{upc_nbr}', using '{barcode_number}' for barcode")
+                        logger.debug(f" Item {item_nbr}: upcNbr='{upc_nbr}', using '{barcode_number}' for barcode")
 
                     items_list.append((item_nbr, barcode_number, item_desc))
                     seen_items.add(item_nbr)
@@ -465,7 +469,7 @@ class DailyPaperworkGenerator:
             Path to EDR PDF file or None if failed
         """
         if not self.edr_generator or not self.edr_generator.auth_token:
-            print("❌ Not authenticated for EDR retrieval")
+            logger.error(" Not authenticated for EDR retrieval")
             return None
 
         try:
@@ -475,7 +479,7 @@ class DailyPaperworkGenerator:
             # Get EDR data
             edr_data = self.edr_generator.get_edr_report(event_mplan_id)
             if not edr_data:
-                print(f"⚠️ No EDR data for event {event_mplan_id}")
+                logger.warning(f" No EDR data for event {event_mplan_id}")
                 return None
 
             # Use EDRPDFGenerator instead of xhtml2pdf (which has CSS compatibility issues)
@@ -484,14 +488,14 @@ class DailyPaperworkGenerator:
             pdf_generator = EDRPDFGenerator()
             if pdf_generator.generate_pdf(edr_data, output_path, employee_name):
                 self.temp_files.append(output_path)
-                print(f"   ✅ EDR PDF generated for event {event_mplan_id}")
+                logger.info(f" EDR PDF generated for event {event_mplan_id}")
                 return output_path
             else:
-                print(f"❌ Failed to generate EDR PDF for {event_mplan_id}")
+                logger.error(f" Failed to generate EDR PDF for {event_mplan_id}")
                 return None
 
         except Exception as e:
-            print(f"❌ Error getting EDR for {event_mplan_id}: {e}")
+            logger.error(f" Error getting EDR for {event_mplan_id}: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -514,7 +518,7 @@ class DailyPaperworkGenerator:
             from app.integrations.edr import EDRPDFGenerator
 
             if not edr_data:
-                print(f"⚠️ No EDR data provided for event {event_mplan_id}")
+                logger.warning(f" No EDR data provided for event {event_mplan_id}")
                 return None
 
             # Use EDRPDFGenerator to create PDF
@@ -525,11 +529,11 @@ class DailyPaperworkGenerator:
                 self.temp_files.append(output_path)
                 return output_path
             else:
-                print(f"❌ Failed to generate EDR PDF for {event_mplan_id}")
+                logger.error(f" Failed to generate EDR PDF for {event_mplan_id}")
                 return None
 
         except Exception as e:
-            print(f"❌ Error generating EDR PDF for {event_mplan_id}: {e}")
+            logger.error(f" Error generating EDR PDF for {event_mplan_id}: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -547,10 +551,10 @@ class DailyPaperworkGenerator:
         try:
             # Use authenticated session if available (for Crossmark URLs)
             if self.session_api_service and hasattr(self.session_api_service, 'session'):
-                print(f"📥 Downloading SalesTool with authenticated session: {salestool_url}")
+                logger.info(f" Downloading SalesTool with authenticated session: {salestool_url}")
                 response = self.session_api_service.session.get(salestool_url, timeout=30)
             else:
-                print(f"📥 Downloading SalesTool (no auth): {salestool_url}")
+                logger.info(f" Downloading SalesTool (no auth): {salestool_url}")
                 response = requests.get(salestool_url, timeout=30)
 
             response.raise_for_status()
@@ -558,17 +562,17 @@ class DailyPaperworkGenerator:
             # Check if response is actually a PDF
             content_type = response.headers.get('Content-Type', '')
             if 'pdf' not in content_type.lower() and 'application/octet-stream' not in content_type.lower():
-                print(f"⚠️ URL {salestool_url} did not return PDF (Content-Type: {content_type})")
-                print(f"   Response size: {len(response.content)} bytes")
+                logger.warning(f" URL {salestool_url} did not return PDF (Content-Type: {content_type})")
+                logger.debug(f"Response size: {len(response.content)} bytes")
                 if len(response.content) < 10000:  # Likely an error page
-                    print(f"   Response preview: {response.text[:500]}")
+                    logger.debug(f"Response preview: {response.text[:500]}")
                 return None
 
             # Verify content is actually PDF by checking magic bytes
             if len(response.content) > 4:
                 pdf_magic = response.content[:4]
                 if pdf_magic != b'%PDF':
-                    print(f"⚠️ Response does not start with PDF magic bytes: {pdf_magic}")
+                    logger.warning(f" Response does not start with PDF magic bytes: {pdf_magic}")
                     return None
 
             output_path = os.path.join(tempfile.gettempdir(), f'salestool_{event_ref}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
@@ -576,13 +580,13 @@ class DailyPaperworkGenerator:
                 f.write(response.content)
 
             file_size = len(response.content)
-            print(f"✅ Downloaded SalesTool PDF ({file_size:,} bytes)")
+            logger.info(f" Downloaded SalesTool PDF ({file_size:,} bytes)")
 
             self.temp_files.append(output_path)
             return output_path
 
         except Exception as e:
-            print(f"⚠️ Failed to download SalesTool from {salestool_url}: {e}")
+            logger.warning(f" Failed to download SalesTool from {salestool_url}: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -609,7 +613,7 @@ class DailyPaperworkGenerator:
             return True
 
         except Exception as e:
-            print(f"❌ Failed to merge PDFs: {e}")
+            logger.error(f" Failed to merge PDFs: {e}")
             return False
 
     def generate_complete_daily_paperwork(self, target_date: datetime.date) -> Optional[str]:
@@ -619,26 +623,45 @@ class DailyPaperworkGenerator:
         Returns:
             Path to final consolidated PDF
         """
-        print(f"📋 Generating daily paperwork for {target_date.strftime('%Y-%m-%d')}...")
+        logger.info(f" Generating daily paperwork for {target_date.strftime('%Y-%m-%d')}...")
 
         # Get events for the date
         schedules = self.get_events_for_date(target_date)
         if not schedules:
-            print("⚠️ No events found for this date")
+            logger.warning(" No events found for this date")
             return None
 
-        print(f"📊 Found {len(schedules)} scheduled events")
+        logger.info(f" Found {len(schedules)} scheduled events")
+
+        # Get the Primary Lead for this date from rotation assignments
+        # Primary Lead always gets shift block 1 (which has the first lunch time)
+        primary_lead_id = None
+        try:
+            from app.services.rotation_manager import RotationManager
+            from app.models.registry import get_models
+            # Use registry to get full models dict (includes RotationAssignment, ScheduleException)
+            full_models = get_models()
+            rotation_manager = RotationManager(self.db, full_models)
+            primary_lead = rotation_manager.get_rotation_employee(
+                datetime.combine(target_date, datetime.min.time()), 
+                'primary_lead'
+            )
+            if primary_lead:
+                primary_lead_id = primary_lead.id
+                logger.info(f" Primary Lead for {target_date}: {primary_lead.name} ({primary_lead_id}) - will get shift block 1")
+        except Exception as e:
+            logger.warning(f" Could not get Primary Lead: {e}")
 
         # List to hold all PDF paths in order
         all_pdfs = []
 
         # 1. Generate Daily Schedule
-        print("📄 Generating daily schedule...")
+        logger.info(" Generating daily schedule...")
         schedule_pdf = self.generate_daily_schedule_pdf(target_date, schedules)
         all_pdfs.append(schedule_pdf)
 
         # 2. Fetch all EDR data using get_edr_report() for each event
-        print("📄 Fetching EDR data using direct API calls...")
+        logger.info(" Fetching EDR data using direct API calls...")
         edr_data_cache = {}  # Cache: event_number -> edr_data
         edr_data_list = []
 
@@ -647,15 +670,15 @@ class DailyPaperworkGenerator:
 
             # Check if we need to authenticate
             if not self.edr_generator.auth_token:
-                print("❌ Not authenticated - cannot fetch EDR data")
-                print("💡 Please authenticate via the printing interface first")
+                logger.error(" Not authenticated - cannot fetch EDR data")
+                logger.info(" Please authenticate via the printing interface first")
             else:
                 # Fetch EDR data for each Core event directly
                 for schedule, event, employee in schedules:
                     if event.event_type == 'Core':
                         event_num = extract_event_number(event.project_name)
                         if event_num:
-                            print(f"   📥 Fetching EDR for event {event_num} via get_edr_report()...")
+                            logger.info(f" Fetching EDR for event {event_num} via get_edr_report()...")
 
                             try:
                                 # Call get_edr_report() directly for this event
@@ -670,16 +693,16 @@ class DailyPaperworkGenerator:
                                     if item_details and len(item_details) > 0:
                                         first_item = item_details[0]
                                         gtin = first_item.get('gtin', 'N/A')
-                                        print(f"   ✅ Event {event_num} fetched - {len(item_details)} items, first GTIN: {gtin}")
+                                        logger.info(f" Event {event_num} fetched - {len(item_details)} items, first GTIN: {gtin}")
                                     else:
-                                        print(f"   ✅ Event {event_num} fetched - no items")
+                                        logger.info(f" Event {event_num} fetched - no items")
                                 else:
-                                    print(f"   ⚠️ Event {event_num} returned no data")
+                                    logger.warning(f" Event {event_num} returned no data")
                             except Exception as e:
-                                print(f"   ❌ Failed to fetch event {event_num}: {e}")
+                                logger.error(f" Failed to fetch event {event_num}: {e}")
 
         # 3. Generate Daily Item Numbers from EDR data
-        print("📄 Generating daily item numbers...")
+        logger.info(" Generating daily item numbers...")
         items_pdf = self.generate_item_numbers_pdf(edr_data_list, target_date)
         all_pdfs.append(items_pdf)
 
@@ -687,7 +710,7 @@ class DailyPaperworkGenerator:
         docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs')
 
         # Load dynamic templates from database - separated by category
-        print("📄 Loading paperwork templates from database...")
+        logger.info(" Loading paperwork templates from database...")
         PaperworkTemplate = self.models.get('PaperworkTemplate')
         event_templates = []  # Templates to add for each event
         daily_templates = []  # Templates to add once at the end
@@ -706,15 +729,15 @@ class DailyPaperworkGenerator:
                         # Separate by category: 'event' vs 'daily'
                         if template.category == 'daily':
                             daily_templates.append(template_info)
-                            print(f"   ✅ Loaded daily template: {template.name}")
+                            logger.info(f" Loaded daily template: {template.name}")
                         else:
                             event_templates.append(template_info)
-                            print(f"   ✅ Loaded event template: {template.name}")
+                            logger.info(f" Loaded event template: {template.name}")
                     else:
-                        print(f"   ⚠️ Template file not found: {template.file_path}")
+                        logger.warning(f" Template file not found: {template.file_path}")
             except Exception as e:
-                print(f"   ⚠️ Could not load templates from database: {e}")
-                print(f"   ℹ️ Falling back to legacy hardcoded templates")
+                logger.warning(f" Could not load templates from database: {e}")
+                logger.info(f" Falling back to legacy hardcoded templates")
                 # Fallback to legacy behavior if database query fails
                 activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
                 checklist_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
@@ -724,7 +747,7 @@ class DailyPaperworkGenerator:
                     event_templates.append({'name': 'Checklist', 'path': checklist_path, 'order': 2})
         else:
             # Model not available, use legacy hardcoded paths
-            print(f"   ℹ️ PaperworkTemplate model not available, using legacy templates")
+            logger.info(f" PaperworkTemplate model not available, using legacy templates")
             activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
             checklist_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
             if os.path.exists(activity_log_path):
@@ -733,7 +756,7 @@ class DailyPaperworkGenerator:
                 event_templates.append({'name': 'Checklist', 'path': checklist_path, 'order': 2})
 
         for schedule, event, employee in schedules:
-            print(f"📋 Processing event {event.project_ref_num} for {employee.name}...")
+            logger.info(f" Processing event {event.project_ref_num} for {employee.name}...")
 
             # Only process documents for Core events
             if event.event_type == 'Core':
@@ -742,52 +765,70 @@ class DailyPaperworkGenerator:
 
                 # Get EDR PDF if we have cached data
                 if event_num and event_num in edr_data_cache:
-                    print(f"   Generating EDR PDF for event {event_num}...")
-                    # Prepare schedule info for PDF generation
+                    logger.info(f"Generating EDR PDF for event {event_num}...")
+                    
+                    # Auto-assign shift block if not set (for legacy events)
+                    if schedule.shift_block is None:
+                        try:
+                            from app.services.shift_block_config import ShiftBlockConfig
+                            block_num = ShiftBlockConfig.assign_next_available_block(
+                                schedule, 
+                                target_date,
+                                primary_lead_id=primary_lead_id
+                            )
+                            if block_num:
+                                logger.info(f"Auto-assigned shift block {block_num} to schedule {schedule.id}")
+                                # Commit the assignment
+                                self.db.commit()
+                        except Exception as e:
+                            logger.warning(f"Could not auto-assign shift block: {e}")
+                    
+                    # Prepare schedule info for PDF generation (includes shift_block for times)
                     schedule_info = {
                         'scheduled_date': schedule.schedule_datetime,
                         'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,
                         'event_type': event.event_type,
+                        'shift_block': schedule.shift_block,  # IMPORTANT: Pass shift_block for lunch times
                         'start_date': event.start_date if hasattr(event, 'start_date') else None,
                         'due_date': event.due_date if hasattr(event, 'due_date') else None
                     }
                     edr_pdf = self.get_event_edr_pdf_from_data(edr_data_cache[event_num], event_num, employee.name, schedule_info)
                     if edr_pdf:
                         all_pdfs.append(edr_pdf)
-                        print(f"   ✅ EDR PDF added for event {event_num}")
+                        logger.info(f" EDR PDF added for event {event_num}")
 
                 # Get SalesTool if URL available
                 if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
-                    print(f"   Downloading SalesTool for Core event...")
+                    logger.info(f"Downloading SalesTool for Core event...")
                     salestool_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
                     if salestool_pdf:
                         all_pdfs.append(salestool_pdf)
-                        print(f"   ✅ SalesTool added")
+                        logger.info(f" SalesTool added")
 
                 # Add event-level templates for this Core event (in order)
                 for template in event_templates:
                     all_pdfs.append(template['path'])
-                    print(f"   ✅ Added event template: {template['name']}")
+                    logger.info(f" Added event template: {template['name']}")
             else:
-                print(f"   ℹ️ Skipping documents - event type is '{event.event_type}' (Core events only)")
+                logger.info(f" Skipping documents - event type is '{event.event_type}' (Core events only)")
 
         # 5. Add daily-level templates ONCE at the end (after all events)
         if daily_templates:
-            print("📄 Adding daily-level documentation at the end...")
+            logger.info(" Adding daily-level documentation at the end...")
             for template in daily_templates:
                 all_pdfs.append(template['path'])
-                print(f"   ✅ Added daily template: {template['name']}")
+                logger.info(f" Added daily template: {template['name']}")
 
         # Merge all PDFs
         output_filename = f'Paperwork_{target_date.strftime("%Y%m%d")}.pdf'
         output_path = os.path.join(tempfile.gettempdir(), output_filename)
 
-        print(f"📄 Merging {len(all_pdfs)} PDFs into final document...")
+        logger.info(f" Merging {len(all_pdfs)} PDFs into final document...")
         if self.merge_pdfs(all_pdfs, output_path):
-            print(f"✅ Daily paperwork generated: {output_path}")
+            logger.info(f" Daily paperwork generated: {output_path}")
             return output_path
         else:
-            print("❌ Failed to merge PDFs")
+            logger.error(" Failed to merge PDFs")
             return None
 
     def cleanup(self):

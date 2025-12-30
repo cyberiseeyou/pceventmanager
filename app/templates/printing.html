@@ -379,6 +379,23 @@
     </div>
 </div>
 
+<!-- Full-screen Paperwork Progress Modal (like auto-scheduler) -->
+<div class="paperwork-progress-overlay" id="paperwork-progress-modal">
+    <div class="paperwork-progress-modal">
+        <h2 id="paperwork-progress-title">📄 Generating Complete Paperwork</h2>
+        <div class="paperwork-progress-info">
+            <div class="paperwork-progress-label" id="paperwork-progress-label">Preparing documents...</div>
+        </div>
+        <div class="paperwork-progress-bar-container">
+            <div class="paperwork-progress-bar" id="paperwork-progress-bar"></div>
+        </div>
+        <div class="paperwork-current-event" id="paperwork-current-event">
+            Initializing...
+        </div>
+        <div id="paperwork-progress-status"></div>
+    </div>
+</div>
+
 <style>
     .card {
         border: none;
@@ -444,6 +461,127 @@
 
     body.modal-open {
         overflow: hidden;
+    }
+
+    /* Paperwork Progress Modal Styles (like auto-scheduler) */
+    .paperwork-progress-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .paperwork-progress-overlay.active {
+        display: flex;
+    }
+
+    .paperwork-progress-modal {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        max-width: 550px;
+        width: 90%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .paperwork-progress-modal h2 {
+        margin: 0 0 20px 0;
+        color: #2c3e50;
+        text-align: center;
+        font-size: 1.5rem;
+    }
+
+    .paperwork-progress-info {
+        text-align: center;
+        margin-bottom: 25px;
+    }
+
+    .paperwork-progress-label {
+        font-size: 18px;
+        color: #2c3e50;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+
+    .paperwork-current-event {
+        font-size: 14px;
+        color: #2c3e50;
+        margin-top: 15px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        min-height: 50px;
+        text-align: center;
+        border-left: 4px solid #3498db;
+    }
+
+    .paperwork-progress-bar-container {
+        width: 100%;
+        height: 30px;
+        background: #ecf0f1;
+        border-radius: 15px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    .paperwork-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%);
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+        width: 0%;
+    }
+
+    /* Indeterminate progress animation */
+    @keyframes paperwork-indeterminate {
+        0% {
+            transform: translateX(-100%);
+            width: 30%;
+        }
+
+        50% {
+            width: 30%;
+        }
+
+        100% {
+            transform: translateX(400%);
+            width: 30%;
+        }
+    }
+
+    .paperwork-progress-bar.indeterminate {
+        width: 30%;
+        animation: paperwork-indeterminate 1.5s ease-in-out infinite;
+    }
+
+    .paperwork-progress-status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 6px;
+        text-align: center;
+    }
+
+    .paperwork-progress-status.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .paperwork-progress-status.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
     }
 </style>
 
@@ -2236,9 +2374,7 @@
                 const pdfWindow = window.open(url, '_blank');
 
                 if (pdfWindow) {
-                    // The PDF opens in the browser's built-in PDF viewer
-                    // User can use Ctrl+P or the print button in the PDF viewer
-                    alert('EDR Report generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.');
+                    // The PDF opens in the browser's built-in PDF viewer - no alert needed
                 } else {
                     // Popup was blocked, try download instead
                     alert('Popup was blocked. Downloading the PDF instead...');
@@ -2448,125 +2584,144 @@
         eventCount = eventCount || window.paperworkEventCount || 0;
         events = events || window.paperworkEvents || [];
 
-        // Show loading modal with progress bar
-        const eventList = events.map(e => e.number).join(', ');
-        showLoading(`📄 <strong>Generating Complete Paperwork</strong>\n\nPreparing documents for ${eventCount} event(s)...\n<small class="text-muted">Events: ${eventList}</small>`, true);
+        // Get the full-screen progress modal elements
+        const progressModal = document.getElementById('paperwork-progress-modal');
+        const progressLabel = document.getElementById('paperwork-progress-label');
+        const progressBar = document.getElementById('paperwork-progress-bar');
+        const currentEvent = document.getElementById('paperwork-current-event');
+        const progressStatus = document.getElementById('paperwork-progress-status');
+        const progressTitle = document.getElementById('paperwork-progress-title');
 
-        // Simulate progress updates as we wait for the server
-        let progressStep = 0;
+        // Build progress steps
         const progressSteps = [
-            { pct: 10, msg: '📅 Generating daily schedule...' },
-            { pct: 20, msg: '📋 Creating item list...' }
+            { pct: 5, label: 'Starting...', detail: 'Initializing paperwork generator...' },
+            { pct: 10, label: 'Step 1: Daily Schedule', detail: '📅 Generating daily schedule PDF...' },
+            { pct: 15, label: 'Step 2: Fetching EDR Data', detail: '📥 Fetching EDR data from Walmart...' }
         ];
 
         // Add steps for each event
         events.forEach((event, idx) => {
-            const stepPct = 20 + ((idx + 1) / eventCount) * 70;
+            const stepPct = 20 + ((idx + 1) / eventCount) * 65;
             progressSteps.push({
                 pct: Math.round(stepPct),
-                msg: `📝 Processing event ${idx + 1} of ${eventCount} (${event.number})...`
+                label: `Processing Event ${idx + 1} of ${eventCount}`,
+                detail: `📝 Event ${event.number}: Generating EDR, Instructions, and templates...`
             });
         });
 
-        progressSteps.push({ pct: 95, msg: '📎 Merging all documents...' });
-        progressSteps.push({ pct: 100, msg: '✅ Finalizing PDF...' });
+        progressSteps.push({ pct: 90, label: 'Creating Item List', detail: '📋 Generating item list with barcodes...' });
+        progressSteps.push({ pct: 95, label: 'Merging Documents', detail: '📎 Combining all PDFs into final document...' });
+        progressSteps.push({ pct: 100, label: 'Finalizing', detail: '✅ Creating final PDF file...' });
 
-        // Start progress simulation
+        // Show the full-screen progress modal
+        progressModal.classList.add('active');
+        progressBar.classList.remove('indeterminate');
+        progressBar.style.width = '0%';
+        progressStatus.innerHTML = '';
+        progressTitle.textContent = `📄 Generating Paperwork for ${date}`;
+        progressLabel.textContent = 'Starting...';
+        currentEvent.textContent = `Preparing to generate paperwork for ${eventCount} events...`;
+
+        // Simulate progress updates as we wait for the server
+        let progressStep = 0;
         const progressInterval = setInterval(() => {
             if (progressStep < progressSteps.length) {
                 const step = progressSteps[progressStep];
-                updateLoadingProgress(step.pct, 100, step.msg);
+                progressLabel.textContent = step.label;
+                currentEvent.textContent = step.detail;
+                progressBar.style.width = step.pct + '%';
                 progressStep++;
             }
-        }, 2000); // Update every 2 seconds
+        }, 2500); // Update every 2.5 seconds
 
-        // Call the complete paperwork endpoint
-        fetch('/printing/complete-paperwork', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
-            body: JSON.stringify({
-                date: date
-            })
-        })
-            .then(response => {
-                console.log('Response status:', response.status);
-                console.log('Response content-type:', response.headers.get('content-type'));
+        // Call the complete paperwork endpoint using async/await for better error handling
+        (async () => {
+            try {
+                console.log('Starting fetch request...');
+                const response = await fetch('/printing/complete-paperwork', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({ date: date })
+                });
 
-                if (!response.ok) {
-                    // Try to parse as JSON for error message
-                    return response.text().then(text => {
-                        try {
-                            const json = JSON.parse(text);
-                            throw new Error(json.error || 'Failed to generate complete paperwork');
-                        } catch (e) {
-                            throw new Error(text || 'Failed to generate complete paperwork');
-                        }
-                    });
-                }
+                console.log('Response received:', response.status, response.headers.get('content-type'));
 
-                // Check if response is actually a PDF
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    // Server returned JSON, probably an error
-                    return response.json().then(json => {
-                        throw new Error(json.error || json.message || 'Unexpected JSON response');
-                    });
-                }
-
-                return response.blob();
-            })
-            .then(blob => {
                 // Stop progress simulation
                 clearInterval(progressInterval);
 
-                console.log('Received blob:', blob.type, blob.size, 'bytes');
-
-                if (blob.size === 0) {
-                    hideLoading();
-                    alert('No paperwork was generated. The response was empty.');
-                    return;
+                if (!response.ok) {
+                    const text = await response.text();
+                    let errorMsg = 'Failed to generate complete paperwork';
+                    try {
+                        const json = JSON.parse(text);
+                        errorMsg = json.error || errorMsg;
+                    } catch (e) {
+                        errorMsg = text || errorMsg;
+                    }
+                    throw new Error(errorMsg);
                 }
 
-                // Create URL for the PDF blob
-                const url = URL.createObjectURL(blob);
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const json = await response.json();
+                    throw new Error(json.error || json.message || 'Unexpected JSON response');
+                }
+
+                console.log('Converting response to blob...');
+                const blob = await response.blob();
+                console.log('Blob received:', blob.type, blob.size, 'bytes');
+
+                if (!blob || blob.size === 0) {
+                    throw new Error('No paperwork was generated. The response was empty.');
+                }
 
                 // Update progress to show completion
-                updateLoadingProgress(100, 100, '✅ Complete! Opening PDF...');
+                progressLabel.textContent = 'Complete!';
+                progressBar.style.width = '100%';
+                currentEvent.textContent = `✅ Generated ${Math.round(blob.size / 1024)} KB PDF`;
+                progressStatus.innerHTML = '<div class="paperwork-progress-status success">Opening PDF...</div>';
 
-                // Hide loading after a brief delay
-                setTimeout(() => {
-                    hideLoading();
+                // Create URL and open PDF
+                const url = URL.createObjectURL(blob);
+                console.log('Blob URL created:', url);
 
-                    // Open PDF directly in a new tab - this allows the browser's native PDF viewer
-                    // to handle printing correctly with proper page count
-                    const pdfWindow = window.open(url, '_blank');
+                // Close modal and open PDF
+                progressModal.classList.remove('active');
 
-                    if (pdfWindow) {
-                        // The PDF opens in the browser's built-in PDF viewer
-                        // User can use Ctrl+P or the print button in the PDF viewer
-                        // This shows the correct page count unlike iframe embedding
-                        alert('PDF generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.');
-                    } else {
-                        // Popup was blocked, try download instead
-                        alert('Popup was blocked. Downloading the PDF instead...');
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Complete_Paperwork_${date}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                    }
-                }, 500);
-            })
-            .catch(error => {
+                const pdfWindow = window.open(url, '_blank');
+                if (pdfWindow) {
+                    // PDF opened successfully - no alert needed, just let user interact with PDF
+                } else {
+                    // Force download if popup blocked
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Complete_Paperwork_${date}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    alert('PDF downloaded! Check your downloads folder.');
+                }
+
+            } catch (error) {
                 clearInterval(progressInterval);
-                hideLoading();
                 console.error('Error generating complete paperwork:', error);
-                alert('Error generating complete paperwork: ' + (error.message || error.error || error));
-            });
+
+                progressLabel.textContent = 'Error';
+                progressBar.style.background = '#e74c3c';
+                progressBar.style.width = '100%';
+                currentEvent.textContent = error.message || 'An unexpected error occurred';
+                progressStatus.innerHTML = '<div class="paperwork-progress-status error">Failed to generate paperwork</div>';
+
+                setTimeout(() => {
+                    progressModal.classList.remove('active');
+                    progressBar.style.background = '';
+                    alert('Error generating complete paperwork: ' + (error.message || error));
+                }, 3000);
+            }
+        })();
     }
 
     // Load and display active templates on page load
@@ -2697,8 +2852,7 @@
                 const pdfWindow = window.open(url, '_blank');
 
                 if (pdfWindow) {
-                    // The PDF opens in the browser's built-in PDF viewer
-                    alert(`Event ${eventNumber} paperwork generated successfully!\n\nThe PDF is now open in a new tab.\nUse Ctrl+P or the print button to print.`);
+                    // The PDF opens in the browser's built-in PDF viewer - no alert needed
                 } else {
                     // Popup was blocked, try download instead
                     alert('Popup was blocked. Downloading the PDF instead...');

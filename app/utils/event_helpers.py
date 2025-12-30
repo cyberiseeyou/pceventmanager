@@ -239,9 +239,13 @@ def get_supervisor_event(core_event):
     """
     Find Supervisor event paired with CORE event.
 
-    The pairing is based on a 6-digit event number prefix. For example:
-    - CORE event: "606001-CORE-Super Pretzel"
-    - Supervisor event: "606001-Supervisor-Super Pretzel"
+    The pairing is based on a 6-digit event number prefix AND matching date window.
+    For example:
+    - CORE event: "606001-CORE-Super Pretzel" (start: 2025-12-26, due: 2025-12-28)
+    - Supervisor event: "606001-Supervisor-Super Pretzel" (start: 2025-12-26, due: 2025-12-28)
+
+    If multiple Supervisor events exist with the same event number (e.g., across different weeks),
+    this function returns the one whose date window overlaps with the Core event's date window.
 
     Args:
         core_event: Event object with project_name containing "-CORE-"
@@ -260,7 +264,7 @@ def get_supervisor_event(core_event):
 
     # Get Event model from the model class of core_event
     Event = type(core_event)
-    from sqlalchemy import inspect
+    from sqlalchemy import inspect, and_
 
     # Try to get db session from the event
     try:
@@ -281,31 +285,91 @@ def get_supervisor_event(core_event):
         return None
 
     # Extract 6-digit event number using regex (case-insensitive)
+    # Try multiple patterns:
+    # 1. XXXXXX-CORE- (middle of name)
+    # 2. XXXXXX-...-CORE (end of name)
+    # 3. Leading 6 digits for Core event types
+    
+    # Pattern 1: Try the -CORE- pattern (in middle)
     match = re.search(r'(\d{6})-CORE-', core_event.project_name, re.IGNORECASE)
+    
+    # Pattern 2: Try -CORE at end of name
+    if not match:
+        match = re.search(r'^(\d{6}).*-CORE$', core_event.project_name, re.IGNORECASE)
+        if match:
+            logger.debug(f"Extracted event number from -CORE suffix pattern: {core_event.project_name}")
 
     if not match:
-        logger.warning(
-            f"Could not extract event number from: {core_event.project_name}. "
-            f"Expected format: XXXXXX-CORE-ProductName"
-        )
-        return None
+        # Pattern 3: If -CORE patterns failed, check if this is a Core event by type
+        # and try to extract the first 6 digits as the event number
+        if hasattr(core_event, 'event_type') and core_event.event_type == 'Core':
+            match = re.search(r'^(\d{6})', core_event.project_name)
+            if match:
+                logger.debug(f"Extracted event number from prefix for Core event type: {core_event.project_name}")
+        
+        if not match:
+            logger.warning(
+                f"Could not extract event number from: {core_event.project_name}. "
+                f"Expected format: XXXXXX-CORE-ProductName, XXXXXX-...-CORE, or leading 6 digits for Core event types"
+            )
+            return None
 
     event_number = match.group(1)
     logger.debug(f"Extracted event number: {event_number} from CORE event {core_event.id}")
 
-    # Find matching Supervisor event (case-insensitive search)
-    supervisor_event = Event.query.filter(
-        Event.project_name.ilike(f'{event_number}-Supervisor-%')
-    ).first()
+    # Find matching Supervisor event with overlapping date window
+    # The Supervisor event must:
+    # 1. Match the event number pattern (supports multiple naming conventions)
+    # 2. Have an overlapping date window (Supervisor.start <= Core.due AND Supervisor.due >= Core.start)
+    # 
+    # Naming patterns supported:
+    # - "617606-Supervisor-ProductName" (Supervisor after number)
+    # - "617606-ProductName-Supervisor" (Supervisor at end)
+    # - Any event starting with event_number that has event_type='Supervisor'
+    from sqlalchemy import or_
+    
+    supervisor_query = Event.query.filter(
+        or_(
+            # Pattern 1: 617606-Supervisor-...
+            Event.project_name.ilike(f'{event_number}-Supervisor-%'),
+            # Pattern 2: 617606-...-Supervisor (ends with -Supervisor)
+            Event.project_name.ilike(f'{event_number}%-Supervisor'),
+            # Pattern 3: Starts with event number AND has event_type 'Supervisor'
+            and_(
+                Event.project_name.ilike(f'{event_number}%'),
+                Event.event_type == 'Supervisor'
+            )
+        )
+    )
+
+    # Add date window filter if core_event has date constraints
+    if hasattr(core_event, 'start_datetime') and hasattr(core_event, 'due_datetime') and \
+       core_event.start_datetime is not None and core_event.due_datetime is not None:
+        # Find Supervisor with overlapping date window
+        supervisor_query = supervisor_query.filter(
+            and_(
+                Event.start_datetime <= core_event.due_datetime,
+                Event.due_datetime >= core_event.start_datetime
+            )
+        )
+        logger.debug(
+            f"Filtering Supervisor by date window: Core start={core_event.start_datetime}, "
+            f"Core due={core_event.due_datetime}"
+        )
+
+    supervisor_event = supervisor_query.first()
 
     if not supervisor_event:
         logger.info(
             f"No Supervisor event found for CORE event {core_event.id} "
-            f"(event number: {event_number}). This may be expected."
+            f"(event number: {event_number}) within date window. This may be expected."
         )
         return None
 
-    logger.debug(f"Found Supervisor event {supervisor_event.id} for CORE event {core_event.id}")
+    logger.debug(
+        f"Found Supervisor event {supervisor_event.id} for CORE event {core_event.id} "
+        f"(Supervisor dates: {supervisor_event.start_datetime} to {supervisor_event.due_datetime})"
+    )
     return supervisor_event
 
 
@@ -375,7 +439,9 @@ def is_core_event_redesign(event):
     if not event or not event.project_name:
         return False
 
-    return '-CORE-' in event.project_name.upper()
+    project_upper = event.project_name.upper()
+    # Match -CORE- in middle OR -CORE at end
+    return '-CORE-' in project_upper or project_upper.endswith('-CORE')
 
 
 def is_supervisor_event(event):

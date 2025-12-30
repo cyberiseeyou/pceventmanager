@@ -107,7 +107,7 @@ class EDRPDFGenerator:
             if str(item.get('DEPT_NO')) == str(code):
                 return item.get('DESCRIPTION', f"Department {code}")
 
-        return f"Department {code}"
+        return 'N/A'
 
     def wrap_category_text(self, text: str, max_length: int = 18) -> str:
         """
@@ -211,10 +211,10 @@ class EDRPDFGenerator:
                                 'end': f"{block['depart'].hour:02d}:{block['depart'].minute:02d}"
                             }
                     
-                    # CASE 2: No shift_block assigned yet - try to match by on_floor time
+                    # CASE 2: No shift_block assigned yet - try to match by arrive time (scheduling time)
                     if scheduled_time:
-                        # Try to match to an active shift block
-                        block = ShiftBlockConfig.find_block_by_on_floor_time(scheduled_time)
+                        # Try to match to an active shift block by arrive time
+                        block = ShiftBlockConfig.find_block_by_arrive_time(scheduled_time)
                         if block:
                             return {
                                 'block': block['block'],
@@ -522,26 +522,50 @@ class EDRPDFGenerator:
                 shift_times_style = ParagraphStyle(
                     'ShiftTimes',
                     parent=styles['Normal'],
-                    fontSize=11,
-                    spaceAfter=6,
+                    fontSize=10,
+                    spaceAfter=3,
                     alignment=TA_CENTER,
                     fontName='Helvetica-Bold',
                     textColor=self.pc_blue
                 )
 
-                # Build shift times display
+                # Build shift times display with all 5 time fields for Core events
                 shift_times_parts = []
                 shift_times_parts.append(f"START: {self.format_time_12h(shift_times['start'])}")
+                
+                # Add ON FLOOR time if present (new 8-block system)
+                if 'on_floor' in shift_times:
+                    shift_times_parts.append(f"ON FLOOR: {self.format_time_12h(shift_times['on_floor'])}")
 
                 # Only Core events have lunch times
                 if 'lunch_begin' in shift_times and 'lunch_end' in shift_times:
                     shift_times_parts.append(f"LUNCH: {self.format_time_12h(shift_times['lunch_begin'])} - {self.format_time_12h(shift_times['lunch_end'])}")
+                
+                # Add OFF FLOOR time if present (new 8-block system)
+                if 'off_floor' in shift_times:
+                    shift_times_parts.append(f"OFF FLOOR: {self.format_time_12h(shift_times['off_floor'])}")
 
                 shift_times_parts.append(f"LEAVE: {self.format_time_12h(shift_times['end'])}")
 
                 shift_times_text = "   |   ".join(shift_times_parts)
                 story.append(Paragraph(shift_times_text, shift_times_style))
                 story.append(Spacer(1, 15))
+            else:
+                # For non-Core events, show at least the scheduled time
+                scheduled_time = schedule_info.get('scheduled_time') if schedule_info else None
+                if scheduled_time:
+                    time_style = ParagraphStyle(
+                        'ScheduledTime',
+                        parent=styles['Normal'],
+                        fontSize=10,
+                        spaceAfter=3,
+                        alignment=TA_CENTER,
+                        fontName='Helvetica-Bold',
+                        textColor=self.pc_blue
+                    )
+                    time_text = f"SCHEDULED TIME: {self.format_time_12h(scheduled_time)}"
+                    story.append(Paragraph(time_text, time_style))
+                    story.append(Spacer(1, 15))
 
             # Signature section
             story.append(Paragraph("<b>MUST BE SIGNED AND DATED</b>", header_style))
@@ -711,7 +735,7 @@ class DailyItemsListPDFGenerator:
         """Convert department number to description"""
         if not dept_no or dept_no == 'N/A' or dept_no == '':
             return 'N/A'
-        return self.department_codes.get(str(dept_no), f"Dept {dept_no}")
+        return self.department_codes.get(str(dept_no), 'N/A')
 
     def wrap_category_text(self, text: str, max_length: int = 18) -> str:
         """

@@ -277,7 +277,7 @@ def unscheduled_events():
         event.days_remaining = days_remaining
 
         # For scheduled events, fetch schedule and employee information
-        if condition_filter in ['scheduled', 'submitted', 'reissued']:
+        if condition_filter in ['all', 'scheduled', 'submitted', 'reissued']:
             schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
             if schedules:
                 # Get employee names and times for all schedules

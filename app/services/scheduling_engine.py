@@ -62,8 +62,9 @@ class SchedulingEngine:
             digital_teardown_slots = get_digital_teardown_slots()
             other = get_other_times()
 
-            # Default Core time is the first shift block's on_floor time
-            core_start = shift_blocks[0]['on_floor'] if shift_blocks else time(10, 30)
+            # Default Core time is the first shift block's ARRIVE time (time stored in MVRetail)
+            # on_floor time is only for EDR display
+            core_start = shift_blocks[0]['arrive'] if shift_blocks else time(10, 15)
 
             return {
                 'Juicer Production': time(9, 0),     # 9 AM - JUICER-PRODUCTION-SPCLTY
@@ -87,7 +88,7 @@ class SchedulingEngine:
                 'Digital Refresh': time(10, 15),   # 30 min
                 'Freeosk': time(10, 0),            # 30 min
                 'Digital Teardown': time(18, 0),   # 30 min
-                'Core': time(10, 30),              # First shift block on_floor time
+                'Core': time(10, 15),              # First shift block ARRIVE time
                 'Supervisor': time(12, 0),         # 5 min
                 'Other': time(11, 0)               # 60 min
             }
@@ -98,13 +99,21 @@ class SchedulingEngine:
         from app.services.shift_block_config import ShiftBlockConfig
 
         try:
-            # Use new 8-block system - on_floor times are the scheduling times
+            # Use new 8-block system - arrive times are the scheduling times
+            # on_floor times are only displayed on EDRs
             blocks = ShiftBlockConfig.get_all_blocks()
-            return [block['on_floor'] for block in blocks]
+            # Return in sequential order (1-8) for first 8 assignments
+            ordered_blocks = []
+            for block_num in ShiftBlockConfig.BLOCK_SEQUENTIAL_ORDER:
+                block = ShiftBlockConfig.get_block(block_num)
+                if block:
+                    ordered_blocks.append(block['arrive'])
+            return ordered_blocks if ordered_blocks else [time(10, 15), time(10, 15), time(10, 45), time(10, 45),
+                    time(11, 15), time(11, 15), time(11, 45), time(11, 45)]
         except Exception:
-            # Fallback to hard-coded defaults matching first 4 blocks
-            return [time(10, 30), time(10, 30), time(11, 0), time(11, 0),
-                    time(11, 30), time(11, 30), time(12, 0), time(12, 0)]
+            # Fallback to hard-coded defaults matching arrive times
+            return [time(10, 15), time(10, 15), time(10, 45), time(10, 45),
+                    time(11, 15), time(11, 15), time(11, 45), time(11, 45)]
 
     @classmethod
     def _get_digital_time_slots(cls):
@@ -2061,13 +2070,33 @@ class SchedulingEngine:
 
     def _get_next_time_slot(self, date_obj: datetime) -> time:
         """
-        Get the next available time slot for a date
-        Regular days: Rotates through 9:45, 10:30, 11:00, 11:30
+        Get the next available time slot for a Core event on a date.
+        Takes into account already-scheduled Core events in the database.
+        
+        Regular days: Rotates through CORE_TIME_SLOTS (block arrive times)
         Sundays: Rotates through ONLY 10:30, 11:00
         """
+        from sqlalchemy import func
+        
         date_str = date_obj.date().isoformat()
+        
+        # If we haven't initialized this date's slot index yet, check the database
+        # for already-scheduled Core events to start from the right slot
         if date_str not in self.daily_time_slot_index:
-            self.daily_time_slot_index[date_str] = 0
+            # Count Core events already scheduled on this date
+            already_scheduled_count = self.db.query(func.count(self.Schedule.id)).join(
+                self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+            ).filter(
+                func.date(self.Schedule.schedule_datetime) == date_obj.date(),
+                self.Event.event_type == 'Core'
+            ).scalar() or 0
+            
+            current_app.logger.debug(
+                f"Initializing time slot for {date_str}: {already_scheduled_count} Core events already scheduled"
+            )
+            
+            # Start from the slot index after already-scheduled events
+            self.daily_time_slot_index[date_str] = already_scheduled_count
 
         # Check if it's Sunday (weekday() returns 6 for Sunday)
         is_sunday = date_obj.weekday() == 6
@@ -2078,7 +2107,7 @@ class SchedulingEngine:
             slot_index = self.daily_time_slot_index[date_str]
             time_slot = sunday_slots[slot_index % len(sunday_slots)]
         else:
-            # Regular days: Use all 4 slots
+            # Regular days: Use all 8 block slots
             slot_index = self.daily_time_slot_index[date_str]
             time_slot = self.CORE_TIME_SLOTS[slot_index % len(self.CORE_TIME_SLOTS)]
 

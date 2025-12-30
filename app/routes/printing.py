@@ -818,7 +818,17 @@ def get_event_paperwork():
                 with tempfile.NamedTemporaryFile(mode='w+b', suffix='.pdf', delete=False) as tmp_file:
                     edr_temp_path = tmp_file.name
 
-                if edr_pdf_generator.generate_pdf(edr_data, edr_temp_path, employee_name):
+                # Build schedule_info for EDR times display
+                schedule_info = None
+                if schedule:
+                    schedule_info = {
+                        'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,
+                        'scheduled_date': schedule.schedule_datetime.date() if schedule.schedule_datetime else None,
+                        'event_type': event.event_type,
+                        'shift_block': schedule.shift_block
+                    }
+
+                if edr_pdf_generator.generate_pdf(edr_data, edr_temp_path, employee_name, schedule_info):
                     with open(edr_temp_path, 'rb') as f:
                         edr_buffer = BytesIO(f.read())
                         pdf_buffers.append(edr_buffer)
@@ -1176,7 +1186,17 @@ def edr_batch_download():
                     temp_path = tmp_file.name
 
                 try:
-                    if edr_pdf_generator.generate_pdf(edr_data, temp_path, employee_name):
+                    # Build schedule_info for EDR times display
+                    schedule_info = None
+                    if schedule:
+                        schedule_info = {
+                            'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,
+                            'scheduled_date': schedule.schedule_datetime.date() if schedule.schedule_datetime else None,
+                            'event_type': event.event_type,
+                            'shift_block': schedule.shift_block
+                        }
+                    
+                    if edr_pdf_generator.generate_pdf(edr_data, temp_path, employee_name, schedule_info):
                         # Read the generated PDF
                         with open(temp_path, 'rb') as f:
                             pdf_buffer.write(f.read())
