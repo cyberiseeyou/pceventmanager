@@ -1507,11 +1507,11 @@ class SchedulingEngine:
 
     def _find_least_busy_time_slot(self, run: object, target_date: date) -> time:
         """Find the time slot with the fewest scheduled employees on a given day"""
-        time_slots = self.CORE_TIME_SLOTS  # [9:45, 10:30, 11:00, 11:30]
+        time_slots = self.CORE_TIME_SLOTS  # 8-block system: 10:15, 10:15, 10:45, 10:45, 11:15, 11:15, 11:45, 11:45
 
         if not time_slots:
-            # Fallback to default time if CORE_TIME_SLOTS is empty
-            return time(9, 45)
+            # Fallback to default time if CORE_TIME_SLOTS is empty (first 8-block slot)
+            return time(10, 15)
 
         slot_counts = {}
         for slot in time_slots:
@@ -1566,12 +1566,12 @@ class SchedulingEngine:
         Subwave 2.1: Lead Event Specialists (highest priority)
                     - Fill their available days first, even if event could start earlier
                     - If Lead has available day with no events, prioritize assigning to them
-        Subwave 2.2: Juicer Baristas (when not juicing that day)
-        Subwave 2.3: Event Specialists
+        Tries lead employees (excluding Juicers) at available time slots.
 
-        Time slots rotate: 9:45 AM, 10:30 AM, 11:00 AM, 11:30 AM
+        Time slots rotate through 8-block system: 10:15 AM, 10:45 AM, 11:15 AM, 11:45 AM
+        Priority order: Primary Lead first, then other leads.
 
-        IMPORTANT: Supervisor events are scheduled INLINE with Core events
+        Also schedules matching Supervisor event inline.s
         """
         core_events = [e for e in events if e.event_type == 'Core' and not e.is_scheduled]
 
@@ -1617,52 +1617,52 @@ class SchedulingEngine:
 
         current_date = self._get_earliest_schedule_date(event)
         while current_date < event.due_datetime:
-            # STEP 1: Try Primary Lead at 9:45 (highest priority)
-            time_slot_945 = time(9, 45)
-            schedule_datetime_945 = datetime.combine(current_date.date(), time_slot_945)
+            # STEP 1: Try Primary Lead at first 8-block slot (highest priority)
+            first_slot = self.CORE_TIME_SLOTS[0] if self.CORE_TIME_SLOTS else time(10, 15)
+            schedule_datetime_first = datetime.combine(current_date.date(), first_slot)
 
             # Get Primary Lead for this date
             primary_lead = self.rotation_manager.get_rotation_employee(current_date, 'primary_lead')
 
-            # Try Primary Lead at 9:45 first
+            # Try Primary Lead at first slot
             if primary_lead:
-                validation = self.validator.validate_assignment(event, primary_lead, schedule_datetime_945)
+                validation = self.validator.validate_assignment(event, primary_lead, schedule_datetime_first)
                 if validation.is_valid:
-                    self._create_pending_schedule(run, event, primary_lead, schedule_datetime_945, False, None, None)
+                    self._create_pending_schedule(run, event, primary_lead, schedule_datetime_first, False, None, None)
                     run.events_scheduled += 1
                     current_app.logger.info(
-                        f"Wave 2.1: Scheduled Core event {event.project_ref_num} to Primary Lead {primary_lead.name} at 9:45 AM"
+                        f"Wave 2.1: Scheduled Core event {event.project_ref_num} to Primary Lead {primary_lead.name} at {first_slot.strftime('%I:%M %p')}"
                     )
 
                     # Schedule matching Supervisor event inline
-                    self._schedule_matching_supervisor_event(run, event, schedule_datetime_945.date(), events)
+                    self._schedule_matching_supervisor_event(run, event, schedule_datetime_first.date(), events)
 
                     return True
 
-            # STEP 2: Try other Leads at 9:45
+            # STEP 2: Try other Leads at first slot
             for lead in leads:
                 if primary_lead and lead.id == primary_lead.id:
                     continue  # Already tried primary lead
 
-                validation = self.validator.validate_assignment(event, lead, schedule_datetime_945)
+                validation = self.validator.validate_assignment(event, lead, schedule_datetime_first)
                 if validation.is_valid:
-                    self._create_pending_schedule(run, event, lead, schedule_datetime_945, False, None, None)
+                    self._create_pending_schedule(run, event, lead, schedule_datetime_first, False, None, None)
                     run.events_scheduled += 1
                     current_app.logger.info(
-                        f"Wave 2.1: Scheduled Core event {event.project_ref_num} to Lead {lead.name} at 9:45 AM"
+                        f"Wave 2.1: Scheduled Core event {event.project_ref_num} to Lead {lead.name} at {first_slot.strftime('%I:%M %p')}"
                     )
 
                     # Schedule matching Supervisor event inline
-                    self._schedule_matching_supervisor_event(run, event, schedule_datetime_945.date(), events)
+                    self._schedule_matching_supervisor_event(run, event, schedule_datetime_first.date(), events)
 
                     return True
 
-            # STEP 3: If 9:45 not available, try other time slots for non-primary Leads
+            # STEP 3: If first slot not available, try other time slots for non-primary Leads
             time_slot = self._get_next_time_slot(current_date)
             schedule_datetime = datetime.combine(current_date.date(), time_slot)
 
             for lead in leads:
-                # Don't use rotating slots for Primary Lead - they should only be at 9:45
+                # Don't use rotating slots for Primary Lead - they should only be at first slot
                 if primary_lead and lead.id == primary_lead.id:
                     continue
 
@@ -1684,10 +1684,11 @@ class SchedulingEngine:
         # STEP 4: If no available slots found, try bumping a less urgent event
         bump_employee, bump_datetime, bump_schedule, is_posted = self._find_bumpable_core_event(run, event)
         if bump_employee:
-            # Found a bumpable event - but if employee is a Primary Lead for that date, always use 9:45
+            # Found a bumpable event - but if employee is a Primary Lead for that date, always use first slot
             bump_date_primary_lead = self.rotation_manager.get_rotation_employee(bump_datetime, 'primary_lead')
+            first_slot = self.CORE_TIME_SLOTS[0] if self.CORE_TIME_SLOTS else time(10, 15)
             if bump_date_primary_lead and bump_employee.id == bump_date_primary_lead.id:
-                bump_datetime = datetime.combine(bump_datetime.date(), time(9, 45))
+                bump_datetime = datetime.combine(bump_datetime.date(), first_slot)
 
             # Take that employee and time slot
             if self._try_cascading_bump_for_core(run, event, bump_employee, bump_datetime, events, "Wave 2.1", is_posted):
@@ -2102,8 +2103,8 @@ class SchedulingEngine:
         is_sunday = date_obj.weekday() == 6
 
         if is_sunday:
-            # Sunday: Only use 10:30 and 11:00
-            sunday_slots = [time(10, 30), time(11, 0)]
+            # Sunday: Only use 2 slots from 8-block system (10:45 and 11:15)
+            sunday_slots = [time(10, 45), time(11, 15)]
             slot_index = self.daily_time_slot_index[date_str]
             time_slot = sunday_slots[slot_index % len(sunday_slots)]
         else:
@@ -2121,31 +2122,32 @@ class SchedulingEngine:
         Schedule a single Core event
 
         Logic:
-        - Primary Leads get 9:45 AM slot
-        - Everyone else rotates through 10:30, 11:00, 11:30, then back to 9:45
+        - Primary Leads get first 8-block slot (10:15 AM)
+        - Everyone else rotates through 8-block slots: 10:15, 10:45, 11:15, 11:45
         """
         current_date = self._get_earliest_schedule_date(event)
         while current_date < event.due_datetime:
-            # Check if Primary Lead is available at 9:45
+            # Check if Primary Lead is available at first 8-block slot
+            first_slot = self.CORE_TIME_SLOTS[0] if self.CORE_TIME_SLOTS else time(10, 15)
             primary_lead_id = self.rotation_manager.get_rotation_employee_id(current_date, 'primary_lead')
             if primary_lead_id:
                 primary_lead = self.db.query(self.Employee).get(primary_lead_id)
-                schedule_datetime_945 = datetime.combine(current_date.date(), time(9, 45))
+                schedule_datetime_first = datetime.combine(current_date.date(), first_slot)
 
-                validation = self.validator.validate_assignment(event, primary_lead, schedule_datetime_945)
+                validation = self.validator.validate_assignment(event, primary_lead, schedule_datetime_first)
                 if validation.is_valid:
-                    # Check if Primary Lead doesn't already have an event at 9:45
+                    # Check if Primary Lead doesn't already have an event at first slot
                     existing = self.db.query(self.Schedule).filter(
                         self.Schedule.employee_id == primary_lead_id,
-                        self.Schedule.schedule_datetime == schedule_datetime_945
+                        self.Schedule.schedule_datetime == schedule_datetime_first
                     ).first()
 
                     if not existing:
-                        self._create_pending_schedule(run, event, primary_lead, schedule_datetime_945, False, None, None)
+                        self._create_pending_schedule(run, event, primary_lead, schedule_datetime_first, False, None, None)
                         run.events_scheduled += 1
                         return
 
-            # Primary Lead not available or already has 9:45 slot - use rotating time slots
+            # Primary Lead not available or already has first slot - use rotating time slots
             time_slot = self._get_next_time_slot(current_date)
             schedule_datetime = datetime.combine(current_date.date(), time_slot)
 
@@ -2758,7 +2760,7 @@ class SchedulingEngine:
         elif event.event_type == 'Freeosk':
             schedule_time = time(10, 0)   # 30 min duration, moved from 9:00
         elif event.event_type == 'Core':
-            schedule_time = time(9, 45)   # 390 min (360 + 30 lunch)
+            schedule_time = time(10, 15)   # First 8-block slot (390 min work)
         elif event.event_type == 'Supervisor':
             schedule_time = time(12, 0)   # 5 min
         else:

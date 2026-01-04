@@ -481,8 +481,16 @@ def get_event_instructions():
 
         if event_id:
             # Single event lookup - search by first 6 characters of project_name
+            # Prioritize Core events over Supervisor events
+            from sqlalchemy import case
             event = db.session.query(Event).filter(
                 db.func.substr(Event.project_name, 1, 6) == event_id
+            ).order_by(
+                case(
+                    (Event.event_type == 'Core', 0),
+                    (Event.event_type == 'Supervisor', 1),
+                    else_=2
+                )
             ).first()
 
             if not event:
@@ -782,8 +790,20 @@ def get_event_paperwork():
         Employee = current_app.config['Employee']
 
         # Find event by first 6 digits of project_name
+        # IMPORTANT: Prioritize Core events over Supervisor events
+        # Both Core and Supervisor events share the same 6-digit prefix,
+        # so we need to ensure we get the Core event when printing paperwork
+        from sqlalchemy import case
+        
         event = db.session.query(Event).filter(
             db.func.substr(Event.project_name, 1, 6) == event_number
+        ).order_by(
+            # Prioritize Core events (0) over Supervisor (1) over others (2)
+            case(
+                (Event.event_type == 'Core', 0),
+                (Event.event_type == 'Supervisor', 1),
+                else_=2
+            )
         ).first()
 
         if not event:
@@ -792,7 +812,7 @@ def get_event_paperwork():
                 'error': f'Event starting with "{event_number}" not found in the system'
             }), 404
 
-        logger.info(f"Found event: {event.project_name}")
+        logger.info(f"Found event: {event.project_name} (type: {event.event_type})")
 
         # Look up employee assigned to this event (most recent schedule)
         schedule = db.session.query(Schedule).filter(
@@ -821,12 +841,29 @@ def get_event_paperwork():
                 # Build schedule_info for EDR times display
                 schedule_info = None
                 if schedule:
+                    # Auto-assign shift block if not set (for legacy events or single event printing)
+                    if schedule.shift_block is None and event.event_type == 'Core':
+                        try:
+                            from app.services.shift_block_config import ShiftBlockConfig
+                            target_date = schedule.schedule_datetime.date() if schedule.schedule_datetime else None
+                            if target_date:
+                                block_num = ShiftBlockConfig.assign_next_available_block(
+                                    schedule, 
+                                    target_date
+                                )
+                                if block_num:
+                                    logger.info(f"Auto-assigned shift block {block_num} to schedule {schedule.id}")
+                                    db.session.commit()
+                        except Exception as e:
+                            logger.warning(f"Could not auto-assign shift block: {e}")
+                    
                     schedule_info = {
                         'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,
                         'scheduled_date': schedule.schedule_datetime.date() if schedule.schedule_datetime else None,
                         'event_type': event.event_type,
                         'shift_block': schedule.shift_block
                     }
+                    logger.info(f"Schedule info: date={schedule_info['scheduled_date']}, time={schedule_info['scheduled_time']}, shift_block={schedule_info['shift_block']}")
 
                 if edr_pdf_generator.generate_pdf(edr_data, edr_temp_path, employee_name, schedule_info):
                     with open(edr_temp_path, 'rb') as f:
@@ -861,32 +898,54 @@ def get_event_paperwork():
                 logger.error(f"Error downloading instructions: {str(e)}")
                 # Continue without instructions
 
-        # 3. Add Activity Log (static PDF)
+        # 3. Add Core event templates from database (like complete paperwork generator)
         docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs')
-        activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
-
-        if os.path.exists(activity_log_path):
-            logger.info("Adding Activity Log...")
+        PaperworkTemplate = current_app.config.get('PaperworkTemplate')
+        
+        event_templates = []  # Templates to add for each event
+        
+        if PaperworkTemplate:
             try:
-                with open(activity_log_path, 'rb') as f:
-                    activity_log_buffer = BytesIO(f.read())
-                    pdf_buffers.append(activity_log_buffer)
-                logger.info("✅ Activity Log added")
+                templates = db.session.query(PaperworkTemplate).filter_by(
+                    is_active=True,
+                    category='event'  # Only event-level templates (per Core event)
+                ).order_by(PaperworkTemplate.display_order).all()
+                
+                for template in templates:
+                    template_path = os.path.join(docs_dir, template.file_path)
+                    if os.path.exists(template_path):
+                        event_templates.append({
+                            'name': template.name,
+                            'path': template_path
+                        })
+                        logger.info(f"✅ Loaded template: {template.name}")
+                    else:
+                        logger.warning(f"⚠️ Template file not found: {template.file_path}")
             except Exception as e:
-                logger.error(f"Error reading Activity Log: {str(e)}")
-
-        # 4. Add Daily Task Checkoff (static PDF)
-        checkoff_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
-
-        if os.path.exists(checkoff_path):
-            logger.info("Adding Daily Task Checkoff...")
+                logger.warning(f"Could not load templates from database: {e}")
+                # Fallback to legacy hardcoded names
+                event_templates = []
+        
+        # Fallback if no templates loaded from database
+        if not event_templates:
+            logger.info("Using fallback legacy templates...")
+            activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
+            checkoff_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
+            if os.path.exists(activity_log_path):
+                event_templates.append({'name': 'Activity Log', 'path': activity_log_path})
+            if os.path.exists(checkoff_path):
+                event_templates.append({'name': 'Checklist', 'path': checkoff_path})
+        
+        # Add all event templates to the PDF
+        for template in event_templates:
+            logger.info(f"Adding template: {template['name']}...")
             try:
-                with open(checkoff_path, 'rb') as f:
-                    checkoff_buffer = BytesIO(f.read())
-                    pdf_buffers.append(checkoff_buffer)
-                logger.info("✅ Daily Task Checkoff added")
+                with open(template['path'], 'rb') as f:
+                    template_buffer = BytesIO(f.read())
+                    pdf_buffers.append(template_buffer)
+                logger.info(f"✅ {template['name']} added")
             except Exception as e:
-                logger.error(f"Error reading Daily Task Checkoff: {str(e)}")
+                logger.error(f"Error reading {template['name']}: {str(e)}")
 
         # Check if we have at least one PDF
         if not pdf_buffers:

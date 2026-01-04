@@ -79,6 +79,10 @@
                                 class="nav-dropdown-item {% if request.endpoint == 'admin.schedule_verification' %}active{% endif %}">
                                 Schedule Verification
                             </a>
+                            <a href="{{ url_for('dashboard.weekly_validation') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
+                                Weekly Validation
+                            </a>
                         </div>
                     </div>
 
@@ -129,6 +133,10 @@
                             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                         </svg>
                         <span class="btn-text">Refresh Database</span>
+                    </button>
+                    <button id="aiPanelToggle" class="notifications-btn" title="AI Assistant (Ctrl+K)"
+                        aria-label="AI Assistant" style="margin-right: var(--spacing-sm);">
+                        <span class="nav-icon" style="font-size: 1.2rem;">✨</span>
                     </button>
                     <div class="notifications-dropdown">
                         <button id="notificationsBtn" class="notifications-btn" title="View notifications"
@@ -347,8 +355,8 @@
     <!-- Notifications -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
 
-    <!-- AI Assistant Chat Bubble -->
-    {% include 'components/ai_chat_bubble.html' %}
+    <!-- AI Assistant Panel -->
+    {% include 'components/ai_panel.html' %}
 
     <!-- Floating Schedule Verification Widget -->
     {% include 'components/floating_verification_widget.html' %}
@@ -536,6 +544,9 @@
             console.log('[Session] Activity tracker initialized');
         })();
     </script>
+
+    <!-- AI Assistant Logic -->
+    <script src="{{ url_for('static', filename='js/components/ai-assistant.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>

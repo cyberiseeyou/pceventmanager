@@ -134,6 +134,7 @@ def create_app(config_name=None):
     app.config['PaperworkTemplate'] = PaperworkTemplate
     app.config['UserSession'] = UserSession
     app.config['CompanyHoliday'] = CompanyHoliday
+    app.config['IgnoredValidationIssue'] = models.get('IgnoredValidationIssue')
 
     # Register blueprints
     register_blueprints(app, db, models)

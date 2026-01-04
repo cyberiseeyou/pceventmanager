@@ -13,6 +13,7 @@ from .employee_attendance import create_employee_attendance_model
 from .paperwork_template import create_paperwork_template_model
 from .user_session import create_user_session_model
 from .company_holiday import create_company_holiday_model
+from .ignored_validation_issue import create_ignored_validation_issue_model
 
 
 def init_models(db):
@@ -36,6 +37,7 @@ def init_models(db):
     PaperworkTemplate = create_paperwork_template_model(db)
     UserSession = create_user_session_model(db)
     CompanyHoliday = create_company_holiday_model(db)
+    IgnoredValidationIssue = create_ignored_validation_issue_model(db)
 
     return {
         'Employee': Employee,
@@ -56,7 +58,8 @@ def init_models(db):
         'EmployeeAttendance': EmployeeAttendance,
         'PaperworkTemplate': PaperworkTemplate,
         'UserSession': UserSession,
-        'CompanyHoliday': CompanyHoliday
+        'CompanyHoliday': CompanyHoliday,
+        'IgnoredValidationIssue': IgnoredValidationIssue
     }
 
 

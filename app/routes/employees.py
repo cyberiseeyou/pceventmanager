@@ -438,6 +438,9 @@ def manage_employee_time_off(employee_id):
                 from app.integrations.external_api.session_api_service import session_api as external_api
                 
                 unscheduled_events = []
+                schedule_ids_to_delete = [s.id for s in conflicting_schedules]
+                current_app.logger.info(f"Attempting to delete {len(schedule_ids_to_delete)} schedules: {schedule_ids_to_delete}")
+                
                 for sched in conflicting_schedules:
                     event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
                     
@@ -458,9 +461,10 @@ def manage_employee_time_off(employee_id):
                         event.is_scheduled = False
                         event.condition = 'Unstaffed'
                         unscheduled_events.append(event.project_name)
-                    
-                    # Delete the schedule
-                    db.session.delete(sched)
+                
+                # Delete schedules using bulk delete to ensure they're removed
+                deleted_count = Schedule.query.filter(Schedule.id.in_(schedule_ids_to_delete)).delete(synchronize_session='fetch')
+                current_app.logger.info(f"Deleted {deleted_count} schedule records from database")
                 
                 current_app.logger.info(
                     f"Unscheduled {len(unscheduled_events)} events for {employee.name} due to time-off request"

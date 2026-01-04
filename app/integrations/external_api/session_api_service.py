@@ -1095,7 +1095,7 @@ class SessionAPIService:
             }
 
             self.logger.info(f"Scheduling mPlan {mplan_id} for Rep {rep_id} at Location {location_id} from {start_str} to {end_str}")
-            self.logger.info(f"PHPSESSID being used: {self.phpsessid[:8] + '...' if self.phpsessid else 'None'}")
+            self.logger.info(f"PHPSESSID being used: {(self.phpsessid[:8] + '...') if self.phpsessid else 'None'}")
             self.logger.info(f"Form data: {form_data}")
 
             response = self.make_request(

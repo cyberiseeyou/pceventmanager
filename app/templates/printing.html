@@ -170,6 +170,9 @@
                     <button class="btn btn-info text-white" id="print-weekly-schedule-btn">
                         <i class="fas fa-print"></i> Print Weekly Schedule
                     </button>
+                    <button class="btn btn-outline-info ms-2" id="print-weekly-summary-btn">
+                        <i class="fas fa-table"></i> Print Weekly Summary
+                    </button>
                 </div>
             </div>
         </div>
@@ -606,6 +609,7 @@
 
         // Weekly Schedule handlers
         document.getElementById('print-weekly-schedule-btn').addEventListener('click', printWeeklySchedule);
+        document.getElementById('print-weekly-summary-btn').addEventListener('click', printWeeklySummary);
 
         // Employee Schedule handlers
         document.getElementById('print-employee-schedule-btn').addEventListener('click', printEmployeeSchedule);
@@ -779,6 +783,17 @@
                 console.error('Error:', error);
                 alert('Error loading weekly schedule');
             });
+    }
+
+    function printWeeklySummary() {
+        const startDate = document.getElementById('weekly-schedule-start-date').value;
+        if (!startDate) {
+            alert('Please select a start date');
+            return;
+        }
+
+        // Open in new tab - the PDF will display in the browser
+        window.open(`/api/print_weekly_summary/${startDate}`, '_blank');
     }
 
     function generatePrintableWeeklySchedule(data) {

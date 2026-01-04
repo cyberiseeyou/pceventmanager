@@ -80,16 +80,26 @@ class ScheduleVerificationService:
 
     @classmethod
     def _get_core_timeslots(cls):
-        """Get Core event time slots from database settings"""
-        from app.services.event_time_settings import get_core_slots
+        """Get Core event time slots from 8-block shift system (matches scheduling engine)"""
+        from app.services.shift_block_config import ShiftBlockConfig
 
         try:
-            slots = get_core_slots()
-            # Convert to HH:MM:SS format for comparison
-            return [f"{slot['start'].hour:02d}:{slot['start'].minute:02d}:00" for slot in slots]
+            # Use new 8-block system - arrive times are the scheduling times
+            blocks = ShiftBlockConfig.get_all_blocks()
+            # Get unique arrive times in HH:MM:SS format for comparison
+            seen_times = set()
+            timeslots = []
+            for block_num in ShiftBlockConfig.BLOCK_SEQUENTIAL_ORDER:
+                block = ShiftBlockConfig.get_block(block_num)
+                if block:
+                    time_str = f"{block['arrive'].hour:02d}:{block['arrive'].minute:02d}:00"
+                    if time_str not in seen_times:
+                        seen_times.add(time_str)
+                        timeslots.append(time_str)
+            return timeslots if timeslots else ['10:15:00', '10:45:00', '11:15:00', '11:45:00']
         except Exception:
-            # Fallback to hard-coded defaults
-            return ['09:45:00', '10:30:00', '11:00:00', '11:30:00']
+            # Fallback to hard-coded defaults matching 8-block arrive times
+            return ['10:15:00', '10:45:00', '11:15:00', '11:45:00']
 
     @classmethod
     def _get_supervisor_time(cls):
@@ -803,6 +813,13 @@ class ScheduleVerificationService:
         ).distinct().all()
 
         for employee in scheduled_employees:
+            # Get the employee's first schedule for this date (for linking in UI)
+            first_schedule = self.db.query(self.Schedule).filter(
+                self.Schedule.employee_id == employee.id,
+                func.date(self.Schedule.schedule_datetime) == verify_date
+            ).first()
+            schedule_id = first_schedule.id if first_schedule else None
+
             # Check time-off first (highest priority)
             time_off = self.db.query(self.EmployeeTimeOff).filter(
                 self.EmployeeTimeOff.employee_id == employee.id,
@@ -818,9 +835,11 @@ class ScheduleVerificationService:
                     details={
                         'employee_id': employee.id,
                         'employee_name': employee.name,
+                        'schedule_id': schedule_id,
                         'time_off_start': time_off.start_date.isoformat(),
                         'time_off_end': time_off.end_date.isoformat(),
-                        'reason': time_off.reason
+                        'reason': time_off.reason,
+                        'date': verify_date.isoformat()
                     }
                 ))
                 continue  # Skip availability check if on time-off
@@ -845,6 +864,7 @@ class ScheduleVerificationService:
                             details={
                                 'employee_id': employee.id,
                                 'employee_name': employee.name,
+                                'schedule_id': schedule_id,
                                 'day_of_week': day_column,
                                 'date': verify_date.isoformat()
                             }
@@ -880,8 +900,10 @@ class ScheduleVerificationService:
                     rule_name='Core Event Time',
                     message=f"Core event for {employee.name} is scheduled at {self._format_time(scheduled_time)} which is not a standard time slot. Valid times: {', '.join(valid_times)}",
                     details={
+                        'schedule_id': schedule.id,
                         'employee_id': employee.id,
                         'employee_name': employee.name,
+                        'event_id': event.id,
                         'event_name': event.project_name,
                         'scheduled_time': scheduled_time,
                         'valid_times': self.CORE_TIMESLOTS
@@ -916,9 +938,19 @@ class ScheduleVerificationService:
 
         return issues
 
+    def _extract_event_number(self, event_name: str) -> Optional[str]:
+        """Extract first 6 digits from event name (matches scheduling engine logic)"""
+        if not event_name:
+            return None
+        match = re.search(r'\d{6}', event_name)
+        return match.group(0) if match else None
+
     def _check_core_supervisor_pairing(self, verify_date: date) -> List[VerificationIssue]:
         """
-        Verify each Core event has a paired Supervisor event scheduled to a supervisor
+        Verify each Core event has a paired Supervisor event scheduled to a supervisor.
+
+        Matching logic: Supervisor events are matched to Core events by the 6-digit
+        event number in the project name (same logic as scheduling engine).
         """
         issues = []
 
@@ -946,23 +978,23 @@ class ScheduleVerificationService:
             self.Event.event_type == 'Supervisor'
         ).all()
 
-        # Build map of Supervisor events by project_ref_num
+        # Build map of Supervisor events by their 6-digit event number
         supervisor_map = {}
         for sched, event, emp in supervisor_schedules:
-            supervisor_map[event.project_ref_num] = {
-                'schedule': sched,
-                'event': event,
-                'employee': emp
-            }
+            event_number = self._extract_event_number(event.project_name)
+            if event_number:
+                supervisor_map[event_number] = {
+                    'schedule': sched,
+                    'event': event,
+                    'employee': emp
+                }
 
         for core_sched, core_event, core_emp in core_schedules:
-            # Check if there's a corresponding Supervisor event (by parent_event_ref_num)
-            # Supervisor events should have parent_event_ref_num pointing to Core
-            paired_sup = None
-            for sup_ref, sup_data in supervisor_map.items():
-                if sup_data['event'].parent_event_ref_num == core_event.project_ref_num:
-                    paired_sup = sup_data
-                    break
+            # Extract 6-digit event number from Core event name
+            core_event_number = self._extract_event_number(core_event.project_name)
+
+            # Find matching Supervisor event by event number
+            paired_sup = supervisor_map.get(core_event_number) if core_event_number else None
 
             if not paired_sup:
                 issues.append(VerificationIssue(
@@ -978,12 +1010,15 @@ class ScheduleVerificationService:
             else:
                 # Check Supervisor is assigned to correct person (Club Supervisor or Lead)
                 sup_emp = paired_sup['employee']
+                sup_sched = paired_sup['schedule']
                 if sup_emp.job_title not in ['Club Supervisor', 'Lead Event Specialist']:
                     issues.append(VerificationIssue(
                         severity='warning',
                         rule_name='Supervisor Assignment',
                         message=f"Supervisor event for '{core_event.project_name}' is assigned to {sup_emp.name} ({sup_emp.job_title}). Should be Club Supervisor or Lead.",
                         details={
+                            'schedule_id': sup_sched.id,
+                            'employee_id': sup_emp.id,
                             'supervisor_employee': sup_emp.name,
                             'supervisor_title': sup_emp.job_title,
                             'core_event': core_event.project_name
@@ -1030,7 +1065,10 @@ class ScheduleVerificationService:
                     rule_name='Freeosk Assignment',
                     message=f"Freeosk event '{event.project_name}' is assigned to {employee.name} ({employee.job_title}). Must be Club Supervisor or Lead Event Specialist.",
                     details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
                         'event_name': event.project_name,
+                        'employee_id': employee.id,
                         'employee': employee.name,
                         'job_title': employee.job_title
                     }
@@ -1064,8 +1102,11 @@ class ScheduleVerificationService:
                     rule_name='Digital Event Assignment',
                     message=f"Digital event '{event.project_name}' is assigned to {employee.name} ({employee.job_title}). Must be Club Supervisor or Lead Event Specialist.",
                     details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
                         'event_name': event.project_name,
                         'event_type': event.event_type,
+                        'employee_id': employee.id,
                         'employee': employee.name,
                         'job_title': employee.job_title
                     }
@@ -1148,6 +1189,9 @@ class ScheduleVerificationService:
                     rule_name='Juicer Qualification',
                     message=f"Juicer event assigned to {employee.name} ({employee.job_title}) who is not qualified for Juicer events.",
                     details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
+                        'employee_id': employee.id,
                         'employee': employee.name,
                         'job_title': employee.job_title,
                         'event_name': event.project_name
@@ -1163,8 +1207,12 @@ class ScheduleVerificationService:
                     rule_name='Juicer Rotation',
                     message=f"Juicer event assigned to {employee.name} but {expected_name} is on Juicer rotation for this day.",
                     details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
+                        'employee_id': employee.id,
                         'assigned_employee': employee.name,
                         'rotation_employee': expected_name,
+                        'rotation_employee_id': expected_juicer_id,
                         'day_of_week': verify_date.strftime('%A')
                     }
                 ))
@@ -1188,6 +1236,7 @@ class ScheduleVerificationService:
                     details={
                         'employee_id': juicer_emp_id,
                         'employee_name': employee.name,
+                        'core_schedule_id': core_event.id,
                         'date': verify_date.isoformat()
                     }
                 ))

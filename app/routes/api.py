@@ -238,27 +238,32 @@ def get_daily_summary(date):
         }
         
     timeslot_coverage = {}
-    
+
     for timeslot in core_timeslots:
         from datetime import time as dt_time
         parts = timeslot.split(':')
         slot_time = dt_time(int(parts[0]), int(parts[1]), int(parts[2]))
-        
+
         slot_start = datetime.combine(selected_date, slot_time)
         slot_end = slot_start + timedelta(minutes=1)
-        
+
+        # FIX: Only show Core events in the Core Timeslot Coverage section
+        # Previously this showed ALL events (including Digitals) at these times
         employees = db.session.query(
             Employee.name
         ).join(
             Schedule, Schedule.employee_id == Employee.id
+        ).join(
+            Event, Schedule.event_ref_num == Event.project_ref_num
         ).filter(
             and_(
                 Schedule.schedule_datetime >= slot_start,
                 Schedule.schedule_datetime < slot_end,
-                Schedule.employee_id.isnot(None)
+                Schedule.employee_id.isnot(None),
+                Event.event_type == 'Core'  # Only Core events
             )
         ).distinct().all()
-        
+
         employee_names = [emp.name for emp in employees]
         timeslot_coverage[timeslot] = {
             'count': len(employee_names),
@@ -2006,7 +2011,12 @@ def reschedule_event_with_validation(schedule_id):
                         # Fallback to Primary Lead for that day
                         if not supervisor_employee:
                             from app.services.rotation_manager import RotationManager
-                            rotation_manager = RotationManager(db.session)
+                            rotation_models = {
+                                'RotationAssignment': current_app.config.get('RotationAssignment'),
+                                'ScheduleException': current_app.config.get('ScheduleException'),
+                                'Employee': Employee
+                            }
+                            rotation_manager = RotationManager(db.session, rotation_models)
                             primary_lead = rotation_manager.get_rotation_employee(supervisor_new_datetime, 'primary_lead')
                             
                             if primary_lead:
@@ -4600,8 +4610,8 @@ def reissue_event():
         rep_id = employee.external_id if employee.external_id else employee.id
 
         # Get store ID and mPlan ID
-        store_id = str(event.store_number) if event.store_number else (str(event.location_mvid) if event.location_mvid else '')
-        mplan_id = str(event.project_ref_num) if event.project_ref_num else ''
+        store_id = str(event.location_mvid) if event.location_mvid else ''
+        mplan_id = str(event.external_id) if event.external_id else ''
 
         # Get workLogEntryID from the schedule's external_id (the Crossmark scheduled event ID)
         work_log_entry_id = schedule.external_id if schedule.external_id else ''
@@ -4672,17 +4682,18 @@ def reissue_event():
             # ========================================
             # Calculate start and end times with timezone offset
             # Using Eastern Time offset (-05:00)
-            start_datetime = schedule_datetime
-            # End is typically the next day at midnight for full-day events
-            end_datetime = start_datetime + timedelta(days=1)
+            # Use midnight on the scheduled date (Crossmark expects midnight)
+            schedule_date_only = schedule_datetime.date()
+            start_midnight = datetime.combine(schedule_date_only, datetime.min.time())
+            end_midnight = start_midnight + timedelta(days=1)
 
             schedule_data = {
                 'ClassName': 'MVScheduledmPlan',
                 'RepID': str(rep_id),
                 'mPlanID': mplan_id,
                 'LocationID': store_id,
-                'Start': start_datetime.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
-                'End': end_datetime.strftime('%Y-%m-%dT00:00:00') + '-05:00',
+                'Start': start_midnight.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
+                'End': end_midnight.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
                 'hash': '',
                 'v': '3.0.1',
                 'PlanningOverride': 'true'

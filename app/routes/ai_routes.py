@@ -22,7 +22,8 @@ def process_query():
         {
             "query": "Verify tomorrow's schedule",
             "conversation_id": "optional-session-id",
-            "history": [...]  // Optional conversation history
+            "history": [...],  # Optional conversation history
+            "context": {...}   # Optional page context (e.g. current view info)
         }
 
     Returns:
@@ -32,7 +33,8 @@ def process_query():
             "actions": [...],
             "requires_confirmation": bool,
             "confirmation_data": {...},
-            "conversation_id": "session-id"
+            "conversation_id": "session-id",
+            "context_used": {...}
         }
     """
     try:
@@ -40,6 +42,7 @@ def process_query():
         query = data.get('query')
         conversation_id = data.get('conversation_id')
         history = data.get('history', [])
+        page_context = data.get('context', {})
 
         if not query:
             return jsonify({'error': 'Missing query parameter'}), 400
@@ -72,8 +75,8 @@ def process_query():
             models=models
         )
 
-        # Process query
-        result = assistant.process_query(query, history)
+        # Process query with context
+        result = assistant.process_query(query, history, context=page_context)
 
         # Store conversation in session if needed
         if not conversation_id:
@@ -86,7 +89,8 @@ def process_query():
             'actions': result.actions,
             'requires_confirmation': result.requires_confirmation,
             'confirmation_data': result.confirmation_data,
-            'conversation_id': conversation_id
+            'conversation_id': conversation_id,
+            'context_used': result.context_used
         }
 
         return jsonify(response), 200

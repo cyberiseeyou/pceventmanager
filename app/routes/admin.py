@@ -2083,7 +2083,7 @@ def print_weekly_summary(week_start_str):
 
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename="Weekly_Summary_{week_start_str}.pdf"'
+        response.headers['Content-Disposition'] = f'inline; filename="Weekly_Summary_{week_start_str}.pdf"'
 
         return response
 

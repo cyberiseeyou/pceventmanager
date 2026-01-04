@@ -1,461 +1,292 @@
 /**
- * AI Assistant Component
- *
- * Handles chat interactions with the AI assistant
- * Supports both cloud API and local Ollama RAG API
+ * AI Assistant Panel Component
+ * 
+ * Handles side-panel interaction, context scraping, and unified AI service communication.
  */
 
-class AIAssistant {
-    constructor(options = {}) {
-        // DOM elements
-        this.container = document.getElementById('ai-chat-container');
-        this.toggleBtn = document.getElementById('ai-chat-toggle');
-        this.closeBtn = document.getElementById('ai-chat-close');
-        this.chatWindow = document.getElementById('ai-chat-window');
+class AIAssistantPanel {
+    constructor() {
+        // UI Elements
+        this.panel = document.getElementById('ai-panel');
+        this.toggleBtn = document.getElementById('aiPanelToggle');
+        this.closeBtn = document.getElementById('ai-panel-close');
+        this.overlay = document.getElementById('ai-panel-overlay');
         this.messagesContainer = document.getElementById('ai-messages');
-        this.suggestionsContainer = document.getElementById('ai-suggestions');
-        this.suggestionsList = document.getElementById('ai-suggestions-list');
         this.input = document.getElementById('ai-input');
         this.sendBtn = document.getElementById('ai-send-btn');
+        this.suggestionsContainer = document.getElementById('ai-suggestions');
 
-        // Configuration
-        this.options = {
-            preferLocal: true,  // Prefer local Ollama RAG API if available
-            cloudApiBase: '/api/ai',
-            ragApiBase: '/api/ai/rag',
-            ...options
-        };
+        // Context Elements
+        this.contextCard = document.getElementById('ai-context-card');
+        this.contextDetails = document.getElementById('ai-context-details');
 
         // State
         this.isOpen = false;
         this.conversationId = null;
         this.conversationHistory = [];
-        this.pendingConfirmation = null;
-        this.useRagApi = false;  // Will be set based on health check
-        this.providerInfo = null;
+        this.isProcessing = false;
 
         this.init();
     }
 
     init() {
-        // Event listeners
-        this.toggleBtn.addEventListener('click', () => this.toggleChat());
-        this.closeBtn.addEventListener('click', () => this.closeChat());
-        this.sendBtn.addEventListener('click', () => this.sendMessage());
-        this.input.addEventListener('keydown', (e) => this.handleInputKeydown(e));
+        if (!this.panel) {
+            console.warn('[AIAssistantPanel] Panel element not found');
+            return;
+        }
 
-        // Auto-resize textarea
-        this.input.addEventListener('input', () => this.autoResizeInput());
+        // Event Listeners
+        if (this.toggleBtn) {
+            this.toggleBtn.addEventListener('click', () => this.togglePanel());
+        } else {
+            console.warn('[AIAssistantPanel] Toggle button not found');
+        }
 
-        // Keyboard shortcut (Ctrl+K or Cmd+K)
+        if (this.closeBtn) {
+            this.closeBtn.addEventListener('click', () => this.closePanel());
+        }
+
+        if (this.overlay) {
+            this.overlay.addEventListener('click', () => this.closePanel());
+        }
+
+        if (this.sendBtn) {
+            this.sendBtn.addEventListener('click', () => this.sendMessage());
+        }
+
+        if (this.input) {
+            this.input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            });
+        }
+
+        // Keyboard Shortcut (Ctrl+K)
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                this.toggleChat();
+                this.togglePanel();
             }
         });
 
         // Load suggestions
         this.loadSuggestions();
 
-        // Check AI health
-        this.checkHealth();
+        console.log('[AIAssistantPanel] Initialized successfully');
     }
 
-    toggleChat() {
+    togglePanel() {
         if (this.isOpen) {
-            this.closeChat();
+            this.closePanel();
         } else {
-            this.openChat();
+            this.openPanel();
         }
     }
 
-    openChat() {
-        this.chatWindow.style.display = 'flex';
+    openPanel() {
+        this.panel.classList.add('open');
         this.isOpen = true;
         this.input.focus();
 
-        // Show/hide suggestions based on messages
-        if (this.conversationHistory.length === 0) {
-            this.suggestionsContainer.style.display = 'block';
-        } else {
-            this.suggestionsContainer.style.display = 'none';
-        }
+        // Refresh context when opening
+        this.updateContext();
     }
 
-    closeChat() {
-        this.chatWindow.style.display = 'none';
+    closePanel() {
+        this.panel.classList.remove('open');
         this.isOpen = false;
+    }
+
+    updateContext() {
+        // Simple context scraping based on URL and page content
+        const path = window.location.pathname;
+        let contextText = "Viewing ";
+        let actions = [];
+
+        // Determine context and actions
+        if (path.includes('schedule')) {
+            const dateElement = document.querySelector('.date-header, h1');
+            const dateStr = dateElement ? dateElement.innerText : 'current view';
+            contextText += `Schedule for ${dateStr}`;
+
+            actions.push({
+                label: 'Verify Schedule',
+                query: `verify schedule for ${dateStr}`,
+                icon: '✓'
+            });
+            actions.push({
+                label: 'Fill Empty Slots',
+                query: `find empty slots in ${dateStr} schedule and suggest employees`,
+                icon: '👥'
+            });
+
+            this.contextCard.style.display = 'flex';
+        } else if (path.includes('employees')) {
+            contextText += "Employee List";
+
+            actions.push({
+                label: 'Analyze Coverage',
+                query: 'analyze employee coverage and role distribution',
+                icon: '📊'
+            });
+
+            this.contextCard.style.display = 'flex';
+        } else {
+            this.contextCard.style.display = 'none';
+        }
+
+        this.contextDetails.textContent = contextText;
+
+        // Render Context Actions
+        const actionsContainer = document.getElementById('ai-context-actions');
+        if (actionsContainer) {
+            actionsContainer.innerHTML = '';
+            actions.forEach(action => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-xs btn-outline';
+                btn.innerHTML = `${action.icon} ${action.label}`;
+                btn.onclick = () => {
+                    this.input.value = action.query;
+                    this.sendMessage();
+                };
+                actionsContainer.appendChild(btn);
+            });
+        }
+
+        this.currentContext = {
+            url: window.location.href,
+            path: path,
+            view_name: document.title,
+            summary: contextText
+        };
     }
 
     async loadSuggestions() {
         try {
             const response = await fetch('/api/ai/suggestions');
-            if (!response.ok) return;
-
-            const data = await response.json();
-            this.renderSuggestions(data.suggestions);
+            if (response.ok) {
+                const data = await response.json();
+                this.renderSuggestions(data.suggestions);
+            }
         } catch (error) {
-            console.error('Failed to load suggestions:', error);
+            console.warn('Failed to load AI suggestions', error);
         }
     }
 
     renderSuggestions(suggestions) {
-        this.suggestionsList.innerHTML = '';
-
+        this.suggestionsContainer.innerHTML = '';
         suggestions.forEach(suggestion => {
-            const chip = document.createElement('div');
+            const chip = document.createElement('button');
             chip.className = 'ai-suggestion-chip';
-            chip.innerHTML = `
-                <span class="ai-suggestion-icon">${suggestion.icon}</span>
-                <span>${suggestion.label}</span>
-            `;
-            chip.addEventListener('click', () => {
+            chip.textContent = suggestion.label;
+            chip.onclick = () => {
                 this.input.value = suggestion.query;
                 this.sendMessage();
-            });
-            this.suggestionsList.appendChild(chip);
+            };
+            this.suggestionsContainer.appendChild(chip);
         });
-    }
-
-    handleInputKeydown(e) {
-        // Send on Enter (without Shift)
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            this.sendMessage();
-        }
-    }
-
-    autoResizeInput() {
-        this.input.style.height = 'auto';
-        this.input.style.height = this.input.scrollHeight + 'px';
     }
 
     async sendMessage() {
-        const message = this.input.value.trim();
-        if (!message) return;
+        const text = this.input.value.trim();
+        if (!text || this.isProcessing) return;
 
         // Clear input
         this.input.value = '';
-        this.autoResizeInput();
 
-        // Hide suggestions
-        this.suggestionsContainer.style.display = 'none';
+        // Add User Message
+        this.addMessage('user', text);
+        this.isProcessing = true;
 
-        // Add user message to chat
-        this.addMessage('user', message);
-
-        // Show loading indicator
-        const loadingId = this.showLoading();
+        // Show loading placeholder
+        const loadingId = this.addLoadingIndicator();
 
         try {
-            let response, data;
-
-            if (this.useRagApi) {
-                // Use local RAG API (Ollama)
-                response = await fetch(`${this.options.ragApiBase}/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to get response');
-                }
-
-                data = await response.json();
-
-                // Remove loading
-                this.removeLoading(loadingId);
-
-                // Update conversation history
-                this.conversationHistory.push(
-                    { role: 'user', content: message },
-                    { role: 'assistant', content: data.answer }
-                );
-
-                // Add assistant response
-                this.addMessage('assistant', data.answer, {
-                    response: data.answer,
-                    metadata: data.metadata
-                });
-
-            } else {
-                // Use cloud API
-                response = await fetch(`${this.options.cloudApiBase}/query`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        query: message,
-                        conversation_id: this.conversationId,
-                        history: this.conversationHistory
-                    })
-                });
-
-                // Remove loading
-                this.removeLoading(loadingId);
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to get response');
-                }
-
-                data = await response.json();
-
-                // Update conversation
-                this.conversationId = data.conversation_id;
-                this.conversationHistory.push(
-                    { role: 'user', content: message },
-                    { role: 'assistant', content: data.response }
-                );
-
-                // Add assistant response
-                this.addMessage('assistant', data.response, data);
-            }
-
-        } catch (error) {
-            console.error('Error sending message:', error);
-            this.removeLoading(loadingId);
-            this.addMessage('assistant', `Sorry, I encountered an error: ${error.message}`);
-        }
-    }
-
-    addMessage(role, content, data = null) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `ai-message ${role}-message`;
-
-        const avatar = document.createElement('div');
-        avatar.className = `ai-message-avatar ${role}-avatar`;
-        avatar.textContent = role === 'user' ? '👤' : '🤖';
-
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'ai-message-content';
-
-        const bubble = document.createElement('div');
-        bubble.className = 'ai-message-bubble';
-        bubble.textContent = content;
-
-        contentDiv.appendChild(bubble);
-
-        // Add actions if present
-        if (data && data.actions) {
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'ai-message-actions';
-
-            data.actions.forEach(action => {
-                const btn = document.createElement('button');
-                btn.className = 'ai-action-btn';
-                btn.textContent = action.label;
-                btn.addEventListener('click', () => {
-                    if (action.action.startsWith('/')) {
-                        window.location.href = action.action;
-                    }
-                });
-                actionsDiv.appendChild(btn);
-            });
-
-            contentDiv.appendChild(actionsDiv);
-        }
-
-        // Add confirmation if required
-        if (data && data.requires_confirmation) {
-            const confirmDiv = this.createConfirmationUI(data.confirmation_data);
-            contentDiv.appendChild(confirmDiv);
-        }
-
-        messageDiv.appendChild(avatar);
-        messageDiv.appendChild(contentDiv);
-
-        this.messagesContainer.appendChild(messageDiv);
-        this.scrollToBottom();
-    }
-
-    createConfirmationUI(confirmationData) {
-        const confirmDiv = document.createElement('div');
-        confirmDiv.className = 'ai-confirmation';
-
-        const text = document.createElement('div');
-        text.className = 'ai-confirmation-text';
-        text.textContent = 'Do you want to proceed?';
-
-        const actions = document.createElement('div');
-        actions.className = 'ai-confirmation-actions';
-
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'ai-confirm-btn confirm';
-        confirmBtn.textContent = 'Confirm';
-        confirmBtn.addEventListener('click', () => this.confirmAction(confirmationData, confirmDiv));
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'ai-confirm-btn cancel';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.addEventListener('click', () => {
-            confirmDiv.remove();
-            this.addMessage('assistant', 'Action cancelled.');
-        });
-
-        actions.appendChild(confirmBtn);
-        actions.appendChild(cancelBtn);
-
-        confirmDiv.appendChild(text);
-        confirmDiv.appendChild(actions);
-
-        return confirmDiv;
-    }
-
-    async confirmAction(confirmationData, confirmDiv) {
-        // Disable buttons
-        const buttons = confirmDiv.querySelectorAll('button');
-        buttons.forEach(btn => btn.disabled = true);
-
-        try {
-            const response = await fetch('/api/ai/confirm', {
+            const response = await fetch('/api/ai/query', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCsrfToken()
                 },
                 body: JSON.stringify({
-                    confirmation_data: confirmationData
+                    query: text,
+                    conversation_id: this.conversationId,
+                    history: this.conversationHistory,
+                    context: this.currentContext
                 })
             });
 
+            // Remove loading
+            this.removeMessage(loadingId);
+
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to confirm action');
+                throw new Error('Network response was not ok');
             }
 
             const data = await response.json();
+            this.conversationId = data.conversation_id;
 
-            // Remove confirmation UI
-            confirmDiv.remove();
+            // Add Assistant Response
+            this.addMessage('assistant', data.response);
 
-            // Add result message
-            this.addMessage('assistant', data.response, data);
+            // Update History
+            this.conversationHistory.push({ role: 'user', content: text });
+            this.conversationHistory.push({ role: 'assistant', content: data.response });
 
         } catch (error) {
-            console.error('Error confirming action:', error);
-            confirmDiv.remove();
-            this.addMessage('assistant', `Error: ${error.message}`);
+            this.removeMessage(loadingId);
+            this.addMessage('assistant', "I'm sorry, I encountered an error. Please try again.");
+            console.error('AI Error:', error);
+        } finally {
+            this.isProcessing = false;
         }
     }
 
-    showLoading() {
-        const loadingId = `loading-${Date.now()}`;
-        const loadingDiv = document.createElement('div');
-        loadingDiv.id = loadingId;
-        loadingDiv.className = 'ai-message assistant-message';
-
-        const avatar = document.createElement('div');
-        avatar.className = 'ai-message-avatar bot-avatar';
-        avatar.textContent = '🤖';
-
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'ai-message-content';
-
-        const bubble = document.createElement('div');
-        bubble.className = 'ai-message-bubble';
-
-        const loading = document.createElement('div');
-        loading.className = 'ai-loading';
-        loading.innerHTML = `
-            <div class="ai-loading-dot"></div>
-            <div class="ai-loading-dot"></div>
-            <div class="ai-loading-dot"></div>
+    addMessage(role, text) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `ai-message ${role}-message`;
+        msgDiv.innerHTML = `
+            <div class="ai-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+            <div class="ai-bubble"><p>${this.formatText(text)}</p></div>
         `;
-
-        bubble.appendChild(loading);
-        contentDiv.appendChild(bubble);
-        loadingDiv.appendChild(avatar);
-        loadingDiv.appendChild(contentDiv);
-
-        this.messagesContainer.appendChild(loadingDiv);
-        this.scrollToBottom();
-
-        return loadingId;
-    }
-
-    removeLoading(loadingId) {
-        const loadingDiv = document.getElementById(loadingId);
-        if (loadingDiv) {
-            loadingDiv.remove();
-        }
-    }
-
-    scrollToBottom() {
+        this.messagesContainer.appendChild(msgDiv);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
     }
 
-    async checkHealth() {
-        // First, check if local RAG API (Ollama) is available
-        if (this.options.preferLocal) {
-            try {
-                const ragResponse = await fetch(`${this.options.ragApiBase}/health`);
-                const ragData = await ragResponse.json();
-
-                if (ragData.status === 'healthy') {
-                    this.useRagApi = true;
-                    this.providerInfo = {
-                        type: 'local',
-                        provider: ragData.providers?.primary?.provider || 'ollama',
-                        model: ragData.config?.model || 'ministral-3:3b'
-                    };
-                    console.log('AI Assistant: Using local Ollama RAG API', this.providerInfo);
-                    this.updateProviderIndicator();
-                    return;
-                }
-            } catch (error) {
-                console.log('Local RAG API not available, trying cloud API...');
-            }
-        }
-
-        // Fall back to cloud API
-        try {
-            const response = await fetch(`${this.options.cloudApiBase}/health`);
-            const data = await response.json();
-
-            if (data.status === 'ok' && data.configured) {
-                this.useRagApi = false;
-                this.providerInfo = {
-                    type: 'cloud',
-                    provider: data.provider || 'unknown'
-                };
-                console.log('AI Assistant: Using cloud API', this.providerInfo);
-                this.updateProviderIndicator();
-            } else {
-                console.warn('AI Assistant not configured:', data.message);
-                this.providerInfo = { type: 'none', error: data.message };
-                this.updateProviderIndicator();
-            }
-        } catch (error) {
-            console.error('Failed to check AI health:', error);
-            this.providerInfo = { type: 'none', error: error.message };
-            this.updateProviderIndicator();
-        }
+    addLoadingIndicator() {
+        const id = 'loading-' + Date.now();
+        const msgDiv = document.createElement('div');
+        msgDiv.id = id;
+        msgDiv.className = 'ai-message assistant-message';
+        msgDiv.innerHTML = `
+            <div class="ai-avatar">🤖</div>
+            <div class="ai-bubble"><p>Thinking...</p></div>
+        `;
+        this.messagesContainer.appendChild(msgDiv);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        return id;
     }
 
-    updateProviderIndicator() {
-        // Update the header subtitle to show which provider is being used
-        const subtitle = this.chatWindow?.querySelector('.ai-header-subtitle');
-        if (subtitle && this.providerInfo) {
-            if (this.providerInfo.type === 'local') {
-                subtitle.textContent = `Local AI (${this.providerInfo.model})`;
-                subtitle.style.color = '#90EE90';  // Light green
-            } else if (this.providerInfo.type === 'cloud') {
-                subtitle.textContent = `Cloud AI (${this.providerInfo.provider})`;
-                subtitle.style.color = '#87CEEB';  // Light blue
-            } else {
-                subtitle.textContent = 'AI not configured';
-                subtitle.style.color = '#FFB6C1';  // Light red
-            }
-        }
+    removeMessage(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
     }
 
-    getApiEndpoint() {
-        return this.useRagApi ? this.options.ragApiBase : this.options.cloudApiBase;
+    formatText(text) {
+        // Basic markdown formatting
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+    }
+
+    getCsrfToken() {
+        return document.querySelector('script[src*="csrf_helper.js"]')?.getAttribute('data-csrf') || '';
     }
 }
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    window.aiPanel = new AIAssistantPanel();
+});
