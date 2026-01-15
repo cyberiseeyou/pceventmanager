@@ -2,13 +2,14 @@
 Authentication routes blueprint
 Handles user login, logout, and session management
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, Response, stream_with_context
 from functools import wraps
 from datetime import datetime, timedelta
 import secrets
 import redis
 import json
 import os
+import time
 
 import urllib.parse
 
@@ -300,18 +301,16 @@ def login():
 
                 current_app.logger.info(f"Successful authentication for user: {username}")
 
-                # Create response - redirect to today's daily view
-                today = datetime.now().strftime('%Y-%m-%d')
+                # Create response - redirect to loading page for database sync
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     response = jsonify({
                         'success': True,
-                        'redirect': url_for('main.daily_schedule_view', date=today),
+                        'redirect': url_for('auth.loading_page'),
                         'user': user_info,
-                        'refresh_database': True,  # Trigger post-login database refresh
                         'event_times_configured': event_times_configured
                     })
                 else:
-                    response = redirect(url_for('main.daily_schedule_view', date=today))
+                    response = redirect(url_for('auth.loading_page'))
 
                 # Set session cookie
                 response.set_cookie(
@@ -464,10 +463,10 @@ def session_heartbeat():
     Called by frontend when user is actively using the application.
     """
     session_id = request.cookies.get('session_id')
-    
+
     if not session_id:
         return jsonify({'success': False, 'error': 'No session'}), 401
-    
+
     if update_session_activity(session_id):
         inactivity_timeout = get_inactivity_timeout()
         return jsonify({
@@ -477,3 +476,159 @@ def session_heartbeat():
         })
     else:
         return jsonify({'success': False, 'error': 'Session not found'}), 401
+
+
+# =============================================================================
+# Database Refresh Progress Tracking
+# =============================================================================
+
+REFRESH_PROGRESS_PREFIX = "db_refresh_progress:"
+REFRESH_PROGRESS_TTL = 300  # 5 minutes
+
+
+def save_refresh_progress(task_id, progress_data):
+    """Save refresh progress state to Redis"""
+    try:
+        client = get_redis_client()
+        client.setex(
+            f"{REFRESH_PROGRESS_PREFIX}{task_id}",
+            REFRESH_PROGRESS_TTL,
+            json.dumps(progress_data)
+        )
+    except Exception as e:
+        current_app.logger.error(f"Redis progress write error: {e}")
+
+
+def get_refresh_progress(task_id):
+    """Get refresh progress state from Redis"""
+    try:
+        client = get_redis_client()
+        data = client.get(f"{REFRESH_PROGRESS_PREFIX}{task_id}")
+        return json.loads(data) if data else None
+    except Exception as e:
+        current_app.logger.error(f"Redis progress read error: {e}")
+        return None
+
+
+def update_refresh_progress(task_id, **kwargs):
+    """Update specific refresh progress fields"""
+    progress = get_refresh_progress(task_id) or {
+        'status': 'pending',
+        'current_step': 0,
+        'total_steps': 5,
+        'step_label': 'Initializing...',
+        'processed': 0,
+        'total': 0,
+        'error': None,
+        'stats': None
+    }
+    progress.update(kwargs)
+    save_refresh_progress(task_id, progress)
+
+
+def delete_refresh_progress(task_id):
+    """Delete refresh progress from Redis"""
+    try:
+        client = get_redis_client()
+        client.delete(f"{REFRESH_PROGRESS_PREFIX}{task_id}")
+    except Exception as e:
+        current_app.logger.error(f"Redis progress delete error: {e}")
+
+
+# =============================================================================
+# Loading Page Routes
+# =============================================================================
+
+@auth_bp.route('/loading')
+@require_authentication()
+def loading_page():
+    """Display the database refresh loading page"""
+    # Generate unique task ID for this refresh operation
+    task_id = secrets.token_urlsafe(16)
+
+    # Initialize progress state in Redis
+    progress_data = {
+        'status': 'pending',
+        'current_step': 0,
+        'total_steps': 5,
+        'step_label': 'Initializing...',
+        'processed': 0,
+        'total': 0,
+        'error': None,
+        'stats': None
+    }
+    save_refresh_progress(task_id, progress_data)
+
+    # Get today's date for redirect after completion
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    return render_template(
+        'auth/loading.html',
+        task_id=task_id,
+        redirect_url=url_for('main.daily_schedule_view', date=today)
+    )
+
+
+@auth_bp.route('/loading/progress/<task_id>')
+@require_authentication()
+def loading_progress(task_id):
+    """Stream database refresh progress via Server-Sent Events"""
+
+    def generate():
+        max_iterations = 600  # Max 5 minutes (600 * 0.5s)
+        iteration = 0
+
+        while iteration < max_iterations:
+            progress = get_refresh_progress(task_id)
+
+            if not progress:
+                yield f"data: {json.dumps({'error': 'Task not found', 'status': 'error'})}\n\n"
+                break
+
+            yield f"data: {json.dumps(progress)}\n\n"
+
+            if progress.get('status') in ('completed', 'error'):
+                break
+
+            time.sleep(0.5)
+            iteration += 1
+
+        # Cleanup progress data after completion
+        if progress and progress.get('status') == 'completed':
+            delete_refresh_progress(task_id)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
+
+
+@auth_bp.route('/loading/start/<task_id>', methods=['POST'])
+@require_authentication()
+def start_loading_refresh(task_id):
+    """Start the database refresh process with progress tracking"""
+    try:
+        # Verify task exists
+        progress = get_refresh_progress(task_id)
+        if not progress:
+            return jsonify({'success': False, 'error': 'Invalid task ID'}), 400
+
+        # Check if already running
+        if progress.get('status') == 'running':
+            return jsonify({'success': False, 'error': 'Refresh already in progress'}), 400
+
+        # Import and run the refresh service
+        from app.services.database_refresh_service import refresh_database_with_progress
+        result = refresh_database_with_progress(task_id)
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to start database refresh: {e}")
+        update_refresh_progress(task_id, status='error', error=str(e))
+        return jsonify({'success': False, 'error': str(e)}), 500

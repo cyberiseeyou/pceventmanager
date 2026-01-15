@@ -1,0 +1,303 @@
+/**
+ * Loading Page Styles
+ * Database sync progress page after login
+ */
+
+/* Loading Page Specific Overrides */
+.loading-body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-container {
+    width: auto;
+    max-width: 900px;
+    padding: 2rem;
+    margin: 0 !important; /* Override login-container margin and let flexbox handle centering */
+    border: 2px solid var(--pc-blue);
+    border-radius: 16px;
+}
+
+.loading-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.loading-title {
+    font-size: 1.5rem;
+    color: var(--gray-900);
+    margin-bottom: 0.5rem;
+}
+
+.loading-subtitle {
+    color: var(--gray-500);
+    font-size: 0.95rem;
+}
+
+/* Progress Section */
+.loading-progress-section {
+    padding: 2rem;
+    background: var(--gray-50);
+    border-radius: 12px;
+    margin: 0 auto 1.5rem;
+    max-width: 600px;
+}
+
+/* Progress Bar */
+.progress-bar-container {
+    height: 12px;
+    background: var(--gray-200);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.progress-percentage {
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--primary-600);
+    margin-bottom: 1.5rem;
+}
+
+/* Current Step Display */
+.current-step-container {
+    margin-top: 1.25rem;
+    text-align: center;
+}
+
+.current-step-text {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--pc-navy);
+    margin-bottom: 0.5rem;
+}
+
+.current-step-detail {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    display: none;
+}
+
+/* Error Container */
+.loading-error-container {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--danger-300);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.loading-error-container .error-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--danger-700);
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+}
+
+.loading-error-container .error-message svg {
+    flex-shrink: 0;
+    color: var(--danger-500);
+}
+
+.retry-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--danger-500);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.retry-button:hover {
+    background: var(--danger-600);
+    transform: translateY(-1px);
+}
+
+.retry-button:active {
+    transform: translateY(0);
+}
+
+.retry-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Footer */
+.loading-footer {
+    text-align: center;
+    color: var(--gray-500);
+    font-size: 0.9rem;
+}
+
+.loading-footer p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.loading-footer p::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--primary-500);
+    border-radius: 50%;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Success State */
+.loading-progress-section.success .progress-bar {
+    background: linear-gradient(90deg, var(--success-500), var(--success-600));
+}
+
+.loading-progress-section.success .progress-percentage {
+    color: var(--success-600);
+}
+
+.loading-progress-section.success .loading-footer p::before {
+    background: var(--success-500);
+    animation: none;
+}
+
+/* Responsive */
+/* Desktop and landscape tablets - full screen */
+@media (min-width: 768px) {
+    .loading-logo {
+        max-width: 300px;
+    }
+
+    .loading-title {
+        font-size: 2rem;
+    }
+
+    .loading-subtitle {
+        font-size: 1.125rem;
+    }
+
+    .loading-progress-section {
+        padding: 3rem;
+        max-width: 700px;
+    }
+
+    .progress-bar-container {
+        height: 16px;
+    }
+
+    .progress-percentage {
+        font-size: 1.5rem;
+    }
+
+    .current-step-text {
+        font-size: 1.25rem;
+    }
+
+    .current-step-detail {
+        font-size: 1rem;
+    }
+}
+
+/* Large desktop - constrain width slightly */
+@media (min-width: 1200px) {
+    .loading-progress-section {
+        max-width: 800px;
+    }
+}
+
+/* Mobile portrait */
+@media (max-width: 767px) {
+    .loading-container {
+        width: 100%;
+        padding: 1.5rem;
+        border: none;
+    }
+
+    .loading-title {
+        font-size: 1.25rem;
+    }
+
+    .loading-subtitle {
+        font-size: 0.875rem;
+    }
+
+    .loading-progress-section {
+        padding: 1.25rem;
+        max-width: 100%;
+    }
+
+    .current-step-text {
+        font-size: 0.9rem;
+    }
+
+    .current-step-detail {
+        font-size: 0.8rem;
+    }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+    .loading-container {
+        padding: 1rem;
+    }
+
+    .loading-progress-section {
+        padding: 1rem;
+    }
+}

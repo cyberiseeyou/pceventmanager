@@ -2,13 +2,72 @@
 Daily Validation Dashboard Blueprint
 Provides visual overview of scheduling status and validation checks
 """
-from flask import Blueprint, render_template, jsonify, current_app
+from flask import Blueprint, render_template, jsonify, current_app, redirect, url_for
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
 from urllib.parse import quote
 
 # Create blueprint
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
+
+
+@dashboard_bp.route('/command-center')
+def command_center():
+    """
+    Morning Command Center - Unified view of everything that needs attention.
+
+    Shows:
+    - Deadline countdown (if Fri/Sat/EOM)
+    - Quick stats bar
+    - Deadline events (LIA needing scan-out)
+    - Unscheduled urgent events
+    - Pending tasks and notes
+    - Employee issues (time-off, notes)
+    - Today's rotation assignments
+    """
+    from app.services.command_center_service import CommandCenterService
+    from app.models import get_models
+
+    try:
+        db = current_app.extensions['sqlalchemy']
+        models = get_models()
+
+        service = CommandCenterService(db, models)
+        dashboard_data = service.get_dashboard_data()
+
+        return render_template(
+            'dashboard/command_center.html',
+            data=dashboard_data
+        )
+    except Exception as e:
+        current_app.logger.error(f"Command center error: {str(e)}")
+        # Fallback to daily schedule if command center fails
+        return redirect(url_for('main.today'))
+
+
+@dashboard_bp.route('/api/command-center')
+def command_center_api():
+    """API endpoint for command center data (for AJAX refresh)"""
+    from app.services.command_center_service import CommandCenterService
+    from app.models import get_models
+
+    try:
+        db = current_app.extensions['sqlalchemy']
+        models = get_models()
+
+        service = CommandCenterService(db, models)
+        data = service.get_dashboard_data()
+
+        return jsonify({
+            'success': True,
+            'data': data
+        })
+    except Exception as e:
+        current_app.logger.error(f"Command center API error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @dashboard_bp.route('/daily-validation')
@@ -958,3 +1017,30 @@ def assign_supervisor_event():
         db.session.rollback()
         current_app.logger.error(f'Error assigning supervisor event: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/approved-events')
+def approved_events():
+    """
+    Approved Events Dashboard for Walmart scan-out tracking.
+
+    Displays APPROVED events from Walmart Retail Link merged with local
+    database status to help users:
+    - See which events need scheduling
+    - See which events need API submission
+    - See which events need scan-out in Walmart
+
+    Business Rule: APPROVED events must be scanned out by 6 PM on:
+    - Fridays
+    - Saturdays
+    - Last day of the month
+
+    Query Parameters:
+        club: Optional default club number to pre-populate
+    """
+    from flask import request
+
+    # Get optional club parameter
+    club = request.args.get('club', '8135')
+
+    return render_template('dashboard/approved_events.html', club=club)

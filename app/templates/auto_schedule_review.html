@@ -62,6 +62,12 @@
         color: #2c3e50;
     }
 
+    .stat-card .stat-description {
+        font-size: 12px;
+        color: #95a5a6;
+        margin-top: 5px;
+    }
+
     .section {
         background: white;
         border-radius: 8px;
@@ -110,6 +116,25 @@
 
     .event-table tr:hover {
         background: #f8f9fa;
+    }
+
+    .bump-table td {
+        vertical-align: top;
+    }
+
+    .bump-table strong {
+        color: #e67e22;
+        font-size: 1.1em;
+    }
+
+    .text-warning {
+        color: #e67e22;
+        font-style: italic;
+    }
+
+    .text-danger {
+        color: #e74c3c;
+        font-style: italic;
     }
 
     .event-type-badge {
@@ -764,18 +789,22 @@
             <div class="stat-card success">
                 <h3>Newly Scheduled</h3>
                 <div class="value" id="stat-scheduled">-</div>
+                <div class="stat-description">Placed in empty slots</div>
             </div>
             <div class="stat-card warning">
-                <h3>Require Swaps</h3>
+                <h3>Bumped Events</h3>
                 <div class="value" id="stat-swaps">-</div>
+                <div class="stat-description">Replaced less urgent events</div>
             </div>
             <div class="stat-card error">
-                <h3>Failed to Schedule</h3>
+                <h3>Failed</h3>
                 <div class="value" id="stat-failed">-</div>
+                <div class="stat-description">Could not be scheduled</div>
             </div>
             <div class="stat-card">
                 <h3>Total Processed</h3>
                 <div class="value" id="stat-total">-</div>
+                <div class="stat-description">Events in scheduling window</div>
             </div>
         </div>
     </div>
@@ -825,10 +854,10 @@
         </div>
     </div>
 
-    <!-- Events Requiring Swaps Section -->
+    <!-- Events Being Bumped Section -->
     <div class="section">
         <h2>
-            Events Requiring Swaps
+            Events Being Bumped
             <span class="count-badge" id="count-swaps">0</span>
         </h2>
         <div id="swaps-container">
@@ -853,7 +882,7 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-color swap"></div>
-                    <span>Swap (Bumping Another Event)</span>
+                    <span>Bump (Replacing Another Event)</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color existing"></div>
@@ -1090,11 +1119,13 @@
 
         const data = await response.json();
 
-        // Update stats
-        document.getElementById('stat-scheduled').textContent = data.stats.events_scheduled;
-        document.getElementById('stat-swaps').textContent = data.stats.events_requiring_swaps;
-        document.getElementById('stat-failed').textContent = data.stats.events_failed;
-        document.getElementById('stat-total').textContent = data.stats.total_events_processed;
+        // Update stats - use actual list lengths for accurate breakdown
+        document.getElementById('stat-scheduled').textContent = data.newly_scheduled.length;
+        document.getElementById('stat-swaps').textContent = data.swaps.length;
+        document.getElementById('stat-failed').textContent = data.failed.length;
+        // Total = newly scheduled + bumps + failed
+        const totalActual = data.newly_scheduled.length + data.swaps.length + data.failed.length;
+        document.getElementById('stat-total').textContent = totalActual;
 
         // Update count badges
         document.getElementById('count-scheduled').textContent = data.newly_scheduled.length;
@@ -1125,21 +1156,56 @@
             scheduledContainer.innerHTML = html;
         }
 
-        // Render swaps
+        // Render bumps (previously called swaps)
         const swapsContainer = document.getElementById('swaps-container');
         if (data.swaps.length === 0) {
-            swapsContainer.innerHTML = '<div class="empty-state">No swap proposals in this run.</div>';
+            swapsContainer.innerHTML = '<div class="empty-state">No events being bumped in this run.</div>';
         } else {
-            let html = '<table class="event-table">';
-            html += '<thead><tr><th>Event</th><th>Type</th><th>Event Period</th><th>Assigned To</th><th>Scheduled For</th><th>Swap Reason</th><th>Actions</th></tr></thead><tbody>';
+            // Helper function to strip 6-digit number from event name (since we show it separately)
+            function stripEventNumber(name, number) {
+                if (!name || !number) return name;
+                // Remove the 6-digit number and any following dash/hyphen with spaces
+                return name.replace(new RegExp(number + '[-–]?\\s*', 'g'), '').trim();
+            }
+            
+            let html = '<table class="event-table bump-table">';
+            html += '<thead><tr><th>Event Being Bumped</th><th>Replaced By</th><th>New Schedule</th><th>Bumped Event Rescheduled To</th><th>Actions</th></tr></thead><tbody>';
             data.swaps.forEach(event => {
+                // Format the bumped event info (show number once, then name without number)
+                const bumpedNameClean = stripEventNumber(event.bumped_event_name, event.bumped_event_number);
+                const bumpedEventDisplay = event.bumped_event_number 
+                    ? `<strong>${event.bumped_event_number}</strong> - ${bumpedNameClean || 'Unknown'}`
+                    : event.bumped_event_name || 'Unknown';
+                
+                // Format the replacing event info (show number once, then name without number)
+                const replacingNameClean = stripEventNumber(event.event_name, event.replacing_event_number);
+                const replacingEventDisplay = event.replacing_event_number
+                    ? `<strong>${event.replacing_event_number}</strong> - ${replacingNameClean}`
+                    : event.event_name;
+                
+                // Format the new schedule for the replacing event
+                const newScheduleDisplay = `${event.employee_name}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
+                
+                // Format where the bumped event is being rescheduled to
+                let rescheduledToDisplay;
+                if (event.bumped_rescheduled_to) {
+                    if (event.bumped_rescheduled_to.failed) {
+                        // Show failure reason in red
+                        rescheduledToDisplay = `<span class="text-danger">Failed: ${event.bumped_rescheduled_to.failure_reason}</span>`;
+                    } else {
+                        // Show successful reschedule
+                        rescheduledToDisplay = `${event.bumped_rescheduled_to.employee_name}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
+                    }
+                } else {
+                    // This should never happen - scheduler always reschedules or fails
+                    rescheduledToDisplay = '<span class="text-danger">Error: Not processed</span>';
+                }
+                
                 html += `<tr>
-                    <td>${event.event_name}</td>
-                    <td>${getEventTypeBadge(event.event_type)}</td>
-                    <td>${formatEventPeriod(event.start_date, event.end_date)}</td>
-                    <td>${event.employee_name}</td>
-                    <td>${formatDateTime(event.schedule_date, event.schedule_time)}</td>
-                    <td class="swap-indicator">${event.swap_reason || 'Conflict resolution'}</td>
+                    <td>${bumpedEventDisplay}</td>
+                    <td>${replacingEventDisplay}</td>
+                    <td>${newScheduleDisplay}</td>
+                    <td>${rescheduledToDisplay}</td>
                     <td><button class="btn-edit" data-pending-id="${event.id}">Edit</button></td>
                 </tr>`;
             });

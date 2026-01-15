@@ -1,0 +1,994 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - Demo Supplies{% endblock %}
+
+{% block extra_head %}
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- Font Awesome -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+/* Override custom modal styles for Bootstrap modals */
+.modal.fade {
+    opacity: 1;
+    visibility: visible;
+}
+.modal.fade:not(.show) {
+    opacity: 0;
+    visibility: hidden;
+}
+.modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+.modal-backdrop {
+    z-index: 1040;
+}
+.modal {
+    z-index: 1050;
+}
+.modal-dialog {
+    z-index: 1055;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-boxes me-2"></i>Demo Supply Inventory</h2>
+            <p class="text-muted mb-0">Track supplies, set reorder levels, and manage stock</p>
+        </div>
+        <div>
+            <a href="{{ url_for('inventory.orders') }}" class="btn btn-outline-primary me-2">
+                <i class="fas fa-clipboard-list me-1"></i> Orders
+            </a>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplyModal">
+                <i class="fas fa-plus me-1"></i> Add Supply
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="fs-1 fw-bold text-primary">{{ summary.total_items }}</div>
+                    <div class="text-muted">Total Items</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 {% if summary.ok_stock == summary.total_items %}bg-success-subtle{% endif %}">
+                <div class="card-body text-center">
+                    <div class="fs-1 fw-bold text-success">{{ summary.ok_stock }}</div>
+                    <div class="text-muted">In Stock</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 {% if summary.low_stock > 0 %}bg-warning-subtle{% endif %}">
+                <div class="card-body text-center">
+                    <div class="fs-1 fw-bold text-warning">{{ summary.low_stock }}</div>
+                    <div class="text-muted">Low Stock</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 {% if summary.out_of_stock > 0 %}bg-danger-subtle{% endif %}">
+                <div class="card-body text-center">
+                    <div class="fs-1 fw-bold text-danger">{{ summary.out_of_stock }}</div>
+                    <div class="text-muted">Out of Stock</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if low_stock %}
+    <!-- Low Stock Alert -->
+    <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Low Stock Alert:</strong> {{ low_stock|length }} item(s) need reordering.
+        <button type="button" class="btn btn-sm btn-warning ms-3" onclick="createReorderList()">
+            <i class="fas fa-shopping-cart me-1"></i> Create Reorder List
+        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Categories Sidebar -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-folder me-2"></i>Categories</span>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="list-group list-group-flush" id="categoryList">
+                    <a href="#" class="list-group-item list-group-item-action active" data-category-id="">
+                        <i class="fas fa-list me-2"></i> All Items
+                        <span class="badge bg-primary float-end">{{ supplies|length }}</span>
+                    </a>
+                    {% for category in categories %}
+                    <a href="#" class="list-group-item list-group-item-action" data-category-id="{{ category.id }}">
+                        <i class="fas fa-tag me-2"></i> {{ category.name }}
+                        <span class="badge bg-secondary float-end">{{ category.supply_count }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#inventoryCountModal">
+                            <i class="fas fa-clipboard-check me-2"></i>Inventory Count
+                        </button>
+                        <a href="{{ url_for('inventory.orders') }}?status=ordered" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-truck me-2"></i>Pending Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Supply List -->
+        <div class="col-md-9">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-boxes me-2"></i>Supplies</span>
+                    <div class="input-group" style="width: 300px;">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="fas fa-search text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0" id="searchSupplies" placeholder="Search supplies...">
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="suppliesTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Supply</th>
+                                <th class="text-center">Quantity</th>
+                                <th class="text-center">Par Level</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center">Quick Adjust</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suppliesBody">
+                            {% for supply in supplies %}
+                            <tr data-supply-id="{{ supply.id }}" data-category-id="{{ supply.category_id or '' }}">
+                                <td>
+                                    <div class="fw-semibold">{{ supply.name }}</div>
+                                    {% if supply.category_name %}
+                                    <small class="text-muted">{{ supply.category_name }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="quantity-display">{{ supply.current_quantity }}</span>
+                                    <small class="text-muted">{{ supply.unit }}</small>
+                                </td>
+                                <td class="text-center">
+                                    {% if supply.par_level %}
+                                    {{ supply.par_level }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if supply.stock_status == 'out' %}
+                                    <span class="badge bg-danger">Out</span>
+                                    {% elif supply.stock_status == 'critical' %}
+                                    <span class="badge bg-danger">Critical</span>
+                                    {% elif supply.stock_status == 'low' %}
+                                    <span class="badge bg-warning text-dark">Low</span>
+                                    {% else %}
+                                    <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-danger" onclick="adjustQuantity({{ supply.id }}, -1)" title="Use 1">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="adjustQuantity({{ supply.id }}, 1)" title="Add 1">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="showAdjustModal({{ supply.id }}, '{{ supply.name }}')" title="Custom">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="editSupply({{ supply.id }})" title="Edit">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="showHistory({{ supply.id }}, '{{ supply.name }}')" title="History">
+                                            <i class="fas fa-history"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr id="emptyRow">
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="fas fa-box-open fa-3x mb-3"></i>
+                                    <p class="mb-0">No supplies added yet</p>
+                                    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#addSupplyModal">
+                                        <i class="fas fa-plus me-1"></i> Add Your First Supply
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Supply Modal -->
+<div class="modal fade" id="addSupplyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Add Supply</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addSupplyForm">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category_id">
+                            <option value="">-- No Category --</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Initial Quantity</label>
+                            <input type="number" class="form-control" name="current_quantity" value="0" min="0">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Unit</label>
+                            <select class="form-select" name="unit">
+                                <option value="each">Each</option>
+                                <option value="pack">Pack</option>
+                                <option value="case">Case</option>
+                                <option value="box">Box</option>
+                                <option value="roll">Roll</option>
+                                <option value="bag">Bag</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Par Level</label>
+                            <input type="number" class="form-control" name="par_level" min="0" placeholder="Ideal qty">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Reorder Threshold</label>
+                            <input type="number" class="form-control" name="reorder_threshold" min="0" placeholder="Alert when below">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveSupply()">
+                    <i class="fas fa-save me-1"></i> Save Supply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Category Modal -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-folder-plus me-2"></i>Add Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addCategoryForm">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCategory()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Adjust Quantity Modal -->
+<div class="modal fade" id="adjustModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-balance-scale me-2"></i>Adjust Quantity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" id="adjustSupplyName"></p>
+                <input type="hidden" id="adjustSupplyId">
+                <div class="mb-3">
+                    <label class="form-label">Adjustment</label>
+                    <div class="input-group">
+                        <select class="form-select" id="adjustType" style="max-width: 100px;">
+                            <option value="add">Add</option>
+                            <option value="subtract">Use</option>
+                            <option value="set">Set to</option>
+                        </select>
+                        <input type="number" class="form-control" id="adjustAmount" min="0" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason (optional)</label>
+                    <input type="text" class="form-control" id="adjustReason" placeholder="e.g., Event setup">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitAdjustment()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-history me-2"></i>Adjustment History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" id="historySupplyName"></p>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Change</th>
+                                <th>Before → After</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Count Modal -->
+<div class="modal fade" id="inventoryCountModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i>Inventory Count</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Enter actual counts. Only changed items will be updated.</p>
+                <div class="table-responsive" style="max-height: 400px;">
+                    <table class="table table-sm">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Supply</th>
+                                <th class="text-center">System Qty</th>
+                                <th class="text-center" style="width: 120px;">Actual Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="countBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitInventoryCount()">
+                    <i class="fas fa-save me-1"></i> Save Counts
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.quantity-display {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+#categoryList .list-group-item {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#categoryList .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+#categoryList .list-group-item.active {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.table tbody tr {
+    transition: all 0.15s;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table tbody tr.updating {
+    opacity: 0.5;
+}
+
+.card-header {
+    font-weight: 500;
+}
+
+/* Mobile responsive enhancements */
+@media (max-width: 991px) {
+    /* Stack categories sidebar on tablet */
+    .col-md-3, .col-md-9 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Horizontal scrolling category list */
+    #categoryList {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+    }
+
+    #categoryList .list-group-item {
+        flex: 0 0 auto;
+        border-radius: 20px;
+        margin-right: 8px;
+        white-space: nowrap;
+        padding: 8px 16px;
+    }
+
+    /* Quick actions as horizontal buttons */
+    .card-body .d-grid {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .card-body .d-grid .btn {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Header stacking */
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 12px;
+    }
+
+    .d-flex.justify-content-between.align-items-center.mb-4 > div:last-child {
+        display: flex;
+        gap: 8px;
+    }
+
+    .d-flex.justify-content-between.align-items-center.mb-4 > div:last-child .btn {
+        flex: 1;
+    }
+
+    /* Summary cards - 2 columns */
+    .row.mb-4 .col-md-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+        padding: 4px;
+    }
+
+    .row.mb-4 .card-body {
+        padding: 12px 8px;
+    }
+
+    .row.mb-4 .fs-1 {
+        font-size: 1.5rem !important;
+    }
+
+    /* Table responsive */
+    .table th, .table td {
+        padding: 8px 6px;
+        font-size: 0.875rem;
+    }
+
+    /* Hide less important columns on mobile */
+    .table th:nth-child(3),
+    .table td:nth-child(3) {
+        display: none; /* Par Level */
+    }
+
+    /* Compact action buttons */
+    .btn-group-sm .btn {
+        padding: 4px 8px;
+    }
+
+    /* Search bar full width */
+    .input-group[style*="width: 300px"] {
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra small mobile */
+    .container-fluid {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+    }
+
+    /* Summary cards single column */
+    .row.mb-4 .col-md-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+
+    .row.mb-4 .fs-1 {
+        font-size: 1.25rem !important;
+    }
+
+    .row.mb-4 .text-muted {
+        font-size: 0.75rem;
+    }
+
+    /* Hide more columns */
+    .table th:nth-child(4),
+    .table td:nth-child(4) {
+        display: none; /* Status */
+    }
+
+    /* Stack action buttons vertically */
+    .table td:last-child .btn-group {
+        flex-direction: column;
+    }
+
+    .table td:last-child .btn-group .btn {
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }
+
+    /* Modal forms */
+    .modal-dialog {
+        margin: 8px;
+    }
+
+    .modal-body .row > div {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* Touch-friendly adjustments */
+@media (hover: none) and (pointer: coarse) {
+    .btn-group-sm .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .list-group-item {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+    }
+
+    .form-control, .form-select {
+        min-height: 44px;
+        font-size: 16px;
+    }
+}
+</style>
+
+<script>
+// CSRF token for API calls
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ||
+                  document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+
+// Category filter
+document.querySelectorAll('#categoryList a').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('#categoryList a').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+
+        const categoryId = this.dataset.categoryId;
+        filterByCategory(categoryId);
+    });
+});
+
+function filterByCategory(categoryId) {
+    document.querySelectorAll('#suppliesBody tr').forEach(row => {
+        if (!categoryId || row.dataset.categoryId === categoryId) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Search filter
+document.getElementById('searchSupplies').addEventListener('input', function() {
+    const search = this.value.toLowerCase();
+    document.querySelectorAll('#suppliesBody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+    });
+});
+
+// Adjust quantity
+async function adjustQuantity(supplyId, amount) {
+    const row = document.querySelector(`tr[data-supply-id="${supplyId}"]`);
+    row.classList.add('updating');
+
+    try {
+        const response = await fetch(`/inventory/api/supplies/${supplyId}/adjust`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ amount: amount })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            updateSupplyRow(data.supply);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to adjust quantity');
+    } finally {
+        row.classList.remove('updating');
+    }
+}
+
+function updateSupplyRow(supply) {
+    const row = document.querySelector(`tr[data-supply-id="${supply.id}"]`);
+    if (!row) return;
+
+    row.querySelector('.quantity-display').textContent = supply.current_quantity;
+
+    const statusCell = row.cells[3];
+    let badge = '';
+    if (supply.stock_status === 'out') {
+        badge = '<span class="badge bg-danger">Out</span>';
+    } else if (supply.stock_status === 'critical') {
+        badge = '<span class="badge bg-danger">Critical</span>';
+    } else if (supply.stock_status === 'low') {
+        badge = '<span class="badge bg-warning text-dark">Low</span>';
+    } else {
+        badge = '<span class="badge bg-success">OK</span>';
+    }
+    statusCell.innerHTML = badge;
+}
+
+// Adjust modal
+function showAdjustModal(supplyId, supplyName) {
+    document.getElementById('adjustSupplyId').value = supplyId;
+    document.getElementById('adjustSupplyName').textContent = supplyName;
+    document.getElementById('adjustAmount').value = '';
+    document.getElementById('adjustReason').value = '';
+    new bootstrap.Modal(document.getElementById('adjustModal')).show();
+}
+
+async function submitAdjustment() {
+    const supplyId = document.getElementById('adjustSupplyId').value;
+    const type = document.getElementById('adjustType').value;
+    let amount = parseInt(document.getElementById('adjustAmount').value);
+    const reason = document.getElementById('adjustReason').value;
+
+    if (isNaN(amount) || amount < 0) {
+        alert('Please enter a valid amount');
+        return;
+    }
+
+    if (type === 'subtract') amount = -amount;
+
+    const endpoint = type === 'set'
+        ? `/inventory/api/supplies/${supplyId}/set-quantity`
+        : `/inventory/api/supplies/${supplyId}/adjust`;
+
+    const body = type === 'set'
+        ? { quantity: amount, reason: reason }
+        : { amount: amount, reason: reason };
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            updateSupplyRow(data.supply);
+            bootstrap.Modal.getInstance(document.getElementById('adjustModal')).hide();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to adjust quantity');
+    }
+}
+
+// Save new supply
+async function saveSupply() {
+    const form = document.getElementById('addSupplyForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    // Convert numeric fields and remove empty optional fields
+    data.current_quantity = data.current_quantity ? parseInt(data.current_quantity) : 0;
+
+    if (data.par_level && data.par_level.trim() !== '') {
+        data.par_level = parseInt(data.par_level);
+    } else {
+        delete data.par_level;
+    }
+
+    if (data.reorder_threshold && data.reorder_threshold.trim() !== '') {
+        data.reorder_threshold = parseInt(data.reorder_threshold);
+    } else {
+        delete data.reorder_threshold;
+    }
+
+    if (data.category_id && data.category_id.trim() !== '') {
+        data.category_id = parseInt(data.category_id);
+    } else {
+        delete data.category_id;
+    }
+
+    // Remove empty notes
+    if (!data.notes || data.notes.trim() === '') {
+        delete data.notes;
+    }
+
+    try {
+        const response = await fetch('/inventory/api/supplies', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to save supply');
+    }
+}
+
+// Save new category
+async function saveCategory() {
+    const form = document.getElementById('addCategoryForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const response = await fetch('/inventory/api/categories', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to save category');
+    }
+}
+
+// Show history
+async function showHistory(supplyId, supplyName) {
+    document.getElementById('historySupplyName').textContent = supplyName;
+
+    try {
+        const response = await fetch(`/inventory/api/supplies/${supplyId}/history`);
+        const data = await response.json();
+
+        const tbody = document.getElementById('historyBody');
+        tbody.innerHTML = '';
+
+        if (data.history.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No history</td></tr>';
+        } else {
+            data.history.forEach(h => {
+                const date = new Date(h.created_at).toLocaleString();
+                const typeClass = h.adjustment_type === 'add' ? 'text-success' : (h.adjustment_type === 'subtract' ? 'text-danger' : 'text-info');
+                const sign = h.adjustment_type === 'add' ? '+' : (h.adjustment_type === 'subtract' ? '-' : '');
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${date}</td>
+                        <td><span class="${typeClass}">${h.adjustment_type}</span></td>
+                        <td class="${typeClass}">${sign}${h.quantity_change}</td>
+                        <td>${h.quantity_before} → ${h.quantity_after}</td>
+                        <td>${h.reason || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        new bootstrap.Modal(document.getElementById('historyModal')).show();
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load history');
+    }
+}
+
+// Edit supply
+function editSupply(supplyId) {
+    // For now, redirect to detail view or show edit modal
+    // Could be expanded to full edit modal
+    alert('Edit functionality - coming soon');
+}
+
+// Inventory count
+document.getElementById('inventoryCountModal').addEventListener('show.bs.modal', async function() {
+    try {
+        const response = await fetch('/inventory/api/supplies');
+        const data = await response.json();
+
+        const tbody = document.getElementById('countBody');
+        tbody.innerHTML = '';
+
+        data.supplies.forEach(s => {
+            tbody.innerHTML += `
+                <tr data-supply-id="${s.id}" data-current="${s.current_quantity}">
+                    <td>${s.name}</td>
+                    <td class="text-center">${s.current_quantity} ${s.unit}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm text-center count-input"
+                               value="${s.current_quantity}" min="0">
+                    </td>
+                </tr>
+            `;
+        });
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
+
+async function submitInventoryCount() {
+    const rows = document.querySelectorAll('#countBody tr');
+    const updates = [];
+
+    rows.forEach(row => {
+        const supplyId = row.dataset.supplyId;
+        const current = parseInt(row.dataset.current);
+        const newValue = parseInt(row.querySelector('.count-input').value);
+
+        if (newValue !== current) {
+            updates.push({ supplyId, quantity: newValue });
+        }
+    });
+
+    if (updates.length === 0) {
+        alert('No changes to save');
+        return;
+    }
+
+    try {
+        for (const update of updates) {
+            await fetch(`/inventory/api/supplies/${update.supplyId}/set-quantity`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    quantity: update.quantity,
+                    reason: 'Inventory count'
+                })
+            });
+        }
+
+        location.reload();
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to save counts');
+    }
+}
+
+// Create reorder list
+async function createReorderList() {
+    try {
+        const response = await fetch('/inventory/api/orders/create-reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            window.location.href = `/inventory/order/${data.order.id}`;
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to create reorder list');
+    }
+}
+</script>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

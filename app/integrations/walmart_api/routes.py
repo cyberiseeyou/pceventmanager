@@ -54,6 +54,7 @@ from .session_manager import session_manager
 from .authenticator import EDRAuthenticator
 from app.integrations.edr.pdf_generator import EDRPDFGenerator
 from app.routes.auth import require_authentication, get_current_user
+from app.services.approved_events_service import ApprovedEventsService
 
 # Initialize Blueprint and logger
 walmart_bp = Blueprint('walmart_api', __name__, url_prefix='/api/walmart')
@@ -71,6 +72,120 @@ def get_models():
         'Employee': current_app.config['Employee'],
         'db': current_app.extensions['sqlalchemy']
     }
+
+
+def _fetch_approved_events_with_session(session, auth_token, club_numbers, start_date, end_date, event_types=None):
+    """
+    Fetch approved events using an existing authenticated session.
+
+    This allows sharing the global authenticator from printing.py.
+
+    Args:
+        session: requests.Session with authenticated cookies
+        auth_token: Authentication token from Event Management
+        club_numbers: List of club/store numbers (uses first one)
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+        event_types: Optional list of event type IDs
+
+    Returns:
+        List of approved events or None if request fails
+    """
+    if not auth_token:
+        logger.error("No auth token - cannot fetch approved events")
+        return None
+
+    if not session:
+        logger.error("No session object - cannot fetch approved events")
+        return None
+
+    # Convert club numbers to list of integers for API
+    club_list = []
+    for club in club_numbers:
+        try:
+            club_list.append(int(club))
+        except (ValueError, TypeError):
+            pass
+
+    if not club_list:
+        logger.error("No valid club numbers provided")
+        return None
+
+    base_url = "https://retaillink2.wal-mart.com/EventManagement"
+    # Use the daily-schedule-report API (returns event-level data, not item-level)
+    url = f"{base_url}/api/store-event/daily-schedule-report"
+
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'no-cache',
+        'content-type': 'application/json',
+        'origin': 'https://retaillink2.wal-mart.com',
+        'pragma': 'no-cache',
+        'priority': 'u=1, i',
+        'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        'referer': f"{base_url}/daily-scheduled-report"
+    }
+
+    # Default to all event types if not specified
+    if event_types is None:
+        event_types = [1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57]
+
+    # Payload format for daily-schedule-report API
+    payload = {
+        "startDate": start_date,
+        "endDate": end_date,
+        "eventType": event_types,
+        "clubList": club_list,
+        "walmartWeekYear": ""
+    }
+
+    logger.info(f"Fetching events for clubs {club_list} from {start_date} to {end_date}")
+    logger.info(f"Auth token present: {bool(auth_token)}, Session cookies: {len(session.cookies)}")
+
+    try:
+        response = session.post(url, headers=headers, json=payload, timeout=60)
+        logger.info(f"Walmart API response status: {response.status_code}")
+
+        if response.status_code != 200:
+            logger.error(f"Walmart API error: status={response.status_code}, body={response.text[:500]}")
+            return None
+
+        all_events = response.json()
+        logger.info(f"Walmart API returned {len(all_events)} total events")
+
+        # Log first event's keys for debugging
+        if all_events:
+            logger.info(f"Event fields available: {list(all_events[0].keys())}")
+
+        # Get status from either 'status' or 'eventStatus' field
+        def get_status(event):
+            return (event.get('status') or event.get('eventStatus') or '').strip().upper()
+
+        # Log unique statuses for debugging
+        statuses = set(get_status(event) for event in all_events)
+        logger.info(f"Event statuses found: {statuses}")
+
+        # Filter for APPROVED status only
+        approved_events = [
+            event for event in all_events
+            if get_status(event) == 'APPROVED'
+        ]
+
+        logger.info(f"Found {len(approved_events)} APPROVED (LIA) events out of {len(all_events)} total")
+        return approved_events
+
+    except Exception as e:
+        logger.error(f"Failed to fetch approved events: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return None
 
 
 @walmart_bp.route('/health', methods=['GET'])
@@ -95,12 +210,21 @@ def health_check():
         }
     """
     try:
-        # Check if Walmart credentials are configured
-        has_credentials = all([
-            current_app.config.get('WALMART_EDR_USERNAME'),
-            current_app.config.get('WALMART_EDR_PASSWORD'),
-            current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
-        ])
+        # Check if Walmart credentials are configured (from SystemSetting or .env)
+        SystemSetting = current_app.config.get('SystemSetting')
+
+        if SystemSetting:
+            has_credentials = all([
+                SystemSetting.get_setting('edr_username') or current_app.config.get('WALMART_EDR_USERNAME'),
+                SystemSetting.get_setting('edr_password') or current_app.config.get('WALMART_EDR_PASSWORD'),
+                SystemSetting.get_setting('edr_mfa_credential_id') or current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+            ])
+        else:
+            has_credentials = all([
+                current_app.config.get('WALMART_EDR_USERNAME'),
+                current_app.config.get('WALMART_EDR_PASSWORD'),
+                current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+            ])
 
         return jsonify({
             'status': 'healthy',
@@ -170,10 +294,18 @@ def request_mfa():
 
         user_id = user.get('username', user.get('userId', 'unknown'))
 
-        # Get Walmart credentials from app configuration
-        username = current_app.config.get('WALMART_EDR_USERNAME')
-        password = current_app.config.get('WALMART_EDR_PASSWORD')
-        mfa_credential_id = current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+        # Get Walmart credentials from SystemSetting database (with .env fallback)
+        SystemSetting = current_app.config.get('SystemSetting')
+
+        if SystemSetting:
+            username = SystemSetting.get_setting('edr_username') or current_app.config.get('WALMART_EDR_USERNAME')
+            password = SystemSetting.get_setting('edr_password') or current_app.config.get('WALMART_EDR_PASSWORD')
+            mfa_credential_id = SystemSetting.get_setting('edr_mfa_credential_id') or current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+        else:
+            # Fallback to .env config if SystemSetting not available
+            username = current_app.config.get('WALMART_EDR_USERNAME')
+            password = current_app.config.get('WALMART_EDR_PASSWORD')
+            mfa_credential_id = current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
 
         if not all([username, password, mfa_credential_id]):
             logger.error("Walmart credentials not configured")
@@ -806,6 +938,473 @@ def batch_download_edrs():
             'success': False,
             'message': f'Batch download failed: {str(e)}'
         }), 500
+
+
+@walmart_bp.route('/events/approved', methods=['GET'])
+@require_authentication()
+def get_approved_events():
+    """
+    Get APPROVED events from Walmart merged with local database status.
+
+    Retrieves events with APPROVED status from Walmart's Daily Scheduled Report
+    and merges them with local database status to show:
+    - Which events need scheduling
+    - Which events need API submission
+    - Which events need scan-out in Walmart
+
+    Business Rule: APPROVED events must be scanned out by 6 PM on:
+    - Fridays
+    - Saturdays
+    - Last day of the month
+
+    Required Authentication:
+        Flask-Login session (logged in user)
+        Active authenticated Walmart session
+
+    Query Parameters:
+        club (required): Club/store number (e.g., 8135)
+        start_date (optional): Start date YYYY-MM-DD (default: 1st of previous month)
+        end_date (optional): End date YYYY-MM-DD (default: today)
+        include_core_events (optional): Set to 'true' to include matching Core events from local DB
+
+    Returns:
+        JSON response with:
+        - success: Boolean
+        - events: List of merged event data
+        - summary: Counts by local status
+        - scanout_warning: Warning info for Fri/Sat/EOM
+        - date_range: The date range used for the query
+
+    Status Codes:
+        200: Events retrieved successfully
+        400: Missing club parameter or no authenticated session
+        500: Retrieval failed
+
+    Example Response:
+        {
+            "success": true,
+            "events": [
+                {
+                    "event_id": 615801,
+                    "event_name": "01.04-Smucker-Grape&StrawberryUncrustables",
+                    "scheduled_date": "2026-01-04",
+                    "walmart_status": "APPROVED",
+                    "local_status": "scheduled",
+                    "local_status_label": "Scheduled",
+                    "local_status_icon": "✅",
+                    "required_action": "Submit to API",
+                    "assigned_employee_name": "John Doe",
+                    "schedule_datetime": "2026-01-04T10:30:00",
+                    "api_submitted_at": null
+                }
+            ],
+            "summary": {
+                "total": 15,
+                "not_in_db": 2,
+                "unscheduled": 3,
+                "scheduled": 5,
+                "api_submitted": 5,
+                "api_failed": 0
+            },
+            "scanout_warning": {
+                "show_warning": true,
+                "reason": "Friday",
+                "urgency": "warning",
+                "deadline": "6:00 PM"
+            },
+            "date_range": {
+                "start_date": "2025-12-01",
+                "end_date": "2026-01-04"
+            }
+        }
+    """
+    try:
+        # Get current user
+        user = get_current_user()
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'User not authenticated'
+            }), 401
+
+        user_id = user.get('username', user.get('userId', 'unknown'))
+
+        # Get club parameter (required)
+        club = request.args.get('club')
+        if not club:
+            return jsonify({
+                'success': False,
+                'message': 'Club parameter is required'
+            }), 400
+
+        # Get date range (optional, defaults to previous month start to today)
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        if not start_date or not end_date:
+            default_start, default_end = ApprovedEventsService.get_date_range_for_approved_events()
+            start_date = start_date or default_start
+            end_date = end_date or default_end
+
+        # Try multiple authentication sources in order of preference
+        walmart_events = None
+        auth_source = None
+
+        # 1. First try session-based authenticator (from this page's MFA flow)
+        user_session = session_manager.get_session(str(user_id))
+        if user_session and user_session.is_authenticated:
+            user_session.refresh()
+            authenticator = user_session.authenticator
+            if authenticator and authenticator.auth_token:
+                logger.info(f"Using session-based authenticator for user {user_id}")
+                auth_source = "session"
+                walmart_events = _fetch_approved_events_with_session(
+                    authenticator.session,
+                    authenticator.auth_token,
+                    club_numbers=[club],
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+        # 2. If session auth didn't work, try global authenticator from printing module
+        if walmart_events is None:
+            try:
+                from app.routes.printing import edr_authenticator as global_authenticator
+                if global_authenticator and global_authenticator.auth_token:
+                    logger.info(f"Using global EDR authenticator for user {user_id}")
+                    auth_source = "global"
+                    walmart_events = _fetch_approved_events_with_session(
+                        global_authenticator.session,
+                        global_authenticator.auth_token,
+                        club_numbers=[club],
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+            except ImportError:
+                logger.warning("Printing module not available for global authenticator")
+
+        # 3. If still no events, return appropriate error
+        if walmart_events is None:
+            if not user_session or not user_session.is_authenticated:
+                return jsonify({
+                    'success': False,
+                    'message': 'Not authenticated. Please click "Request MFA Code" to authenticate.'
+                }), 400
+            else:
+                logger.error(f"Failed to fetch events for user {user_id}, auth_source={auth_source}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Failed to fetch events from Walmart. The session may have expired. Please try authenticating again.'
+                }), 500
+
+        # Get models for database queries
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
+        db = models['db']
+
+        # Try to get PendingSchedule model (may not exist in all setups)
+        PendingSchedule = current_app.config.get('PendingSchedule')
+
+        # Merge with local database status
+        service = ApprovedEventsService(db, Event, Schedule, Employee, PendingSchedule)
+        merged_events = service.merge_with_local_status(walmart_events)
+
+        # Optionally enrich with Core event data from local database
+        include_core_events = request.args.get('include_core_events', '').lower() == 'true'
+        if include_core_events:
+            merged_events = service.enrich_with_core_event_data(merged_events)
+
+        # Get summary counts
+        summary = service.get_summary_counts(merged_events)
+
+        # Check for scan-out warning
+        scanout_warning = ApprovedEventsService.should_show_scanout_warning()
+
+        logger.info(f"Returning {len(merged_events)} approved events for club {club}")
+
+        return jsonify({
+            'success': True,
+            'events': merged_events,
+            'summary': summary,
+            'scanout_warning': scanout_warning,
+            'date_range': {
+                'start_date': start_date,
+                'end_date': end_date
+            },
+            'session_info': session_manager.get_session_info(str(user_id))
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Failed to get approved events: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get approved events: {str(e)}'
+        }), 500
+
+
+@walmart_bp.route('/events/roll', methods=['POST'])
+@require_authentication()
+def roll_event():
+    """
+    Roll an event to a new scheduled date in Walmart.
+
+    This endpoint allows rolling events directly from the application by making
+    an authenticated API call to Walmart's Event Management system.
+
+    Required Authentication:
+        - Flask-Login session (logged in user)
+        - Active Walmart session (via MFA or global authenticator)
+
+    Request Body (JSON):
+        - event_id (str): Walmart event ID (required)
+        - scheduled_date (str): Target date in YYYY-MM-DD format (required)
+        - club_id (str): Club/store number (optional, defaults to '8135')
+
+    Returns:
+        JSON response with:
+        - success: Boolean indicating if roll was successful
+        - message: Success or error message
+        - event_id: The event ID that was rolled
+        - scheduled_date: The date it was rolled to
+
+    Status Codes:
+        200: Event rolled successfully
+        400: Missing required parameters or not authenticated
+        500: Roll operation failed
+
+    Example Request:
+        POST /api/walmart/events/roll
+        {
+            "event_id": "619688",
+            "scheduled_date": "2026-01-11",
+            "club_id": "8135"
+        }
+
+    Example Response:
+        {
+            "success": true,
+            "message": "Event 619688 rolled to 2026-01-11",
+            "event_id": "619688",
+            "scheduled_date": "2026-01-11"
+        }
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Authentication required'
+            }), 401
+
+        user_id = user.get('username', user.get('userId', 'unknown'))
+
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Request body required'
+            }), 400
+
+        event_id = data.get('event_id')
+        scheduled_date = data.get('scheduled_date')
+        club_id = data.get('club_id', '8135')
+
+        if not event_id or not scheduled_date:
+            return jsonify({
+                'success': False,
+                'message': 'event_id and scheduled_date are required'
+            }), 400
+
+        # Get Walmart user ID from config (required for API call)
+        try:
+            from app.models import SystemSetting
+            walmart_user_id = SystemSetting.get_setting('walmart_user_id')
+        except:
+            walmart_user_id = None
+
+        if not walmart_user_id:
+            walmart_user_id = current_app.config.get('WALMART_USER_ID')
+
+        if not walmart_user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Walmart user ID not configured. Please set walmart_user_id in system settings.'
+            }), 500
+
+        # Try to get authenticated session
+        authenticator = None
+
+        # 1. Try session-based authenticator
+        user_session = session_manager.get_session(str(user_id))
+        if user_session and user_session.is_authenticated:
+            user_session.refresh()
+            authenticator = user_session.authenticator
+
+        # 2. Try global authenticator from printing module
+        if not authenticator or not authenticator.auth_token:
+            try:
+                from app.routes.printing import edr_authenticator as global_authenticator
+                if global_authenticator and global_authenticator.auth_token:
+                    authenticator = global_authenticator
+            except ImportError:
+                pass
+
+        if not authenticator or not authenticator.auth_token:
+            return jsonify({
+                'success': False,
+                'message': 'Not authenticated with Walmart. Please authenticate first.'
+            }), 400
+
+        # Call roll_event method
+        result = authenticator.roll_event(event_id, scheduled_date, club_id, walmart_user_id)
+
+        if result['success']:
+            logger.info(f"User {user_id} rolled event {event_id} to {scheduled_date}")
+            return jsonify({
+                'success': True,
+                'message': f'Event {event_id} rolled to {scheduled_date}',
+                'event_id': event_id,
+                'scheduled_date': scheduled_date
+            }), 200
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to roll event {event_id}: {error_msg}")
+            return jsonify({
+                'success': False,
+                'message': f'Failed to roll event: {error_msg}'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Roll event error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+
+
+@walmart_bp.route('/events/search-core/<event_id>', methods=['GET'])
+@require_authentication()
+def search_core_events(event_id: str):
+    """
+    Search for Core events in local database by event ID.
+
+    Searches the local Event table for events where project_name contains
+    the given event ID. Prioritizes Core events over Supervisor events.
+
+    This endpoint mirrors the search behavior of the all events page -
+    when searching by event ID, it finds matching events in the local database.
+
+    Required Authentication:
+        Flask-Login session (logged in user)
+
+    URL Parameters:
+        event_id (str): The 6-digit event ID to search for
+
+    Returns:
+        JSON response with:
+        - success: Boolean
+        - event_id: The searched event ID
+        - matches: List of matching local events with details
+        - count: Number of matches found
+
+    Status Codes:
+        200: Search completed successfully
+        400: Invalid event ID format
+
+    Example Response:
+        {
+            "success": true,
+            "event_id": "615801",
+            "matches": [
+                {
+                    "event_id": 12345,
+                    "project_name": "615801 Core Event Name",
+                    "event_type": "Core",
+                    "is_scheduled": true,
+                    "assigned_employee_name": "John Doe",
+                    "schedule_datetime": "2026-01-04T10:30:00"
+                },
+                {
+                    "event_id": 12346,
+                    "project_name": "615801 Supervisor Event Name",
+                    "event_type": "Supervisor",
+                    "is_scheduled": true,
+                    "assigned_employee_name": "Jane Smith",
+                    "schedule_datetime": "2026-01-04T10:30:00"
+                }
+            ],
+            "count": 2
+        }
+    """
+    try:
+        # Validate event ID format
+        if not event_id or not event_id.isdigit():
+            return jsonify({
+                'success': False,
+                'message': 'Event ID must be numeric'
+            }), 400
+
+        # Get models for database queries
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
+        db = models['db']
+
+        # Try to get PendingSchedule model (may not exist in all setups)
+        PendingSchedule = current_app.config.get('PendingSchedule')
+
+        # Search for matching Core events
+        service = ApprovedEventsService(db, Event, Schedule, Employee, PendingSchedule)
+        matches = service.find_core_events_by_event_id(int(event_id))
+
+        logger.info(f"Core event search for {event_id}: found {len(matches)} matches")
+
+        return jsonify({
+            'success': True,
+            'event_id': event_id,
+            'matches': matches,
+            'count': len(matches)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Core event search failed for {event_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Search failed: {str(e)}'
+        }), 500
+
+
+@walmart_bp.route('/events/scanout-status', methods=['GET'])
+def get_scanout_status():
+    """
+    Get scan-out warning status without requiring authentication.
+
+    This endpoint can be called without a Walmart session to check if
+    today is a scan-out deadline day (Friday, Saturday, or last day of month).
+
+    Returns:
+        JSON response with scan-out warning info
+
+    Status Codes:
+        200: Status retrieved successfully
+
+    Example Response:
+        {
+            "show_warning": true,
+            "reason": "Friday",
+            "urgency": "warning",
+            "deadline": "6:00 PM",
+            "is_friday": true,
+            "is_saturday": false,
+            "is_last_day_of_month": false,
+            "current_hour": 14
+        }
+    """
+    return jsonify(ApprovedEventsService.should_show_scanout_warning()), 200
 
 
 # Error handlers for the blueprint

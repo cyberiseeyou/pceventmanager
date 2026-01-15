@@ -731,7 +731,7 @@
         <div class="event-card-header">
             <h3 class="event-title">{{ event.project_name }}</h3>
             <div style="display: flex; align-items: center; gap: var(--spacing-xs); flex-wrap: wrap;">
-                <span class="event-type-badge event-type-{{ event.event_type.lower() }}">
+                <span class="event-type-badge event-type-{{ event.event_type.lower().replace(' ', '-') }}">
                     {{ event.event_type }}
                 </span>
                 <span class="event-condition status-{{ event.condition|lower }}">

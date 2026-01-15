@@ -761,6 +761,52 @@ tbody tr:last-child td {
     font-size: 1.1rem;
 }
 
+/* Lock/Unlock Button Styles */
+.btn-lock {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 2px solid var(--pc-gray-medium);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: var(--font-weight-bold);
+}
+
+.btn-lock:hover {
+    background-color: var(--pc-light-blue);
+    border-color: var(--primary-color);
+}
+
+.btn-lock.btn-unlocked {
+    background-color: var(--bg-secondary);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.btn-lock.btn-unlocked:hover {
+    background-color: rgba(40, 167, 69, 0.1);
+    border-color: var(--success-color);
+}
+
+.btn-lock.btn-locked {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+.btn-lock.btn-locked:hover {
+    background-color: rgba(220, 53, 69, 0.2);
+    border-color: var(--error-color);
+}
+
+.btn-lock .icon {
+    font-size: 1.1rem;
+}
+
 /* Form Elements */
 .form-select,
 .form-input,
@@ -824,6 +870,21 @@ input:focus {
     color: var(--text-primary);
 }
 
+.event-type-juicer-production {
+    background: linear-gradient(135deg, #ffc107, #ff9800);
+    color: var(--text-primary);
+}
+
+.event-type-juicer-survey {
+    background: linear-gradient(135deg, #ffeb3b, #fdd835);
+    color: var(--text-primary);
+}
+
+.event-type-juicer-deep-clean {
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: white;
+}
+
 /* Flash Messages */
 .flash-messages {
     margin-bottom: var(--spacing-lg);
@@ -859,23 +920,23 @@ input:focus {
     .container {
         padding: 1rem;
     }
-    
+
     h1 {
         font-size: 2rem;
     }
-    
+
     table {
         font-size: 0.875rem;
     }
-    
+
     th, td {
         padding: 0.75rem 0.5rem;
     }
-    
+
     .form-actions {
         flex-direction: column;
     }
-    
+
     .btn {
         text-align: center;
     }
@@ -926,6 +987,146 @@ input:focus {
     .dropdown-item {
         padding: var(--spacing-xs) var(--spacing-sm);
         font-size: var(--font-size-small);
+    }
+}
+
+/* Small mobile breakpoint (480px) */
+@media (max-width: 480px) {
+    :root {
+        --font-size-h1: 1.75rem;
+        --font-size-h2: 1.375rem;
+        --font-size-h3: 1.125rem;
+        --font-size-body: 0.9375rem;
+        --font-size-small: 0.8125rem;
+        --spacing-lg: 1.5rem;
+        --spacing-xl: 2rem;
+    }
+
+    .container {
+        padding: 0.75rem;
+    }
+
+    h1 {
+        font-size: 1.75rem;
+        margin-bottom: var(--spacing-md);
+    }
+
+    h2 {
+        font-size: 1.375rem;
+    }
+
+    h3 {
+        font-size: 1.125rem;
+    }
+
+    .main-content {
+        padding: var(--spacing-sm);
+    }
+
+    /* Compact table styling */
+    table {
+        font-size: 0.8125rem;
+    }
+
+    th, td {
+        padding: 0.5rem 0.375rem;
+    }
+
+    th {
+        font-size: 0.75rem;
+    }
+
+    /* Button sizing */
+    .btn {
+        padding: 10px 14px;
+        font-size: 0.875rem;
+    }
+
+    .btn-sm {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+
+    /* Form element spacing */
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        font-size: 0.875rem;
+        margin-bottom: 0.375rem;
+    }
+
+    /* Event type badges */
+    .event-type-badge {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.6875rem;
+    }
+
+    /* Header compact */
+    .header-title {
+        font-size: 1.1rem;
+    }
+
+    .header-logo {
+        height: 35px;
+    }
+
+    /* Alerts compact */
+    .alert {
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* Extra small mobile breakpoint (374px and below) */
+@media (max-width: 374px) {
+    :root {
+        --font-size-h1: 1.5rem;
+        --font-size-h2: 1.25rem;
+        --font-size-h3: 1rem;
+        --font-size-body: 0.875rem;
+        --font-size-small: 0.75rem;
+    }
+
+    .container {
+        padding: 0.5rem;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    .main-content {
+        padding: var(--spacing-xs);
+    }
+
+    table {
+        font-size: 0.75rem;
+    }
+
+    th, td {
+        padding: 0.375rem 0.25rem;
+    }
+
+    .btn {
+        padding: 8px 12px;
+        font-size: 0.8125rem;
+    }
+
+    .header-title {
+        font-size: 1rem;
+    }
+
+    .header-logo {
+        height: 30px;
+        padding: 3px 5px;
+    }
+
+    /* Stack form rows */
+    .form-row {
+        flex-direction: column;
+        gap: 0.75rem;
     }
 }
 
@@ -1044,6 +1245,19 @@ input:focus {
 
 .event-type-juicer {
     background-color: #28a745;
+}
+
+.event-type-juicer-production {
+    background-color: #28a745;
+}
+
+.event-type-juicer-survey {
+    background-color: #fdd835;
+    color: var(--text-primary);
+}
+
+.event-type-juicer-deep-clean {
+    background-color: #f57c00;
 }
 
 .event-type-supervisor {
@@ -1601,4 +1815,5 @@ input:focus {
     border-left-width: 6px;
   }
 }
+
 

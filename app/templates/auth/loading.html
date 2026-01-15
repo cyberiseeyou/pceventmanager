@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Updating Database - Product Connections Scheduler</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='img/favicon-48x48.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loading.css') }}">
+    <meta name="description" content="Updating local database - Product Connections Scheduler">
+</head>
+
+<body class="login-body loading-body">
+    <!-- Loading Container -->
+    <div class="login-container loading-container">
+        <!-- Header Section -->
+        <div class="login-header loading-header">
+            <div class="login-logo-container">
+                <img src="{{ url_for('static', filename='img/PC-Logo_Primary_Full-Color-1024x251.png') }}"
+                    alt="Product Connections" class="login-logo">
+            </div>
+            <h1 class="login-title loading-title">Please wait while updating local database</h1>
+            <p class="login-subtitle loading-subtitle">This may take a minute. Please do not close this window.</p>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="loading-progress-section">
+            <!-- Progress Bar -->
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-bar-shimmer"></div>
+                </div>
+            </div>
+            <div class="progress-percentage" id="progressPercentage">0%</div>
+
+            <!-- Current Step Display -->
+            <div class="current-step-container">
+                <div class="current-step-text" id="currentStepText">Initializing...</div>
+                <div class="current-step-detail" id="currentStepDetail"></div>
+            </div>
+
+            <!-- Error Container -->
+            <div id="errorContainer" class="loading-error-container" style="display: none;">
+                <div class="error-message">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    <span id="errorMessage">An error occurred during database refresh.</span>
+                </div>
+                <button type="button" id="retryButton" class="retry-button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10" />
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                    Retry
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="loading-footer">
+            <p>Syncing with Crossmark MVRetail...</p>
+        </div>
+    </div>
+
+    <!-- Background shapes (matching login page) -->
+    <div class="bg-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <!-- Configuration Data -->
+    <script>
+        window.LOADING_CONFIG = {
+            taskId: '{{ task_id }}',
+            redirectUrl: '{{ redirect_url }}'
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/loading-progress.js') }}"></script>
+</body>
+
+</html>

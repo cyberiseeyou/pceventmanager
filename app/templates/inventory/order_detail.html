@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}Order {{ order.order_number or 'Draft' }}{% endblock %}
+
+{% block extra_head %}
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- Font Awesome -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+/* Override custom modal styles for Bootstrap modals */
+.modal.fade {
+    opacity: 1;
+    visibility: visible;
+}
+.modal.fade:not(.show) {
+    opacity: 0;
+    visibility: hidden;
+}
+.modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+.modal-backdrop {
+    z-index: 1040;
+}
+.modal {
+    z-index: 1050;
+}
+.modal-dialog {
+    z-index: 1055;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Inventory</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('inventory.orders') }}">Orders</a></li>
+                    <li class="breadcrumb-item active">{{ order.order_number or 'Draft' }}</li>
+                </ol>
+            </nav>
+            <h2>
+                <i class="fas fa-clipboard-list me-2"></i>
+                {% if order.order_number %}
+                Order {{ order.order_number }}
+                {% else %}
+                Draft Order
+                {% endif %}
+                {% if order.status == 'draft' %}
+                <span class="badge bg-secondary fs-6 ms-2">Draft</span>
+                {% elif order.status == 'ordered' %}
+                <span class="badge bg-primary fs-6 ms-2">Ordered</span>
+                {% elif order.status == 'partial' %}
+                <span class="badge bg-warning text-dark fs-6 ms-2">Partial</span>
+                {% elif order.status == 'received' %}
+                <span class="badge bg-success fs-6 ms-2">Received</span>
+                {% elif order.status == 'cancelled' %}
+                <span class="badge bg-danger fs-6 ms-2">Cancelled</span>
+                {% endif %}
+            </h2>
+        </div>
+        <div>
+            {% if order.status == 'draft' %}
+            <button class="btn btn-success me-2" onclick="submitOrder()" {% if order.total_items == 0 %}disabled{% endif %}>
+                <i class="fas fa-paper-plane me-1"></i> Submit Order
+            </button>
+            <button class="btn btn-outline-danger" onclick="deleteOrder()">
+                <i class="fas fa-trash me-1"></i> Delete
+            </button>
+            {% elif order.status in ['ordered', 'partial'] %}
+            <button class="btn btn-success" onclick="receiveAll()">
+                <i class="fas fa-check-double me-1"></i> Receive All
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Order Details -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <i class="fas fa-info-circle me-2"></i>Order Details
+                </div>
+                <div class="card-body">
+                    {% if order.vendor %}
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Vendor</label>
+                        <span class="fw-semibold">{{ order.vendor }}</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Status</label>
+                        <span class="fw-semibold">{{ order.status|capitalize }}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Created</label>
+                        <span>{{ order.created_at[:10] }}</span>
+                    </div>
+
+                    {% if order.ordered_at %}
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Ordered</label>
+                        <span>{{ order.ordered_at[:10] }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if order.expected_date %}
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Expected Delivery</label>
+                        <span>{{ order.expected_date }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if order.received_at %}
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Received</label>
+                        <span>{{ order.received_at[:10] }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if order.notes %}
+                    <div class="mb-3">
+                        <label class="text-muted small d-block">Notes</label>
+                        <span>{{ order.notes }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Progress -->
+                    {% if order.status in ['ordered', 'partial', 'received'] %}
+                    <hr>
+                    <div class="mb-2">
+                        <label class="text-muted small d-block">Receiving Progress</label>
+                        <div class="progress" style="height: 8px;">
+                            {% set progress = (order.received_items / order.total_items * 100) if order.total_items > 0 else 0 %}
+                            <div class="progress-bar bg-success" style="width: {{ progress }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ order.received_items }} of {{ order.total_items }} items received</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if order.status == 'draft' %}
+            <!-- Add Items Panel -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="fas fa-plus me-2"></i>Add Items
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Supply</label>
+                        <select class="form-select" id="addSupplySelect">
+                            <option value="">Select a supply...</option>
+                            {% for supply in supplies %}
+                            <option value="{{ supply.id }}" data-unit="{{ supply.unit }}" data-needed="{{ supply.quantity_needed }}">
+                                {{ supply.name }}
+                                {% if supply.is_low_stock %}(Low: {{ supply.current_quantity }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantity</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="addQuantity" min="1" value="1">
+                            <span class="input-group-text" id="addUnit">each</span>
+                        </div>
+                        <small class="text-muted" id="addSuggestion"></small>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="addItem()">
+                        <i class="fas fa-plus me-1"></i> Add to Order
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Order Items -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-list me-2"></i>Order Items</span>
+                    <span class="badge bg-primary">{{ order.total_items }} items</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Supply</th>
+                                <th class="text-center">Ordered</th>
+                                {% if order.status in ['ordered', 'partial', 'received'] %}
+                                <th class="text-center">Received</th>
+                                {% endif %}
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderItemsBody">
+                            {% if order.items %}
+                            {% for item in order.items %}
+                            <tr data-item-id="{{ item.id }}">
+                                <td>
+                                    <span class="{% if item.is_received %}text-decoration-line-through text-muted{% endif %}">
+                                        {{ item.supply_name }}
+                                    </span>
+                                    {% if item.notes %}
+                                    <br><small class="text-muted">{{ item.notes }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {{ item.quantity_ordered }} {{ item.supply_unit }}
+                                </td>
+                                {% if order.status in ['ordered', 'partial', 'received'] %}
+                                <td class="text-center">
+                                    {% if item.is_received %}
+                                    {{ item.quantity_received }} {{ item.supply_unit }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td class="text-center">
+                                    {% if item.is_received %}
+                                    <span class="badge bg-success">Received</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if order.status == 'draft' %}
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removeItem({{ item.id }})">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    {% elif order.status in ['ordered', 'partial'] and not item.is_received %}
+                                    <button class="btn btn-sm btn-success" onclick="receiveItem({{ item.id }})">
+                                        <i class="fas fa-check me-1"></i> Receive
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr id="emptyRow">
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                                    <p class="mb-0">No items added yet</p>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ||
+                  document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+const orderId = {{ order.id }};
+
+// Update unit label when supply changes
+document.getElementById('addSupplySelect')?.addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    const unit = selected.dataset.unit || 'each';
+    const needed = parseInt(selected.dataset.needed) || 0;
+
+    document.getElementById('addUnit').textContent = unit;
+
+    const suggestion = document.getElementById('addSuggestion');
+    if (needed > 0) {
+        suggestion.textContent = `Suggested: ${needed} to reach par level`;
+        document.getElementById('addQuantity').value = needed;
+    } else {
+        suggestion.textContent = '';
+    }
+});
+
+async function addItem() {
+    const supplyId = document.getElementById('addSupplySelect').value;
+    const quantity = parseInt(document.getElementById('addQuantity').value);
+
+    if (!supplyId) {
+        alert('Please select a supply');
+        return;
+    }
+
+    if (!quantity || quantity < 1) {
+        alert('Please enter a valid quantity');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}/items`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ supply_id: parseInt(supplyId), quantity: quantity })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to add item');
+    }
+}
+
+async function removeItem(itemId) {
+    if (!confirm('Remove this item from the order?')) return;
+
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}/items/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to remove item');
+    }
+}
+
+async function submitOrder() {
+    if (!confirm('Submit this order? You won\'t be able to add or remove items after submitting.')) return;
+
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}/submit`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to submit order');
+    }
+}
+
+async function deleteOrder() {
+    if (!confirm('Delete this draft order? This cannot be undone.')) return;
+
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            window.location.href = '{{ url_for("inventory.orders") }}';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to delete order');
+    }
+}
+
+async function receiveItem(itemId) {
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}/receive-item/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ auto_adjust: true })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to receive item');
+    }
+}
+
+async function receiveAll() {
+    if (!confirm('Mark all items as received? This will update inventory quantities.')) return;
+
+    try {
+        const response = await fetch(`/inventory/api/orders/${orderId}/receive-all`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ auto_adjust: true })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to receive items');
+    }
+}
+</script>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

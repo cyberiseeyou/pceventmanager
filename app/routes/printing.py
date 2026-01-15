@@ -39,6 +39,12 @@ except ImportError as e:
     EDRPDFGenerator = None
     DailyItemsListPDFGenerator = None
 
+# Import CancelledEventError for handling cancelled events during paperwork generation
+try:
+    from app.services.daily_paperwork_generator import CancelledEventError
+except ImportError:
+    CancelledEventError = None
+
 # Import constants
 try:
     from app.constants import WALMART_WEEKS
@@ -732,6 +738,16 @@ def get_complete_paperwork():
             as_attachment=False,
             download_name=filename
         )
+
+    except CancelledEventError as cancelled_err:
+        # Handle cancelled events - return specific error with details for user
+        logger.error(f"Paperwork generation blocked: {len(cancelled_err.cancelled_events)} cancelled event(s)")
+        return jsonify({
+            'success': False,
+            'error_type': 'cancelled_events',
+            'error': cancelled_err.message,
+            'cancelled_events': cancelled_err.cancelled_events
+        }), 409  # 409 Conflict - resource state prevents the operation
 
     except Exception as e:
         logger.error(f"Failed to generate complete paperwork: {str(e)}")

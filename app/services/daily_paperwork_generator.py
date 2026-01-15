@@ -19,6 +19,39 @@ from typing import List, Dict, Optional, Any
 # Set up logging (avoid print() which can cause BrokenPipeError in WSGI servers)
 logger = logging.getLogger(__name__)
 
+
+class CancelledEventError(Exception):
+    """
+    Raised when one or more scheduled events have been cancelled in the EDR system.
+
+    This exception is used to block paperwork generation when cancelled events are detected,
+    requiring the user to unschedule the affected events first.
+    """
+    def __init__(self, cancelled_events: list):
+        self.cancelled_events = cancelled_events
+        event_names = [f"• {e['event_number']}: {e['event_name']} (Employee: {e['employee_name']})"
+                       for e in cancelled_events]
+        self.message = (
+            f"Cannot generate paperwork: {len(cancelled_events)} event(s) have been CANCELLED "
+            f"in the Walmart EDR system:\n\n" + "\n".join(event_names) + "\n\n"
+            f"Please unschedule these events and either:\n"
+            f"1. Leave the assigned employee unscheduled (notify them of the change), or\n"
+            f"2. Reschedule them to a different event."
+        )
+        super().__init__(self.message)
+
+
+# Status codes that indicate a cancelled event
+CANCELLED_STATUS_CODES = {'5', 'CANC', 'cancelled', 'Cancelled', 'CANCELLED'}
+
+
+def is_cancelled_status(status_code: str) -> bool:
+    """Check if a status code indicates a cancelled event."""
+    if not status_code or status_code == 'N/A':
+        return False
+    return str(status_code).upper() in {'5', 'CANC', 'CANCELLED'}
+
+
 # Import EDR components
 from app.integrations.edr import EDRReportGenerator
 
@@ -90,6 +123,50 @@ class DailyPaperworkGenerator:
         if not self.edr_generator:
             return False
         return self.edr_generator.complete_authentication_with_mfa_code(mfa_code)
+
+    def _get_edr_status_description(self, status_code: str) -> str:
+        """
+        Convert EDR status code to human-readable description.
+
+        Args:
+            status_code: The status code from EDR API (e.g., '5', 'CANC', 'ACTV')
+
+        Returns:
+            Human-readable status description
+        """
+        if not status_code or status_code == 'N/A':
+            return 'Unknown'
+
+        # Status code mappings (same as in pdf_generator_base.py)
+        status_map = {
+            '1': 'Pending',
+            '2': 'Active/Scheduled',
+            '3': 'In Progress',
+            '4': 'Completed',
+            '5': 'Cancelled',
+            '6': 'On Hold',
+            '7': 'Under Review',
+            '8': 'Approved',
+            '9': 'Rejected',
+            '10': 'Suspended',
+            'ACTV': 'Active',
+            'COMP': 'Completed',
+            'CANC': 'Cancelled',
+            'PEND': 'Pending',
+            'HOLD': 'On Hold',
+            'PREP': 'In Preparation',
+            'SCHED': 'Scheduled',
+            'INPR': 'In Progress',
+            'SUSP': 'Suspended',
+            'CLOS': 'Closed',
+            'APPR': 'Approved',
+            'REJE': 'Rejected',
+            'SUBM': 'Submitted',
+            'REVI': 'Under Review'
+        }
+
+        code_str = str(status_code).upper()
+        return status_map.get(code_str, f'Status {status_code}')
 
     def generate_barcode_image(self, item_number: str) -> Optional[str]:
         """
@@ -660,31 +737,78 @@ class DailyPaperworkGenerator:
         schedule_pdf = self.generate_daily_schedule_pdf(target_date, schedules)
         all_pdfs.append(schedule_pdf)
 
-        # 2. Fetch all EDR data using get_edr_report() for each event
+        # 2. First check for cancelled events from database (synced from Crossmark API)
+        # This catches cancelled events BEFORE we try to fetch EDR data
+        cancelled_events = []  # Track cancelled events to block generation
+        from app.utils.event_helpers import extract_event_number
+
+        for schedule, event, employee in schedules:
+            # Check if event is cancelled in the Crossmark system (condition field)
+            if event.condition and event.condition.lower() == 'canceled':
+                event_num = extract_event_number(event.project_name)
+                logger.warning(f" EVENT {event_num} is CANCELLED (from Crossmark API)! Cannot include in paperwork.")
+                cancelled_events.append({
+                    'event_number': event_num or str(event.project_ref_num),
+                    'event_name': event.project_name,
+                    'employee_name': employee.name if employee else 'Unassigned',
+                    'edr_status': 'Canceled (Crossmark)'
+                })
+
+        # If cancelled events found from database, block immediately
+        if cancelled_events:
+            logger.error(f" BLOCKING PAPERWORK GENERATION: {len(cancelled_events)} cancelled event(s) found in database")
+            raise CancelledEventError(cancelled_events)
+
+        # 3. Fetch all EDR data using get_edr_report() for each event
         logger.info(" Fetching EDR data using direct API calls...")
         edr_data_cache = {}  # Cache: event_number -> edr_data
         edr_data_list = []
 
         if self.edr_generator:
-            from app.utils.event_helpers import extract_event_number
 
             # Check if we need to authenticate
             if not self.edr_generator.auth_token:
                 logger.error(" Not authenticated - cannot fetch EDR data")
                 logger.info(" Please authenticate via the printing interface first")
             else:
-                # Fetch EDR data for each Core event directly
+                # Fetch EDR data for ALL scheduled events to check for cancelled status
+                # This ensures we catch cancelled events regardless of event type
                 for schedule, event, employee in schedules:
-                    if event.event_type == 'Core':
-                        event_num = extract_event_number(event.project_name)
-                        if event_num:
-                            logger.info(f" Fetching EDR for event {event_num} via get_edr_report()...")
+                    event_num = extract_event_number(event.project_name)
+                    if event_num:
+                        logger.info(f" Fetching EDR for event {event_num} ({event.event_type}) via get_edr_report()...")
 
-                            try:
-                                # Call get_edr_report() directly for this event
-                                edr_data = self.edr_generator.get_edr_report(event_num)
+                        try:
+                            # Call get_edr_report() directly for this event
+                            edr_data = self.edr_generator.get_edr_report(event_num)
 
-                                if edr_data:
+                            if edr_data:
+                                # Check EDR status and update the Event model
+                                edr_status_code = edr_data.get('demoStatusCode', 'N/A')
+                                edr_status_desc = self._get_edr_status_description(edr_status_code)
+
+                                # Update event's EDR status in database
+                                try:
+                                    event.edr_status = edr_status_desc
+                                    event.edr_status_updated = datetime.now()
+                                    self.db.commit()
+                                    logger.info(f" Updated EDR status for event {event_num}: {edr_status_desc}")
+                                except Exception as db_err:
+                                    logger.warning(f" Could not update EDR status in database: {db_err}")
+
+                                # Check if event is CANCELLED - block paperwork generation
+                                if is_cancelled_status(edr_status_code):
+                                    logger.warning(f" EVENT {event_num} IS CANCELLED! Cannot include in paperwork.")
+                                    cancelled_events.append({
+                                        'event_number': event_num,
+                                        'event_name': event.project_name,
+                                        'employee_name': employee.name if employee else 'Unassigned',
+                                        'edr_status': edr_status_desc
+                                    })
+                                    continue  # Don't add to cache for PDF generation
+
+                                # Only add Core events to the EDR cache for PDF generation
+                                if event.event_type == 'Core':
                                     edr_data_cache[event_num] = edr_data
                                     edr_data_list.append(edr_data)
 
@@ -696,10 +820,15 @@ class DailyPaperworkGenerator:
                                         logger.info(f" Event {event_num} fetched - {len(item_details)} items, first GTIN: {gtin}")
                                     else:
                                         logger.info(f" Event {event_num} fetched - no items")
-                                else:
-                                    logger.warning(f" Event {event_num} returned no data")
-                            except Exception as e:
-                                logger.error(f" Failed to fetch event {event_num}: {e}")
+                            else:
+                                logger.warning(f" Event {event_num} returned no data")
+                        except Exception as e:
+                            logger.error(f" Failed to fetch event {event_num}: {e}")
+
+        # CRITICAL: If any events are cancelled, stop generation and notify user
+        if cancelled_events:
+            logger.error(f" BLOCKING PAPERWORK GENERATION: {len(cancelled_events)} cancelled event(s) found")
+            raise CancelledEventError(cancelled_events)
 
         # 3. Generate Daily Item Numbers from EDR data
         logger.info(" Generating daily item numbers...")

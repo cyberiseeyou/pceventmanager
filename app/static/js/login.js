@@ -220,160 +220,17 @@ class LoginManager {
         // Clear form for security
         this.passwordInput.value = '';
 
-        // Check if database refresh is needed
-        if (result.refresh_database) {
-            // Show initial success briefly, then transition to database refresh
-            this.showSuccess('Login successful!');
-            // Add a small delay to ensure session cookie is properly set
-            setTimeout(() => {
-                this.showRefreshProgress('Clearing existing data and fetching latest events from Crossmark API...');
-                this.triggerDatabaseRefresh(() => {
-                    // Redirect after refresh completes
-                    if (result.redirect) {
-                        window.location.href = result.redirect;
-                    } else {
-                        window.location.href = '/';
-                    }
-                });
-            }, 800); // 800ms delay - show success briefly then start refresh
-        } else {
-            // No database refresh needed
-            this.showSuccess('Login successful! Redirecting to dashboard...');
-            // Redirect after short delay
-            setTimeout(() => {
-                if (result.redirect) {
-                    window.location.href = result.redirect;
-                } else {
-                    window.location.href = '/';
-                }
-            }, 1500);
-        }
-    }
+        // Show success and redirect to loading page
+        this.showSuccess('Login successful! Redirecting...');
 
-    getCsrfToken() {
-        // Extract CSRF token from cookie
-        const cookieValue = document.cookie
-            .split('; ')
-            .find(row => row.startsWith('csrf_token='))
-            ?.split('=')[1];
-        return cookieValue || '';
-    }
-
-    async triggerDatabaseRefresh(onComplete) {
-        try {
-            // Progress indicator already shown by caller
-            const response = await fetch('/api/refresh/database', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': this.getCsrfToken()
-                },
-                credentials: 'same-origin'
-            });
-
-            // Check if we got redirected to login (authentication failed)
-            if (response.redirected && response.url.includes('/login')) {
-                throw new Error('Authentication failed - session not established yet');
-            }
-
-            const result = await response.json();
-
-            if (result.success) {
-                const stats = result.stats;
-                let message = `Database completely refreshed! Cleared ${stats.cleared} old events, added ${stats.created} fresh events from ${stats.total_fetched} fetched.`;
-
-                // Show warning if there are Staffed events without schedules
-                if (result.warning) {
-                    message += `\n\n⚠️ ${result.warning}`;
-                }
-
-                this.showRefreshProgress(message);
-
-                // Complete after showing final message (longer delay if there's a warning)
-                const delay = result.warning ? 4000 : 2000;
-                setTimeout(() => {
-                    onComplete();
-                }, delay);
+        // Redirect after short delay
+        setTimeout(() => {
+            if (result.redirect) {
+                window.location.href = result.redirect;
             } else {
-                this.showError(`Database refresh failed: ${result.message}`);
-                // Still redirect on failure after delay
-                setTimeout(() => {
-                    onComplete();
-                }, 3000);
+                window.location.href = '/';
             }
-        } catch (error) {
-            // If authentication failed, try once more after additional delay
-            if (error.message.includes('Authentication failed')) {
-                this.showRefreshProgress('Session not ready yet, retrying database refresh...');
-                setTimeout(async () => {
-                    try {
-                        const retryResponse = await fetch('/api/refresh/database', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'X-CSRF-TOKEN': this.getCsrfToken()
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        if (retryResponse.redirected && retryResponse.url.includes('/login')) {
-                            throw new Error('Authentication still failed after retry');
-                        }
-
-                        const retryResult = await retryResponse.json();
-                        if (retryResult.success) {
-                            const stats = retryResult.stats;
-                            this.showRefreshProgress(
-                                `Database completely refreshed! Cleared ${stats.cleared} old events, added ${stats.created} fresh events from ${stats.total_fetched} fetched.`
-                            );
-                            setTimeout(() => {
-                                onComplete();
-                            }, 2000);
-                        } else {
-                            this.showError(`Database refresh failed: ${retryResult.message}`);
-                            setTimeout(() => {
-                                onComplete();
-                            }, 3000);
-                        }
-                    } catch (retryError) {
-                        this.showError('Database refresh failed after retry. Proceeding to dashboard...');
-                        setTimeout(() => {
-                            onComplete();
-                        }, 3000);
-                    }
-                }, 1500); // Additional 1.5 second delay for retry
-            } else {
-                this.showError('Database refresh failed. Proceeding to dashboard...');
-                // Still redirect on error after delay
-                setTimeout(() => {
-                    onComplete();
-                }, 3000);
-            }
-        }
-    }
-
-    showRefreshProgress(message) {
-        this.errorContainer.style.display = 'none';
-        this.successContainer.style.display = 'block';
-
-        // Clear the success container completely
-        this.successContainer.innerHTML = '';
-
-        // Create refresh progress element
-        const progressIndicator = document.createElement('div');
-        progressIndicator.className = 'success-message';
-        progressIndicator.innerHTML = `
-            <div class="progress-spinner"></div>
-            <span class="progress-text">${message}</span>
-        `;
-
-        // Add the progress indicator
-        this.successContainer.appendChild(progressIndicator);
-
-        // Announce to screen readers
-        this.successContainer.setAttribute('role', 'alert');
+        }, 500);
     }
 
     handleLoginError(result) {
@@ -475,55 +332,6 @@ style.textContent = `
     .login-form.submitting .password-toggle {
         pointer-events: none;
         opacity: 0.5;
-    }
-
-    /* Database refresh progress styles */
-    .refresh-progress {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        margin-top: var(--spacing-xs);
-        padding: var(--spacing-sm);
-        background: rgba(46, 125, 50, 0.1);
-        border-radius: var(--border-radius-sm);
-        border-left: 4px solid var(--success-color);
-    }
-
-    .progress-spinner {
-        width: 20px;
-        height: 20px;
-        border: 2px solid rgba(46, 125, 50, 0.3);
-        border-top: 2px solid var(--success-color);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    .progress-text {
-        font-size: var(--font-size-small);
-        font-weight: 500;
-        color: var(--success-color);
-        line-height: 1.4;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* Enhanced success message container for refresh */
-    .success-container .refresh-progress {
-        animation: slideInDown 0.3s ease-out;
-    }
-
-    @keyframes slideInDown {
-        from {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
     }
 `;
 document.head.appendChild(style);

@@ -135,6 +135,16 @@ def create_app(config_name=None):
     app.config['UserSession'] = UserSession
     app.config['CompanyHoliday'] = CompanyHoliday
     app.config['IgnoredValidationIssue'] = models.get('IgnoredValidationIssue')
+    app.config['ShiftBlockSetting'] = models.get('ShiftBlockSetting')
+    app.config['Note'] = models.get('Note')
+    app.config['RecurringReminder'] = models.get('RecurringReminder')
+    app.config['SupplyCategory'] = models.get('SupplyCategory')
+    app.config['Supply'] = models.get('Supply')
+    app.config['SupplyAdjustment'] = models.get('SupplyAdjustment')
+    app.config['PurchaseOrder'] = models.get('PurchaseOrder')
+    app.config['OrderItem'] = models.get('OrderItem')
+    app.config['InventoryReminder'] = models.get('InventoryReminder')
+    app.config['LockedDay'] = models.get('LockedDay')
 
     # Register blueprints
     register_blueprints(app, db, models)
@@ -225,6 +235,18 @@ def register_blueprints(app, db, models):
     from app.routes.api_company_holidays import api_company_holidays_bp
     app.register_blueprint(api_company_holidays_bp)
 
+    from app.routes.api_shift_blocks import api_shift_blocks_bp
+    app.register_blueprint(api_shift_blocks_bp)
+
+    from app.routes.api_notes import api_notes_bp
+    app.register_blueprint(api_notes_bp)
+
+    from app.routes.inventory import inventory_bp
+    app.register_blueprint(inventory_bp)
+
+    from app.routes.api_locked_days import api_locked_days_bp
+    app.register_blueprint(api_locked_days_bp)
+
     # Configure CSRF exemptions for specific routes (after blueprint registration)
     if 'auth.login' in app.view_functions:
         csrf.exempt(app.view_functions['auth.login'])
@@ -235,6 +257,10 @@ def register_blueprints(app, db, models):
     # Session heartbeat doesn't need CSRF - it only updates last_activity timestamp
     if 'auth.session_heartbeat' in app.view_functions:
         csrf.exempt(app.view_functions['auth.session_heartbeat'])
+
+    # Loading page refresh start - protected by authentication, CSRF not needed
+    if 'auth.start_loading_refresh' in app.view_functions:
+        csrf.exempt(app.view_functions['auth.start_loading_refresh'])
 
 
 def setup_background_tasks(app):

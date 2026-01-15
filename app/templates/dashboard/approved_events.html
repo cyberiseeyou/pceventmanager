@@ -1,0 +1,1629 @@
+{% extends "base.html" %}
+
+{% block title %}Left in Approved - Event Management{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    crossorigin="anonymous" />
+<style>
+    .dashboard-header {
+        background: linear-gradient(135deg, #0071ce 0%, #004c91 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+    }
+
+    .dashboard-header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .dashboard-header .subtitle {
+        opacity: 0.9;
+        font-size: 14px;
+    }
+
+    /* Scan-out Warning Banner */
+    .scanout-warning {
+        padding: 16px 24px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .scanout-warning.normal {
+        background: #f0f9ff;
+        border: 1px solid #0ea5e9;
+        color: #0369a1;
+    }
+
+    .scanout-warning.warning {
+        background: #fffbeb;
+        border: 1px solid #f59e0b;
+        color: #b45309;
+    }
+
+    .scanout-warning.urgent {
+        background: #fef2f2;
+        border: 2px solid #dc2626;
+        color: #dc2626;
+        animation: pulse-border 2s infinite;
+    }
+
+    @keyframes pulse-border {
+        0%, 100% { border-color: #dc2626; }
+        50% { border-color: #fca5a5; }
+    }
+
+    .scanout-warning .icon {
+        font-size: 24px;
+    }
+
+    .scanout-warning .message {
+        flex: 1;
+    }
+
+    .scanout-warning .message strong {
+        display: block;
+        font-size: 16px;
+    }
+
+    .scanout-warning .deadline {
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    /* Auth Section */
+    .auth-section {
+        background: white;
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+    }
+
+    .auth-section h2 {
+        margin: 0 0 8px 0;
+        color: #1f2937;
+    }
+
+    .auth-section p {
+        color: #6b7280;
+        margin-bottom: 24px;
+    }
+
+    .auth-section .btn {
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: #0071ce;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #005ea6;
+    }
+
+    .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+        margin-left: 8px;
+    }
+
+    .mfa-input {
+        padding: 12px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 18px;
+        letter-spacing: 4px;
+        text-align: center;
+        width: 160px;
+        margin-right: 12px;
+    }
+
+    .mfa-input:focus {
+        outline: none;
+        border-color: #0071ce;
+    }
+
+    /* Summary Stats */
+    .stats-row {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 20px 24px;
+        border-radius: 12px;
+        flex: 1;
+        min-width: 140px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #e5e7eb;
+    }
+
+    .stat-card .count {
+        font-size: 32px;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .stat-card .label {
+        color: #6b7280;
+        font-size: 13px;
+        margin-top: 4px;
+    }
+
+    .stat-card.total { border-left-color: #0071ce; }
+    .stat-card.total .count { color: #0071ce; }
+
+    .stat-card.not-in-db { border-left-color: #6b7280; }
+    .stat-card.not-in-db .count { color: #6b7280; }
+
+    .stat-card.unscheduled { border-left-color: #dc2626; }
+    .stat-card.unscheduled .count { color: #dc2626; }
+
+    .stat-card.scheduled { border-left-color: #f59e0b; }
+    .stat-card.scheduled .count { color: #f59e0b; }
+
+    .stat-card.submitted { border-left-color: #10b981; }
+    .stat-card.submitted .count { color: #10b981; }
+
+    /* Action Cards */
+    .stat-card.action-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left-width: 6px;
+    }
+
+    .stat-card.action-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card.action-card.active {
+        box-shadow: 0 0 0 3px rgba(0, 113, 206, 0.3);
+    }
+
+    .stat-card .action-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+        opacity: 0.8;
+    }
+
+    .stat-card .action-hint {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+
+    .stat-card.scan-out { border-left-color: #10b981; }
+    .stat-card.scan-out .count { color: #10b981; }
+    .stat-card.scan-out .action-icon { color: #10b981; }
+
+    .stat-card.needs-rolling-scheduled { border-left-color: #f59e0b; }
+    .stat-card.needs-rolling-scheduled .count { color: #f59e0b; }
+    .stat-card.needs-rolling-scheduled .action-icon { color: #f59e0b; }
+
+    .stat-card.needs-rolling-unscheduled { border-left-color: #dc2626; }
+    .stat-card.needs-rolling-unscheduled .count { color: #dc2626; }
+    .stat-card.needs-rolling-unscheduled .action-icon { color: #dc2626; }
+
+    /* Deadline Countdown */
+    .deadline-countdown {
+        background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+        color: white;
+        padding: 20px 32px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        text-align: center;
+    }
+
+    .deadline-countdown .countdown-inner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+    }
+
+    .deadline-countdown .countdown-label {
+        font-size: 14px;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .deadline-countdown .countdown-timer {
+        font-size: 48px;
+        font-weight: 700;
+        font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        letter-spacing: 2px;
+    }
+
+    .deadline-countdown .countdown-remaining {
+        font-size: 16px;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 16px;
+        border-radius: 20px;
+    }
+
+    .deadline-countdown.warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    .deadline-countdown.urgent {
+        background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
+        animation: pulse-countdown 1s infinite;
+    }
+
+    @keyframes pulse-countdown {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.85; }
+    }
+
+    /* Filter Controls */
+    .filter-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .filter-row label {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .filter-row select, .filter-row input {
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .filter-btn {
+        padding: 8px 16px;
+        background: #0071ce;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .filter-btn:hover {
+        background: #005ea6;
+    }
+
+    /* Events Table */
+    .events-table-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .events-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .events-table th {
+        background: #f9fafb;
+        padding: 12px 16px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .events-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 14px;
+    }
+
+    .events-table tr:hover {
+        background: #f9fafb;
+    }
+
+    .events-table .event-id {
+        font-family: monospace;
+        color: #6b7280;
+    }
+
+    .events-table .event-name {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Status Badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .status-badge.not-in-db {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .status-badge.unscheduled {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .status-badge.scheduled {
+        background: #fffbeb;
+        color: #b45309;
+    }
+
+    .status-badge.api-submitted {
+        background: #ecfdf5;
+        color: #059669;
+    }
+
+    .status-badge.api-failed {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    /* Action Buttons */
+    .action-btn {
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        text-decoration: none;
+    }
+
+    .action-btn.primary {
+        background: #0071ce;
+        color: white;
+    }
+
+    .action-btn.secondary {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    /* Loading State */
+    .loading-overlay {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px;
+        color: #6b7280;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #0071ce;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 48px;
+        color: #6b7280;
+    }
+
+    .empty-state .icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    /* Session Info */
+    .session-info {
+        background: #f0f9ff;
+        border: 1px solid #0ea5e9;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+    }
+
+    .session-info .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .session-info .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+    }
+
+    .session-info .logout-btn {
+        color: #dc2626;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    /* Action Panels */
+    .action-panel {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+
+    .panel-header {
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .panel-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .panel-header.scan-out-header { background: #ecfdf5; color: #059669; }
+    .panel-header.roll-scheduled-header { background: #fffbeb; color: #b45309; }
+    .panel-header.roll-unscheduled-header { background: #fef2f2; color: #dc2626; }
+
+    .panel-count {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .panel-instruction {
+        padding: 12px 24px;
+        background: #f9fafb;
+        font-size: 13px;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .panel-events {
+        padding: 16px;
+    }
+
+    /* Event Card in Panel */
+    .event-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .event-card:hover {
+        background: #f3f4f6;
+    }
+
+    .event-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .event-card .event-id {
+        font-family: monospace;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        min-width: 70px;
+    }
+
+    .event-card .event-name {
+        flex: 1;
+        font-size: 14px;
+        color: #1f2937;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .event-card .event-date {
+        font-size: 13px;
+        color: #6b7280;
+        min-width: 100px;
+    }
+
+    .event-card .roll-to-date {
+        background: #fef3c7;
+        color: #92400e;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        min-width: 120px;
+        text-align: center;
+    }
+
+    .event-card .roll-to-date.green {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .event-card .assigned-to {
+        font-size: 13px;
+        color: #059669;
+        min-width: 120px;
+    }
+
+    .event-card .action-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+    }
+
+    /* View Toggle */
+    .table-header {
+        padding: 12px 16px;
+        background: #f9fafb;
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .view-toggle {
+        padding: 6px 12px;
+        border: 1px solid #d1d5db;
+        background: white;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .view-toggle.active {
+        background: #0071ce;
+        color: white;
+        border-color: #0071ce;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stats-row {
+            flex-direction: column;
+        }
+
+        .stat-card {
+            min-width: 100%;
+        }
+
+        .events-table-container {
+            overflow-x: auto;
+        }
+
+        .deadline-countdown .countdown-inner {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .deadline-countdown .countdown-timer {
+            font-size: 36px;
+        }
+
+        .event-card {
+            flex-wrap: wrap;
+        }
+
+        .event-card .event-name {
+            width: 100%;
+            order: 1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin: 0 auto; padding: 24px;">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <h1>
+            <img src="https://corporate.walmart.com/content/dam/corporate/images/global/social-share-og/Walmart_Spark.png"
+                 alt="Walmart" style="height: 32px; filter: brightness(0) invert(1);">
+            Left in Approved Events
+        </h1>
+        <div class="subtitle">
+            APPROVED events must be scanned out by 6:00 PM on Fridays, Saturdays, and the last day of each month
+        </div>
+    </div>
+
+    <!-- Scan-out Warning Banner (dynamically shown) -->
+    <div id="scanoutWarning" class="scanout-warning" style="display: none;">
+        <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="message">
+            <strong id="warningReason">Today is a scan-out deadline day</strong>
+            <span id="warningDetail">All APPROVED events must be scanned out in Walmart</span>
+        </div>
+        <div class="deadline">
+            Deadline: <span id="warningDeadline">6:00 PM</span>
+        </div>
+    </div>
+
+    <!-- Auth Section (shown when not authenticated) -->
+    <div id="authSection" class="auth-section">
+        <h2><i class="fas fa-lock"></i> Walmart Authentication Required</h2>
+        <p>Connect to Walmart Retail Link to view APPROVED events and track their status (scheduling, rolling, scan-out)</p>
+        <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 14px; color: #0369a1;">
+            <strong>What you'll see after authenticating:</strong>
+            <ul style="margin: 8px 0 0 0; padding-left: 20px; text-align: left;">
+                <li>All events with APPROVED status from Walmart</li>
+                <li>Which events need scheduling in your system</li>
+                <li>Which events need rolling to their scheduled date</li>
+                <li>Which events are ready for scan-out</li>
+            </ul>
+        </div>
+
+        <div id="authStep1">
+            <button class="btn btn-primary" onclick="requestMFA()">
+                <i class="fas fa-key"></i> Request MFA Code
+            </button>
+        </div>
+
+        <div id="authStep2" style="display: none;">
+            <p style="color: #059669; margin-bottom: 16px;">
+                <i class="fas fa-check-circle"></i> MFA code sent to your phone
+            </p>
+            <input type="text" id="mfaCode" class="mfa-input" placeholder="000000" maxlength="6" pattern="[0-9]*">
+            <button class="btn btn-primary" onclick="submitMFA()">
+                <i class="fas fa-sign-in-alt"></i> Authenticate
+            </button>
+            <button class="btn btn-secondary" onclick="requestMFA()">
+                <i class="fas fa-redo"></i> Resend Code
+            </button>
+        </div>
+
+        <div id="authError" style="display: none; color: #dc2626; margin-top: 16px;">
+            <i class="fas fa-exclamation-circle"></i> <span id="authErrorMsg"></span>
+        </div>
+    </div>
+
+    <!-- Session Info (shown when authenticated) -->
+    <div id="sessionInfo" class="session-info" style="display: none;">
+        <div class="status">
+            <span class="status-dot"></span>
+            <span>Connected to Walmart Retail Link</span>
+            <span style="color: #6b7280; margin-left: 8px;">
+                Session expires in <span id="sessionTimeRemaining">10:00</span>
+            </span>
+        </div>
+        <button class="logout-btn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Disconnect
+        </button>
+    </div>
+
+    <!-- Filter Controls -->
+    <div id="filterSection" class="filter-row" style="display: none;">
+        <label for="clubSelect">Club:</label>
+        <input type="text" id="clubInput" value="{{ club or '8135' }}" style="width: 80px;">
+
+        <label for="statusFilter">Filter Status:</label>
+        <select id="statusFilter">
+            <option value="all">All Statuses</option>
+            <option value="not_in_db">Not in DB</option>
+            <option value="unscheduled">Unscheduled</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="api_submitted">API Submitted</option>
+        </select>
+
+        <button class="filter-btn" onclick="fetchApprovedEvents()">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Deadline Countdown (shown on Fri/Sat/EOM) -->
+    <div id="deadlineCountdown" class="deadline-countdown" style="display: none;">
+        <div class="countdown-inner">
+            <div class="countdown-label">Time Until 6 PM Deadline</div>
+            <div class="countdown-timer" id="countdownTimer">--:--:--</div>
+            <div class="countdown-remaining" id="countdownRemaining">-- events remaining</div>
+        </div>
+    </div>
+
+    <!-- Action-Based Summary Stats -->
+    <div id="statsSection" class="stats-row" style="display: none;">
+        <div class="stat-card action-card scan-out" onclick="filterByAction('scan_out')">
+            <div class="action-icon"><i class="fas fa-barcode"></i></div>
+            <div class="count" id="statScanOut">0</div>
+            <div class="label">Needs Scan-Out</div>
+            <div class="action-hint">Scan with handheld machine</div>
+        </div>
+        <div class="stat-card action-card needs-rolling-scheduled" onclick="filterByAction('roll_scheduled')">
+            <div class="action-icon"><i class="fas fa-calendar-check"></i></div>
+            <div class="count" id="statRollScheduled">0</div>
+            <div class="label">Needs Rolling</div>
+            <div class="action-hint">Scheduled - Roll to date</div>
+        </div>
+        <div class="stat-card action-card needs-rolling-unscheduled" onclick="filterByAction('roll_unscheduled')">
+            <div class="action-icon"><i class="fas fa-calendar-plus"></i></div>
+            <div class="count" id="statRollUnscheduled">0</div>
+            <div class="label">Needs Scheduling</div>
+            <div class="action-hint">Schedule first, then roll</div>
+        </div>
+        <div class="stat-card total" onclick="filterByAction('all')">
+            <div class="count" id="statTotal">0</div>
+            <div class="label">Total Approved</div>
+        </div>
+    </div>
+
+    <!-- Action Panels (grouped by action type) -->
+    <div id="actionPanels" style="display: none;">
+        <!-- Needs Scan-Out Panel -->
+        <div id="scanOutPanel" class="action-panel" style="display: none;">
+            <div class="panel-header scan-out-header">
+                <h3><i class="fas fa-barcode"></i> Ready for Scan-Out</h3>
+                <span class="panel-count" id="scanOutPanelCount">0</span>
+            </div>
+            <div class="panel-instruction">
+                These events are scheduled on or before today's date. Use handheld machine to scan out.
+            </div>
+            <div class="panel-events" id="scanOutEvents"></div>
+        </div>
+
+        <!-- Needs Rolling (Scheduled) Panel -->
+        <div id="rollScheduledPanel" class="action-panel" style="display: none;">
+            <div class="panel-header roll-scheduled-header">
+                <h3><i class="fas fa-calendar-check"></i> Roll to Scheduled Date</h3>
+                <span class="panel-count" id="rollScheduledPanelCount">0</span>
+            </div>
+            <div class="panel-instruction">
+                These events are scheduled in your system. Roll them to the scheduled date in Walmart Retail Link.
+            </div>
+            <div class="panel-events" id="rollScheduledEvents"></div>
+        </div>
+
+        <!-- Needs Rolling (Unscheduled) Panel -->
+        <div id="rollUnscheduledPanel" class="action-panel" style="display: none;">
+            <div class="panel-header roll-unscheduled-header">
+                <h3><i class="fas fa-calendar-plus"></i> Schedule First, Then Roll</h3>
+                <span class="panel-count" id="rollUnscheduledPanelCount">0</span>
+            </div>
+            <div class="panel-instruction">
+                These events need scheduling. Either schedule them first, or roll to the latest possible date.
+            </div>
+            <div class="panel-events" id="rollUnscheduledEvents"></div>
+        </div>
+    </div>
+
+    <!-- Events Table (legacy view, hidden by default) -->
+    <div id="eventsSection" class="events-table-container" style="display: none;">
+        <div class="table-header">
+            <button class="view-toggle active" onclick="showPanelView()">
+                <i class="fas fa-th-large"></i> Action View
+            </button>
+            <button class="view-toggle" onclick="showTableView()">
+                <i class="fas fa-table"></i> Table View
+            </button>
+        </div>
+        <table class="events-table">
+            <thead>
+                <tr>
+                    <th>Event ID</th>
+                    <th>Event Name</th>
+                    <th>Walmart Date</th>
+                    <th>Status</th>
+                    <th>Assigned To</th>
+                    <th>Scheduled For</th>
+                    <th>Action Required</th>
+                </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+                <!-- Populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div>Loading approved events...</div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="icon"><i class="fas fa-check-circle"></i></div>
+        <h3 id="emptyStateTitle">No Approved Events Remaining</h3>
+        <p id="emptyStateMessage">All approved events have been processed, or there are no APPROVED events in the selected date range.</p>
+        <div style="margin-top: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px; color: #0369a1; font-size: 14px;">
+            <strong>Note:</strong> This dashboard shows events with <strong>APPROVED</strong> status in Walmart Retail Link that need action (scheduling, rolling, or scan-out).
+            <div style="margin-top: 8px;">
+                If you have approved events in your Excel export from Walmart but don't see them here, they may have already been processed (scheduled, rolled, and scanned out).
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// State
+let isAuthenticated = false;
+let sessionTimer = null;
+let deadlineTimer = null;
+let currentEvents = [];
+let currentFilter = 'all';
+let viewMode = 'panels'; // 'panels' or 'table'
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkScanoutStatus();
+    checkSessionStatus();
+
+    // MFA input auto-submit
+    document.getElementById('mfaCode').addEventListener('input', function(e) {
+        if (e.target.value.length === 6) {
+            submitMFA();
+        }
+    });
+});
+
+// Check scan-out warning status and start countdown
+async function checkScanoutStatus() {
+    try {
+        const response = await fetch('/api/walmart/events/scanout-status');
+        const data = await response.json();
+
+        if (data.show_warning) {
+            // Show warning banner
+            const banner = document.getElementById('scanoutWarning');
+            banner.style.display = 'flex';
+            banner.className = 'scanout-warning ' + data.urgency;
+
+            document.getElementById('warningReason').textContent =
+                'Today is ' + data.reason + ' - Scan-out deadline day!';
+            document.getElementById('warningDeadline').textContent = data.deadline;
+
+            if (data.urgency === 'urgent') {
+                document.getElementById('warningDetail').textContent =
+                    'URGENT: Less than 1 hour remaining!';
+            }
+
+            // Start deadline countdown
+            startDeadlineCountdown(data.urgency);
+        }
+    } catch (error) {
+        console.error('Failed to check scan-out status:', error);
+    }
+}
+
+// Start 6 PM deadline countdown
+function startDeadlineCountdown(urgency) {
+    const countdownEl = document.getElementById('deadlineCountdown');
+    countdownEl.style.display = 'block';
+    countdownEl.className = 'deadline-countdown ' + urgency;
+
+    function updateCountdown() {
+        const now = new Date();
+        const deadline = new Date();
+        deadline.setHours(18, 0, 0, 0); // 6 PM today
+
+        let diff = deadline - now;
+        if (diff < 0) {
+            document.getElementById('countdownTimer').textContent = 'PAST DEADLINE';
+            document.getElementById('countdownRemaining').textContent = 'All events should be complete!';
+            countdownEl.className = 'deadline-countdown urgent';
+            return;
+        }
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        document.getElementById('countdownTimer').textContent =
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        // Update urgency class based on time remaining
+        if (hours < 1) {
+            countdownEl.className = 'deadline-countdown urgent';
+        } else if (hours < 3) {
+            countdownEl.className = 'deadline-countdown warning';
+        }
+    }
+
+    updateCountdown();
+    deadlineTimer = setInterval(updateCountdown, 1000);
+}
+
+// Check if user has active Walmart session
+async function checkSessionStatus() {
+    try {
+        const response = await fetch('/api/walmart/auth/session-status');
+        const data = await response.json();
+
+        if (data.has_session && data.session_info && data.session_info.is_authenticated) {
+            showAuthenticatedUI(data.session_info);
+            fetchApprovedEvents();
+        } else {
+            showAuthSection();
+        }
+    } catch (error) {
+        console.error('Failed to check session status:', error);
+        showAuthSection();
+    }
+}
+
+// Request MFA code
+async function requestMFA() {
+    document.getElementById('authError').style.display = 'none';
+    document.getElementById('authStep1').innerHTML =
+        '<div class="loading-spinner" style="width: 24px; height: 24px; margin: 0 auto;"></div>';
+
+    try {
+        const response = await fetch('/api/walmart/auth/request-mfa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('authStep1').style.display = 'none';
+            document.getElementById('authStep2').style.display = 'block';
+            document.getElementById('mfaCode').focus();
+        } else {
+            showAuthError(data.message || 'Failed to request MFA code');
+            document.getElementById('authStep1').innerHTML =
+                '<button class="btn btn-primary" onclick="requestMFA()"><i class="fas fa-key"></i> Request MFA Code</button>';
+        }
+    } catch (error) {
+        showAuthError('Network error. Please try again.');
+        document.getElementById('authStep1').innerHTML =
+            '<button class="btn btn-primary" onclick="requestMFA()"><i class="fas fa-key"></i> Request MFA Code</button>';
+    }
+}
+
+// Submit MFA code
+async function submitMFA() {
+    const code = document.getElementById('mfaCode').value.trim();
+    if (code.length !== 6) {
+        showAuthError('Please enter a 6-digit code');
+        return;
+    }
+
+    document.getElementById('authError').style.display = 'none';
+
+    try {
+        const response = await fetch('/api/walmart/auth/authenticate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mfa_code: code })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showAuthenticatedUI(data.session_info);
+            fetchApprovedEvents();
+        } else {
+            showAuthError(data.message || 'Invalid MFA code');
+            document.getElementById('mfaCode').value = '';
+            document.getElementById('mfaCode').focus();
+        }
+    } catch (error) {
+        showAuthError('Network error. Please try again.');
+    }
+}
+
+// Show authentication section
+function showAuthSection() {
+    document.getElementById('authSection').style.display = 'block';
+    document.getElementById('sessionInfo').style.display = 'none';
+    document.getElementById('filterSection').style.display = 'none';
+    document.getElementById('statsSection').style.display = 'none';
+    document.getElementById('eventsSection').style.display = 'none';
+    document.getElementById('authStep1').style.display = 'block';
+    document.getElementById('authStep1').innerHTML =
+        '<button class="btn btn-primary" onclick="requestMFA()"><i class="fas fa-key"></i> Request MFA Code</button>';
+    document.getElementById('authStep2').style.display = 'none';
+}
+
+// Show authenticated UI
+function showAuthenticatedUI(sessionInfo) {
+    isAuthenticated = true;
+    document.getElementById('authSection').style.display = 'none';
+    document.getElementById('sessionInfo').style.display = 'flex';
+    document.getElementById('filterSection').style.display = 'flex';
+    document.getElementById('statsSection').style.display = 'flex';
+    document.getElementById('actionPanels').style.display = 'block';
+
+    // Start session timer
+    if (sessionInfo && sessionInfo.time_remaining_seconds) {
+        startSessionTimer(sessionInfo.time_remaining_seconds);
+    }
+}
+
+// Start session countdown timer
+function startSessionTimer(seconds) {
+    if (sessionTimer) clearInterval(sessionTimer);
+
+    let remaining = seconds;
+    updateTimerDisplay(remaining);
+
+    sessionTimer = setInterval(() => {
+        remaining--;
+        updateTimerDisplay(remaining);
+
+        if (remaining <= 0) {
+            clearInterval(sessionTimer);
+            showAuthSection();
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    document.getElementById('sessionTimeRemaining').textContent =
+        `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Show auth error
+function showAuthError(message) {
+    document.getElementById('authError').style.display = 'block';
+    document.getElementById('authErrorMsg').textContent = message;
+}
+
+// Logout
+async function logout() {
+    try {
+        await fetch('/api/walmart/auth/logout', { method: 'POST' });
+    } catch (error) {
+        console.error('Logout error:', error);
+    }
+
+    if (sessionTimer) clearInterval(sessionTimer);
+    showAuthSection();
+}
+
+// Fetch approved events
+async function fetchApprovedEvents() {
+    const club = document.getElementById('clubInput').value.trim();
+    if (!club) {
+        alert('Please enter a club number');
+        return;
+    }
+
+    document.getElementById('loadingState').style.display = 'flex';
+    document.getElementById('eventsSection').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/walmart/events/approved?club=${club}`);
+        const data = await response.json();
+
+        document.getElementById('loadingState').style.display = 'none';
+
+        if (!data.success) {
+            if (data.message && data.message.includes('authenticate')) {
+                // User needs to authenticate first
+                showAuthSection();
+                // Also show helpful empty state
+                showEmptyState(false);
+            } else {
+                // Other error - show alert with details
+                const errorMsg = data.message || 'Failed to fetch events';
+                alert(`Error: ${errorMsg}\n\nTip: Check the club number and date range, or try authenticating again.`);
+                // Show empty state for clarity
+                document.getElementById('emptyStateTitle').textContent = 'Unable to Load Events';
+                document.getElementById('emptyStateMessage').textContent = errorMsg;
+                document.getElementById('emptyState').querySelector('.icon i').className = 'fas fa-exclamation-triangle';
+                document.getElementById('emptyState').style.display = 'block';
+            }
+            return;
+        }
+
+        // Update session timer
+        if (data.session_info && data.session_info.time_remaining_seconds) {
+            startSessionTimer(data.session_info.time_remaining_seconds);
+        }
+
+        // Store events for filtering
+        currentEvents = data.events || [];
+        
+        // Log summary for debugging
+        console.log(`Fetched ${currentEvents.length} approved events from Walmart`);
+        console.log('Date range:', data.date_range);
+        console.log('Summary:', data.summary);
+        
+        // Log rolling status breakdown
+        const needsRolling = currentEvents.filter(e => e.needs_rolling).length;
+        const scheduled = currentEvents.filter(e => e.is_scheduled).length;
+        console.log(`Rolling status: ${needsRolling} need rolling, ${scheduled} scheduled locally`);
+        
+        if (currentEvents.length === 0) {
+            console.info('No events found. This could mean:');
+            console.info('1. All approved events have been processed');
+            console.info('2. No APPROVED status events exist for this club/date range');
+            console.info('3. Events are in a different date range than the default (2 weeks)');
+        }
+
+        // Update stats
+        updateStats(data.summary, currentEvents);
+
+        // Update countdown remaining count
+        const remainingCount = currentEvents.filter(e =>
+            e.local_status !== 'api_submitted' || !e.api_submitted_at
+        ).length;
+        document.getElementById('countdownRemaining').textContent =
+            `${remainingCount} events remaining`;
+
+        // Render view
+        if (currentEvents.length > 0) {
+            if (viewMode === 'panels') {
+                renderPanelView(currentEvents);
+            } else {
+                renderEventsTable(currentEvents);
+            }
+        } else {
+            // Show empty state with appropriate messaging
+            showEmptyState(isAuthenticated);
+        }
+
+    } catch (error) {
+        document.getElementById('loadingState').style.display = 'none';
+        console.error('Failed to fetch approved events:', error);
+        alert('Network error. Please try again.');
+    }
+}
+
+// Update stats display with action-based counts
+function updateStats(summary, events) {
+    // Count by action type using same logic as renderPanelView
+    const scanOutCount = events.filter(e => 
+        e.local_status === 'api_submitted' && !e.needs_rolling
+    ).length;
+    
+    const rollScheduledCount = events.filter(e => 
+        e.is_scheduled && e.needs_rolling
+    ).length;
+    
+    const rollUnscheduledCount = events.filter(e =>
+        !e.is_scheduled && (e.local_status === 'unscheduled' || e.local_status === 'not_in_db')
+    ).length;
+
+    document.getElementById('statScanOut').textContent = scanOutCount;
+    document.getElementById('statRollScheduled').textContent = rollScheduledCount;
+    document.getElementById('statRollUnscheduled').textContent = rollUnscheduledCount;
+    document.getElementById('statTotal').textContent = summary.total || 0;
+}
+
+// Render panel view (action-based grouping)
+function renderPanelView(events) {
+    // Group events by action type based on needs_rolling flag
+    // Scan-Out: API submitted events that have correct dates (no rolling needed)
+    const scanOutEvents = events.filter(e => 
+        e.local_status === 'api_submitted' && !e.needs_rolling
+    );
+    
+    // Roll Scheduled: Events that are scheduled locally but need rolling
+    // (Walmart date doesn't match local scheduled date)
+    const rollScheduledEvents = events.filter(e => 
+        e.is_scheduled && e.needs_rolling
+    );
+    
+    // Roll Unscheduled: Events not scheduled locally
+    const rollUnscheduledEvents = events.filter(e =>
+        !e.is_scheduled && (e.local_status === 'unscheduled' || e.local_status === 'not_in_db')
+    );
+
+    // Apply filter if set
+    const showScanOut = currentFilter === 'all' || currentFilter === 'scan_out';
+    const showRollScheduled = currentFilter === 'all' || currentFilter === 'roll_scheduled';
+    const showRollUnscheduled = currentFilter === 'all' || currentFilter === 'roll_unscheduled';
+
+    // Render Scan-Out Panel
+    const scanOutPanel = document.getElementById('scanOutPanel');
+    if (scanOutEvents.length > 0 && showScanOut) {
+        scanOutPanel.style.display = 'block';
+        document.getElementById('scanOutPanelCount').textContent = scanOutEvents.length;
+        document.getElementById('scanOutEvents').innerHTML = scanOutEvents.map(e =>
+            renderEventCard(e, 'scan_out')
+        ).join('');
+    } else {
+        scanOutPanel.style.display = 'none';
+    }
+
+    // Render Roll Scheduled Panel
+    const rollScheduledPanel = document.getElementById('rollScheduledPanel');
+    if (rollScheduledEvents.length > 0 && showRollScheduled) {
+        rollScheduledPanel.style.display = 'block';
+        document.getElementById('rollScheduledPanelCount').textContent = rollScheduledEvents.length;
+        document.getElementById('rollScheduledEvents').innerHTML = rollScheduledEvents.map(e =>
+            renderEventCard(e, 'roll_scheduled')
+        ).join('');
+    } else {
+        rollScheduledPanel.style.display = 'none';
+    }
+
+    // Render Roll Unscheduled Panel
+    const rollUnscheduledPanel = document.getElementById('rollUnscheduledPanel');
+    if (rollUnscheduledEvents.length > 0 && showRollUnscheduled) {
+        rollUnscheduledPanel.style.display = 'block';
+        document.getElementById('rollUnscheduledPanelCount').textContent = rollUnscheduledEvents.length;
+        document.getElementById('rollUnscheduledEvents').innerHTML = rollUnscheduledEvents.map(e =>
+            renderEventCard(e, 'roll_unscheduled')
+        ).join('');
+    } else {
+        rollUnscheduledPanel.style.display = 'none';
+    }
+
+    // Show panels container
+    document.getElementById('actionPanels').style.display = 'block';
+    document.getElementById('eventsSection').style.display = 'none';
+}
+
+// Render a single event card
+function renderEventCard(event, actionType) {
+    let actionContent = '';
+    let rollDateContent = '';
+
+    if (actionType === 'scan_out') {
+        actionContent = `
+            <button class="action-btn primary" onclick="openInWalmart('${event.event_id}')">
+                <i class="fas fa-external-link-alt"></i> View in Walmart
+            </button>
+        `;
+    } else if (actionType === 'roll_scheduled') {
+        const scheduledDate = event.schedule_datetime ?
+            formatDate(event.schedule_datetime) : 'Unknown';
+        const walmartDate = formatDate(event.scheduled_date);
+        rollDateContent = `
+            <span class="roll-to-date" style="background: #fef3c7; color: #92400e;">
+                <i class="fas fa-exclamation-triangle"></i> Walmart: ${walmartDate} → Roll to: ${scheduledDate}
+            </span>`;
+        actionContent = `
+            <button class="action-btn secondary" onclick="rollEventToDate('${event.event_id}', '${event.schedule_datetime}', 'scheduled')">
+                <i class="fas fa-calendar-alt"></i> Roll to Scheduled Date
+            </button>
+        `;
+    } else if (actionType === 'roll_unscheduled') {
+        // Calculate one day before due date
+        const rollToDate = getOneDayBeforeDueDate(event.scheduled_date);
+        rollDateContent = `<span class="roll-to-date" style="background: #fef3c7; color: #92400e;">
+            <i class="fas fa-exclamation-triangle"></i> Roll to: ${rollToDate} (one day before due)
+        </span>`;
+        actionContent = `
+            <button class="action-btn secondary" onclick="window.location.href='/events?search=${event.event_id}'">
+                <i class="fas fa-calendar-plus"></i> Schedule
+            </button>
+            <button class="action-btn secondary" onclick="rollEventToDate('${event.event_id}', '${rollToDate}', 'unscheduled')" style="margin-left: 8px;">
+                <i class="fas fa-forward"></i> Roll to ${rollToDate}
+            </button>
+        `;
+    }
+
+    // Determine what dates to show
+    let dateDisplay = '';
+    const walmartDate = formatDate(event.scheduled_date);
+    const localScheduledDate = event.schedule_datetime ? formatDate(event.schedule_datetime) : null;
+    
+    if (localScheduledDate && event.needs_rolling) {
+        // Show both dates if they differ
+        dateDisplay = `
+            <span class="event-date" style="font-size: 12px;">
+                <div style="color: #dc2626;"><i class="fas fa-exclamation-circle"></i> Walmart: ${walmartDate}</div>
+                <div style="color: #059669;"><i class="fas fa-calendar-check"></i> Scheduled: ${localScheduledDate}</div>
+            </span>`;
+    } else if (localScheduledDate) {
+        // Show local scheduled date (they match)
+        dateDisplay = `<span class="event-date" style="color: #059669;"><i class="fas fa-calendar-check"></i> ${localScheduledDate}</span>`;
+    } else {
+        // Show Walmart date only (not scheduled locally)
+        dateDisplay = `<span class="event-date"><i class="fas fa-calendar"></i> ${walmartDate}</span>`;
+    }
+    
+    return `
+        <div class="event-card">
+            <span class="event-id">${event.event_id}</span>
+            <span class="event-name" title="${event.event_name}">${event.event_name}</span>
+            ${dateDisplay}
+            ${event.assigned_employee_name ?
+                `<span class="assigned-to"><i class="fas fa-user"></i> ${event.assigned_employee_name}</span>` :
+                '<span class="assigned-to" style="color: #dc2626;"><i class="fas fa-user-slash"></i> Unassigned</span>'
+            }
+            ${rollDateContent}
+            ${actionContent}
+        </div>
+    `;
+}
+
+// Get latest possible roll date
+function getLatestRollDate() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+
+    // If Friday (5) or Saturday (6), return today
+    if (dayOfWeek === 5 || dayOfWeek === 6) {
+        return formatDate(today.toISOString());
+    }
+
+    // Otherwise return next Friday
+    const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+    const nextFriday = new Date(today);
+    nextFriday.setDate(today.getDate() + daysUntilFriday);
+    return formatDate(nextFriday.toISOString());
+}
+
+// Get one day before the due date for unscheduled events
+function getOneDayBeforeDueDate(dueDateString) {
+    const dueDate = new Date(dueDateString);
+    const oneDayBefore = new Date(dueDate);
+    oneDayBefore.setDate(dueDate.getDate() - 1);
+    return formatDate(oneDayBefore.toISOString());
+}
+
+// Open event in Walmart Retail Link
+function openInWalmart(eventId) {
+    window.open(`https://retaillink2.wal-mart.com/EventManagement/browse-event?eventId=${eventId}`, '_blank');
+}
+
+// Roll event to specified date
+async function rollEventToDate(eventId, dateString, rollType) {
+    try {
+        // Parse the date string and format it as YYYY-MM-DD
+        let scheduledDate;
+        if (dateString.includes('T')) {
+            // ISO datetime format
+            scheduledDate = dateString.split('T')[0];
+        } else {
+            // Already in YYYY-MM-DD format
+            scheduledDate = dateString;
+        }
+
+        // Show confirmation
+        const confirmMsg = rollType === 'scheduled'
+            ? `Roll event ${eventId} to its scheduled date (${scheduledDate})?`
+            : `Roll event ${eventId} to ${scheduledDate} (one day before due)?`;
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        // Show loading indicator on button
+        const button = event.target;
+        const originalHTML = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rolling...';
+
+        // Make API call
+        const response = await fetch('/api/walmart/events/roll', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({
+                event_id: eventId,
+                scheduled_date: scheduledDate,
+                club_id: '8135'
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            // Success - show message and refresh events
+            alert(`✓ Event ${eventId} successfully rolled to ${scheduledDate}`);
+            fetchApprovedEvents();  // Refresh the events list
+        } else {
+            // Error - show error message
+            alert(`✗ Failed to roll event: ${result.message || 'Unknown error'}`);
+            button.disabled = false;
+            button.innerHTML = originalHTML;
+        }
+
+    } catch (error) {
+        console.error('Roll event error:', error);
+        alert(`✗ Failed to roll event: ${error.message}`);
+        // Restore button
+        if (event.target) {
+            event.target.disabled = false;
+            event.target.innerHTML = originalHTML;
+        }
+    }
+}
+
+// Filter by action type
+function filterByAction(actionType) {
+    currentFilter = actionType;
+
+    // Update active card
+    document.querySelectorAll('.stat-card.action-card').forEach(card => {
+        card.classList.remove('active');
+    });
+
+    if (actionType !== 'all') {
+        event.target.closest('.stat-card').classList.add('active');
+    }
+
+    // Re-render panels
+    if (currentEvents.length > 0) {
+        renderPanelView(currentEvents);
+    }
+}
+
+// Toggle view modes
+function showPanelView() {
+    viewMode = 'panels';
+    document.querySelectorAll('.view-toggle').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    document.getElementById('actionPanels').style.display = 'block';
+    document.getElementById('eventsSection').style.display = 'none';
+
+    if (currentEvents.length > 0) {
+        renderPanelView(currentEvents);
+    }
+}
+
+function showTableView() {
+    viewMode = 'table';
+    document.querySelectorAll('.view-toggle').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    document.getElementById('actionPanels').style.display = 'none';
+    document.getElementById('eventsSection').style.display = 'block';
+
+    if (currentEvents.length > 0) {
+        renderEventsTable(currentEvents);
+    }
+}
+
+// Render events table
+function renderEventsTable(events) {
+    const tbody = document.getElementById('eventsTableBody');
+    const statusFilter = document.getElementById('statusFilter').value;
+
+    // Filter events
+    let filteredEvents = events;
+    if (statusFilter !== 'all') {
+        filteredEvents = events.filter(e => e.local_status === statusFilter);
+    }
+
+    // Sort: unscheduled first, then scheduled, then submitted
+    const statusOrder = { 'not_in_db': 0, 'unscheduled': 1, 'scheduled': 2, 'api_failed': 3, 'api_submitted': 4 };
+    filteredEvents.sort((a, b) => (statusOrder[a.local_status] || 5) - (statusOrder[b.local_status] || 5));
+
+    tbody.innerHTML = filteredEvents.map(event => {
+        // Determine action required
+        let actionRequired = '';
+        let actionButton = '';
+
+        if (event.local_status === 'api_submitted') {
+            actionRequired = '<span style="color: #059669;">Scan out in Walmart</span>';
+            actionButton = `<button class="action-btn primary" onclick="openInWalmart('${event.event_id}')">
+                <i class="fas fa-barcode"></i> Scan Out
+            </button>`;
+        } else if (event.local_status === 'scheduled') {
+            actionRequired = `<span style="color: #f59e0b;">Roll to ${formatDate(event.schedule_datetime)}</span>`;
+            actionButton = `<button class="action-btn secondary" onclick="openInWalmart('${event.event_id}')">
+                <i class="fas fa-calendar-alt"></i> Roll
+            </button>`;
+        } else {
+            actionRequired = '<span style="color: #dc2626;">Schedule or Roll to latest date</span>';
+            actionButton = `<button class="action-btn secondary" onclick="window.location.href='/events?search=${event.event_id}'">
+                <i class="fas fa-calendar-plus"></i> Schedule
+            </button>`;
+        }
+
+        return `
+            <tr>
+                <td class="event-id">${event.event_id}</td>
+                <td class="event-name" title="${event.event_name}">${event.event_name}</td>
+                <td>${formatDate(event.scheduled_date)}</td>
+                <td>
+                    <span class="status-badge ${event.local_status.replace('_', '-')}">
+                        ${event.local_status_icon} ${event.local_status_label}
+                    </span>
+                </td>
+                <td>${event.assigned_employee_name || '<span style="color: #dc2626;">-</span>'}</td>
+                <td>${event.schedule_datetime ? formatDate(event.schedule_datetime) : '-'}</td>
+                <td>${actionRequired}</td>
+            </tr>
+        `;
+    }).join('');
+
+    document.getElementById('eventsSection').style.display = 'block';
+}
+
+// Format date
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Format datetime
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+// Show empty state with appropriate messaging
+function showEmptyState(authenticated) {
+    const emptyState = document.getElementById('emptyState');
+    const title = document.getElementById('emptyStateTitle');
+    const message = document.getElementById('emptyStateMessage');
+    
+    if (!authenticated) {
+        // User needs to authenticate first
+        title.textContent = 'Authentication Required';
+        message.textContent = 'Please authenticate with Walmart Retail Link using the "Request MFA Code" button above to view approved events.';
+        emptyState.querySelector('.icon i').className = 'fas fa-lock';
+    } else {
+        // Authenticated but no events found
+        title.textContent = 'No Approved Events Remaining';
+        message.textContent = 'Great work! All approved events have been processed (scheduled, rolled, and scanned out), or there are no APPROVED events in the selected date range.';
+        emptyState.querySelector('.icon i').className = 'fas fa-check-circle';
+    }
+    
+    emptyState.style.display = 'block';
+}
+
+// Filter change handler
+document.getElementById('statusFilter').addEventListener('change', function() {
+    // Re-render current view with new filter
+    if (currentEvents.length > 0) {
+        if (viewMode === 'panels') {
+            renderPanelView(currentEvents);
+        } else {
+            renderEventsTable(currentEvents);
+        }
+    }
+});
+</script>
+{% endblock %}

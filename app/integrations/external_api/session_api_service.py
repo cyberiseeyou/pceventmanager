@@ -639,15 +639,15 @@ class SessionAPIService:
     def get_all_planning_events(self, start_date: datetime = None, end_date: datetime = None, limit: int = 5000) -> Optional[Dict]:
         """
         Get all planning events (all statuses) from Crossmark API for comprehensive database refresh.
-        This method fetches events from 1 month before to 3 months after current date by default.
+        This method fetches events from 1 month before to 4 months after current date by default.
         Args:
             start_date: Start date (defaults to 1 month before today)
-            end_date: End date (defaults to 3 months after today)
+            end_date: End date (defaults to 4 months after today)
             limit: Maximum number of records to fetch (defaults to 5000)
         Returns:
             dict or None: All planning events data if successful, None otherwise
         """
-        # Calculate default date range: 1 month before to 3 months after
+        # Calculate default date range: 1 month before to 4 months after
         if start_date is None:
             start_dt = datetime.now() - timedelta(days=30)  # 1 month before
             start_date = start_dt.strftime("%Y-%m-%d")
@@ -655,7 +655,7 @@ class SessionAPIService:
             start_date = start_date.strftime("%Y-%m-%d") if isinstance(start_date, datetime) else start_date
 
         if end_date is None:
-            end_dt = datetime.now() + timedelta(days=90)  # 3 months after
+            end_dt = datetime.now() + timedelta(days=120)  # 4 months after
             end_date = end_dt.strftime("%Y-%m-%d")
         else:
             end_date = end_date.strftime("%Y-%m-%d") if isinstance(end_date, datetime) else end_date
@@ -772,99 +772,6 @@ class SessionAPIService:
 
         except Exception as e:
             self.logger.error("Error getting unscheduled events: %s", e)
-            return None
-
-    def get_all_planning_events(self, start_date: datetime = None, end_date: datetime = None, limit: int = 5000) -> Optional[Dict]:
-        """
-        Get all planning events (all statuses) from Crossmark API for comprehensive database refresh.
-        This method fetches events from 1 month before to 3 months after current date by default.
-        Args:
-            start_date: Start date (defaults to 1 month before today)
-            end_date: End date (defaults to 3 months after today)
-            limit: Maximum number of records to fetch (defaults to 5000)
-        Returns:
-            dict or None: All planning events data if successful, None otherwise
-        """
-        # Calculate default date range: 1 month before to 3 months after
-        if start_date is None:
-            start_dt = datetime.now() - timedelta(days=30)  # 1 month before
-            start_date = start_dt.strftime("%Y-%m-%d")
-        else:
-            start_date = start_date.strftime("%Y-%m-%d") if isinstance(start_date, datetime) else start_date
-
-        if end_date is None:
-            end_dt = datetime.now() + timedelta(days=90)  # 3 months after
-            end_date = end_dt.strftime("%Y-%m-%d")
-        else:
-            end_date = end_date.strftime("%Y-%m-%d") if isinstance(end_date, datetime) else end_date
-
-        # Complete search fields with all statuses - based on your curl command
-        search_fields = {
-            "searchTerms": {
-                "condition": {
-                    "name": "condition",
-                    "title": "Conditions",
-                    "items": [{
-                        "id": 11,
-                        "value": ["Unstaffed", "Scheduled", "Staffed", "Canceled", "In Progress", "Paused", "Reissued", "Expired", "Submitted"],
-                        "displayValue": ["Unstaffed", "Scheduled", "Staffed", "Canceled", "In Progress", "Paused", "Reissued", "Expired", "Submitted"],
-                        "exactmatch": True,
-                        "allActive": False
-                    }]
-                }
-            }
-        }
-
-        # Prepare query parameters matching your curl command exactly
-        params = {
-            '_dc': str(int(time.time() * 1000)),  # Timestamp
-            'intervalStart': start_date,
-            'intervalEnd': end_date,
-            'showAllActive': 'false',
-            'searchFields': json.dumps(search_fields),
-            'searchFilter': '',
-            'page': '1',
-            'start': '0',
-            'limit': str(limit),
-            'sort': '[{"property":"startDate","direction":"ASC"}]'
-        }
-
-        headers = {
-            "accept": "*/*",
-            "accept-language": "en-US,en;q=0.9",
-            "cache-control": "no-cache",
-            "pragma": "no-cache",
-            "referer": f"{self.base_url}/planning/",
-            "x-requested-with": "XMLHttpRequest"
-        }
-
-        try:
-            self.logger.info(f"Fetching all planning events from {start_date} to {end_date}")
-            response = self.make_request(
-                'GET',
-                '/planningextcontroller/getPlanningMplans',
-                params=params,
-                headers=headers
-            )
-
-            if 200 <= response.status_code < 300:
-                events_data = self._safe_json(response)
-                if events_data is None:
-                    return None
-
-                self.logger.info(
-                    f"Retrieved all planning events from {start_date} to {end_date} - Total: {events_data.get('total', 0)}"
-                )
-
-                return events_data
-            else:
-                self.logger.warning(
-                    f"Failed to get all planning events: {response.status_code} {response.text[:300]}"
-                )
-                return None
-
-        except Exception as e:
-            self.logger.error(f"Error getting all planning events: {str(e)}")
             return None
 
     def get_non_scheduled_visits(self) -> Optional[Dict]:

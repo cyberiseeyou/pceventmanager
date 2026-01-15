@@ -3,7 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- iOS/Mobile optimizations -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
     <title>{% block title %}Product Connections - Scheduler{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
@@ -82,6 +88,15 @@
                             <a href="{{ url_for('dashboard.weekly_validation') }}"
                                 class="nav-dropdown-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
                                 Weekly Validation
+                            </a>
+                            <a href="{{ url_for('dashboard.approved_events') }}"
+                                class="nav-dropdown-item {% if request.endpoint == 'dashboard.approved_events' %}active{% endif %}">
+                                Left in Approved
+                            </a>
+                            <div class="nav-dropdown-divider"></div>
+                            <a href="{{ url_for('inventory.index') }}"
+                                class="nav-dropdown-item {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}">
+                                Demo Supplies
                             </a>
                         </div>
                     </div>
@@ -173,6 +188,10 @@
                             <a href="{{ url_for('admin.settings_page') }}" class="dropdown-item">
                                 <span class="dropdown-icon">⚙️</span>
                                 Settings
+                            </a>
+                            <a href="{{ url_for('admin.event_times_page') }}" class="dropdown-item">
+                                <span class="dropdown-icon">🕐</span>
+                                Event Time Settings
                             </a>
                             <div class="dropdown-divider"></div>
                             <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
@@ -267,11 +286,11 @@
     <!-- Priority 2: Load shared modules first for global availability -->
     <script type="module">
         // Import and initialize core modules
-        import { apiClient } from '{{ url_for('static', filename='js / utils / api - client.js') }}';
-        import { stateManager } from '{{ url_for('static', filename='js / modules / state - manager.js') }}';
-        import { ariaAnnouncer } from '{{ url_for('static', filename='js / modules / aria - announcer.js') }}';
-        import { toaster } from '{{ url_for('static', filename='js / modules / toast - notifications.js') }}';
-        import ValidationEngine from '{{ url_for('static', filename='js / modules / validation - engine.js') }}';
+        import { apiClient } from '{{ url_for('static', filename='js/utils/api-client.js') }}';
+        import { stateManager } from '{{ url_for('static', filename='js/modules/state-manager.js') }}';
+        import { ariaAnnouncer } from '{{ url_for('static', filename='js/modules/aria-announcer.js') }}';
+        import { toaster } from '{{ url_for('static', filename='js/modules/toast-notifications.js') }}';
+        import ValidationEngine from '{{ url_for('static', filename='js/modules/validation-engine.js') }}';
 
         // Make available globally for non-module scripts
         window.apiClient = apiClient;
@@ -547,6 +566,9 @@
 
     <!-- AI Assistant Logic -->
     <script src="{{ url_for('static', filename='js/components/ai-assistant.js') }}"></script>
+
+    <!-- Quick Note Widget -->
+    {% include 'components/quick_note_widget.html' %}
 
     {% block scripts %}{% endblock %}
 </body>

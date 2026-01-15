@@ -26,13 +26,9 @@ class Config:
     EXTERNAL_API_TIMEZONE = config('EXTERNAL_API_TIMEZONE', default='America/Indiana/Indianapolis')
     EXTERNAL_API_TIMEOUT = config('EXTERNAL_API_TIMEOUT', default=30, cast=int)
     EXTERNAL_API_MAX_RETRIES = config('EXTERNAL_API_MAX_RETRIES', default=3, cast=int)
-    EXTERNAL_API_RETRY_DELAY = config('EXTERNAL_API_RETRY_DELAY', default=1, cast=int)
-    SESSION_REFRESH_INTERVAL = config('SESSION_REFRESH_INTERVAL', default=3600, cast=int)  # 1 hour
 
     # Sync settings
     SYNC_ENABLED = config('SYNC_ENABLED', default=False, cast=bool)
-    SYNC_INTERVAL_MINUTES = config('SYNC_INTERVAL_MINUTES', default=15, cast=int)
-    SYNC_BATCH_SIZE = config('SYNC_BATCH_SIZE', default=50, cast=int)
 
     # Logging settings
     LOG_LEVEL = config('LOG_LEVEL', default='INFO')
@@ -46,6 +42,7 @@ class Config:
     WALMART_EDR_USERNAME = config('WALMART_EDR_USERNAME', default='')
     WALMART_EDR_PASSWORD = config('WALMART_EDR_PASSWORD', default='')
     WALMART_EDR_MFA_CREDENTIAL_ID = config('WALMART_EDR_MFA_CREDENTIAL_ID', default='')
+    WALMART_USER_ID = config('WALMART_USER_ID', default='')  # Walmart user ID for API calls (e.g., 'd2fr4w2')
 
     # Settings encryption key (should be set in environment for production)
     SETTINGS_ENCRYPTION_KEY = config('SETTINGS_ENCRYPTION_KEY', default=None)
@@ -156,7 +153,6 @@ class ProductionConfig(Config):
 
     # Logging
     LOG_LEVEL = config('LOG_LEVEL', default='WARNING')
-    LOG_FORMAT = 'json'  # JSON format for production logging
 
     # Performance
     SEND_FILE_MAX_AGE_DEFAULT = config('SEND_FILE_MAX_AGE_DEFAULT', default=31536000, cast=int)

@@ -33,6 +33,9 @@ class SchedulingEngine:
     # Event type priority order (lower = higher priority)
     EVENT_TYPE_PRIORITY = {
         'Juicer': 1,
+        'Juicer Production': 1,
+        'Juicer Survey': 1,
+        'Juicer Deep Clean': 1,
         'Digital Setup': 2,
         'Digital Refresh': 3,
         'Freeosk': 4,
@@ -73,6 +76,7 @@ class SchedulingEngine:
                 'Digital Setup': digital_setup_slots[0]['start'],
                 'Digital Refresh': digital_setup_slots[0]['start'],
                 'Freeosk': freeosk['start'],
+                'Freeosk Troubleshooting': time(12, 0),  # Noon - for troubleshooting events
                 'Digital Teardown': digital_teardown_slots[0]['start'],
                 'Core': core_start,
                 'Supervisor': supervisor['start'],
@@ -87,6 +91,7 @@ class SchedulingEngine:
                 'Digital Setup': time(10, 15),     # 30 min
                 'Digital Refresh': time(10, 15),   # 30 min
                 'Freeosk': time(10, 0),            # 30 min
+                'Freeosk Troubleshooting': time(12, 0),  # Noon - for troubleshooting events
                 'Digital Teardown': time(18, 0),   # 30 min
                 'Core': time(10, 15),              # First shift block ARRIVE time
                 'Supervisor': time(12, 0),         # 5 min
@@ -160,6 +165,7 @@ class SchedulingEngine:
         self.PendingSchedule = models['PendingSchedule']
         self.EmployeeTimeOff = models['EmployeeTimeOff']
         self.EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
+        self.LockedDay = models.get('LockedDay')  # For locked day checking
 
         # Initialize service dependencies
         self.rotation_manager = RotationManager(db_session, models)
@@ -170,6 +176,10 @@ class SchedulingEngine:
         # Key: event.project_ref_num, Value: bump count
         self.bump_count = {}
         self.MAX_BUMPS_PER_EVENT = 3  # Maximum times an event can be bumped
+        
+        # Track bumped posted schedule IDs to prevent duplicate bumping
+        # Posted schedules can't be marked as superseded (no status field), so we track them here
+        self.bumped_posted_schedule_ids = set()
 
         # Track time slot rotation per day
         self.daily_time_slot_index = {}  # {date_str: slot_index} for Core events
@@ -181,6 +191,118 @@ class SchedulingEngine:
         self.CORE_TIME_SLOTS = self._get_core_time_slots()
         self.DIGITAL_TIME_SLOTS = self._get_digital_time_slots()
         self.TEARDOWN_TIME_SLOTS = self._get_teardown_time_slots()
+
+    def _is_day_locked(self, target_date) -> bool:
+        """
+        Check if a specific date is locked.
+        
+        Locked days cannot have schedules created, modified, or bumped.
+        
+        Args:
+            target_date: datetime or date object to check
+            
+        Returns:
+            True if the day is locked, False otherwise
+        """
+        if not self.LockedDay:
+            return False
+        
+        from datetime import date as date_type
+        if isinstance(target_date, datetime):
+            check_date = target_date.date()
+        elif isinstance(target_date, date_type):
+            check_date = target_date
+        else:
+            return False
+            
+        return self.LockedDay.is_day_locked(check_date)
+
+    def _is_full_day_event(self, event: object) -> bool:
+        """
+        Check if an event is a full-day event (8+ hours).
+        
+        Full-day events have special scheduling rules:
+        - Only one per employee per day
+        - Cannot be combined with Core or Juicer events on the same day
+        - Should be scheduled on start date
+        
+        Args:
+            event: Event object to check
+            
+        Returns:
+            True if the event is 8+ hours (480+ minutes), False otherwise
+        """
+        FULL_DAY_MINUTES = 480  # 8 hours
+        return event.estimated_time and event.estimated_time >= FULL_DAY_MINUTES
+
+    def _has_full_day_event_on_day(self, run: object, employee: object, target_date) -> bool:
+        """
+        Check if an employee already has a full-day event scheduled on a specific date.
+        
+        Args:
+            run: Current scheduler run
+            employee: Employee to check
+            target_date: Date to check
+            
+        Returns:
+            True if employee has a full-day event on this date
+        """
+        from datetime import date as date_type
+        if isinstance(target_date, datetime):
+            check_date = target_date.date()
+        elif isinstance(target_date, date_type):
+            check_date = target_date
+        else:
+            return False
+        
+        # Check pending schedules from current run
+        pending_full_day = self.db.query(self.PendingSchedule).join(
+            self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.employee_id == employee.id,
+            func.date(self.PendingSchedule.schedule_datetime) == check_date,
+            self.PendingSchedule.failure_reason.is_(None),
+            self.PendingSchedule.status != 'superseded',
+            self.Event.estimated_time >= 480  # Full-day events
+        ).first()
+        
+        if pending_full_day:
+            return True
+        
+        # Check existing approved schedules
+        existing_full_day = self.db.query(self.Schedule).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            self.Schedule.employee_id == employee.id,
+            func.date(self.Schedule.schedule_datetime) == check_date,
+            self.Event.estimated_time >= 480  # Full-day events
+        ).first()
+        
+        return existing_full_day is not None
+    
+    def _get_locked_day_info(self, target_date):
+        """
+        Get locked day information for a specific date.
+        
+        Args:
+            target_date: datetime or date object to check
+            
+        Returns:
+            LockedDay object if locked, None otherwise
+        """
+        if not self.LockedDay:
+            return None
+        
+        from datetime import date as date_type
+        if isinstance(target_date, datetime):
+            check_date = target_date.date()
+        elif isinstance(target_date, date_type):
+            check_date = target_date
+        else:
+            return None
+            
+        return self.LockedDay.get_locked_day(check_date)
 
     def run_auto_scheduler(self, run_type: str = 'manual') -> object:
         """
@@ -203,6 +325,27 @@ class SchedulingEngine:
         Returns:
             SchedulerRunHistory object
         """
+        # AUTO-REFRESH: Sync database from external API before scheduling
+        # This ensures we have the latest event data before making scheduling decisions
+        current_app.logger.info("=== PRE-SCHEDULER DATABASE REFRESH ===")
+        try:
+            from app.services.database_refresh_service import DatabaseRefreshService
+            refresh_service = DatabaseRefreshService()
+            refresh_result = refresh_service.refresh()
+            if refresh_result.get('success'):
+                current_app.logger.info(
+                    f"Database refresh completed: {refresh_result.get('stats', {}).get('total_processed', 0)} events processed"
+                )
+            else:
+                current_app.logger.warning(
+                    f"Database refresh failed: {refresh_result.get('message', 'Unknown error')}. "
+                    f"Proceeding with existing data."
+                )
+        except Exception as refresh_error:
+            current_app.logger.warning(
+                f"Database refresh error: {refresh_error}. Proceeding with existing data."
+            )
+
         # Create run history record
         run = self.SchedulerRunHistory(
             run_type=run_type,
@@ -243,7 +386,12 @@ class SchedulingEngine:
             # Wave 4: Digital events (Setup/Refresh at 9:15-10:00, Teardown at 5:00 PM+)
             self._schedule_digital_events_wave4(run, events)
 
+            # Full-Day Events: Schedule 8+ hour Other events BEFORE regular Other events
+            # These have Core-like constraints (one per employee per day, no Core/Juicer same day)
+            self._schedule_full_day_events(run, events)
+
             # Wave 5: Other events (Noon to Club Supervisor or Lead)
+            # Note: Full-day events are skipped here as they were scheduled above
             self._schedule_other_events_wave5(run, events)
 
             # RESCUE PASS: Give failed urgent Core events another chance to bump less urgent ones
@@ -527,61 +675,71 @@ class SchedulingEngine:
             self._schedule_single_juicer_event_wave1(run, event)
 
     def _schedule_single_juicer_event_wave1(self, run: object, event: object) -> None:
-        """Schedule a single Juicer event, bumping Core events if needed"""
+        """Schedule a single Juicer event, bumping Core events if needed
+        
+        IMPORTANT: Juicer events are ALWAYS scheduled on their start date.
+        They should NOT be automatically moved to different days - only manual
+        user intervention can change the scheduled date for Juicer events.
+        """
         # Determine the appropriate time for this Juicer event
         juicer_time = self._get_juicer_time(event)
 
-        # Try each day from earliest allowed date to due date
-        current_date = self._get_earliest_schedule_date(event)
-
-        while current_date < event.due_datetime:
-            # Get rotation employee for this specific date
-            employee = self.rotation_manager.get_rotation_employee(current_date, 'juicer')
-            if not employee:
-                # No Juicer assigned for this day in rotation
-                current_date += timedelta(days=1)
-                continue
-
-            schedule_datetime = datetime.combine(current_date.date(), juicer_time)
-
-            # Check if employee is available (time off, weekly availability, etc.)
-            # But SKIP the daily Core events limit check - we'll bump Core events if needed
-            validation = self.validator.validate_assignment(event, employee, schedule_datetime)
-
-            # Check if employee has Core events scheduled on this day
-            core_events_to_bump = self._get_core_events_for_employee_on_date(
-                run, employee.id, current_date.date()
+        # ONLY try to schedule on the event's START DATE
+        # Juicer events should not be auto-moved to different days
+        target_date = event.start_datetime
+        
+        # Get rotation employee for this specific date
+        employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
+        if not employee:
+            # No Juicer assigned for this day in rotation
+            self._create_failed_pending_schedule(
+                run, event, 
+                f"No Juicer rotation employee assigned for {target_date.date()}"
             )
-
-            # Wave 1 special logic: We can BUMP Core events, so ignore DAILY_LIMIT and ALREADY_SCHEDULED constraints
-            # Check if the ONLY violations are bumpable constraints
-            from .validation_types import ConstraintType
-
-            bumpable_constraints = {ConstraintType.DAILY_LIMIT, ConstraintType.ALREADY_SCHEDULED}
-            blocking_violations = [v for v in validation.violations if v.constraint_type not in bumpable_constraints]
-
-            is_actually_valid = len(blocking_violations) == 0
-
-            if not is_actually_valid:
-                # Has real blocking violations (TIME_OFF, AVAILABILITY, ROLE, DUE_DATE) - skip this date
-                current_date += timedelta(days=1)
-                continue
-
-            # Employee is available (ignoring bumpable constraints) - bump any Core events and schedule Juicer
-            if core_events_to_bump:
-                self._bump_core_events(run, core_events_to_bump, employee, current_date.date())
-
-            self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
-            run.events_scheduled += 1
-            current_app.logger.info(
-                f"Wave 1: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {current_date.date()}"
-                + (f" (bumped {len(core_events_to_bump)} Core events)" if core_events_to_bump else "")
-            )
+            run.events_failed += 1
             return
 
-        # Failed to schedule
-        self._create_failed_pending_schedule(run, event, "No available Juicer rotation employee before due date")
-        run.events_failed += 1
+        schedule_datetime = datetime.combine(target_date.date(), juicer_time)
+
+        # Check if employee is available (time off, weekly availability, etc.)
+        # But SKIP the daily Core events limit check - we'll bump Core events if needed
+        validation = self.validator.validate_assignment(event, employee, schedule_datetime)
+
+        # Check if employee has Core events scheduled on this day
+        core_events_to_bump = self._get_core_events_for_employee_on_date(
+            run, employee.id, target_date.date()
+        )
+
+        # Wave 1 special logic: We can BUMP Core events, so ignore DAILY_LIMIT and ALREADY_SCHEDULED constraints
+        # Check if the ONLY violations are bumpable constraints
+        from .validation_types import ConstraintType
+
+        bumpable_constraints = {ConstraintType.DAILY_LIMIT, ConstraintType.ALREADY_SCHEDULED}
+        blocking_violations = [v for v in validation.violations if v.constraint_type not in bumpable_constraints]
+
+        is_actually_valid = len(blocking_violations) == 0
+
+        if not is_actually_valid:
+            # Has real blocking violations (TIME_OFF, AVAILABILITY, ROLE, DUE_DATE)
+            # Since we can ONLY schedule on start date, this is a failure
+            violation_reasons = ", ".join([v.message for v in blocking_violations])
+            self._create_failed_pending_schedule(
+                run, event, 
+                f"Cannot schedule on start date ({target_date.date()}): {violation_reasons}"
+            )
+            run.events_failed += 1
+            return
+
+        # Employee is available (ignoring bumpable constraints) - bump any Core events and schedule Juicer
+        if core_events_to_bump:
+            self._bump_core_events(run, core_events_to_bump, employee, target_date.date())
+
+        self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
+        run.events_scheduled += 1
+        current_app.logger.info(
+            f"Wave 1: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {target_date.date()}"
+            + (f" (bumped {len(core_events_to_bump)} Core events)" if core_events_to_bump else "")
+        )
 
     def _get_core_events_for_employee_on_date(self, run: object, employee_id: str, target_date: date) -> List[object]:
         """
@@ -693,6 +851,9 @@ class SchedulingEngine:
 
         # Process posted schedules
         for schedule in bumpable_posted:
+            # Skip schedules already bumped in this run
+            if schedule.id in self.bumped_posted_schedule_ids:
+                continue  # Already bumped in this run
             bump_count = self.bump_count.get(schedule.event.project_ref_num, 0)
             if bump_count >= self.MAX_BUMPS_PER_EVENT:
                 continue  # Already bumped too many times
@@ -727,6 +888,8 @@ class SchedulingEngine:
         Try to bump a Core event with a later due date to make room for a Core event with earlier due date.
         Keeps same employee and time slot to avoid schedule confusion.
         Allows cascading: bumped event will try to reschedule and may bump another event.
+        
+        IMPORTANT: This now TRACKS bumps without executing them. Actual bumps happen during approval.
 
         Args:
             run: Current scheduler run
@@ -764,6 +927,16 @@ class SchedulingEngine:
             )
             return False
 
+        # CHECK LOCKED DAYS: Cannot bump on or schedule to a locked day
+        if self._is_day_locked(schedule_datetime):
+            locked_info = self._get_locked_day_info(schedule_datetime)
+            reason = locked_info.reason if locked_info else "Unknown"
+            current_app.logger.warning(
+                f"{wave_label} BUMP: Cannot schedule event {new_event.project_ref_num} at {schedule_datetime.strftime('%Y-%m-%d')} "
+                f"- day is LOCKED (reason: {reason})"
+            )
+            return False
+
         # VALIDATION 2: If employee is a Juicer, check they don't have a Juicer event that day
         if employee.job_title == 'Juicer Barista':
             juicer_event_today = self.db.query(self.PendingSchedule).join(
@@ -772,7 +945,8 @@ class SchedulingEngine:
                 self.PendingSchedule.scheduler_run_id == run.id,
                 self.PendingSchedule.employee_id == employee.id,
                 func.date(self.PendingSchedule.schedule_datetime) == schedule_datetime.date(),
-                self.Event.event_type.in_(['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'])
+                self.Event.event_type.in_(['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean']),
+                self.PendingSchedule.status != 'superseded'  # Ignore superseded schedules
             ).first()
 
             if juicer_event_today:
@@ -784,6 +958,7 @@ class SchedulingEngine:
 
         # Find what Core event (if any) is scheduled for this employee at this exact time
         # Look in the correct table based on is_posted flag
+        # IMPORTANT: Exclude superseded schedules from consideration
         if is_posted:
             # Event is already posted to external API - query Schedule table
             existing_schedule = self.db.query(self.Schedule).join(
@@ -802,7 +977,8 @@ class SchedulingEngine:
                 self.PendingSchedule.employee_id == employee.id,
                 self.PendingSchedule.schedule_datetime == schedule_datetime,
                 self.Event.event_type == 'Core',
-                self.PendingSchedule.failure_reason == None
+                self.PendingSchedule.failure_reason == None,
+                self.PendingSchedule.status != 'superseded'  # Ignore already superseded schedules
             ).first()
 
         if not existing_schedule:
@@ -838,8 +1014,10 @@ class SchedulingEngine:
             if self._try_move_event_forward(run, existing_event, existing_schedule,
                                             new_event.start_datetime, employee):
                 # Success! The existing event was moved forward
-                # Now schedule the new event in the freed slot
-                self._create_pending_schedule(run, new_event, employee, schedule_datetime, False, None, None)
+                # Now schedule the new event in the freed slot, marking it as a swap
+                swap_reason = f"Moved existing event {existing_event.project_ref_num} forward to accommodate more urgent event"
+                self._create_pending_schedule(run, new_event, employee, schedule_datetime, True, 
+                                             existing_event.project_ref_num, swap_reason)
                 run.events_scheduled += 1
                 current_app.logger.info(
                     f"{wave_label}: Scheduled Core event {new_event.project_ref_num} to {employee.name} "
@@ -851,9 +1029,10 @@ class SchedulingEngine:
 
                 return True
 
-        # STRATEGY 2: Forward move failed (or is_posted=True), fall back to traditional bump (delete and reschedule)
+        # STRATEGY 2: Forward move failed (or is_posted=True), fall back to traditional bump
+        # IMPORTANT: Don't actually delete - just mark as superseded and track the bump
         current_app.logger.info(
-            f"{wave_label} BUMP: Forward move failed, using traditional bump for event {existing_event.project_ref_num} "
+            f"{wave_label} BUMP: Forward move failed, marking for bump: event {existing_event.project_ref_num} "
             f"(due {existing_event.due_datetime.date()}) from {employee.name} at {schedule_datetime.strftime('%Y-%m-%d %I:%M %p')} "
             f"to make room for event {new_event.project_ref_num} (due {new_event.due_datetime.date()})"
         )
@@ -861,18 +1040,23 @@ class SchedulingEngine:
         # Increment bump count for existing_event
         self.bump_count[existing_event.project_ref_num] = bump_count + 1
 
-        # Delete the existing schedule (from appropriate table)
+        # Mark the existing schedule as superseded (don't delete it yet)
         if is_posted:
-            # Event was posted to external API - need to unschedule it
+            # Event was posted to external API - we'll need to track it for deletion during approval
             external_id = existing_schedule.external_id if hasattr(existing_schedule, 'external_id') else None
             current_app.logger.warning(
-                f"{wave_label} BUMP POSTED: Bumping event {existing_event.project_ref_num} that was already posted to external API "
-                f"(external_id: {external_id}). It will be deleted from Schedule table and marked for rescheduling."
+                f"{wave_label} BUMP POSTED: Marking posted event {existing_event.project_ref_num} for bumping "
+                f"(external_id: {external_id}). It will be deleted from Schedule table during approval."
             )
-            # Delete from Schedule table
-            self.db.delete(existing_schedule)
-            # Also delete any matching Supervisor event that was posted
-            # Find Supervisor by matching event number in project name
+            # For posted schedules, we'll handle deletion during approval via the is_swap mechanism
+            # We can't mark it as superseded since Schedule table doesn't have status field
+            # The approval process will look for schedules with matching bumped_event_ref_num
+            # CRITICAL: Set is_scheduled back to False so the bumped event can be rescheduled
+            existing_event.is_scheduled = False
+            # Track this posted schedule as bumped to prevent double-bumping
+            self.bumped_posted_schedule_ids.add(existing_schedule.id)
+            
+            # Also mark matching Supervisor event for deletion
             core_event_number = self._extract_event_number(existing_event.project_name)
             if core_event_number:
                 # Look for Supervisor events scheduled on the same date
@@ -888,24 +1072,28 @@ class SchedulingEngine:
                     supervisor_event_number = self._extract_event_number(supervisor_schedule.event.project_name)
                     if supervisor_event_number == core_event_number:
                         current_app.logger.info(
-                            f"{wave_label} BUMP POSTED: Also deleting matching Supervisor event {supervisor_schedule.event.project_ref_num}"
+                            f"{wave_label} BUMP POSTED: Also marking matching Supervisor event {supervisor_schedule.event.project_ref_num} for deletion"
                         )
-                        self.db.delete(supervisor_schedule)
+                        # Supervisor will also be handled during approval
                         break
         else:
-            # Event is in pending run - just delete from PendingSchedule
-            self.db.delete(existing_schedule)
+            # Event is in pending run - mark as superseded
+            existing_schedule.status = 'superseded'
+            swap_reason = f"Superseded by more urgent event {new_event.project_ref_num}"
+            existing_schedule.swap_reason = swap_reason
+            # CRITICAL: Set is_scheduled back to False so the event can be rescheduled
+            existing_event.is_scheduled = False
 
-        existing_event.is_scheduled = False
-
-        # Schedule the new event in its place
-        self._create_pending_schedule(run, new_event, employee, schedule_datetime, False, None, None)
+        # Schedule the new event in its place, marking it as a swap
+        bump_type = "POSTED" if is_posted else "PENDING"
+        swap_reason = f"Bumped {bump_type} event {existing_event.project_ref_num} (due {existing_event.due_datetime.date()})"
+        self._create_pending_schedule(run, new_event, employee, schedule_datetime, True, 
+                                     existing_event.project_ref_num, swap_reason)
         run.events_scheduled += 1
 
-        bump_type = "POSTED" if is_posted else "PENDING"
         current_app.logger.info(
             f"{wave_label}: Scheduled Core event {new_event.project_ref_num} to {employee.name} "
-            f"(bumped {bump_type} event {existing_event.project_ref_num})"
+            f"(will bump {bump_type} event {existing_event.project_ref_num} on approval)"
         )
 
         # Schedule matching Supervisor event inline
@@ -930,7 +1118,10 @@ class SchedulingEngine:
 
     def _bump_core_events(self, run: object, schedules_to_bump: List[object], employee: object, date_obj: date) -> None:
         """
-        Bump (unschedule) Core events from an employee to make room for Juicer rotation
+        Mark Core events for bumping (but don't actually delete them until approval)
+
+        Instead of deleting immediately, we mark them as 'superseded' so they'll be
+        bumped when the schedule is approved.
 
         Args:
             run: Current scheduler run
@@ -938,33 +1129,43 @@ class SchedulingEngine:
             employee: Employee being bumped from
             date_obj: Date of the bump
         """
+        # CHECK LOCKED DAYS: Cannot bump events from a locked day
+        if self._is_day_locked(date_obj):
+            locked_info = self._get_locked_day_info(date_obj)
+            reason = locked_info.reason if locked_info else "Unknown"
+            current_app.logger.warning(
+                f"Cannot bump events on {date_obj} - day is LOCKED (reason: {reason}). "
+                f"Skipping {len(schedules_to_bump)} schedules."
+            )
+            return
+
         for schedule in schedules_to_bump:
             # Check if it's a PendingSchedule or permanent Schedule
             is_pending = isinstance(schedule, self.PendingSchedule)
 
             if is_pending:
-                # It's a PendingSchedule from current run
+                # It's a PendingSchedule from current run - mark as superseded
                 event = schedule.event
-                # Mark the event as unscheduled so it can be rescheduled
+                schedule.status = 'superseded'
+                # Add a note about why it was superseded
+                schedule.swap_reason = f"Bumped by Juicer rotation for {employee.name} on {date_obj}"
+                # CRITICAL: Set is_scheduled back to False so the event can be rescheduled
                 event.is_scheduled = False
-                # Delete the pending schedule
-                self.db.delete(schedule)
                 current_app.logger.info(
-                    f"Wave 1: Bumped pending Core event {event.project_ref_num} from {employee.name} on {date_obj} "
-                    f"(Juicer rotation takes priority)"
+                    f"Wave 1: Marked pending Core event {event.project_ref_num} as superseded "
+                    f"from {employee.name} on {date_obj} (Juicer rotation takes priority - will be bumped on approval)"
                 )
             else:
                 # It's a permanent Schedule from previous run
+                # We can't change its status, so we'll need to track it differently
+                # For now, just log it - we'll handle the actual deletion during approval
                 event = self.db.query(self.Event).filter_by(project_ref_num=schedule.event_ref_num).first()
                 if event:
-                    # Mark the event as unscheduled so it can be rescheduled
-                    event.is_scheduled = False
-                    # Delete the permanent schedule
-                    self.db.delete(schedule)
                     current_app.logger.info(
-                        f"Wave 1: Bumped approved Core event {event.project_ref_num} from {employee.name} on {date_obj} "
-                        f"(Juicer rotation takes priority - event will be rescheduled)"
+                        f"Wave 1: Marked approved Core event {event.project_ref_num} for bumping "
+                        f"from {employee.name} on {date_obj} (Juicer rotation takes priority - will be bumped on approval)"
                     )
+                    # Note: The actual bumping will happen during approval when we process is_swap=True schedules
 
     def _schedule_juicer_events_wave2(self, run: object, events: List[object]) -> None:
         """
@@ -1052,17 +1253,164 @@ class SchedulingEngine:
                     # Unknown Digital subtype - try Primary Lead as default
                     self._schedule_primary_lead_event(run, event)
 
+    def _schedule_full_day_events(self, run: object, events: List[object]) -> None:
+        """
+        Schedule full-day Other events (8+ hours) before regular Other events.
+        
+        These events have special rules:
+        - Schedule on start date (like Juicer events)
+        - One per employee per day
+        - Cannot work with Core or Juicer event on same day
+        - Uses Core-like employee pool: Leads → Specialists → Juicers
+        """
+        current_app.logger.info("=== FULL-DAY EVENTS: Scheduling 8+ hour Other events ===")
+        
+        full_day_events = [
+            e for e in events 
+            if e.event_type == 'Other' 
+            and not e.is_scheduled 
+            and self._is_full_day_event(e)
+        ]
+        
+        current_app.logger.info(f"Found {len(full_day_events)} full-day Other events to schedule")
+        
+        for event in full_day_events:
+            self._schedule_single_full_day_event(run, event, events)
+
+    def _schedule_single_full_day_event(self, run: object, event: object, events: List[object]) -> None:
+        """
+        Schedule a single full-day event.
+        
+        Priority: Leads → Specialists → Juicers (NOT Club Supervisor)
+        Constraints: No Core/Juicer/Full-day events on same day for employee
+        """
+        # Schedule on start date (like Juicer events)
+        target_date = event.start_datetime.date()
+        schedule_datetime = datetime.combine(target_date, time(9, 0))  # 9 AM start
+        
+        # Check if day is locked
+        if self._is_day_locked(target_date):
+            locked_info = self._get_locked_day_info(target_date)
+            reason = locked_info.reason if locked_info else "Unknown"
+            self._create_failed_pending_schedule(
+                run, event, 
+                f"Start date {target_date} is locked (reason: {reason})"
+            )
+            run.events_failed += 1
+            current_app.logger.info(
+                f"FULL-DAY: Failed to schedule {event.project_ref_num} - start date locked"
+            )
+            return
+        
+        day_of_week = target_date.weekday()
+        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        day_column = day_names[day_of_week]
+        
+        # Build employee pool: Leads → Specialists → Juicers (like Core events)
+        employee_pool = []
+        
+        # Get Leads (priority)
+        leads = self.db.query(self.Employee).filter(
+            self.Employee.job_title == 'Lead Event Specialist',
+            self.Employee.is_active == True
+        ).all()
+        employee_pool.extend([(emp, 'Lead') for emp in leads])
+        
+        # Get Specialists
+        specialists = self.db.query(self.Employee).filter(
+            self.Employee.job_title == 'Event Specialist',
+            self.Employee.is_active == True
+        ).all()
+        employee_pool.extend([(emp, 'Specialist') for emp in specialists])
+        
+        # Get Juicers (only if not juicing that day)
+        juicers = self.db.query(self.Employee).filter(
+            self.Employee.job_title == 'Juicer Barista',
+            self.Employee.is_active == True
+        ).all()
+        for juicer in juicers:
+            if not self._has_juicer_event_on_day(run, juicer, target_date):
+                employee_pool.append((juicer, 'Juicer'))
+        
+        current_app.logger.info(f"FULL-DAY: Employee pool has {len(employee_pool)} candidates")
+        
+        # Try each employee
+        for employee, role in employee_pool:
+            # Check if employee already has a full-day event this day
+            if self._has_full_day_event_on_day(run, employee, target_date):
+                current_app.logger.debug(
+                    f"FULL-DAY: Skipping {employee.name} - already has full-day event on {target_date}"
+                )
+                continue
+            
+            # Check if employee has a Core event this day
+            core_events = self._get_core_events_for_employee_on_date(run, employee, target_date)
+            if core_events:
+                current_app.logger.debug(
+                    f"FULL-DAY: Skipping {employee.name} - has Core event on {target_date}"
+                )
+                continue
+            
+            # Check if employee has a Juicer event this day (for non-juicers who might have been assigned)
+            if self._has_juicer_event_on_day(run, employee, target_date):
+                current_app.logger.debug(
+                    f"FULL-DAY: Skipping {employee.name} - has Juicer event on {target_date}"
+                )
+                continue
+            
+            # Check time off
+            time_off = self.db.query(self.EmployeeTimeOff).filter(
+                self.EmployeeTimeOff.employee_id == employee.id,
+                self.EmployeeTimeOff.start_date <= target_date,
+                self.EmployeeTimeOff.end_date >= target_date
+            ).first()
+            if time_off:
+                continue
+            
+            # Check weekly availability
+            weekly_avail = self.db.query(self.EmployeeWeeklyAvailability).filter_by(
+                employee_id=employee.id
+            ).first()
+            if weekly_avail:
+                is_available = getattr(weekly_avail, day_column, True)
+                if not is_available:
+                    continue
+            
+            # Found an available employee!
+            self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
+            run.events_scheduled += 1
+            current_app.logger.info(
+                f"FULL-DAY: Scheduled {event.project_ref_num} to {employee.name} ({role}) on {target_date}"
+            )
+            return
+        
+        # Failed to find available employee
+        self._create_failed_pending_schedule(
+            run, event, 
+            f"No available employee on start date {target_date} (all have conflicts or unavailable)"
+        )
+        run.events_failed += 1
+        current_app.logger.info(
+            f"FULL-DAY: Failed to schedule {event.project_ref_num} - no available employees"
+        )
+
     def _schedule_other_events_wave5(self, run: object, events: List[object]) -> None:
         """
         Wave 5: Schedule Other events
 
         Priority: Club Supervisor first → ANY Lead Event Specialist fallback
+        
+        Note: Full-day Other events (8+ hours) are handled separately in _schedule_full_day_events
+        before this wave runs, so we skip them here.
         """
         for event in events:
             if event.is_scheduled:
                 continue
 
             if event.event_type == 'Other':
+                # Skip full-day events - they were already scheduled
+                if self._is_full_day_event(event):
+                    continue
                 self._schedule_other_event_wave5(run, event)
 
     def _schedule_other_event_wave5(self, run: object, event: object) -> None:
@@ -1173,11 +1521,9 @@ class SchedulingEngine:
         """
         Wave 2: Schedule a Juicer event to the rotation-assigned Juicer Barista
 
-        Logic:
-        - Try rotation Juicer for event start date
-        - If Juicer has time off or unavailable, try next day
-        - Continue until due date
-        - Can bump Core events from Wave 1 if needed
+        IMPORTANT: Juicer events are ALWAYS scheduled on their start date.
+        They should NOT be automatically moved to different days - only manual
+        user intervention can change the scheduled date for Juicer events.
 
         Scheduling times:
         - JUICER-PRODUCTION-SPCLTY: 9:00 AM
@@ -1187,32 +1533,38 @@ class SchedulingEngine:
         # Determine the appropriate time for this Juicer event
         juicer_time = self._get_juicer_time(event)
 
-        # Try each day from earliest allowed date to due date
-        current_date = self._get_earliest_schedule_date(event)
-        while current_date < event.due_datetime:
-            employee = self.rotation_manager.get_rotation_employee(current_date, 'juicer')
-            if not employee:
-                # No Juicer assigned for this day in rotation
-                current_date += timedelta(days=1)
-                continue
+        # ONLY try to schedule on the event's START DATE
+        # Juicer events should not be auto-moved to different days
+        target_date = event.start_datetime
+        
+        employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
+        if not employee:
+            # No Juicer assigned for this day in rotation
+            self._create_failed_pending_schedule(
+                run, event, 
+                f"No Juicer rotation employee assigned for {target_date.date()}"
+            )
+            run.events_failed += 1
+            return
 
-            schedule_datetime = datetime.combine(current_date.date(), juicer_time)
-            validation = self.validator.validate_assignment(event, employee, schedule_datetime)
+        schedule_datetime = datetime.combine(target_date.date(), juicer_time)
+        validation = self.validator.validate_assignment(event, employee, schedule_datetime)
 
-            if validation.is_valid:
-                # Juicer is available - schedule it
-                self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
-                run.events_scheduled += 1
-                current_app.logger.info(
-                    f"Wave 2: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {current_date.date()}"
-                )
-                return
+        if validation.is_valid:
+            # Juicer is available - schedule it
+            self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
+            run.events_scheduled += 1
+            current_app.logger.info(
+                f"Wave 2: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {target_date.date()}"
+            )
+            return
 
-            # Juicer not available (time off, already scheduled, etc.) - try next day
-            current_date += timedelta(days=1)
-
-        # Failed to schedule
-        self._create_failed_pending_schedule(run, event, "No available Juicer rotation employee before due date")
+        # Juicer not available on start date - fail (do not auto-move to different day)
+        violation_reasons = ", ".join([v.message for v in validation.violations])
+        self._create_failed_pending_schedule(
+            run, event, 
+            f"Juicer unavailable on start date ({target_date.date()}): {violation_reasons}"
+        )
         run.events_failed += 1
 
     def _schedule_core_events_wave2_new(self, run: object, events: List[object]) -> List[object]:
@@ -1256,6 +1608,7 @@ class SchedulingEngine:
             )
 
             scheduled = False
+            locked_days_encountered = []  # Track which days were locked
 
             # Day-by-day search from tomorrow to due date
             search_start = max(event.start_datetime, today + timedelta(days=1))
@@ -1270,7 +1623,7 @@ class SchedulingEngine:
                     f"  Checking date {current_date.date()} (day {days_from_now} from now)"
                 )
 
-                # Days 1-3: SHORT NOTICE - Only try to bump
+                # Days 1-3: SHORT NOTICE - Only try to bump (bumping allowed on locked days)
                 if days_from_now <= 3:
                     current_app.logger.info("  Short notice window (days 1-3): BUMP ONLY")
                     bumped_event = self._try_bump_for_day(run, event, current_date, events)
@@ -1290,40 +1643,60 @@ class SchedulingEngine:
                 else:
                     current_app.logger.info("  Normal window (day 4+): Try empty slots first, then bump")
 
-                    # Try empty slots first
-                    if self._try_fill_empty_slot(run, event, current_date, events):
-                        scheduled = True
-                        event.is_scheduled = True
-                        current_app.logger.info(f"  SUCCESS: Filled empty slot for {event.project_ref_num}")
-                    else:
-                        # No empty slots, try to bump
+                    # Check if day is locked (for empty slot filling - bumping still allowed)
+                    is_locked = self._is_day_locked(current_date)
+                    if is_locked:
+                        locked_days_encountered.append(current_date.date())
+                        current_app.logger.info(f"  Day {current_date.date()} is locked - skipping empty slot fill, trying bump")
+                        # Can still bump on locked days
                         bumped_event = self._try_bump_for_day(run, event, current_date, events)
                         if bumped_event:
                             scheduled = True
                             event.is_scheduled = True
-                            # Re-insert bumped event and re-sort
                             unstaffed_core.append(bumped_event)
                             unstaffed_core.sort(key=lambda e: e.due_datetime)
                             current_app.logger.info(
-                                f"  SUCCESS: Scheduled {event.project_ref_num}, "
+                                f"  SUCCESS: Scheduled {event.project_ref_num} via bump on locked day, "
                                 f"bumped {bumped_event.project_ref_num} back to queue"
                             )
+                    else:
+                        # Try empty slots first
+                        if self._try_fill_empty_slot(run, event, current_date, events):
+                            scheduled = True
+                            event.is_scheduled = True
+                            current_app.logger.info(f"  SUCCESS: Filled empty slot for {event.project_ref_num}")
+                        else:
+                            # No empty slots, try to bump
+                            bumped_event = self._try_bump_for_day(run, event, current_date, events)
+                            if bumped_event:
+                                scheduled = True
+                                event.is_scheduled = True
+                                # Re-insert bumped event and re-sort
+                                unstaffed_core.append(bumped_event)
+                                unstaffed_core.sort(key=lambda e: e.due_datetime)
+                                current_app.logger.info(
+                                    f"  SUCCESS: Scheduled {event.project_ref_num}, "
+                                    f"bumped {bumped_event.project_ref_num} back to queue"
+                                )
 
                 # Move to next day
                 current_date += timedelta(days=1)
 
-            # If not scheduled by due date, add to failed list
+            # If not scheduled by due date, add to failed list with detailed reason
             if not scheduled:
+                # Build detailed failure reason
+                failure_reason = f"Could not find slot or event to bump within valid window (start: {event.start_datetime.date()}, due: {event.due_datetime.date()})"
+                if locked_days_encountered:
+                    locked_str = ", ".join(str(d) for d in locked_days_encountered)
+                    failure_reason += f". Days locked (empty slot fill blocked): {locked_str}"
+
                 current_app.logger.warning(
                     f"FAILED: Could not schedule Core event {event.project_ref_num} "
-                    f"(due {event.due_datetime.date()})"
+                    f"(due {event.due_datetime.date()}). {failure_reason}"
                 )
                 failed_events.append(event)
                 # Create failure record in PendingSchedule
-                self._create_failed_pending_schedule(
-                    run, event,
-                    f"Could not find slot or event to bump within valid window (start: {event.start_datetime.date()}, due: {event.due_datetime.date()})"
-                )
+                self._create_failed_pending_schedule(run, event, failure_reason)
                 run.events_failed += 1
 
         scheduled_count = run.events_scheduled
@@ -1337,11 +1710,26 @@ class SchedulingEngine:
         """
         Try to bump a less urgent event on a specific day to make room for the given event
 
+        IMPORTANT: This now TRACKS bumps without executing them. Actual bumps happen during approval.
+
+        NOTE: Bumping IS allowed on locked days because it only changes which event is assigned,
+        not the employee or time slot. This preserves the schedule structure while optimizing
+        event assignment.
+
         Returns the bumped event if successful, None otherwise
         """
         target_date_obj = target_date.date()
 
+        # NOTE: Locked day check REMOVED for bumping
+        # Bumping only swaps events (doesn't change employee or time), so it's safe on locked days
+        if self._is_day_locked(target_date):
+            current_app.logger.info(
+                f"    Day {target_date_obj} is locked, but bumping is allowed (only changes event assignment)"
+            )
+            # Continue with bumping - don't return None
+
         # Find all Core events scheduled on this day (both pending and posted)
+        # IMPORTANT: Exclude superseded schedules
         # Pending schedules
         pending_on_day = self.db.query(self.PendingSchedule).join(
             self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
@@ -1349,6 +1737,7 @@ class SchedulingEngine:
             self.PendingSchedule.scheduler_run_id == run.id,
             self.Event.event_type == 'Core',
             self.PendingSchedule.failure_reason == None,
+            self.PendingSchedule.status != 'superseded',  # Exclude superseded schedules
             func.date(self.PendingSchedule.schedule_datetime) == target_date_obj
         ).all()
 
@@ -1366,6 +1755,13 @@ class SchedulingEngine:
             if sched.event.due_datetime > event.due_datetime:
                 candidates.append((sched, False))  # False = not posted
         for sched in posted_on_day:
+            # CRITICAL: Skip posted schedules that have already been bumped in this run
+            if sched.id in self.bumped_posted_schedule_ids:
+                current_app.logger.debug(
+                    f"    Skipping posted schedule {sched.id} (event {sched.event.project_ref_num}) - "
+                    f"already bumped in this run"
+                )
+                continue
             if sched.event.due_datetime > event.due_datetime:
                 candidates.append((sched, True))  # True = posted
 
@@ -1377,30 +1773,40 @@ class SchedulingEngine:
         best_sched, is_posted = max(candidates,
                                     key=lambda x: (x[0].event.due_datetime, -x[0].schedule_datetime.toordinal()))
 
-        # Perform the bump
+        # Mark for bumping (don't actually delete)
         employee = best_sched.employee
         schedule_datetime = best_sched.schedule_datetime
         bumped_event = best_sched.event
 
         current_app.logger.info(
             f"    BUMPING: {bumped_event.project_ref_num} (due {bumped_event.due_datetime.date()}) "
-            f"from {employee.name} at {schedule_datetime.strftime('%Y-%m-%d %I:%M %p')}"
+            f"from {employee.name} at {schedule_datetime.strftime('%Y-%m-%d %I:%M %p')} "
+            f"(will be bumped on approval)"
         )
 
-        # Delete the schedule
+        # Mark the schedule as superseded (don't delete it)
         if is_posted:
-            current_app.logger.info(f"    Removing posted schedule from Schedule table")
-            self.db.delete(best_sched)
-            # Delete matching Supervisor if exists
-            self._delete_matching_supervisor_posted(bumped_event, target_date_obj)
+            current_app.logger.info(f"    Marking posted schedule for deletion during approval")
+            # For posted schedules, we can't mark them as superseded
+            # The approval process will handle deletion via the is_swap mechanism
+            # Matching Supervisor events will also be deleted during approval
+            # CRITICAL: Set is_scheduled back to False so the bumped event can be rescheduled
+            bumped_event.is_scheduled = False
+            # Track this posted schedule as bumped to prevent double-bumping
+            self.bumped_posted_schedule_ids.add(best_sched.id)
         else:
-            current_app.logger.info(f"    Removing pending schedule")
-            self.db.delete(best_sched)
+            current_app.logger.info(f"    Marking pending schedule as superseded")
+            best_sched.status = 'superseded'
+            swap_reason = f"Superseded by more urgent event {event.project_ref_num}"
+            best_sched.swap_reason = swap_reason
+            # CRITICAL: Set is_scheduled back to False so the event can be rescheduled
+            bumped_event.is_scheduled = False
 
-        bumped_event.is_scheduled = False
-
-        # Schedule the new event in its place
-        self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
+        # Schedule the new event in its place, marking it as a swap
+        bump_type = "POSTED" if is_posted else "PENDING"
+        swap_reason = f"Bumped {bump_type} event {bumped_event.project_ref_num} (due {bumped_event.due_datetime.date()})"
+        self._create_pending_schedule(run, event, employee, schedule_datetime, True, 
+                                     bumped_event.project_ref_num, swap_reason)
         run.events_scheduled += 1
 
         # Schedule matching Supervisor event
@@ -1418,6 +1824,15 @@ class SchedulingEngine:
         Returns True if successfully scheduled, False otherwise
         """
         target_date_obj = target_date.date()
+
+        # CHECK LOCKED DAYS FIRST: Cannot schedule to a locked day
+        if self._is_day_locked(target_date):
+            locked_info = self._get_locked_day_info(target_date)
+            reason = locked_info.reason if locked_info else "Unknown"
+            current_app.logger.warning(
+                f"    Skipping {target_date_obj} - day is LOCKED (reason: {reason})"
+            )
+            return False
 
         # Build employee pool
         employee_pool = []
@@ -1450,6 +1865,43 @@ class SchedulingEngine:
 
         # Try each employee (Leads first due to list order)
         for employee, role in employee_pool:
+            # SAFEGUARD: For Core events, explicitly check if employee already has a Core event
+            # on this day (catches timing issues with constraint validator)
+            if event.event_type == 'Core':
+                # Check pending schedules from current run
+                existing_core_pending = self.db.query(self.PendingSchedule).join(
+                    self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.PendingSchedule.scheduler_run_id == run.id,
+                    self.PendingSchedule.employee_id == employee.id,
+                    func.date(self.PendingSchedule.schedule_datetime) == target_date_obj,
+                    self.Event.event_type == 'Core',
+                    self.PendingSchedule.failure_reason.is_(None)
+                ).first()
+
+                if existing_core_pending:
+                    current_app.logger.debug(
+                        f"    Skipping {employee.name} - already has Core event {existing_core_pending.event_ref_num} "
+                        f"pending on {target_date_obj}"
+                    )
+                    continue
+
+                # Also check existing approved schedules
+                existing_core_scheduled = self.db.query(self.Schedule).join(
+                    self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.Schedule.employee_id == employee.id,
+                    func.date(self.Schedule.schedule_datetime) == target_date_obj,
+                    self.Event.event_type == 'Core'
+                ).first()
+
+                if existing_core_scheduled:
+                    current_app.logger.debug(
+                        f"    Skipping {employee.name} - already has Core event {existing_core_scheduled.event_ref_num} "
+                        f"scheduled on {target_date_obj}"
+                    )
+                    continue
+
             # Find the time slot with fewest scheduled employees
             time_slot = self._find_least_busy_time_slot(run, target_date_obj)
 
@@ -1469,13 +1921,21 @@ class SchedulingEngine:
                     f"at {schedule_datetime.strftime('%Y-%m-%d %I:%M %p')}"
                 )
 
-                self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
-                run.events_scheduled += 1
+                # Create pending schedule and CHECK THE RETURN VALUE
+                # _create_pending_schedule returns False if blocked (e.g., locked day, outside event period)
+                if self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None):
+                    run.events_scheduled += 1
 
-                # Schedule matching Supervisor event
-                self._schedule_matching_supervisor_event(run, event, target_date_obj, events)
+                    # Schedule matching Supervisor event
+                    self._schedule_matching_supervisor_event(run, event, target_date_obj, events)
 
-                return True
+                    return True
+                else:
+                    # Pending schedule creation failed - try next employee
+                    current_app.logger.warning(
+                        f"    Failed to create pending schedule for {event.project_ref_num} - trying next employee"
+                    )
+                    continue
 
         return False
 
@@ -1829,6 +2289,9 @@ class SchedulingEngine:
         event_name_upper = event.project_name.upper()
         if event.event_type == 'Digitals' and ('SETUP' in event_name_upper or 'REFRESH' in event_name_upper):
             schedule_time = self._get_next_digital_time_slot(schedule_date)
+        elif event.event_type == 'Freeosk' and 'TROUBLESHOOTING' in event_name_upper:
+            # Freeosk Troubleshooting events (including Interactive Tablet) scheduled at noon
+            schedule_time = self.DEFAULT_TIMES.get('Freeosk Troubleshooting', time(12, 0))
         else:
             schedule_time = self.DEFAULT_TIMES.get('Freeosk', time(10, 0))
 
@@ -2383,15 +2846,15 @@ class SchedulingEngine:
         Schedule a Supervisor event to a specific date
 
         Priority:
-        1. Club Supervisor (if available that day)
-        2. Primary Lead Event Specialist (fallback)
+        1. Club Supervisor (preferred)
+        2. Primary Lead Event Specialist (fallback if Club Supervisor unavailable)
         """
         supervisor_datetime = datetime.combine(target_date, time(12, 0))
         day_of_week = target_date.weekday()
         day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
         day_column = day_names[day_of_week]
 
-        # Try Club Supervisor first
+        # Try Club Supervisor first (preferred for Supervisor events)
         club_supervisor = self.db.query(self.Employee).filter_by(
             job_title='Club Supervisor',
             is_active=True
@@ -2691,8 +3154,37 @@ class SchedulingEngine:
 
     def _create_pending_schedule(self, run: object, event: object, employee: Optional[object],
                                  schedule_datetime: datetime, is_swap: bool,
-                                 bumped_event_ref: Optional[int], swap_reason: Optional[str]) -> None:
-        """Create a PendingSchedule record"""
+                                 bumped_event_ref: Optional[int], swap_reason: Optional[str]) -> bool:
+        """Create a PendingSchedule record
+        
+        Returns:
+            True if schedule was created, False if blocked (e.g., locked day)
+        """
+        # CHECK LOCKED DAYS: Cannot schedule to a locked day
+        if schedule_datetime and self._is_day_locked(schedule_datetime):
+            locked_info = self._get_locked_day_info(schedule_datetime)
+            reason = locked_info.reason if locked_info else "Unknown"
+            current_app.logger.warning(
+                f"Cannot schedule event {event.project_ref_num} to {schedule_datetime.date()} - "
+                f"day is LOCKED (reason: {reason}). Unlock the day to allow scheduling."
+            )
+            return False
+        
+        # DUPLICATE PREVENTION: Check if a non-superseded schedule already exists for this event in this run
+        existing_pending = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.event_ref_num == event.project_ref_num,
+            self.PendingSchedule.status != 'superseded',
+            self.PendingSchedule.failure_reason.is_(None)
+        ).first()
+        
+        if existing_pending:
+            current_app.logger.warning(
+                f"DUPLICATE PREVENTION: Event {event.project_ref_num} already has a pending schedule "
+                f"(id={existing_pending.id}) in run {run.id}. Skipping duplicate creation."
+            )
+            return False
+        
         # CRITICAL VALIDATION: Ensure schedule_datetime is within event period
         # This should never happen if the scheduling logic is correct, but this is a safety check
         if schedule_datetime and not (event.start_datetime <= schedule_datetime <= event.due_datetime):
@@ -2707,7 +3199,7 @@ class SchedulingEngine:
                 f"Stack trace for debugging: Attempted by employee={employee.name if employee else 'None'}, "
                 f"is_swap={is_swap}"
             )
-            return
+            return False
 
         pending = self.PendingSchedule(
             scheduler_run_id=run.id,
@@ -2722,6 +3214,13 @@ class SchedulingEngine:
         )
         self.db.add(pending)
         self.db.flush()
+        
+        # Mark event as scheduled ONLY if we successfully assigned an employee
+        # This prevents the event from being scheduled multiple times
+        if employee:
+            event.is_scheduled = True
+        
+        return True
 
     def _create_failed_pending_schedule(self, run: object, event: object, failure_reason: str) -> None:
         """Create a PendingSchedule record for a failed scheduling attempt"""

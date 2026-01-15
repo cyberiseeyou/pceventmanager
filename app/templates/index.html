@@ -713,7 +713,7 @@
                     <div class="unscheduled-item">
                         <div class="unscheduled-header">
                             <div class="unscheduled-title">{{ event.project_name }}</div>
-                            <span class="event-type-badge event-type-{{ event.event_type.lower() }}">
+                            <span class="event-type-badge event-type-{{ event.event_type.lower().replace(' ', '-') }}">
                                 {{ event.event_type }}
                             </span>
                         </div>

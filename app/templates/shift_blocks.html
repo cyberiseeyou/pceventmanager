@@ -1,0 +1,503 @@
+{% extends "base.html" %}
+
+{% block title %}Shift Block Configuration - Product Connections Scheduler{% endblock %}
+
+{% block content %}
+<div class="shift-blocks-container">
+    <div class="page-header">
+        <h2>Shift Block Configuration</h2>
+        <p class="page-description">
+            Configure the 8 shift blocks used for Core event scheduling. Each block defines arrival, floor time, lunch break, and departure times.
+        </p>
+    </div>
+
+    <div class="info-box">
+        <strong>How Shift Blocks Work:</strong>
+        <ul>
+            <li><strong>Arrive:</strong> Time stored in MVRetail system (employee's scheduled start)</li>
+            <li><strong>On Floor:</strong> Actual time on the sales floor (shown on EDR paperwork)</li>
+            <li><strong>Lunch:</strong> Scheduled break period</li>
+            <li><strong>Off Floor / Depart:</strong> End of shift times</li>
+        </ul>
+        <p style="margin-top: 10px; color: #666;">
+            Blocks 1-8 are assigned to employees sequentially. Primary Lead always gets Block 1.
+            For days with 9+ Core events, blocks are reused in priority order (odd blocks first).
+        </p>
+    </div>
+
+    <div id="loading-indicator" class="loading-message">
+        Loading shift blocks...
+    </div>
+
+    <div id="blocks-container" style="display: none;">
+        <!-- Blocks will be rendered here by JavaScript -->
+    </div>
+
+    <div class="form-actions" id="save-actions" style="display: none;">
+        <button type="button" id="save-all-btn" class="btn btn-primary">Save All Changes</button>
+        <button type="button" id="reset-btn" class="btn btn-secondary">Reset to Environment Defaults</button>
+        <a href="{{ url_for('admin.settings') }}" class="btn btn-link">Back to Settings</a>
+    </div>
+
+    <div id="save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
+</div>
+
+<style>
+    .shift-blocks-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .page-header {
+        margin-bottom: 20px;
+    }
+
+    .page-header h2 {
+        color: #2E4C73;
+        margin-bottom: 10px;
+    }
+
+    .page-description {
+        color: #666;
+        font-size: 0.95em;
+    }
+
+    .info-box {
+        background: #e7f3ff;
+        border: 1px solid #b3d7ff;
+        border-radius: 6px;
+        padding: 15px 20px;
+        margin-bottom: 25px;
+        color: #004085;
+    }
+
+    .info-box ul {
+        margin: 10px 0;
+        padding-left: 20px;
+    }
+
+    .info-box li {
+        margin-bottom: 5px;
+    }
+
+    .loading-message {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-style: italic;
+    }
+
+    .blocks-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .block-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .block-card.block-primary {
+        border-color: #2E4C73;
+        border-width: 2px;
+    }
+
+    .block-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .block-title {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #2E4C73;
+    }
+
+    .block-badge {
+        background: #2E4C73;
+        color: white;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+    }
+
+    .block-badge.primary {
+        background: #28a745;
+    }
+
+    .time-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .time-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .time-field label {
+        font-size: 0.85em;
+        color: #666;
+        margin-bottom: 4px;
+    }
+
+    .time-field input {
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .time-field input:focus {
+        border-color: #2E4C73;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(46, 76, 115, 0.1);
+    }
+
+    .time-field.full-width {
+        grid-column: span 2;
+    }
+
+    .lunch-divider {
+        grid-column: span 2;
+        text-align: center;
+        color: #999;
+        font-size: 0.85em;
+        margin: 5px 0;
+        position: relative;
+    }
+
+    .lunch-divider::before,
+    .lunch-divider::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 30%;
+        height: 1px;
+        background: #ddd;
+    }
+
+    .lunch-divider::before {
+        left: 0;
+    }
+
+    .lunch-divider::after {
+        right: 0;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #ddd;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+
+    .btn-primary {
+        background: #2E4C73;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #1a2f4a;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+
+    .btn-link {
+        background: transparent;
+        color: #2E4C73;
+        padding: 10px 15px;
+    }
+
+    .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+        .blocks-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .time-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .time-field.full-width,
+        .lunch-divider {
+            grid-column: span 1;
+        }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const blocksContainer = document.getElementById('blocks-container');
+    const saveActions = document.getElementById('save-actions');
+    const saveAllBtn = document.getElementById('save-all-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const saveStatus = document.getElementById('save-status');
+
+    let originalBlocks = [];
+
+    // Load shift blocks on page load
+    loadShiftBlocks();
+
+    async function loadShiftBlocks() {
+        try {
+            const response = await fetch('/api/shift-blocks/');
+            const data = await response.json();
+
+            if (data.success) {
+                originalBlocks = JSON.parse(JSON.stringify(data.blocks));
+                renderBlocks(data.blocks);
+                loadingIndicator.style.display = 'none';
+                blocksContainer.style.display = 'block';
+                saveActions.style.display = 'flex';
+            } else {
+                showError('Failed to load shift blocks: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Error loading shift blocks:', error);
+            showError('Error loading shift blocks. Please refresh the page.');
+        }
+    }
+
+    function renderBlocks(blocks) {
+        // Ensure we have 8 blocks
+        const allBlocks = [];
+        for (let i = 1; i <= 8; i++) {
+            const existing = blocks.find(b => b.block === i);
+            if (existing) {
+                allBlocks.push(existing);
+            } else {
+                // Default empty block
+                allBlocks.push({
+                    block: i,
+                    arrive_str: '',
+                    on_floor_str: '',
+                    lunch_begin_str: '',
+                    lunch_end_str: '',
+                    off_floor_str: '',
+                    depart_str: ''
+                });
+            }
+        }
+
+        let html = '<div class="blocks-grid">';
+
+        allBlocks.forEach(block => {
+            const isPrimary = block.block === 1;
+            html += `
+                <div class="block-card ${isPrimary ? 'block-primary' : ''}" data-block="${block.block}">
+                    <div class="block-header">
+                        <span class="block-title">Block ${block.block}</span>
+                        ${isPrimary ? '<span class="block-badge primary">Primary Lead</span>' : ''}
+                    </div>
+                    <div class="time-fields">
+                        <div class="time-field">
+                            <label for="block_${block.block}_arrive">Arrive</label>
+                            <input type="time" id="block_${block.block}_arrive"
+                                   value="${block.arrive_str || ''}" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="block_${block.block}_on_floor">On Floor</label>
+                            <input type="time" id="block_${block.block}_on_floor"
+                                   value="${block.on_floor_str || ''}" required>
+                        </div>
+
+                        <div class="lunch-divider">Lunch Break</div>
+
+                        <div class="time-field">
+                            <label for="block_${block.block}_lunch_begin">Lunch Begin</label>
+                            <input type="time" id="block_${block.block}_lunch_begin"
+                                   value="${block.lunch_begin_str || ''}" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="block_${block.block}_lunch_end">Lunch End</label>
+                            <input type="time" id="block_${block.block}_lunch_end"
+                                   value="${block.lunch_end_str || ''}" required>
+                        </div>
+
+                        <div class="time-field">
+                            <label for="block_${block.block}_off_floor">Off Floor</label>
+                            <input type="time" id="block_${block.block}_off_floor"
+                                   value="${block.off_floor_str || ''}" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="block_${block.block}_depart">Depart</label>
+                            <input type="time" id="block_${block.block}_depart"
+                                   value="${block.depart_str || ''}" required>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        blocksContainer.innerHTML = html;
+    }
+
+    function getBlockData(blockNum) {
+        return {
+            block: blockNum,
+            arrive: document.getElementById(`block_${blockNum}_arrive`).value,
+            on_floor: document.getElementById(`block_${blockNum}_on_floor`).value,
+            lunch_begin: document.getElementById(`block_${blockNum}_lunch_begin`).value,
+            lunch_end: document.getElementById(`block_${blockNum}_lunch_end`).value,
+            off_floor: document.getElementById(`block_${blockNum}_off_floor`).value,
+            depart: document.getElementById(`block_${blockNum}_depart`).value
+        };
+    }
+
+    function validateBlock(block) {
+        const fields = ['arrive', 'on_floor', 'lunch_begin', 'lunch_end', 'off_floor', 'depart'];
+        for (const field of fields) {
+            if (!block[field]) {
+                return `Block ${block.block}: ${field.replace('_', ' ')} is required`;
+            }
+        }
+        return null;
+    }
+
+    saveAllBtn.addEventListener('click', async function() {
+        const blocks = [];
+
+        for (let i = 1; i <= 8; i++) {
+            const block = getBlockData(i);
+            const error = validateBlock(block);
+            if (error) {
+                showStatus(error, 'error');
+                return;
+            }
+            blocks.push(block);
+        }
+
+        try {
+            saveAllBtn.disabled = true;
+            saveAllBtn.textContent = 'Saving...';
+
+            const response = await fetch('/api/shift-blocks/', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ blocks })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showStatus('All shift blocks saved successfully!', 'success');
+                originalBlocks = JSON.parse(JSON.stringify(data.blocks));
+            } else {
+                showStatus('Error: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving shift blocks:', error);
+            showStatus('Error saving shift blocks. Please try again.', 'error');
+        } finally {
+            saveAllBtn.disabled = false;
+            saveAllBtn.textContent = 'Save All Changes';
+        }
+    });
+
+    resetBtn.addEventListener('click', async function() {
+        if (!confirm('This will reset all shift blocks to the values defined in the environment (.env file). Continue?')) {
+            return;
+        }
+
+        try {
+            resetBtn.disabled = true;
+            resetBtn.textContent = 'Resetting...';
+
+            const response = await fetch('/api/shift-blocks/initialize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ force: true })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showStatus(`Reset complete. ${data.count} blocks initialized from environment.`, 'success');
+                // Reload the blocks
+                await loadShiftBlocks();
+            } else {
+                showStatus('Error: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error resetting shift blocks:', error);
+            showStatus('Error resetting shift blocks. Please try again.', 'error');
+        } finally {
+            resetBtn.disabled = false;
+            resetBtn.textContent = 'Reset to Environment Defaults';
+        }
+    });
+
+    function showStatus(message, type) {
+        saveStatus.textContent = message;
+        saveStatus.style.display = 'block';
+        saveStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+        saveStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+        saveStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+
+        if (type === 'success') {
+            setTimeout(() => {
+                saveStatus.style.display = 'none';
+            }, 5000);
+        }
+    }
+
+    function showError(message) {
+        loadingIndicator.innerHTML = `<div style="color: #721c24;">${message}</div>`;
+    }
+
+    function getCsrfToken() {
+        const token = document.cookie.split('; ')
+            .find(row => row.startsWith('csrf_token='))
+            ?.split('=')[1];
+        return token || '';
+    }
+});
+</script>
+{% endblock %}

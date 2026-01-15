@@ -710,8 +710,11 @@ function fixScheduleError(scheduleId, projectName, errorMessage) {
             // Set date constraints for reschedule modal
             initializeRescheduleDateConstraints(schedule.start_date, schedule.due_date);
 
+            // Store event name for time restrictions
+            window.currentEventName = schedule.event_name || projectName || '';
+
             // Initialize time restrictions for reschedule modal
-            initializeRescheduleTimeRestrictions(schedule.event_type, currentDate.toTimeString().slice(0, 5));
+            initializeRescheduleTimeRestrictions(schedule.event_type, currentDate.toTimeString().slice(0, 5), window.currentEventName);
 
             // Load available employees for the date with event type filtering
             fetchEmployeesForReschedule(currentDate.toISOString().split('T')[0], schedule.event_type, schedule.employee_id, currentDate.toISOString().split('T')[0]);
@@ -798,7 +801,7 @@ function initializeRescheduleDateConstraints(startDate, dueDate) {
     });
 }
 
-function initializeRescheduleTimeRestrictions(eventType, currentTime) {
+function initializeRescheduleTimeRestrictions(eventType, currentTime, eventName = '') {
     const timeInput = document.getElementById('reschedule-time');
     const timeDropdown = document.getElementById('reschedule-time-dropdown');
 
@@ -808,14 +811,22 @@ function initializeRescheduleTimeRestrictions(eventType, currentTime) {
 
     // Define time options for each event type
     const timeRestrictions = {
-        'Core': ['09:45', '10:30', '11:00', '11:30'],
+        'Core': ['10:15', '10:45', '11:15', '11:45'],
         'Supervisor': ['12:00'],
-        'Freeosk': ['09:00', '12:00'],
-        'Digitals': ['09:15', '09:30', '09:45', '10:00']
+        'Freeosk': ['10:00', '12:00'],
+        'Digitals': ['09:15', '09:30', '09:45', '10:00'],
+        'Digital Teardown': ['17:00', '17:15', '17:30', '17:45']
     };
 
+    // Determine effective event type (detect Digital Teardown from event name)
+    let effectiveEventType = eventType;
+    const eventNameLower = (eventName || '').toLowerCase();
+    if (eventType === 'Digitals' && (eventNameLower.includes('tear down') || eventNameLower.includes('teardown'))) {
+        effectiveEventType = 'Digital Teardown';
+    }
+
     // Check if this event type has time restrictions
-    if (timeRestrictions[eventType]) {
+    if (timeRestrictions[effectiveEventType]) {
         // Hide time input, show dropdown
         timeInput.style.display = 'none';
         timeInput.required = false;
@@ -825,7 +836,7 @@ function initializeRescheduleTimeRestrictions(eventType, currentTime) {
 
         // Populate dropdown with allowed times
         timeDropdown.innerHTML = '<option value="">Select a time</option>';
-        timeRestrictions[eventType].forEach(time => {
+        timeRestrictions[effectiveEventType].forEach(time => {
             const option = document.createElement('option');
             option.value = time;
             option.textContent = formatTime(time);
@@ -836,8 +847,8 @@ function initializeRescheduleTimeRestrictions(eventType, currentTime) {
         });
 
         // Set default value for Freeosk events if no current time matches
-        if (eventType === 'Freeosk' && !timeRestrictions[eventType].includes(currentTime)) {
-            timeDropdown.value = '09:00';
+        if (eventType === 'Freeosk' && !timeRestrictions[effectiveEventType].includes(currentTime)) {
+            timeDropdown.value = '10:00';
         }
 
     } else {
@@ -970,8 +981,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     dateInput.max = window.currentDueDate;
                 }
 
-                // 2. Restore time restrictions
-                initializeRescheduleTimeRestrictions(window.currentEventType, timeInput.value);
+                // 2. Restore time restrictions\n                initializeRescheduleTimeRestrictions(window.currentEventType, timeInput.value, window.currentEventName);
 
                 // 3. Restore employee restrictions
                 if (dateInput && dateInput.value) {

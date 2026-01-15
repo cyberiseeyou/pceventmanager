@@ -34,30 +34,8 @@
                     <ul class="text-muted small">
                         <li>Daily Schedule</li>
                         <li>Daily Item List</li>
-                        <li>For each Core event: EDR, Instructions, and active templates</li>
+                        <li>For each Core event: EDR and Instructions</li>
                     </ul>
-
-                    <!-- Active Templates Preview -->
-                    <div class="alert alert-info" id="templates-preview-section" style="display: none;">
-                        <h6 class="mb-2"><i class="fas fa-file-pdf"></i> Active Templates (included for each Core
-                            event):</h6>
-                        <ul id="active-templates-list" class="mb-2 small"></ul>
-                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates" class="small">Manage
-                            Templates in Settings</a>
-                    </div>
-
-                    <div class="alert alert-warning" id="no-templates-warning" style="display: none;">
-                        <i class="fas fa-exclamation-triangle"></i> <strong>No templates configured.</strong>
-                        Only EDR and Instructions will be included for each event.
-                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates">Add templates in Settings</a>
-                    </div>
-
-                    <div class="alert alert-danger" id="missing-files-warning" style="display: none;">
-                        <i class="fas fa-exclamation-circle"></i> <strong>Warning:</strong> Some template files are
-                        missing.
-                        <span id="missing-files-list"></span>
-                        <a href="{{ url_for('admin.settings_page') }}#paperwork-templates">Fix in Settings</a>
-                    </div>
 
                     <div class="row">
                         <div class="col-md-6">
@@ -2670,12 +2648,25 @@
                 if (!response.ok) {
                     const text = await response.text();
                     let errorMsg = 'Failed to generate complete paperwork';
+                    let errorType = null;
+                    let cancelledEvents = null;
                     try {
                         const json = JSON.parse(text);
                         errorMsg = json.error || errorMsg;
+                        errorType = json.error_type || null;
+                        cancelledEvents = json.cancelled_events || null;
                     } catch (e) {
                         errorMsg = text || errorMsg;
                     }
+
+                    // Check for cancelled events error - show special modal
+                    if (errorType === 'cancelled_events' && cancelledEvents) {
+                        clearInterval(progressInterval);
+                        progressModal.classList.remove('active');
+                        showCancelledEventsError(cancelledEvents, date);
+                        return;  // Exit early, don't throw error
+                    }
+
                     throw new Error(errorMsg);
                 }
 
@@ -2739,47 +2730,93 @@
         })();
     }
 
-    // Load and display active templates on page load
-    function loadActiveTemplates() {
-        fetch('/api/paperwork-templates/')
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    console.error('Failed to load templates:', data.error);
-                    return;
+    /**
+     * Show a detailed error dialog for cancelled events.
+     * This function creates a modal with information about which events are cancelled
+     * and what actions the user needs to take.
+     */
+    function showCancelledEventsError(cancelledEvents, date) {
+        // Create modal HTML
+        const eventList = cancelledEvents.map(e =>
+            `<li class="cancelled-event-item">
+                <strong>${e.event_number}</strong>: ${e.event_name}
+                <br><small>Assigned to: ${e.employee_name}</small>
+                <br><small>EDR Status: <span class="text-danger">${e.edr_status}</span></small>
+            </li>`
+        ).join('');
+
+        const modalHTML = `
+            <div id="cancelled-events-modal" class="modal-overlay" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center;">
+                <div class="modal-content" style="background: white; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                    <div style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 20px 24px; border-radius: 12px 12px 0 0;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.5em;">🚫</span>
+                            Cancelled Events Detected
+                        </h3>
+                    </div>
+                    <div style="padding: 24px;">
+                        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                            <strong>⚠️ Cannot Generate Paperwork</strong>
+                            <p style="margin: 8px 0 0 0;">
+                                The following ${cancelledEvents.length} event(s) scheduled for <strong>${date}</strong> have been
+                                <span style="color: #c0392b; font-weight: bold;">CANCELLED</span> in the Walmart EDR system:
+                            </p>
+                        </div>
+
+                        <ul style="list-style: none; padding: 0; margin: 0 0 20px 0;">
+                            ${eventList}
+                        </ul>
+
+                        <div style="background: #e8f4f8; border: 1px solid #17a2b8; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                            <strong>📋 Required Actions:</strong>
+                            <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+                                <li><strong>Unschedule</strong> the cancelled event(s) from the Daily View</li>
+                                <li>Either:
+                                    <ul>
+                                        <li>Leave the employee unscheduled and <strong>notify them</strong> of the schedule change, or</li>
+                                        <li><strong>Reschedule</strong> them to a different event</li>
+                                    </ul>
+                                </li>
+                                <li>Return here to generate paperwork once cancelled events are removed</li>
+                            </ol>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button onclick="document.getElementById('cancelled-events-modal').remove()"
+                                    style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                Close
+                            </button>
+                            <a href="/schedule/daily/${date}"
+                               style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                                <span>📅</span> Go to Daily View
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .cancelled-event-item {
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    border-left: 4px solid #e74c3c;
+                    padding: 12px 16px;
+                    margin-bottom: 10px;
+                    border-radius: 0 6px 6px 0;
                 }
-
-                const activeTemplates = data.templates.filter(t => t.is_active);
-                const missingFiles = data.templates.filter(t => t.is_active && !t.file_exists);
-
-                // Show appropriate alert
-                if (activeTemplates.length === 0) {
-                    document.getElementById('no-templates-warning').style.display = 'block';
-                } else {
-                    // Show active templates list
-                    const list = document.getElementById('active-templates-list');
-                    list.innerHTML = activeTemplates.map(t => {
-                        const icon = t.file_exists ? '✓' : '⚠';
-                        const style = t.file_exists ? '' : 'color: red;';
-                        return `<li style="${style}">${icon} ${t.name}</li>`;
-                    }).join('');
-                    document.getElementById('templates-preview-section').style.display = 'block';
-
-                    // Show missing files warning if any
-                    if (missingFiles.length > 0) {
-                        const missingList = missingFiles.map(t => t.name).join(', ');
-                        document.getElementById('missing-files-list').textContent = missingList;
-                        document.getElementById('missing-files-warning').style.display = 'block';
-                    }
+                .cancelled-event-item:last-child {
+                    margin-bottom: 0;
                 }
-            })
-            .catch(error => {
-                console.error('Error loading templates:', error);
-            });
+            </style>
+        `;
+
+        // Remove any existing modal
+        const existing = document.getElementById('cancelled-events-modal');
+        if (existing) existing.remove();
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
-
-    // Call on page load
-    document.addEventListener('DOMContentLoaded', loadActiveTemplates);
 
     function generateEventPaperwork() {
         const eventNumber = document.getElementById('event-paperwork-number').value.trim();

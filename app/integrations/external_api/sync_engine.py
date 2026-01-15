@@ -140,9 +140,9 @@ class SyncEngine:
         result = {'synced': 0, 'errors': 0, 'details': []}
 
         try:
-            # Get events from last week to next month
-            start_date = datetime.now() - timedelta(days=7)
-            end_date = datetime.now() + timedelta(days=30)
+            # Get events from last month to 4 months ahead (matches database refresh)
+            start_date = datetime.now() - timedelta(days=30)
+            end_date = datetime.now() + timedelta(days=120)
 
             # Sync both scheduled and unscheduled events
             all_external_events = []

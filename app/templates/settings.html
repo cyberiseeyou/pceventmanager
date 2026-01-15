@@ -195,165 +195,86 @@
             </div>
         </section>
 
-        <!-- Event Time Configuration Section -->
-        <section class="settings-section" id="event-times">
-            <h3>Event Time Configuration</h3>
-            <p class="section-description">Configure start and end times for all event types. These times are used for
-                scheduling and validation.</p>
+        <!-- Event Time Settings Link -->
+        <section class="settings-section" id="event-times-link">
+            <h3>Event Time Settings</h3>
+            <p class="section-description">Configure scheduling times for all event types including Freeosk, Digital Setup/Teardown, Supervisor, Core shift blocks, and more.</p>
 
-            <div class="warning-box">
-                <strong>⚠️ Important:</strong> All event times must be configured for scheduling to work correctly.
-                Changes will affect all future scheduling operations.
-            </div>
+            <a href="{{ url_for('admin.event_times_page') }}" class="btn btn-primary">
+                Open Event Time Settings
+            </a>
+        </section>
 
-            <!-- Freeosk Times -->
+        <!-- Auto-Scheduler Configuration Section -->
+        <section class="settings-section" id="auto-scheduler-settings">
+            <h3>Auto-Scheduler Configuration</h3>
+            <p class="section-description">Configure which event types the auto-scheduler should process automatically</p>
+
             <div class="event-type-group">
-                <h4>Freeosk Event</h4>
-                <div class="time-input-row">
-                    <div class="form-group">
-                        <label for="freeosk_start_time">Start Time:</label>
-                        <input type="time" id="freeosk_start_time" name="freeosk_start_time"
-                            value="{{ event_times.get('freeosk_start_time', '09:00') }}" class="form-control time-input"
-                            required>
+                <h4>Enabled Event Types</h4>
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                    Select which event types should be automatically scheduled. Unchecked types will require manual assignment.
+                </p>
+
+                <div class="event-type-toggles" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_core" name="enabled_event_types" value="Core" checked>
+                            <span class="toggle-label">Core Events</span>
+                        </label>
                     </div>
-                    <div class="form-group">
-                        <label for="freeosk_end_time">End Time:</label>
-                        <input type="time" id="freeosk_end_time" name="freeosk_end_time"
-                            value="{{ event_times.get('freeosk_end_time', '09:15') }}" class="form-control time-input"
-                            required>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_juicer" name="enabled_event_types" value="Juicer" checked>
+                            <span class="toggle-label">Juicer Events</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_freeosk" name="enabled_event_types" value="Freeosk" checked>
+                            <span class="toggle-label">Freeosk Events</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_digitals" name="enabled_event_types" value="Digitals" checked>
+                            <span class="toggle-label">Digital Events</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_supervisor" name="enabled_event_types" value="Supervisor" checked>
+                            <span class="toggle-label">Supervisor Events</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_other" name="enabled_event_types" value="Other" checked>
+                            <span class="toggle-label">Other Events</span>
+                        </label>
                     </div>
                 </div>
             </div>
 
-            <!-- Digital Setup Slots -->
-            <div class="event-type-group">
-                <h4>Digital Setup Slots (1-4)</h4>
-                {% for slot in range(1, 5) %}
-                <div class="time-slot-group">
-                    <label class="slot-label">Slot {{ slot }}:</label>
-                    <div class="time-input-row">
-                        <div class="form-group">
-                            <label for="digital_setup_{{ slot }}_start_time">Start:</label>
-                            <input type="time" id="digital_setup_{{ slot }}_start_time"
-                                name="digital_setup_{{ slot }}_start_time"
-                                value="{{ event_times.get('digital_setup_' + slot|string + '_start_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="digital_setup_{{ slot }}_end_time">End:</label>
-                            <input type="time" id="digital_setup_{{ slot }}_end_time"
-                                name="digital_setup_{{ slot }}_end_time"
-                                value="{{ event_times.get('digital_setup_' + slot|string + '_end_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Core Slots (4 slots for external API scheduling) -->
-            <div class="event-type-group">
-                <h4>Core Event Slots (1-4)</h4>
-                {% for slot in range(1, 5) %}
-                <div class="time-slot-group">
-                    <label class="slot-label">Slot {{ slot }}:</label>
-                    <div class="time-input-row">
-                        <div class="form-group">
-                            <label for="core_{{ slot }}_start_time">Start:</label>
-                            <input type="time" id="core_{{ slot }}_start_time" name="core_{{ slot }}_start_time"
-                                value="{{ event_times.get('core_' + slot|string + '_start_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="core_{{ slot }}_lunch_begin_time">Lunch Begin:</label>
-                            <input type="time" id="core_{{ slot }}_lunch_begin_time"
-                                name="core_{{ slot }}_lunch_begin_time"
-                                value="{{ event_times.get('core_' + slot|string + '_lunch_begin_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="core_{{ slot }}_lunch_end_time">Lunch End:</label>
-                            <input type="time" id="core_{{ slot }}_lunch_end_time" name="core_{{ slot }}_lunch_end_time"
-                                value="{{ event_times.get('core_' + slot|string + '_lunch_end_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="core_{{ slot }}_end_time">End:</label>
-                            <input type="time" id="core_{{ slot }}_end_time" name="core_{{ slot }}_end_time"
-                                value="{{ event_times.get('core_' + slot|string + '_end_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Supervisor Times -->
-            <div class="event-type-group">
-                <h4>Supervisor Event</h4>
-                <div class="time-input-row">
-                    <div class="form-group">
-                        <label for="supervisor_start_time">Start Time:</label>
-                        <input type="time" id="supervisor_start_time" name="supervisor_start_time"
-                            value="{{ event_times.get('supervisor_start_time', '12:00') }}"
-                            class="form-control time-input" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="supervisor_end_time">End Time:</label>
-                        <input type="time" id="supervisor_end_time" name="supervisor_end_time"
-                            value="{{ event_times.get('supervisor_end_time', '12:05') }}"
-                            class="form-control time-input" required>
-                    </div>
+            <div class="event-type-group" style="margin-top: 20px;">
+                <h4>Scheduling Options</h4>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <label class="toggle-container">
+                        <input type="checkbox" id="auto_schedule_on_import" name="auto_schedule_on_import">
+                        <span class="toggle-label">Auto-schedule events when imported from Walmart</span>
+                    </label>
+                    <label class="toggle-container">
+                        <input type="checkbox" id="require_approval" name="require_approval" checked>
+                        <span class="toggle-label">Require approval before finalizing auto-scheduled assignments</span>
+                    </label>
                 </div>
             </div>
 
-            <!-- Digital Teardown Slots -->
-            <div class="event-type-group">
-                <h4>Digital Teardown Slots (1-4)</h4>
-                {% for slot in range(1, 5) %}
-                <div class="time-slot-group">
-                    <label class="slot-label">Slot {{ slot }}:</label>
-                    <div class="time-input-row">
-                        <div class="form-group">
-                            <label for="digital_teardown_{{ slot }}_start_time">Start:</label>
-                            <input type="time" id="digital_teardown_{{ slot }}_start_time"
-                                name="digital_teardown_{{ slot }}_start_time"
-                                value="{{ event_times.get('digital_teardown_' + slot|string + '_start_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="digital_teardown_{{ slot }}_end_time">End:</label>
-                            <input type="time" id="digital_teardown_{{ slot }}_end_time"
-                                name="digital_teardown_{{ slot }}_end_time"
-                                value="{{ event_times.get('digital_teardown_' + slot|string + '_end_time', '') }}"
-                                class="form-control time-input" required>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
+            <div class="form-actions" style="margin-top: 20px;">
+                <button type="button" id="save-auto-scheduler-btn" class="btn btn-primary">Save Auto-Scheduler Settings</button>
             </div>
 
-            <!-- Other Event Times -->
-            <div class="event-type-group">
-                <h4>Other Event Type</h4>
-                <div class="time-input-row">
-                    <div class="form-group">
-                        <label for="other_start_time">Start Time:</label>
-                        <input type="time" id="other_start_time" name="other_start_time"
-                            value="{{ event_times.get('other_start_time', '10:00') }}" class="form-control time-input"
-                            required>
-                    </div>
-                    <div class="form-group">
-                        <label for="other_end_time">End Time:</label>
-                        <input type="time" id="other_end_time" name="other_end_time"
-                            value="{{ event_times.get('other_end_time', '10:15') }}" class="form-control time-input"
-                            required>
-                    </div>
-                </div>
-            </div>
-
-            <div id="event-times-save-status"
-                style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
+            <div id="auto-scheduler-save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
         </section>
 
         <!-- Form Actions -->
@@ -709,6 +630,38 @@
 
     .form-group label {
         font-size: 0.9em;
+    }
+
+    /* Auto-Scheduler Toggle Styles */
+    .toggle-container {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        padding: 8px 12px;
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+
+    .toggle-container:hover {
+        background: #f0f0f0;
+    }
+
+    .toggle-container input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-right: 10px;
+        cursor: pointer;
+    }
+
+    .toggle-label {
+        font-weight: normal;
+        color: #333;
+    }
+
+    .event-type-toggle-item {
+        margin: 0;
     }
 </style>
 
@@ -1386,6 +1339,114 @@
                 .find(row => row.startsWith('csrf_token='))
                 ?.split('=')[1];
             return token || '';
+        }
+
+        // ===== Auto-Scheduler Settings =====
+        const autoSchedulerSaveStatus = document.getElementById('auto-scheduler-save-status');
+        const saveAutoSchedulerBtn = document.getElementById('save-auto-scheduler-btn');
+
+        // Load auto-scheduler settings on page load
+        async function loadAutoSchedulerSettings() {
+            try {
+                const response = await fetch('/api/auto-scheduler/settings');
+                const data = await response.json();
+
+                if (data.success && data.settings) {
+                    const settings = data.settings;
+
+                    // Set enabled event types
+                    const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digitals', 'Supervisor', 'Other'];
+                    const enabledTypes = settings.enabled_event_types || allEventTypes;
+
+                    allEventTypes.forEach(type => {
+                        const checkbox = document.getElementById('auto_schedule_' + type.toLowerCase());
+                        if (checkbox) {
+                            checkbox.checked = enabledTypes.includes(type);
+                        }
+                    });
+
+                    // Set other options
+                    const autoScheduleOnImport = document.getElementById('auto_schedule_on_import');
+                    const requireApproval = document.getElementById('require_approval');
+
+                    if (autoScheduleOnImport) {
+                        autoScheduleOnImport.checked = settings.auto_schedule_on_import || false;
+                    }
+                    if (requireApproval) {
+                        requireApproval.checked = settings.require_approval !== false;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading auto-scheduler settings:', error);
+            }
+        }
+
+        // Save auto-scheduler settings
+        async function saveAutoSchedulerSettings() {
+            const enabledTypes = [];
+            const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digitals', 'Supervisor', 'Other'];
+
+            allEventTypes.forEach(type => {
+                const checkbox = document.getElementById('auto_schedule_' + type.toLowerCase());
+                if (checkbox && checkbox.checked) {
+                    enabledTypes.push(type);
+                }
+            });
+
+            const autoScheduleOnImport = document.getElementById('auto_schedule_on_import');
+            const requireApproval = document.getElementById('require_approval');
+
+            const settings = {
+                enabled_event_types: enabledTypes,
+                auto_schedule_on_import: autoScheduleOnImport ? autoScheduleOnImport.checked : false,
+                require_approval: requireApproval ? requireApproval.checked : true
+            };
+
+            try {
+                saveAutoSchedulerBtn.disabled = true;
+                saveAutoSchedulerBtn.textContent = 'Saving...';
+
+                const response = await fetch('/api/auto-scheduler/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAutoSchedulerStatus('Auto-scheduler settings saved successfully!', 'success');
+                } else {
+                    showAutoSchedulerStatus('Error: ' + (data.error || 'Failed to save settings'), 'error');
+                }
+            } catch (error) {
+                console.error('Error saving auto-scheduler settings:', error);
+                showAutoSchedulerStatus('Error saving settings. Please try again.', 'error');
+            } finally {
+                saveAutoSchedulerBtn.disabled = false;
+                saveAutoSchedulerBtn.textContent = 'Save Auto-Scheduler Settings';
+            }
+        }
+
+        function showAutoSchedulerStatus(message, type) {
+            autoSchedulerSaveStatus.textContent = message;
+            autoSchedulerSaveStatus.style.display = 'block';
+            autoSchedulerSaveStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+            autoSchedulerSaveStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+            autoSchedulerSaveStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+
+            setTimeout(() => {
+                autoSchedulerSaveStatus.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialize auto-scheduler settings
+        if (saveAutoSchedulerBtn) {
+            saveAutoSchedulerBtn.addEventListener('click', saveAutoSchedulerSettings);
+            loadAutoSchedulerSettings();
         }
     });
 </script>

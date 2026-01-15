@@ -207,7 +207,7 @@ def create_auto_scheduler_models(db):
             db.Index('idx_pending_schedules_run', 'scheduler_run_id'),
             db.Index('idx_pending_schedules_status', 'status'),
             db.CheckConstraint(
-                "status IN ('proposed', 'user_edited', 'approved', 'api_submitted', 'api_failed')",
+                "status IN ('proposed', 'user_edited', 'approved', 'api_submitted', 'api_failed', 'superseded')",
                 name='ck_valid_pending_status'
             ),
         )
@@ -281,4 +281,89 @@ def create_auto_scheduler_models(db):
             status = "allowed" if self.allow_auto_schedule else "blocked"
             return f'<EventSchedulingOverride Event {self.event_ref_num}: {status}>'
 
-    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride
+    class LockedDay(db.Model):
+        """
+        Tracks days that are "locked" and cannot have schedule changes.
+        
+        When a day is locked:
+        - No new schedules can be created for that day
+        - No existing schedules can be modified or deleted
+        - No events can be bumped from that day
+        - The day must be unlocked before any scheduling changes
+        
+        Use case: After printing paperwork for a day, lock it to prevent
+        accidental changes from the auto-scheduler or manual edits.
+        """
+        __tablename__ = 'locked_days'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        locked_date = db.Column(db.Date, nullable=False, unique=True)
+        locked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+        locked_by = db.Column(db.String(100), nullable=True)  # Username who locked it
+        reason = db.Column(db.Text, nullable=True)  # Optional note (e.g., "Paperwork printed")
+
+        # Indexes
+        __table_args__ = (
+            db.Index('idx_locked_days_date', 'locked_date'),
+        )
+
+        def __repr__(self):
+            return f'<LockedDay {self.locked_date}>'
+        
+        @classmethod
+        def is_day_locked(cls, target_date):
+            """Check if a specific date is locked"""
+            from datetime import date
+            if isinstance(target_date, datetime):
+                target_date = target_date.date()
+            return db.session.query(cls).filter(cls.locked_date == target_date).first() is not None
+        
+        @classmethod
+        def get_locked_day(cls, target_date):
+            """Get the LockedDay record for a specific date, or None if not locked"""
+            from datetime import date
+            if isinstance(target_date, datetime):
+                target_date = target_date.date()
+            return db.session.query(cls).filter(cls.locked_date == target_date).first()
+        
+        @classmethod
+        def lock_day(cls, target_date, locked_by=None, reason=None):
+            """Lock a specific date. Returns the LockedDay record or None if already locked."""
+            from datetime import date
+            if isinstance(target_date, datetime):
+                target_date = target_date.date()
+            
+            # Check if already locked
+            existing = cls.get_locked_day(target_date)
+            if existing:
+                return None  # Already locked
+            
+            locked_day = cls(
+                locked_date=target_date,
+                locked_by=locked_by,
+                reason=reason
+            )
+            db.session.add(locked_day)
+            db.session.flush()
+            return locked_day
+        
+        @classmethod
+        def unlock_day(cls, target_date):
+            """Unlock a specific date. Returns True if unlocked, False if wasn't locked."""
+            from datetime import date
+            if isinstance(target_date, datetime):
+                target_date = target_date.date()
+            
+            locked_day = cls.get_locked_day(target_date)
+            if locked_day:
+                db.session.delete(locked_day)
+                db.session.flush()
+                return True
+            return False
+        
+        @classmethod
+        def get_all_locked_days(cls):
+            """Get all locked days, ordered by date"""
+            return db.session.query(cls).order_by(cls.locked_date).all()
+
+    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay

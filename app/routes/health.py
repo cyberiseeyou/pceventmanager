@@ -65,7 +65,7 @@ def readiness():
 
     # Check database connectivity
     try:
-        from scheduler_app.app import db
+        from app.extensions import db
         db.session.execute('SELECT 1')
         checks['database'] = True
     except Exception as e:
@@ -165,7 +165,7 @@ def metrics():
         200: Metrics in Prometheus text format
     """
     try:
-        from scheduler_app.app import db
+        from app.extensions import db
 
         # Count records in key tables
         metrics_data = []

@@ -240,3 +240,107 @@ class EDRAuthenticator:
         except Exception as e:
             self.logger.error(f"Failed to get EDR report for event {event_id}: {str(e)}")
             return None
+
+    def get_approved_events(self, club_numbers: list, start_date: str, end_date: str,
+                           event_types: Optional[list] = None) -> Optional[list]:
+        """
+        Get events with APPROVED status from Daily Scheduled Report.
+
+        Args:
+            club_numbers: List of club/store numbers (e.g., ['8135'])
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            event_types: Optional list of event type IDs (defaults to all types)
+
+        Returns:
+            List of approved events with details, or None if request fails
+        """
+        if not self.auth_token:
+            self.logger.error("Not authenticated - cannot get approved events")
+            return None
+
+        url = f"{self.base_url}/api/store-event/daily-schedule-report"
+        headers = self._get_standard_headers(
+            content_type='application/json',
+            referer=f"{self.base_url}/daily-scheduled-report"
+        )
+
+        # Default to all event types if not specified
+        if event_types is None:
+            event_types = list(range(1, 58))  # Event types 1-57
+
+        payload = {
+            "startDate": start_date,
+            "endDate": end_date,
+            "eventType": event_types,
+            "clubList": club_numbers,
+            "walmartWeekYear": ""
+        }
+
+        self.logger.info(f"Fetching approved events for clubs {club_numbers} from {start_date} to {end_date}")
+
+        try:
+            response = self.session.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+
+            all_events = response.json()
+
+            # Filter for APPROVED status only
+            approved_events = [
+                event for event in all_events
+                if event.get('status', '').upper() == 'APPROVED'
+            ]
+
+            self.logger.info(f"Found {len(approved_events)} approved events out of {len(all_events)} total")
+            return approved_events
+
+        except Exception as e:
+            self.logger.error(f"Failed to get approved events: {str(e)}")
+            return None
+
+    def roll_event(self, event_id: str, scheduled_date: str, club_id: str, walmart_user_id: str) -> Dict[str, Any]:
+        """
+        Roll an event to a new scheduled date in Walmart.
+
+        Args:
+            event_id: The Walmart event ID (e.g., '619688')
+            scheduled_date: Target date in YYYY-MM-DD format (e.g., '2026-01-11')
+            club_id: Club/store number (e.g., '8135')
+            walmart_user_id: Walmart user ID from session (e.g., 'd2fr4w2')
+
+        Returns:
+            Dict with 'success' (bool) and optional 'message' or 'error'
+        """
+        if not self.auth_token:
+            self.logger.error("Not authenticated - cannot roll event")
+            return {'success': False, 'error': 'Not authenticated'}
+
+        url = f"{self.base_url}/api/club-details"
+        headers = self._get_standard_headers(
+            content_type='application/json',
+            referer=f"{self.base_url}/club-details"
+        )
+
+        payload = {
+            "action": "update",
+            "eventId": int(event_id),
+            "eventStatusCode": 2,  # APPROVED status
+            "userId": walmart_user_id,
+            "clubId": int(club_id),
+            "scheduledDate": scheduled_date
+        }
+
+        self.logger.info(f"Rolling event {event_id} to {scheduled_date} for club {club_id}")
+
+        try:
+            response = self.session.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+
+            result = response.json() if response.text else {}
+            self.logger.info(f"Successfully rolled event {event_id} to {scheduled_date}")
+            return {'success': True, 'result': result}
+
+        except Exception as e:
+            error_msg = str(e)
+            self.logger.error(f"Failed to roll event {event_id}: {error_msg}")
+            return {'success': False, 'error': error_msg}

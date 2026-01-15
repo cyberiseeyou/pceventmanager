@@ -130,8 +130,8 @@ def init_notification_routes(db, models):
                     'type': 'validation_incomplete',
                     'title': f'Today {validation_percent}% Validated',
                     'message': f'{today_events_total - today_events_scheduled} event(s) today need attention',
-                    'action_url': f'/daily/{today.strftime("%Y-%m-%d")}',
-                    'action_text': 'View Daily Schedule'
+                    'action_url': f'/dashboard/weekly-validation?start_date={today.strftime("%Y-%m-%d")}',
+                    'action_text': 'View Weekly Validation'
                 })
 
             # Check 5: Tomorrow's validation status
@@ -153,8 +153,8 @@ def init_notification_routes(db, models):
                     'type': 'validation_incomplete',
                     'title': f'Tomorrow {validation_percent}% Validated',
                     'message': f'{tomorrow_events_total - tomorrow_events_scheduled} event(s) tomorrow need attention',
-                    'action_url': f'/daily/{tomorrow.strftime("%Y-%m-%d")}',
-                    'action_text': 'View Daily Schedule'
+                    'action_url': f'/dashboard/weekly-validation?start_date={tomorrow.strftime("%Y-%m-%d")}',
+                    'action_text': 'View Weekly Validation'
                 })
 
             # Check 6: Events scheduled for inactive employees
@@ -200,7 +200,7 @@ def init_notification_routes(db, models):
                             'type': 'auto_scheduler_pending',
                             'title': f'{pending_approvals} Pending Approval(s)',
                             'message': f'{pending_approvals} auto-scheduled event(s) await your approval',
-                            'action_url': '/auto-schedule',
+                            'action_url': '/auto-schedule/review',
                             'action_text': 'Review Schedules'
                         })
 

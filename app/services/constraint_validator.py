@@ -33,6 +33,9 @@ class ConstraintValidator:
     # Max core events per employee per day
     MAX_CORE_EVENTS_PER_DAY = 1
 
+    # Max core events per employee per week (Sunday-Saturday)
+    MAX_CORE_EVENTS_PER_WEEK = 6
+
     def __init__(self, db_session: Session, models: dict):
         """
         Initialize ConstraintValidator
@@ -90,7 +93,8 @@ class ConstraintValidator:
         self._check_availability(employee, schedule_datetime, result)
         self._check_role_requirements(event, employee, result)
         self._check_daily_limit(event, employee, schedule_datetime, result, exclude_schedule_ids)
-        self._check_already_scheduled(employee, schedule_datetime, duration_minutes, result, exclude_schedule_ids)
+        self._check_weekly_limit(event, employee, schedule_datetime, result, exclude_schedule_ids)
+        self._check_already_scheduled(event, employee, schedule_datetime, duration_minutes, result, exclude_schedule_ids)
         self._check_due_date(event, schedule_datetime, result)
 
         return result
@@ -208,6 +212,10 @@ class ConstraintValidator:
         Note: Juicer events are handled separately - if employee has Core event and needs to do Juicer,
         the Core event will be bumped/unscheduled in Wave 1.
         """
+        # Only apply Core event limit when scheduling a Core event
+        if event.event_type != 'Core':
+            return
+
         target_date = schedule_datetime.date()
 
         # Count existing core events for this employee on this day
@@ -243,7 +251,8 @@ class ConstraintValidator:
                     self.PendingSchedule.employee_id == employee.id,
                     func.date(self.PendingSchedule.schedule_datetime) == target_date,
                     self.Event.event_type == 'Core',
-                    self.PendingSchedule.failure_reason.is_(None)  # Exclude failed pending schedules
+                    self.PendingSchedule.failure_reason.is_(None),  # Exclude failed pending schedules
+                    self.PendingSchedule.status != 'superseded'  # Exclude superseded schedules
                 ).scalar()
 
                 core_events_count += pending_core_count
@@ -256,15 +265,95 @@ class ConstraintValidator:
                 details={'date': str(target_date), 'current_count': core_events_count}
             ))
 
-    def _check_already_scheduled(self, employee: object, schedule_datetime: datetime,
+    def _check_weekly_limit(self, event: object, employee: object, schedule_datetime: datetime,
+                           result: ValidationResult, exclude_schedule_ids: list = None) -> None:
+        """
+        Check if employee already has max core events for this week (Sunday-Saturday)
+
+        Args:
+            exclude_schedule_ids: List of schedule IDs to exclude from count (for trade operations)
+        """
+        # Only apply Core event limit when scheduling a Core event
+        if event.event_type != 'Core':
+            return
+
+        from datetime import timedelta
+
+        target_date = schedule_datetime.date()
+
+        # Calculate week boundaries (Sunday-Saturday)
+        # weekday() returns 0=Monday, 6=Sunday
+        # We want Sunday=0, so adjust: (weekday + 1) % 7
+        days_since_sunday = (target_date.weekday() + 1) % 7
+        week_start = target_date - timedelta(days=days_since_sunday)  # Sunday
+        week_end = week_start + timedelta(days=6)  # Saturday
+
+        # Count existing core events for this employee in this week
+        query = self.db.query(func.count(self.Schedule.id)).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            self.Schedule.employee_id == employee.id,
+            func.date(self.Schedule.schedule_datetime) >= week_start,
+            func.date(self.Schedule.schedule_datetime) <= week_end,
+            self.Event.event_type == 'Core'
+        )
+
+        # Exclude schedules being traded
+        if exclude_schedule_ids:
+            query = query.filter(~self.Schedule.id.in_(exclude_schedule_ids))
+
+        core_events_count = query.scalar()
+
+        # Also count pending core events from ALL unapproved runs
+        if self.PendingSchedule and self.SchedulerRunHistory:
+            active_run_ids = self.db.query(self.SchedulerRunHistory.id).filter(
+                self.SchedulerRunHistory.approved_at.is_(None),
+                self.SchedulerRunHistory.status.in_(['completed', 'running'])
+            ).all()
+            active_run_ids = [r.id for r in active_run_ids]
+
+            if active_run_ids:
+                pending_core_count = self.db.query(func.count(self.PendingSchedule.id)).join(
+                    self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.PendingSchedule.scheduler_run_id.in_(active_run_ids),
+                    self.PendingSchedule.employee_id == employee.id,
+                    func.date(self.PendingSchedule.schedule_datetime) >= week_start,
+                    func.date(self.PendingSchedule.schedule_datetime) <= week_end,
+                    self.Event.event_type == 'Core',
+                    self.PendingSchedule.failure_reason.is_(None),
+                    self.PendingSchedule.status != 'superseded'  # Exclude superseded schedules
+                ).scalar()
+
+                core_events_count += pending_core_count
+
+        if core_events_count >= self.MAX_CORE_EVENTS_PER_WEEK:
+            result.add_violation(ConstraintViolation(
+                constraint_type=ConstraintType.DAILY_LIMIT,  # Reuse DAILY_LIMIT type for weekly
+                message=f"Employee {employee.name} already has {core_events_count} core event(s) this week ({week_start} to {week_end})",
+                severity=ConstraintSeverity.HARD,
+                details={
+                    'week_start': str(week_start),
+                    'week_end': str(week_end),
+                    'current_count': core_events_count,
+                    'max_per_week': self.MAX_CORE_EVENTS_PER_WEEK
+                }
+            ))
+
+    def _check_already_scheduled(self, event: object, employee: object, schedule_datetime: datetime,
                                  duration_minutes: int, result: ValidationResult,
                                  exclude_schedule_ids: list = None) -> None:
         """
         Check if employee already has a schedule that overlaps with the proposed time
 
         Args:
+            event: Event being scheduled (used to skip checks for Supervisor events)
             exclude_schedule_ids: List of schedule IDs to exclude from conflict checking (for trade operations)
         """
+        # Supervisor events are expected to overlap with Core events - skip overlap check
+        if event.event_type == 'Supervisor':
+            return
+
         from datetime import timedelta
 
         # Calculate proposed event's end time
@@ -324,7 +413,8 @@ class ConstraintValidator:
                 pending_schedules = self.db.query(self.PendingSchedule).filter(
                     self.PendingSchedule.scheduler_run_id.in_(active_run_ids),
                     self.PendingSchedule.employee_id == employee.id,
-                    self.PendingSchedule.failure_reason.is_(None)  # Exclude failed pending schedules
+                    self.PendingSchedule.failure_reason.is_(None),  # Exclude failed pending schedules
+                    self.PendingSchedule.status != 'superseded'  # Exclude superseded schedules
                 ).all()
 
                 for pending in pending_schedules:

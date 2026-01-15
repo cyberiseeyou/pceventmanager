@@ -189,13 +189,13 @@ class EventTimeSettings:
 
     @classmethod
     def get_digital_teardown_slots(cls) -> List[Dict[str, time]]:
-        """Get Digital Teardown time slots (4 slots) - 30 min each starting at 18:00"""
-        # Default times moved forward 1 hour from original 17:00
+        """Get Digital Teardown time slots (4 slots) - 30 min each starting at 17:00"""
+        # Default times at 5:00 PM - 5:45 PM
         defaults = [
-            {'start': '18:00', 'end': '18:30'},
-            {'start': '18:15', 'end': '18:45'},
-            {'start': '18:30', 'end': '19:00'},
-            {'start': '18:45', 'end': '19:15'},
+            {'start': '17:00', 'end': '17:30'},
+            {'start': '17:15', 'end': '17:45'},
+            {'start': '17:30', 'end': '18:00'},
+            {'start': '17:45', 'end': '18:15'},
         ]
         slots = []
         for slot in range(1, 5):
@@ -220,17 +220,19 @@ class EventTimeSettings:
         }
 
     @classmethod
-    def get_allowed_times_for_event_type(cls, event_type: str) -> List[str]:
+    def get_allowed_times_for_event_type(cls, event_type: str, project_name: str = None) -> List[str]:
         """
         Get allowed start times for an event type
 
         Args:
             event_type: Event type name
+            project_name: Optional project name for detecting sub-types (e.g., Digital Teardown)
 
         Returns:
             List of allowed time strings (HH:MM format)
         """
         event_type_lower = event_type.lower()
+        project_name_lower = (project_name or '').lower()
 
         if 'core' in event_type_lower:
             slots = cls.get_core_slots()
@@ -242,15 +244,24 @@ class EventTimeSettings:
 
         elif 'freeosk' in event_type_lower:
             times = cls.get_freeosk_times()
-            return [cls._time_to_str(times['start'])]
+            # Include both default Freeosk time AND noon for troubleshooting events
+            allowed = [cls._time_to_str(times['start'])]
+            if '12:00' not in allowed:
+                allowed.append('12:00')  # Noon for troubleshooting events
+            return allowed
 
-        elif event_type_lower == 'digitals' or 'digital setup' in event_type_lower or 'digital refresh' in event_type_lower:
-            slots = cls.get_digital_setup_slots()
-            return [cls._time_to_str(slot['start']) for slot in slots]
-
-        elif 'digital teardown' in event_type_lower:
-            slots = cls.get_digital_teardown_slots()
-            return [cls._time_to_str(slot['start']) for slot in slots]
+        elif event_type_lower == 'digitals' or 'digital' in event_type_lower:
+            # Check project name for teardown detection
+            if 'tear down' in project_name_lower or 'teardown' in project_name_lower:
+                slots = cls.get_digital_teardown_slots()
+                return [cls._time_to_str(slot['start']) for slot in slots]
+            elif 'digital teardown' in event_type_lower:
+                slots = cls.get_digital_teardown_slots()
+                return [cls._time_to_str(slot['start']) for slot in slots]
+            else:
+                # Digital Setup/Refresh
+                slots = cls.get_digital_setup_slots()
+                return [cls._time_to_str(slot['start']) for slot in slots]
 
         elif 'other' in event_type_lower:
             times = cls.get_other_times()
@@ -325,9 +336,9 @@ def get_other_times() -> Dict[str, time]:
     return EventTimeSettings.get_other_times()
 
 
-def get_allowed_times_for_event_type(event_type: str) -> List[str]:
+def get_allowed_times_for_event_type(event_type: str, project_name: str = None) -> List[str]:
     """Get allowed start times for an event type"""
-    return EventTimeSettings.get_allowed_times_for_event_type(event_type)
+    return EventTimeSettings.get_allowed_times_for_event_type(event_type, project_name)
 
 
 def are_event_times_configured() -> Tuple[bool, List[str]]:

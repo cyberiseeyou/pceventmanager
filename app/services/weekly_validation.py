@@ -164,6 +164,9 @@ class WeeklyValidationService:
             additional_issues.extend(self._check_duplicate_products(day))
             additional_issues.extend(self._check_juicer_deep_clean_conflict(day))
             additional_issues.extend(self._check_primary_lead_block_1(day))
+            additional_issues.extend(self._check_club_supervisor_on_core(day))
+            additional_issues.extend(self._check_club_supervisor_on_digital(day))
+            additional_issues.extend(self._check_time_slot_distribution(day))
 
             result.issues.extend(additional_issues)
 
@@ -386,13 +389,12 @@ class WeeklyValidationService:
 
     def _check_primary_lead_block_1(self, verify_date: date) -> List[VerificationIssue]:
         """
-        RULE-003: Primary Lead Event Specialist should be scheduled for Block 1
+        RULE-003: Primary Lead Event Specialist should be scheduled for Block 1 (10:15)
+        when Core events exist
         """
         issues = []
 
         # Find Primary Lead Event Specialist
-        # Assumption: Primary Lead is identified by order_index=1 or is_primary=True
-        # Let's query the actual field - checking for 'order_index' or similar
         primary_lead = self.db.query(self.Employee).filter(
             self.Employee.job_title == 'Lead Event Specialist',
             self.Employee.is_active == True
@@ -401,7 +403,21 @@ class WeeklyValidationService:
         if not primary_lead:
             return issues
 
-        # Check if Primary Lead has a Core event scheduled for Block 1 (earliest time)
+        # Check if there are any Core events scheduled for this date
+        core_events_exist = self.db.query(
+            self.Schedule, self.Event
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type == 'Core'
+        ).first()
+
+        if not core_events_exist:
+            # No Core events this day, skip validation
+            return issues
+
+        # Check if Primary Lead has a Core event scheduled
         lead_schedule = self.db.query(
             self.Schedule, self.Event
         ).join(
@@ -413,26 +429,281 @@ class WeeklyValidationService:
         ).first()
 
         if not lead_schedule:
-            # Primary Lead not scheduled - might be off
+            # Primary Lead not scheduled for Core events when Core events exist
+            issues.append(VerificationIssue(
+                severity='critical',
+                rule_name='Primary Lead Not Scheduled',
+                message=f"Primary Lead {primary_lead.name} is not scheduled for Core events on {verify_date}, but Core events exist.",
+                details={
+                    'employee_id': primary_lead.id,
+                    'employee_name': primary_lead.name,
+                    'date': verify_date.isoformat(),
+                    'expected_block': 1
+                }
+            ))
             return issues
 
         schedule, event = lead_schedule
 
-        # Check if it's Block 1 (shift_block column or earliest time)
-        if hasattr(schedule, 'shift_block') and schedule.shift_block:
-            if schedule.shift_block != 1:
+        # Check if it's Block 1 (10:15 AM)
+        # Get Block 1 time from shift block config
+        from app.services.shift_block_config import ShiftBlockConfig
+        block_1 = ShiftBlockConfig.get_block(1)
+
+        if not block_1:
+            # Can't validate without block configuration
+            return issues
+
+        block_1_time = block_1['arrive']
+        scheduled_time = schedule.schedule_datetime.time()
+
+        # Check if scheduled time matches Block 1 arrive time
+        is_block_1_time = (
+            scheduled_time.hour == block_1_time.hour and
+            scheduled_time.minute == block_1_time.minute
+        )
+
+        if not is_block_1_time:
+            # Not scheduled for Block 1 time
+            actual_time_str = scheduled_time.strftime('%I:%M %p')
+            block_1_time_str = block_1_time.strftime('%I:%M %p')
+
+            # Also check shift_block field if available
+            actual_block = getattr(schedule, 'shift_block', None)
+
+            issues.append(VerificationIssue(
+                severity='critical',
+                rule_name='Primary Lead Block Assignment',
+                message=f"Primary Lead {primary_lead.name} is scheduled for {actual_time_str} (Block {actual_block or '?'}) instead of Block 1 ({block_1_time_str}) on {verify_date}.",
+                details={
+                    'employee_id': primary_lead.id,
+                    'employee_name': primary_lead.name,
+                    'date': verify_date.isoformat(),
+                    'actual_block': actual_block,
+                    'actual_time': actual_time_str,
+                    'expected_block': 1,
+                    'expected_time': block_1_time_str
+                }
+            ))
+
+        return issues
+
+    def _check_club_supervisor_on_core(self, verify_date: date) -> List[VerificationIssue]:
+        """
+        RULE-022: Club Supervisors should not typically work Core events
+        (unless manually approved/exception made)
+        """
+        issues = []
+
+        # Get all Core events scheduled with Club Supervisors
+        supervisor_cores = self.db.query(
+            self.Schedule, self.Event, self.Employee
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).join(
+            self.Employee, self.Schedule.employee_id == self.Employee.id
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type == 'Core',
+            self.Employee.job_title == 'Club Supervisor',
+            self.Employee.is_active == True
+        ).all()
+
+        for schedule, event, employee in supervisor_cores:
+            issues.append(VerificationIssue(
+                severity='warning',
+                rule_name='Club Supervisor on Core Event',
+                message=f"Club Supervisor {employee.name} is scheduled for Core event on {verify_date}. Core events should typically go to Lead Event Specialists.",
+                details={
+                    'employee_id': employee.id,
+                    'employee_name': employee.name,
+                    'job_title': employee.job_title,
+                    'date': verify_date.isoformat(),
+                    'event_id': event.id,
+                    'event_name': event.project_name,
+                    'schedule_id': schedule.id
+                }
+            ))
+
+        return issues
+
+    def _check_club_supervisor_on_digital(self, verify_date: date) -> List[VerificationIssue]:
+        """
+        RULE-023: Club Supervisors should not work Digital events if Lead Event Specialists
+        are available (not scheduled or on time off)
+        """
+        issues = []
+
+        # Get all Digital events (Digital Setup, Digital Refresh, Digital Teardown, Digitals)
+        digital_types = ['Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Digitals']
+
+        # Get Digital events scheduled with Club Supervisors
+        supervisor_digitals = self.db.query(
+            self.Schedule, self.Event, self.Employee
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).join(
+            self.Employee, self.Schedule.employee_id == self.Employee.id
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type.in_(digital_types),
+            self.Employee.job_title == 'Club Supervisor',
+            self.Employee.is_active == True
+        ).all()
+
+        if not supervisor_digitals:
+            return issues
+
+        # Check if Lead Event Specialists are available (not scheduled for Core or on time off)
+        # Get all active Lead Event Specialists
+        lead_specialists = self.db.query(self.Employee).filter(
+            self.Employee.job_title == 'Lead Event Specialist',
+            self.Employee.is_active == True
+        ).all()
+
+        # For each Club Supervisor on Digital, check if any Lead was available
+        for schedule, event, supervisor in supervisor_digitals:
+            # Check if any Lead Event Specialist was available at this time
+            available_leads = []
+            for lead in lead_specialists:
+                # Check if lead has Core event this day
+                has_core = self.db.query(self.Schedule).join(
+                    self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    func.date(self.Schedule.schedule_datetime) == verify_date,
+                    self.Schedule.employee_id == lead.id,
+                    self.Event.event_type == 'Core'
+                ).first()
+
+                # Check if lead is on time off
+                EmployeeTimeOff = self.models.get('EmployeeTimeOff')
+                on_time_off = False
+                if EmployeeTimeOff:
+                    on_time_off = self.db.query(EmployeeTimeOff).filter(
+                        EmployeeTimeOff.employee_id == lead.id,
+                        EmployeeTimeOff.start_date <= verify_date,
+                        EmployeeTimeOff.end_date >= verify_date
+                    ).first()
+
+                if not has_core and not on_time_off:
+                    available_leads.append(lead.name)
+
+            # If there were available leads, this is a validation issue
+            if available_leads:
                 issues.append(VerificationIssue(
                     severity='warning',
-                    rule_name='Primary Lead Block Assignment',
-                    message=f"Primary Lead {primary_lead.name} is scheduled for Block {schedule.shift_block} instead of Block 1 on {verify_date}.",
+                    rule_name='Club Supervisor on Digital Event',
+                    message=f"Club Supervisor {supervisor.name} is scheduled for {event.event_type} event on {verify_date}, but Lead Event Specialists were available: {', '.join(available_leads)}",
                     details={
-                        'employee_id': primary_lead.id,
-                        'employee_name': primary_lead.name,
+                        'employee_id': supervisor.id,
+                        'employee_name': supervisor.name,
+                        'job_title': supervisor.job_title,
                         'date': verify_date.isoformat(),
-                        'actual_block': schedule.shift_block,
-                        'expected_block': 1
+                        'event_id': event.id,
+                        'event_name': event.project_name,
+                        'event_type': event.event_type,
+                        'schedule_id': schedule.id,
+                        'available_leads': available_leads
                     }
                 ))
+
+        return issues
+
+    def _check_time_slot_distribution(self, verify_date: date) -> List[VerificationIssue]:
+        """
+        RULE-021: Core events must be distributed correctly across time slots
+
+        Pattern: 2 employees per time slot in order, then repeat
+        - Events 1-2: First time slot
+        - Events 3-4: Second time slot
+        - Events 5-6: Third time slot
+        - Events 7-8: Fourth time slot
+        - Event 9+: Repeat pattern (add 1 more to each slot in order)
+
+        Valid distributions:
+        - 1 event: [1,0,0,0]
+        - 2 events: [2,0,0,0]
+        - 3 events: [2,1,0,0]
+        - 4 events: [2,2,0,0]
+        - 8 events: [2,2,2,2]
+        - 9 events: [3,2,2,2]
+        - 10 events: [3,3,2,2]
+        """
+        issues = []
+
+        # Get all Core events scheduled for this date with their times
+        schedules = self.db.query(
+            self.Schedule, self.Event
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type == 'Core'
+        ).order_by(self.Schedule.schedule_datetime).all()
+
+        if len(schedules) == 0:
+            return issues
+
+        # Group schedules by time slot (hour:minute)
+        from collections import defaultdict
+        time_slot_counts = defaultdict(int)
+        time_slots_ordered = []
+
+        for schedule, event in schedules:
+            time_key = schedule.schedule_datetime.strftime('%H:%M')
+            if time_key not in time_slots_ordered:
+                time_slots_ordered.append(time_key)
+            time_slot_counts[time_key] += 1
+
+        # Get counts in order
+        counts = [time_slot_counts[ts] for ts in time_slots_ordered]
+        total_events = len(schedules)
+
+        # Validate the distribution pattern
+        # Rule: counts should be non-increasing (each slot has >= count than next slot)
+        # AND difference between adjacent slots should be at most 1
+        # AND the pattern should match the 2-2-2-2 repeating cycle
+
+        is_valid = True
+        error_details = []
+
+        for i in range(len(counts) - 1):
+            current_count = counts[i]
+            next_count = counts[i + 1]
+
+            # Check that earlier slots have >= later slots
+            if current_count < next_count:
+                is_valid = False
+                error_details.append(
+                    f"Time slot {time_slots_ordered[i]} has {current_count} events but later slot "
+                    f"{time_slots_ordered[i+1]} has {next_count} events"
+                )
+
+            # Check that difference is at most 1
+            if current_count - next_count > 1:
+                is_valid = False
+                error_details.append(
+                    f"Time slot {time_slots_ordered[i]} has {current_count} events but next slot "
+                    f"{time_slots_ordered[i+1]} has only {next_count} events (gap too large)"
+                )
+
+        if not is_valid:
+            # Build a helpful message
+            distribution_str = ", ".join([f"{ts}: {time_slot_counts[ts]}" for ts in time_slots_ordered])
+
+            issues.append(VerificationIssue(
+                severity='critical',
+                rule_name='Time Slot Distribution',
+                message=f"Core events on {verify_date} are not distributed correctly across time slots. "
+                        f"Pattern should be 2 per slot in order before repeating. Current: {distribution_str}",
+                details={
+                    'date': verify_date.isoformat(),
+                    'total_events': total_events,
+                    'time_slots': time_slots_ordered,
+                    'distribution': dict(time_slot_counts),
+                    'errors': error_details
+                }
+            ))
 
         return issues
 

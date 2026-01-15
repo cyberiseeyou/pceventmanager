@@ -22,29 +22,29 @@ def index():
 
     # Get today's date
     today = date.today()
-    two_weeks_from_now = today + timedelta(days=14)
+    display_horizon = today + timedelta(days=120)  # 4 months
 
     # Calculate statistics with new logic
-    # Total events within 2 weeks (from today to 2 weeks from now)
-    total_events_2weeks = Event.query.filter(
+    # Total events within 4 months (from today to 4 months from now)
+    total_events_display = Event.query.filter(
         Event.start_datetime >= today,
-        Event.start_datetime <= two_weeks_from_now,
+        Event.start_datetime <= display_horizon,
         # Exclude canceled and expired
         ~Event.condition.in_(['Canceled', 'Expired'])
     ).count()
 
     # Scheduled events: Scheduled + Submitted conditions within date range
-    scheduled_events_2weeks = Event.query.filter(
+    scheduled_events_display = Event.query.filter(
         Event.start_datetime >= today,
-        Event.start_datetime <= two_weeks_from_now,
+        Event.start_datetime <= display_horizon,
         Event.condition.in_(['Scheduled', 'Submitted'])
     ).count()
 
-    # Get unscheduled events within 2 weeks - ONLY Unstaffed are truly unscheduled
-    unscheduled_events_2weeks = Event.query.filter(
+    # Get unscheduled events within 4 months - ONLY Unstaffed are truly unscheduled
+    unscheduled_events_display = Event.query.filter(
         Event.condition == 'Unstaffed',
         Event.start_datetime >= today,
-        Event.start_datetime <= two_weeks_from_now
+        Event.start_datetime <= display_horizon
     ).order_by(
         Event.start_datetime.asc(),
         Event.due_datetime.asc()
@@ -52,8 +52,8 @@ def index():
 
     # Calculate scheduling percentage
     scheduling_percentage = 0
-    if total_events_2weeks > 0:
-        scheduling_percentage = round((scheduled_events_2weeks / total_events_2weeks) * 100, 1)
+    if total_events_display > 0:
+        scheduling_percentage = round((scheduled_events_display / total_events_display) * 100, 1)
 
     # Get last scheduler run info
     last_run = db.session.query(SchedulerRunHistory).order_by(
@@ -61,9 +61,9 @@ def index():
     ).first()
 
     return render_template('auto_scheduler_main.html',
-                         unscheduled_events_2weeks=unscheduled_events_2weeks,
-                         total_events_2weeks=total_events_2weeks,
-                         scheduled_events_2weeks=scheduled_events_2weeks,
+                         unscheduled_events_display=unscheduled_events_display,
+                         total_events_display=total_events_display,
+                         scheduled_events_display=scheduled_events_display,
                          scheduling_percentage=scheduling_percentage,
                          last_run=last_run,
                          today=today)
@@ -215,9 +215,61 @@ def get_pending_schedules():
         elif ps.is_swap:
             # Get bumped event details
             if ps.bumped_event_ref_num:
+                import re
                 bumped_event = db.session.query(Event).filter_by(project_ref_num=ps.bumped_event_ref_num).first()
                 ps_data['bumped_event_name'] = bumped_event.project_name if bumped_event else 'Unknown'
                 ps_data['bumped_event_ref_num'] = ps.bumped_event_ref_num
+                
+                # Extract 6-digit event numbers from project names
+                if bumped_event:
+                    bumped_match = re.search(r'\d{6}', bumped_event.project_name)
+                    ps_data['bumped_event_number'] = bumped_match.group(0) if bumped_match else str(ps.bumped_event_ref_num)
+                else:
+                    ps_data['bumped_event_number'] = str(ps.bumped_event_ref_num)
+                
+                if event:
+                    replacing_match = re.search(r'\d{6}', event.project_name)
+                    ps_data['replacing_event_number'] = replacing_match.group(0) if replacing_match else str(ps.event_ref_num)
+                else:
+                    ps_data['replacing_event_number'] = str(ps.event_ref_num)
+                
+                # Find where the bumped event is being rescheduled to
+                # Check for ANY successful schedule (could be swap or non-swap)
+                bumped_reschedule = db.session.query(PendingSchedule).filter(
+                    PendingSchedule.scheduler_run_id == run.id,
+                    PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
+                    PendingSchedule.status != 'superseded',
+                    PendingSchedule.failure_reason.is_(None)
+                ).first()
+                
+                if bumped_reschedule:
+                    bumped_employee = db.session.query(Employee).get(bumped_reschedule.employee_id) if bumped_reschedule.employee_id else None
+                    ps_data['bumped_rescheduled_to'] = {
+                        'employee_name': bumped_employee.name if bumped_employee else 'Unassigned',
+                        'schedule_datetime': bumped_reschedule.schedule_datetime.isoformat() if bumped_reschedule.schedule_datetime else None,
+                        'schedule_date': bumped_reschedule.schedule_datetime.date().isoformat() if bumped_reschedule.schedule_datetime else None,
+                        'schedule_time': bumped_reschedule.schedule_time.strftime('%H:%M') if bumped_reschedule.schedule_time else None
+                    }
+                else:
+                    # Check if there's a failed rescheduling attempt
+                    bumped_failed = db.session.query(PendingSchedule).filter(
+                        PendingSchedule.scheduler_run_id == run.id,
+                        PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
+                        PendingSchedule.failure_reason.isnot(None)
+                    ).first()
+                    
+                    if bumped_failed:
+                        ps_data['bumped_rescheduled_to'] = {
+                            'failed': True,
+                            'failure_reason': bumped_failed.failure_reason
+                        }
+                    else:
+                        # This shouldn't happen - scheduler should always reschedule or fail
+                        # But if it does, indicate an error
+                        ps_data['bumped_rescheduled_to'] = {
+                            'failed': True,
+                            'failure_reason': 'Scheduler error: bumped event was not processed'
+                        }
             swaps.append(ps_data)
         else:
             newly_scheduled.append(ps_data)
@@ -376,6 +428,7 @@ def delete_pending_by_ref(event_ref_num):
 def approve_schedule():
     """Approve proposed schedule and submit to Crossmark API"""
     from app.integrations.external_api.session_api_service import session_api as external_api
+    from sqlalchemy import func
 
     db = current_app.extensions['sqlalchemy']
 
@@ -401,12 +454,189 @@ def approve_schedule():
 
     current_app.logger.info(f"Found {len(pending_schedules)} pending schedules to approve for run {run_id}")
 
+    # CHECK LOCKED DAYS: Before approving, check if any affected dates are locked
+    # This includes both target schedule dates and dates of events being bumped
+    LockedDay = current_app.config.get('LockedDay')
+    if LockedDay:
+        locked_date_conflicts = []
+        checked_dates = set()
+
+        for pending in pending_schedules:
+            # Skip superseded schedules - they're not actually being scheduled
+            if pending.status == 'superseded':
+                continue
+
+            # Check target schedule date
+            if pending.schedule_datetime:
+                schedule_date = pending.schedule_datetime.date()
+                if schedule_date not in checked_dates:
+                    checked_dates.add(schedule_date)
+                    locked_info = LockedDay.get_locked_day(schedule_date)
+                    if locked_info:
+                        locked_date_conflicts.append({
+                            'date': schedule_date.isoformat(),
+                            'reason': locked_info.reason or 'No reason provided',
+                            'locked_by': locked_info.locked_by,
+                            'type': 'schedule_target',
+                            'event_ref': pending.event_ref_num
+                        })
+
+            # Check if this approval involves bumping an event from a locked day
+            if pending.is_swap and pending.bumped_event_ref_num:
+                # Find the bumped event's current schedule date
+                bumped_schedules = db.session.query(models['Schedule']).filter(
+                    models['Schedule'].event_ref_num == pending.bumped_event_ref_num
+                ).all()
+
+                for bumped_sched in bumped_schedules:
+                    bumped_date = bumped_sched.schedule_datetime.date()
+                    if bumped_date not in checked_dates:
+                        checked_dates.add(bumped_date)
+                        locked_info = LockedDay.get_locked_day(bumped_date)
+                        if locked_info:
+                            locked_date_conflicts.append({
+                                'date': bumped_date.isoformat(),
+                                'reason': locked_info.reason or 'No reason provided',
+                                'locked_by': locked_info.locked_by,
+                                'type': 'bump_source',
+                                'event_ref': pending.bumped_event_ref_num
+                            })
+
+        if locked_date_conflicts:
+            # Sort by date for cleaner display
+            locked_date_conflicts.sort(key=lambda x: x['date'])
+            unique_dates = list(set(c['date'] for c in locked_date_conflicts))
+
+            current_app.logger.warning(
+                f"Cannot approve run {run_id} - {len(unique_dates)} locked date(s) would be affected: {unique_dates}"
+            )
+
+            return jsonify({
+                'success': False,
+                'error': f'Cannot approve: {len(unique_dates)} locked day(s) would be affected. Unlock these days first.',
+                'locked_dates': locked_date_conflicts
+            }), 409  # Conflict
+
+    # FIRST: Handle bumped events BEFORE processing pending schedules
+    # This ensures that bumped events are unscheduled before we try to schedule new events
+    try:
+        # Find all pending schedules that involve bumping another event
+        swap_schedules = [ps for ps in pending_schedules if ps.is_swap and ps.bumped_event_ref_num]
+        
+        if swap_schedules:
+            current_app.logger.info(f"Processing {len(swap_schedules)} schedules with bumps")
+            
+            # Track which events have been bumped to avoid duplicate processing
+            bumped_event_refs = set()
+            
+            for swap_schedule in swap_schedules:
+                bumped_ref = swap_schedule.bumped_event_ref_num
+                
+                if bumped_ref in bumped_event_refs:
+                    continue  # Already processed this bumped event
+                
+                bumped_event_refs.add(bumped_ref)
+                
+                current_app.logger.info(f"Executing bump for event {bumped_ref}")
+                
+                # 1. Delete superseded PendingSchedule records for the bumped event
+                superseded_pending = db.session.query(models['PendingSchedule']).filter(
+                    models['PendingSchedule'].scheduler_run_id == run_id,
+                    models['PendingSchedule'].event_ref_num == bumped_ref,
+                    models['PendingSchedule'].status == 'superseded'
+                ).all()
+                
+                for sup_pending in superseded_pending:
+                    current_app.logger.info(
+                        f"  Deleting superseded pending schedule for event {bumped_ref}"
+                    )
+                    db.session.delete(sup_pending)
+                
+                # 2. Delete any posted Schedule records for the bumped event
+                # (These might exist from previous approved runs)
+                posted_schedules = db.session.query(models['Schedule']).filter(
+                    models['Schedule'].event_ref_num == bumped_ref
+                ).all()
+                
+                scheduled_dates = set()  # Track dates for supervisor deletion
+                for posted_schedule in posted_schedules:
+                    current_app.logger.info(
+                        f"  Deleting posted schedule for event {bumped_ref} "
+                        f"(was scheduled to {posted_schedule.employee_id} at {posted_schedule.schedule_datetime})"
+                    )
+                    scheduled_dates.add(posted_schedule.schedule_datetime.date())
+                    db.session.delete(posted_schedule)
+                
+                # 3. Delete matching Supervisor events (both pending and posted)
+                bumped_event = db.session.query(models['Event']).filter_by(
+                    project_ref_num=bumped_ref
+                ).first()
+                
+                if bumped_event and bumped_event.event_type == 'Core':
+                    # Extract event number to find matching Supervisor events
+                    import re
+                    match = re.search(r'\d{6}', bumped_event.project_name)
+                    core_event_number = match.group(0) if match else None
+                    
+                    if core_event_number:
+                        # Delete matching Supervisor pending schedules
+                        supervisor_pending = db.session.query(models['PendingSchedule']).join(
+                            models['Event'], models['PendingSchedule'].event_ref_num == models['Event'].project_ref_num
+                        ).filter(
+                            models['PendingSchedule'].scheduler_run_id == run_id,
+                            models['Event'].event_type == 'Supervisor',
+                            models['Event'].project_name.contains(core_event_number)
+                        ).all()
+                        
+                        for sup_pending in supervisor_pending:
+                            current_app.logger.info(
+                                f"  Deleting matching Supervisor pending schedule {sup_pending.event_ref_num}"
+                            )
+                            db.session.delete(sup_pending)
+                        
+                        # Delete matching Supervisor posted schedules (for the dates that were scheduled)
+                        for scheduled_date in scheduled_dates:
+                            supervisor_posted = db.session.query(models['Schedule']).join(
+                                models['Event'], models['Schedule'].event_ref_num == models['Event'].project_ref_num
+                            ).filter(
+                                models['Event'].event_type == 'Supervisor',
+                                models['Event'].project_name.contains(core_event_number),
+                                func.date(models['Schedule'].schedule_datetime) == scheduled_date
+                            ).all()
+                            
+                            for sup_posted in supervisor_posted:
+                                current_app.logger.info(
+                                    f"  Deleting matching Supervisor posted schedule {sup_posted.event_ref_num}"
+                                )
+                                db.session.delete(sup_posted)
+                
+                # 4. Set the bumped event's is_scheduled flag to False
+                if bumped_event:
+                    bumped_event.is_scheduled = False
+                    current_app.logger.info(f"  Set event {bumped_ref} is_scheduled=False")
+            
+            # Commit the bump deletions before proceeding with approvals
+            db.session.flush()
+            current_app.logger.info("Completed processing all bumps")
+    
+    except Exception as bump_error:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to process bumps: {str(bump_error)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Failed to process bumped events: {str(bump_error)}'
+        }), 500
+
     api_submitted = 0
     api_failed = 0
     failed_details = []
 
     try:
+        # Filter out superseded schedules - only process valid schedules
         for pending in pending_schedules:
+            # Skip superseded schedules - they were bumped and should not be approved
+            if pending.status == 'superseded':
+                continue
             if not pending.employee_id or not pending.schedule_datetime:
                 continue
 
@@ -1252,3 +1482,98 @@ def verify_date_range_endpoint():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@auto_scheduler_bp.route('/history')
+@require_authentication()
+def history():
+    """Page showing all scheduler run history with scheduled events"""
+    db = current_app.extensions['sqlalchemy']
+    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    PendingSchedule = current_app.config['PendingSchedule']
+    Event = current_app.config['Event']
+
+    # Get all scheduler runs, ordered by date descending
+    runs = db.session.query(SchedulerRunHistory).order_by(
+        SchedulerRunHistory.started_at.desc()
+    ).limit(50).all()
+
+    # Calculate event type counts for each run
+    runs_data = []
+    for run in runs:
+        # Get event type counts for this run
+        pending_schedules = db.session.query(PendingSchedule).filter_by(
+            scheduler_run_id=run.id
+        ).filter(PendingSchedule.failure_reason.is_(None)).all()
+
+        type_counts = {}
+        for ps in pending_schedules:
+            event = db.session.query(Event).filter_by(
+                project_ref_num=ps.event_ref_num
+            ).first()
+            if event:
+                event_type = event.event_type or 'Other'
+                type_counts[event_type] = type_counts.get(event_type, 0) + 1
+
+        runs_data.append({
+            'run': run,
+            'type_counts': type_counts
+        })
+
+    return render_template('scheduler_history.html', runs_data=runs_data)
+
+
+@auto_scheduler_bp.route('/api/history/<int:run_id>')
+def get_run_history(run_id):
+    """Get detailed event list for a specific scheduler run"""
+    db = current_app.extensions['sqlalchemy']
+    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    PendingSchedule = current_app.config['PendingSchedule']
+    Event = current_app.config['Event']
+    Employee = current_app.config['Employee']
+
+    # Get the run
+    run = db.session.query(SchedulerRunHistory).get(run_id)
+    if not run:
+        return jsonify({'success': False, 'error': 'Run not found'}), 404
+
+    # Get all pending schedules for this run (both successful and failed)
+    pending_schedules = db.session.query(PendingSchedule).filter_by(
+        scheduler_run_id=run_id
+    ).all()
+
+    events_data = []
+    for ps in pending_schedules:
+        event = db.session.query(Event).filter_by(
+            project_ref_num=ps.event_ref_num
+        ).first()
+        employee = db.session.query(Employee).get(ps.employee_id) if ps.employee_id else None
+
+        events_data.append({
+            'event_ref_num': ps.event_ref_num,
+            'event_name': event.project_name if event else 'Unknown',
+            'event_type': event.event_type if event else 'Unknown',
+            'employee_name': employee.name if employee else 'Unassigned',
+            'scheduled_time': ps.schedule_datetime.strftime('%Y-%m-%d %I:%M %p') if ps.schedule_datetime else None,
+            'start_date': event.start_datetime.strftime('%Y-%m-%d') if event and event.start_datetime else None,
+            'due_date': event.due_datetime.strftime('%Y-%m-%d') if event and event.due_datetime else None,
+            'status': 'failed' if ps.failure_reason else 'scheduled',
+            'failure_reason': ps.failure_reason
+        })
+
+    return jsonify({
+        'success': True,
+        'run': {
+            'id': run.id,
+            'run_type': run.run_type,
+            'started_at': run.started_at.strftime('%Y-%m-%d %I:%M %p'),
+            'completed_at': run.completed_at.strftime('%Y-%m-%d %I:%M %p') if run.completed_at else None,
+            'status': run.status,
+            'total_events_processed': run.total_events_processed,
+            'events_scheduled': run.events_scheduled,
+            'events_failed': run.events_failed,
+            'approved_at': run.approved_at.strftime('%Y-%m-%d %I:%M %p') if run.approved_at else None
+        },
+        'events': events_data
+    })
+

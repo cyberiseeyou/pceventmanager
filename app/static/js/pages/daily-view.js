@@ -35,10 +35,12 @@ class DailyView {
         await Promise.all([
             this.loadDailySummary(),   // From Story 3.2
             this.loadAttendance(),     // For attendance
-            this.loadDailyEvents()     // From Story 3.3
+            this.loadDailyEvents(),    // From Story 3.3
+            this.checkLockStatus()     // Check if day is locked
         ]);
         this.setupTypeFilter();        // Setup filter listener
         this.setupViewToggle();        // Setup view mode toggle
+        this.setupLockButton();        // Setup lock/unlock button
     }
 
     /**
@@ -694,12 +696,50 @@ class DailyView {
             return;
         }
 
+        // Check for cancelled events and show notification banner
+        // Supports both is_cancelled flag and reporting_status === 'cancelled'
+        const cancelledEvents = events.filter(e => e.is_cancelled || e.reporting_status === 'cancelled');
+        const cancelledBannerHTML = cancelledEvents.length > 0
+            ? this.createCancelledEventsBanner(cancelledEvents)
+            : '';
+
         // Render event cards
         const cardsHTML = events.map(event => this.createEventCard(event)).join('');
-        this.eventsContainer.innerHTML = cardsHTML;
+        this.eventsContainer.innerHTML = cancelledBannerHTML + cardsHTML;
 
         // Attach event listeners after rendering
         this.attachEventCardListeners();
+    }
+
+    /**
+     * Create notification banner for cancelled events
+     *
+     * @param {Array} cancelledEvents - Array of cancelled event objects
+     * @returns {string} HTML string for banner
+     */
+    createCancelledEventsBanner(cancelledEvents) {
+        const eventDetails = cancelledEvents.map(e =>
+            `<li><strong>${e.event_id}</strong>: ${e.event_name} (${e.employee_name})</li>`
+        ).join('');
+
+        return `
+            <div class="cancelled-events-banner" role="alert">
+                <div class="cancelled-events-banner__header">
+                    <span class="cancelled-events-banner__icon">🚫</span>
+                    <strong>Action Required: ${cancelledEvents.length} Cancelled Event${cancelledEvents.length > 1 ? 's' : ''} Detected</strong>
+                </div>
+                <p class="cancelled-events-banner__message">
+                    The following event${cancelledEvents.length > 1 ? 's have' : ' has'} been <strong>CANCELLED</strong> in the Walmart EDR system.
+                    You cannot generate paperwork until these are unscheduled.
+                </p>
+                <ul class="cancelled-events-banner__list">
+                    ${eventDetails}
+                </ul>
+                <p class="cancelled-events-banner__action">
+                    Please <strong>unschedule</strong> these events and notify the assigned employee(s) of the schedule change.
+                </p>
+            </div>
+        `;
     }
 
     /**
@@ -799,7 +839,9 @@ class DailyView {
      * @returns {string} HTML string for event card
      */
     createEventCard(event) {
-        const statusBadge = this.getStatusBadge(event.reporting_status);
+        // Check for cancelled status from either is_cancelled flag or reporting_status
+        const isCancelled = event.is_cancelled || event.reporting_status === 'cancelled';
+        const statusBadge = this.getStatusBadge(event.reporting_status, isCancelled);
         const overdueBadge = event.is_overdue ? '<span class="badge-overdue">⚠️ OVERDUE</span>' : '';
         const salesToolLink = event.sales_tool_url
             ? `<a href="${event.sales_tool_url}"
@@ -811,14 +853,18 @@ class DailyView {
                </a>`
             : '';
 
+        // Add cancelled class for special styling
+        const cancelledClass = isCancelled ? 'event-card--cancelled' : '';
+
         return `
-            <article class="event-card"
+            <article class="event-card ${cancelledClass}"
                      data-schedule-id="${event.schedule_id}"
                      data-event-id="${event.event_id}"
                      data-event-type="${event.event_type}"
                      data-employee-id="${event.employee_id}"
                      data-event-name="${this.escapeHtml(event.event_name)}"
-                     aria-label="${event.employee_name} - ${event.start_time} ${event.event_name}">
+                     data-is-cancelled="${isCancelled}"
+                     aria-label="${event.employee_name} - ${event.start_time} ${event.event_name}${isCancelled ? ' - CANCELLED' : ''}">
                 <div class="event-card__header">
                     <div class="employee-name">👤 ${event.employee_name.toUpperCase()}</div>
                     ${overdueBadge}
@@ -883,10 +929,16 @@ class DailyView {
     /**
      * Get status badge HTML for reporting status
      *
-     * @param {string} status - Reporting status (scheduled, submitted)
+     * @param {string} status - Reporting status (scheduled, submitted, cancelled)
+     * @param {boolean} isCancelled - Whether the event is cancelled in EDR (legacy support)
      * @returns {string} HTML string for status badge
      */
-    getStatusBadge(status) {
+    getStatusBadge(status, isCancelled = false) {
+        // Support both the new reporting_status='cancelled' and legacy is_cancelled flag
+        if (status === 'cancelled' || isCancelled) {
+            return '<span class="status-badge status-cancelled">🔴 CANCELLED (EDR)</span>';
+        }
+
         const badges = {
             'submitted': '<span class="status-badge status-submitted">🟢 SUBMITTED</span>',
             'scheduled': '<span class="status-badge status-scheduled">🟡 SCHEDULED (Not Reported)</span>'
@@ -1061,6 +1113,7 @@ class DailyView {
                 scheduleId,
                 eventId,
                 eventType,
+                eventName,
                 currentEmployeeId: employeeId
             };
 
@@ -1108,7 +1161,7 @@ class DailyView {
             }
 
             // Set up time restrictions for event type (async - fetches from API)
-            await this.setupTimeRestrictions('reschedule', eventType, time24);
+            await this.setupTimeRestrictions('reschedule', eventType, time24, eventName);
 
             // Load available employees and pre-select current employee
             await this.loadAvailableEmployeesForReschedule('reschedule-employee', currentDate, eventType, employeeId);
@@ -1263,8 +1316,9 @@ class DailyView {
      * @param {string} prefix - Form field prefix
      * @param {string} eventType - Event type
      * @param {string} currentTime - Current time in 24-hour format
+     * @param {string} eventName - Optional event name for teardown detection
      */
-    async setupTimeRestrictions(prefix, eventType, currentTime) {
+    async setupTimeRestrictions(prefix, eventType, currentTime, eventName = null) {
         const timeInput = document.getElementById(`${prefix}-time`);
         const timeDropdown = document.getElementById(`${prefix}-time-dropdown`);
         const overrideCheckbox = document.getElementById('reschedule-override-constraints');
@@ -1289,8 +1343,15 @@ class DailyView {
             const dateInput = document.getElementById(`${prefix}-date`);
             const selectedDate = dateInput ? dateInput.value : '';
             let url = `/api/event-allowed-times/${encodeURIComponent(eventType)}`;
+            const params = [];
             if (selectedDate) {
-                url += `?date=${encodeURIComponent(selectedDate)}`;
+                params.push(`date=${encodeURIComponent(selectedDate)}`);
+            }
+            if (eventName) {
+                params.push(`event_name=${encodeURIComponent(eventName)}`);
+            }
+            if (params.length > 0) {
+                url += '?' + params.join('&');
             }
             const response = await fetch(url);
             const data = await response.json();
@@ -2696,6 +2757,155 @@ class DailyView {
             document.addEventListener('keydown', handleKeyDown);
         });
     }
+
+    /* ===================================================================
+       Lock/Unlock Day Methods
+       =================================================================== */
+
+    /**
+     * Check if the current day is locked
+     */
+    async checkLockStatus() {
+        try {
+            const response = await fetch(`/api/locked-days/${this.date}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            this.isLocked = data.is_locked;
+            this.lockInfo = data.locked_day || null;
+        } catch (error) {
+            console.error('Error checking lock status:', error);
+            this.isLocked = false;
+            this.lockInfo = null;
+        }
+    }
+
+    /**
+     * Setup lock/unlock button listener
+     */
+    setupLockButton() {
+        const lockBtn = document.getElementById('btn-lock-day');
+        if (!lockBtn) return;
+
+        // Update button state based on lock status
+        this.updateLockButtonState();
+
+        // Add click handler
+        lockBtn.addEventListener('click', () => {
+            this.toggleDayLock();
+        });
+    }
+
+    /**
+     * Update the lock button UI based on current state
+     */
+    updateLockButtonState() {
+        const lockBtn = document.getElementById('btn-lock-day');
+        const lockIcon = document.getElementById('lock-icon');
+        const lockText = document.getElementById('lock-text');
+
+        if (!lockBtn || !lockIcon || !lockText) return;
+
+        if (this.isLocked) {
+            lockIcon.textContent = '🔒';
+            lockText.textContent = 'Unlock Day';
+            lockBtn.classList.add('btn-locked');
+            lockBtn.classList.remove('btn-unlocked');
+            lockBtn.setAttribute('aria-label', 'Unlock this day');
+            lockBtn.title = this.lockInfo ?
+                `Locked by ${this.lockInfo.locked_by}${this.lockInfo.reason ? ': ' + this.lockInfo.reason : ''}` :
+                'Day is locked';
+        } else {
+            lockIcon.textContent = '🔓';
+            lockText.textContent = 'Lock Day';
+            lockBtn.classList.add('btn-unlocked');
+            lockBtn.classList.remove('btn-locked');
+            lockBtn.setAttribute('aria-label', 'Lock this day');
+            lockBtn.title = 'Lock this day to prevent schedule changes';
+        }
+    }
+
+    /**
+     * Toggle the lock state of the current day
+     */
+    async toggleDayLock() {
+        if (this.isLocked) {
+            await this.unlockDay();
+        } else {
+            await this.lockDay();
+        }
+    }
+
+    /**
+     * Lock the current day
+     */
+    async lockDay() {
+        const reason = prompt('Enter a reason for locking this day (optional):', 'Schedule finalized');
+
+        // User cancelled the prompt
+        if (reason === null) return;
+
+        try {
+            const response = await fetch('/api/locked-days', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    date: this.date,
+                    reason: reason || 'Schedule finalized',
+                    locked_by: 'User'
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.isLocked = true;
+                this.lockInfo = data.locked_day;
+                this.updateLockButtonState();
+                this.showNotification(`Day locked: ${this.date}`, 'success');
+            } else {
+                this.showNotification(`Failed to lock day: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error locking day:', error);
+            this.showNotification('Failed to lock day', 'error');
+        }
+    }
+
+    /**
+     * Unlock the current day
+     */
+    async unlockDay() {
+        if (!confirm('Are you sure you want to unlock this day? This will allow schedule modifications.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/locked-days/${this.date}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.isLocked = false;
+                this.lockInfo = null;
+                this.updateLockButtonState();
+                this.showNotification(`Day unlocked: ${this.date}`, 'success');
+            } else {
+                this.showNotification(`Failed to unlock day: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error unlocking day:', error);
+            this.showNotification('Failed to unlock day', 'error');
+        }
+    }
 }
 
 // Initialize on page load
@@ -2740,6 +2950,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
 
                 if (response.status === 409) {
+                    // Check if this is a locked day error (no conflicts array)
+                    if (!data.conflicts && data.error) {
+                        // Locked day error - show clear message with unlock instructions
+                        if (data.error.includes('locked')) {
+                            alert(`🔒 Day is Locked\n\n${data.error}\n\nTo reschedule this event, first unlock the day using the "Lock Day" button.`);
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                        return;
+                    }
+
                     // Conflict detected - show override option
                     const conflictList = data.conflicts.map(c =>
                         `<li class="conflict-${c.severity}">
@@ -2834,7 +3055,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         // Restore time restrictions
-                        window.dailyView.setupTimeRestrictions('reschedule', eventType, timeInput.value);
+                        const eventName = window.dailyView.rescheduleContext ? window.dailyView.rescheduleContext.eventName : null;
+                        window.dailyView.setupTimeRestrictions('reschedule', eventType, timeInput.value, eventName);
 
                         // Restore employee restrictions
                         const empId = document.getElementById('reschedule-employee').value;

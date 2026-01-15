@@ -256,7 +256,7 @@
         padding: 40px;
         max-width: 500px;
         width: 90%;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
 
     .progress-modal h2 {
@@ -310,8 +310,13 @@
 
     /* Indeterminate progress animation */
     @keyframes indeterminate {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(400%); }
+        0% {
+            transform: translateX(-100%);
+        }
+
+        100% {
+            transform: translateX(400%);
+        }
     }
 
     .progress-bar.indeterminate {
@@ -341,278 +346,302 @@
 {% endblock %}
 
 {% block content %}
-    <!-- Progress Modal -->
-    <div class="progress-modal-overlay" id="progress-modal">
-        <div class="progress-modal">
-            <h2>Creating Schedule...</h2>
-            <div class="progress-info">
-                <div class="progress-label" id="progress-label">Analyzing events and availability</div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar indeterminate" id="progress-bar"></div>
-            </div>
-            <div class="progress-current-event" id="current-event">
-                Initializing auto-scheduler...
-            </div>
-            <div id="progress-status"></div>
+<!-- Progress Modal -->
+<div class="progress-modal-overlay" id="progress-modal">
+    <div class="progress-modal">
+        <h2>Creating Schedule...</h2>
+        <div class="progress-info">
+            <div class="progress-label" id="progress-label">Analyzing events and availability</div>
         </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar indeterminate" id="progress-bar"></div>
+        </div>
+        <div class="progress-current-event" id="current-event">
+            Initializing auto-scheduler...
+        </div>
+        <div id="progress-status"></div>
     </div>
+</div>
 
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1 class="page-title">Auto-Scheduler</h1>
+<!-- Page Header -->
+<div class="page-header">
+    <h1 class="page-title">Auto-Scheduler</h1>
+</div>
+
+<!-- Auto-Scheduler Notification -->
+<div id="auto-scheduler-notification" class="pending-notification">
+    <div class="pending-notification-content">
+        <div class="pending-notification-icon">📋</div>
+        <div class="pending-notification-text">
+            <h3 class="pending-notification-title">Pending Schedule Proposal</h3>
+            <p class="pending-notification-desc">A proposed schedule is ready for your review and approval.</p>
+        </div>
+        <a href="{{ url_for('auto_scheduler.review') }}" class="btn-review">
+            Review Now
+        </a>
     </div>
+</div>
 
-    <!-- Auto-Scheduler Notification -->
-    <div id="auto-scheduler-notification" class="pending-notification">
-        <div class="pending-notification-content">
-            <div class="pending-notification-icon">📋</div>
-            <div class="pending-notification-text">
-                <h3 class="pending-notification-title">Pending Schedule Proposal</h3>
-                <p class="pending-notification-desc">A proposed schedule is ready for your review and approval.</p>
-            </div>
-            <a href="{{ url_for('auto_scheduler.review') }}" class="btn-review">
-                Review Now
+<!-- Auto-Scheduler Controls -->
+<div class="dashboard-section"
+    style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%); border-left: 4px solid #27ae60;">
+    <div class="section-header">
+        <h3 class="section-title">🤖 Auto-Scheduler</h3>
+        <div style="display: flex; gap: 8px;">
+            <a href="{{ url_for('auto_scheduler.history') }}" class="btn btn-outline"
+                style="font-size: 0.9em; padding: 0.5rem 1rem;">
+                📋 View History
             </a>
-        </div>
-    </div>
-
-    <!-- Auto-Scheduler Controls -->
-    <div class="dashboard-section" style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%); border-left: 4px solid #27ae60;">
-        <div class="section-header">
-            <h3 class="section-title">🤖 Auto-Scheduler</h3>
-            <a href="{{ url_for('rotations.index') }}" class="btn btn-outline" style="font-size: 0.9em; padding: 0.5rem 1rem;">
+            <a href="{{ url_for('rotations.index') }}" class="btn btn-outline"
+                style="font-size: 0.9em; padding: 0.5rem 1rem;">
                 Configure Rotations
             </a>
         </div>
+    </div>
 
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: center;">
-            <div>
-                <p style="color: var(--text-secondary); margin-bottom: 15px; line-height: 1.6;">
-                    The auto-scheduler will analyze unscheduled events within the next 3 weeks and create
-                    assignment proposals based on weekly rotations, employee availability, and event priorities.
-                </p>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <button onclick="runAutoScheduler()" id="auto-schedule-btn" class="btn btn-primary">
-                        Run Auto-Scheduler
-                    </button>
-                    <span id="auto-schedule-status" style="color: var(--text-muted); font-size: 0.9rem;"></span>
-                </div>
-            </div>
-            <div id="last-run-info" style="background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <div style="font-size: 0.85rem; color: #7f8c8d; margin-bottom: 5px;">Last Run</div>
-                <div id="last-run-time" style="font-weight: 600; color: #2c3e50;">
-                    {% if last_run %}
-                        {{ last_run.started_at.strftime('%m/%d/%Y %I:%M %p') }}
-                    {% else %}
-                        Never
-                    {% endif %}
-                </div>
-            </div>
+    <!-- Buffer Notice -->
+    <div
+        style="background: #fff3cd; border-left: 4px solid #ff9800; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px; display: flex; align-items: start; gap: 10px;">
+        <span style="font-size: 1.2em; margin-top: 2px;">ℹ️</span>
+        <div style="flex: 1;">
+            <strong style="color: #856404; display: block; margin-bottom: 4px;">3-Day Buffer Policy</strong>
+            <p style="color: #856404; margin: 0; font-size: 0.9em; line-height: 1.5;">
+                The auto-scheduler maintains a 3-day buffer and will not schedule events starting within the next 3
+                days.
+                Events requiring immediate scheduling must be assigned manually using the calendar or scheduling
+                interface.
+            </p>
         </div>
     </div>
 
-    <!-- Scheduling Progress -->
-    <div class="dashboard-sections">
-        <div class="dashboard-section">
-            <div class="section-header">
-                <h3 class="section-title">Scheduling Progress (Next 2 Weeks)</h3>
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: center;">
+        <div>
+            <p style="color: var(--text-secondary); margin-bottom: 15px; line-height: 1.6;">
+                The auto-scheduler will analyze unscheduled events within the next 3 weeks and create
+                assignment proposals based on weekly rotations, employee availability, and event priorities.
+            </p>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <button onclick="runAutoScheduler()" id="auto-schedule-btn" class="btn btn-primary">
+                    Run Auto-Scheduler
+                </button>
+                <span id="auto-schedule-status" style="color: var(--text-muted); font-size: 0.9rem;"></span>
             </div>
-
-            <!-- Scheduling Percentage -->
-            <div class="percentage-display">
-                <div class="percentage-number">{{ scheduling_percentage }}%</div>
-                <div class="percentage-label">
-                    {{ scheduled_events_2weeks }} of {{ total_events_2weeks }} events scheduled
-                </div>
+        </div>
+        <div id="last-run-info"
+            style="background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85rem; color: #7f8c8d; margin-bottom: 5px;">Last Run</div>
+            <div id="last-run-time" style="font-weight: 600; color: #2c3e50;">
+                {% if last_run %}
+                {{ last_run.started_at.strftime('%m/%d/%Y %I:%M %p') }}
+                {% else %}
+                Never
+                {% endif %}
             </div>
-
-            <!-- Unscheduled Events (within 2 weeks) -->
-            <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm) 0; color: var(--text-primary);">
-                Urgent Unscheduled Events ({{ unscheduled_events_2weeks|length }})
-            </h4>
-
-            {% if unscheduled_events_2weeks %}
-                <div class="unscheduled-list">
-                    {% for event in unscheduled_events_2weeks %}
-                    <div class="unscheduled-item">
-                        <div class="unscheduled-header">
-                            <div class="unscheduled-title">{{ event.project_name }}</div>
-                            <span class="event-type-badge event-type-{{ event.event_type.lower() }}">
-                                {{ event.event_type }}
-                            </span>
-                        </div>
-                        <div class="unscheduled-dates">
-                            📅 {{ event.start_datetime.strftime('%m/%d') }} - {{ event.due_datetime.strftime('%m/%d') }}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <div style="text-align: center; margin-top: var(--spacing-md);">
-                    <a href="{{ url_for('main.unscheduled_events') }}" class="btn btn-outline">
-                        View All Unscheduled Events
-                    </a>
-                </div>
-            {% else %}
-                <div class="no-items">All events within 2 weeks are scheduled!</div>
-            {% endif %}
         </div>
     </div>
+</div>
+
+<!-- Scheduling Progress -->
+<div class="dashboard-sections">
+    <div class="dashboard-section">
+        <div class="section-header">
+            <h3 class="section-title">Scheduling Progress (Next 4 Months)</h3>
+        </div>
+
+        <!-- Scheduling Percentage -->
+        <div class="percentage-display">
+            <div class="percentage-number">{{ scheduling_percentage }}%</div>
+            <div class="percentage-label">
+                {{ scheduled_events_display }} of {{ total_events_display }} events scheduled
+            </div>
+        </div>
+
+        <!-- Unscheduled Events (within 4 months) -->
+        <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm) 0; color: var(--text-primary);">
+            Urgent Unscheduled Events ({{ unscheduled_events_display|length }})
+        </h4>
+
+        {% if unscheduled_events_display %}
+        <div class="unscheduled-list">
+            {% for event in unscheduled_events_display %}
+            <div class="unscheduled-item">
+                <div class="unscheduled-header">
+                    <div class="unscheduled-title">{{ event.project_name }}</div>
+                    <span class="event-type-badge event-type-{{ event.event_type.lower().replace(' ', '-') }}">
+                        {{ event.event_type }}
+                    </span>
+                </div>
+                <div class="unscheduled-dates">
+                    📅 {{ event.start_datetime.strftime('%m/%d') }} - {{ event.due_datetime.strftime('%m/%d') }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div style="text-align: center; margin-top: var(--spacing-md);">
+            <a href="{{ url_for('main.unscheduled_events') }}" class="btn btn-outline">
+                View All Unscheduled Events
+            </a>
+        </div>
+        {% else %}
+        <div class="no-items">All events within 4 months are scheduled!</div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Auto-scheduler functions
-function checkPendingProposal() {
-    fetch('{{ url_for("auto_scheduler.dashboard_status") }}')
-        .then(response => response.json())
-        .then(data => {
-            const notification = document.getElementById('auto-scheduler-notification');
-            if (data.has_pending) {
-                notification.style.display = 'block';
-            } else {
-                notification.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('Failed to check pending proposals:', error);
-        });
-}
-
-function runAutoScheduler() {
-    const btn = document.getElementById('auto-schedule-btn');
-    const statusSpan = document.getElementById('auto-schedule-status');
-    const progressModal = document.getElementById('progress-modal');
-    const progressLabel = document.getElementById('progress-label');
-    const progressBar = document.getElementById('progress-bar');
-    const currentEvent = document.getElementById('current-event');
-    const progressStatus = document.getElementById('progress-status');
-
-    // Scheduling wave messages to simulate progress
-    const progressMessages = [
-        { label: 'Analyzing events and availability', detail: 'Loading unscheduled events...' },
-        { label: 'Wave 1: Juicer Events', detail: 'Scheduling Juicer events to Juicer Baristas...' },
-        { label: 'Wave 2: Core Events', detail: 'Scheduling Core and Supervisor events...' },
-        { label: 'Wave 3: Freeosk Events', detail: 'Scheduling Freeosk events to Leads...' },
-        { label: 'Wave 4: Digital Events', detail: 'Scheduling Digital events...' },
-        { label: 'Wave 5: Other Events', detail: 'Scheduling remaining events...' },
-        { label: 'Finalizing', detail: 'Running rescue pass for urgent events...' }
-    ];
-
-    let messageIndex = 0;
-    let progressInterval;
-
-    // Show progress modal
-    progressModal.classList.add('active');
-    progressBar.classList.add('indeterminate');
-    progressStatus.innerHTML = '';
-
-    // Rotate through progress messages
-    function updateProgressMessage() {
-        if (messageIndex < progressMessages.length) {
-            progressLabel.textContent = progressMessages[messageIndex].label;
-            currentEvent.textContent = progressMessages[messageIndex].detail;
-            messageIndex++;
-        }
+    // Auto-scheduler functions
+    function checkPendingProposal() {
+        fetch('{{ url_for("auto_scheduler.dashboard_status") }}')
+            .then(response => response.json())
+            .then(data => {
+                const notification = document.getElementById('auto-scheduler-notification');
+                if (data.has_pending) {
+                    notification.style.display = 'block';
+                } else {
+                    notification.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Failed to check pending proposals:', error);
+            });
     }
 
-    // Start message rotation
-    updateProgressMessage();
-    progressInterval = setInterval(updateProgressMessage, 2000);
+    function runAutoScheduler() {
+        const btn = document.getElementById('auto-schedule-btn');
+        const statusSpan = document.getElementById('auto-schedule-status');
+        const progressModal = document.getElementById('progress-modal');
+        const progressLabel = document.getElementById('progress-label');
+        const progressBar = document.getElementById('progress-bar');
+        const currentEvent = document.getElementById('current-event');
+        const progressStatus = document.getElementById('progress-status');
 
-    btn.disabled = true;
-    btn.textContent = 'Running...';
-    statusSpan.textContent = '';
+        // Scheduling wave messages to simulate progress
+        const progressMessages = [
+            { label: 'Analyzing events and availability', detail: 'Loading unscheduled events...' },
+            { label: 'Wave 1: Juicer Events', detail: 'Scheduling Juicer events to Juicer Baristas...' },
+            { label: 'Wave 2: Core Events', detail: 'Scheduling Core and Supervisor events...' },
+            { label: 'Wave 3: Freeosk Events', detail: 'Scheduling Freeosk events to Leads...' },
+            { label: 'Wave 4: Digital Events', detail: 'Scheduling Digital events...' },
+            { label: 'Wave 5: Other Events', detail: 'Scheduling remaining events...' },
+            { label: 'Finalizing', detail: 'Running rescue pass for urgent events...' }
+        ];
 
-    fetch('{{ url_for("auto_scheduler.run_scheduler") }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
+        let messageIndex = 0;
+        let progressInterval;
+
+        // Show progress modal
+        progressModal.classList.add('active');
+        progressBar.classList.add('indeterminate');
+        progressStatus.innerHTML = '';
+
+        // Rotate through progress messages
+        function updateProgressMessage() {
+            if (messageIndex < progressMessages.length) {
+                progressLabel.textContent = progressMessages[messageIndex].label;
+                currentEvent.textContent = progressMessages[messageIndex].detail;
+                messageIndex++;
+            }
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        clearInterval(progressInterval);
-        progressBar.classList.remove('indeterminate');
 
-        if (data.success) {
-            // Show success in modal
-            progressLabel.textContent = 'Schedule Created!';
-            progressBar.style.width = '100%';
-            currentEvent.textContent = `${data.stats.events_scheduled} events scheduled, ${data.stats.events_requiring_swaps} swaps proposed`;
-            progressStatus.innerHTML = '<div class="progress-status success">Schedule proposal created successfully!</div>';
+        // Start message rotation
+        updateProgressMessage();
+        progressInterval = setInterval(updateProgressMessage, 2000);
 
-            statusSpan.style.color = '#27ae60';
-            statusSpan.textContent = `✓ Completed: ${data.stats.events_scheduled} scheduled, ${data.stats.events_requiring_swaps} swaps, ${data.stats.events_failed} failed`;
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+        statusSpan.textContent = '';
 
-            // Update last run time
-            const lastRunTime = document.getElementById('last-run-time');
-            lastRunTime.textContent = 'Just now';
+        fetch('{{ url_for("auto_scheduler.run_scheduler") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                clearInterval(progressInterval);
+                progressBar.classList.remove('indeterminate');
 
-            // Check for pending proposals
-            setTimeout(() => {
-                checkPendingProposal();
-            }, 500);
+                if (data.success) {
+                    // Show success in modal
+                    progressLabel.textContent = 'Schedule Created!';
+                    progressBar.style.width = '100%';
+                    currentEvent.textContent = `${data.stats.events_scheduled} events scheduled, ${data.stats.events_requiring_swaps} swaps proposed`;
+                    progressStatus.innerHTML = '<div class="progress-status success">Schedule proposal created successfully!</div>';
 
-            // Hide modal and show confirmation after a brief delay
-            setTimeout(() => {
-                progressModal.classList.remove('active');
-                if (data.stats.events_scheduled > 0 || data.stats.events_requiring_swaps > 0) {
-                    if (confirm('Auto-scheduler completed successfully! Would you like to review the proposals now?')) {
-                        window.location.href = '{{ url_for("auto_scheduler.review") }}';
-                    }
+                    statusSpan.style.color = '#27ae60';
+                    statusSpan.textContent = `✓ Completed: ${data.stats.events_scheduled} scheduled, ${data.stats.events_requiring_swaps} swaps, ${data.stats.events_failed} failed`;
+
+                    // Update last run time
+                    const lastRunTime = document.getElementById('last-run-time');
+                    lastRunTime.textContent = 'Just now';
+
+                    // Check for pending proposals
+                    setTimeout(() => {
+                        checkPendingProposal();
+                    }, 500);
+
+                    // Hide modal and show confirmation after a brief delay
+                    setTimeout(() => {
+                        progressModal.classList.remove('active');
+                        if (data.stats.events_scheduled > 0 || data.stats.events_requiring_swaps > 0) {
+                            if (confirm('Auto-scheduler completed successfully! Would you like to review the proposals now?')) {
+                                window.location.href = '{{ url_for("auto_scheduler.review") }}';
+                            }
+                        } else {
+                            alert('Auto-scheduler completed but found no events to schedule in the next 3 weeks.');
+                        }
+                    }, 1500);
                 } else {
-                    alert('Auto-scheduler completed but found no events to schedule in the next 3 weeks.');
+                    // Show error in modal
+                    progressLabel.textContent = 'Error';
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = '#e74c3c';
+                    currentEvent.textContent = data.error;
+                    progressStatus.innerHTML = '<div class="progress-status error">Failed to create schedule</div>';
+
+                    statusSpan.style.color = '#e74c3c';
+                    statusSpan.textContent = `Error: ${data.error}`;
+
+                    // Hide modal after delay
+                    setTimeout(() => {
+                        progressModal.classList.remove('active');
+                        progressBar.style.background = '';
+                    }, 3000);
                 }
-            }, 1500);
-        } else {
-            // Show error in modal
-            progressLabel.textContent = 'Error';
-            progressBar.style.width = '100%';
-            progressBar.style.background = '#e74c3c';
-            currentEvent.textContent = data.error;
-            progressStatus.innerHTML = '<div class="progress-status error">Failed to create schedule</div>';
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                progressBar.classList.remove('indeterminate');
 
-            statusSpan.style.color = '#e74c3c';
-            statusSpan.textContent = `Error: ${data.error}`;
+                // Show error in modal
+                progressLabel.textContent = 'Error';
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#e74c3c';
+                currentEvent.textContent = error.message;
+                progressStatus.innerHTML = '<div class="progress-status error">Failed to run auto-scheduler</div>';
 
-            // Hide modal after delay
-            setTimeout(() => {
-                progressModal.classList.remove('active');
-                progressBar.style.background = '';
-            }, 3000);
-        }
-    })
-    .catch(error => {
-        clearInterval(progressInterval);
-        progressBar.classList.remove('indeterminate');
+                statusSpan.style.color = '#e74c3c';
+                statusSpan.textContent = `Failed: ${error.message}`;
 
-        // Show error in modal
-        progressLabel.textContent = 'Error';
-        progressBar.style.width = '100%';
-        progressBar.style.background = '#e74c3c';
-        currentEvent.textContent = error.message;
-        progressStatus.innerHTML = '<div class="progress-status error">Failed to run auto-scheduler</div>';
+                // Hide modal after delay
+                setTimeout(() => {
+                    progressModal.classList.remove('active');
+                    progressBar.style.background = '';
+                }, 3000);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Run Auto-Scheduler';
+            });
+    }
 
-        statusSpan.style.color = '#e74c3c';
-        statusSpan.textContent = `Failed: ${error.message}`;
-
-        // Hide modal after delay
-        setTimeout(() => {
-            progressModal.classList.remove('active');
-            progressBar.style.background = '';
-        }, 3000);
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.textContent = 'Run Auto-Scheduler';
+    // Check for pending proposals on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        checkPendingProposal();
     });
-}
-
-// Check for pending proposals on page load
-document.addEventListener('DOMContentLoaded', function() {
-    checkPendingProposal();
-});
 </script>
 {% endblock %}

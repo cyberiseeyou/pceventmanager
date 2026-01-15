@@ -1,6 +1,8 @@
 """
 Shift Block Configuration Service
-Loads and manages 8 active shift blocks + 4 legacy slots from environment variables
+Loads and manages 8 active shift blocks + 4 legacy slots.
+
+Priority: Database (ShiftBlockSetting) -> Environment variables (.env)
 
 The 8 active shift blocks are used for new Core event scheduling.
 The 4 legacy slots are for backward compatibility display of events scheduled
@@ -17,6 +19,32 @@ logger = logging.getLogger(__name__)
 # Create a decouple Config that explicitly uses the .env file from project root
 _ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
 config = Config(RepositoryEnv(_ENV_PATH))
+
+
+def _get_shift_block_from_db(block_num: int) -> Optional[Dict]:
+    """
+    Try to load a shift block from the database.
+
+    Returns:
+        Block dict or None if not found in database
+    """
+    try:
+        from flask import current_app
+        ShiftBlockSetting = current_app.config.get('ShiftBlockSetting')
+
+        if not ShiftBlockSetting:
+            return None
+
+        block = ShiftBlockSetting.get_block(block_num)
+        if block:
+            return block.to_dict()
+        return None
+    except RuntimeError:
+        # Outside of application context (e.g., during testing or CLI)
+        return None
+    except Exception as e:
+        logger.debug(f"Could not load block {block_num} from database: {e}")
+        return None
 
 
 class ShiftBlockConfig:
@@ -69,9 +97,23 @@ class ShiftBlockConfig:
     
     @classmethod
     def _load_block(cls, block_num: int) -> Optional[Dict]:
-        """Load a single shift block from environment variables."""
+        """
+        Load a single shift block.
+
+        Priority: Database -> Environment variables
+
+        Returns:
+            Block dict or None if not configured
+        """
+        # Try database first
+        db_block = _get_shift_block_from_db(block_num)
+        if db_block:
+            logger.debug(f"Loaded shift block {block_num} from database")
+            return db_block
+
+        # Fall back to environment variables
         prefix = f"SHIFT_{block_num}_"
-        
+
         try:
             arrive = config(f"{prefix}ARRIVE", default=None)
             on_floor = config(f"{prefix}ON_FLOOR", default=None)
@@ -79,10 +121,11 @@ class ShiftBlockConfig:
             lunch_end = config(f"{prefix}LUNCH_END", default=None)
             off_floor = config(f"{prefix}OFF_FLOOR", default=None)
             depart = config(f"{prefix}DEPART", default=None)
-            
+
             if not all([arrive, on_floor, lunch_begin, lunch_end, off_floor, depart]):
                 return None
-            
+
+            logger.debug(f"Loaded shift block {block_num} from environment")
             return {
                 'block': block_num,
                 'arrive': cls._parse_time(arrive),
@@ -102,7 +145,68 @@ class ShiftBlockConfig:
         except Exception as e:
             logger.error(f"Error loading shift block {block_num}: {e}")
             return None
-    
+
+    @classmethod
+    def get_all_blocks_from_env(cls) -> List[Dict]:
+        """
+        Get all 8 shift blocks directly from environment variables.
+        Does NOT check database. Used for displaying defaults in UI.
+
+        Returns:
+            List of dicts with block configuration from .env
+        """
+        blocks = []
+        for block_num in range(1, 9):
+            block = cls._load_block_from_env(block_num)
+            if block:
+                blocks.append(block)
+        return blocks
+
+    @classmethod
+    def _load_block_from_env(cls, block_num: int) -> Optional[Dict]:
+        """
+        Load a single shift block from environment variables only.
+        Does NOT check database.
+
+        Args:
+            block_num: Block number 1-8
+
+        Returns:
+            Block dict or None if not configured in .env
+        """
+        prefix = f"SHIFT_{block_num}_"
+
+        try:
+            arrive = config(f"{prefix}ARRIVE", default=None)
+            on_floor = config(f"{prefix}ON_FLOOR", default=None)
+            lunch_begin = config(f"{prefix}LUNCH_BEGIN", default=None)
+            lunch_end = config(f"{prefix}LUNCH_END", default=None)
+            off_floor = config(f"{prefix}OFF_FLOOR", default=None)
+            depart = config(f"{prefix}DEPART", default=None)
+
+            if not all([arrive, on_floor, lunch_begin, lunch_end, off_floor, depart]):
+                return None
+
+            return {
+                'block': block_num,
+                'arrive': cls._parse_time(arrive),
+                'on_floor': cls._parse_time(on_floor),
+                'lunch_begin': cls._parse_time(lunch_begin),
+                'lunch_end': cls._parse_time(lunch_end),
+                'off_floor': cls._parse_time(off_floor),
+                'depart': cls._parse_time(depart),
+                # String versions for display
+                'arrive_str': arrive,
+                'on_floor_str': on_floor,
+                'lunch_begin_str': lunch_begin,
+                'lunch_end_str': lunch_end,
+                'off_floor_str': off_floor,
+                'depart_str': depart,
+            }
+        except Exception as e:
+            logger.error(f"Error loading shift block {block_num} from env: {e}")
+            return None
+
     @classmethod
     def get_block(cls, block_number: int) -> Optional[Dict]:
         """

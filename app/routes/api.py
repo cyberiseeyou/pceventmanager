@@ -358,7 +358,28 @@ def get_daily_events(date):
     def build_event_dict(sched, evt, emp):
         duration = evt.estimated_time or evt.get_default_duration(evt.event_type)
         end_dt = sched.schedule_datetime + timedelta(minutes=duration)
-        rep_status = 'submitted' if evt.condition == 'Submitted' else 'scheduled'
+
+        # Get EDR status if available (from Walmart EDR system)
+        edr_status = getattr(evt, 'edr_status', None)
+
+        # Check for cancelled status from BOTH sources:
+        # 1. condition field from Crossmark API (synced during database refresh)
+        # 2. edr_status field from Walmart EDR API (fetched during paperwork generation)
+        is_cancelled_from_condition = evt.condition and evt.condition.lower() == 'canceled'
+        is_cancelled_from_edr = edr_status and edr_status.lower() == 'cancelled'
+        is_cancelled = is_cancelled_from_condition or is_cancelled_from_edr
+
+        # Determine reporting status:
+        # - 'cancelled' if cancelled from either source (takes precedence)
+        # - 'submitted' if local condition is Submitted
+        # - 'scheduled' otherwise
+        if is_cancelled:
+            rep_status = 'cancelled'
+        elif evt.condition == 'Submitted':
+            rep_status = 'submitted'
+        else:
+            rep_status = 'scheduled'
+
         return {
             'schedule_id': sched.id,
             'event_id': evt.project_ref_num,
@@ -373,7 +394,9 @@ def get_daily_events(date):
             'due_date': evt.due_datetime.strftime('%m/%d/%Y') if evt.due_datetime else None,
             'sales_tool_url': getattr(evt, 'sales_tool_url', None),
             'reporting_status': rep_status,
-            'is_overdue': _is_event_overdue(sched.schedule_datetime, rep_status)
+            'is_overdue': _is_event_overdue(sched.schedule_datetime, rep_status),
+            'edr_status': edr_status,
+            'is_cancelled': is_cancelled
         }
 
     # PERFORMANCE: Pre-index Supervisor schedules by 6-digit event number: O(n)
@@ -621,6 +644,17 @@ def unschedule_event_quick(schedule_id):
     # Unscheduling an event does NOT delete attendance records since attendance
     # is tied to the employee's day, not to specific events/schedules
     has_attendance = False
+
+    # CHECK LOCKED DAYS: Cannot unschedule from a locked day
+    LockedDay = current_app.config.get('LockedDay')
+    if LockedDay:
+        schedule_date = schedule.schedule_datetime.date()
+        locked_info = LockedDay.get_locked_day(schedule_date)
+        if locked_info:
+            reason = locked_info.reason or 'No reason provided'
+            return jsonify({
+                'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+            }), 409
 
     # Store employee and event info for logging before deletion
     employee_name = schedule.employee.name if schedule.employee else 'Unassigned'
@@ -1081,16 +1115,23 @@ def get_event_allowed_times(event_type):
         elif event_type_lower == 'supervisor':
             times = EventTimeSettings.get_supervisor_times()
             allowed_times.append(f"{times['start'].hour:02d}:{times['start'].minute:02d}")
-        elif event_type_lower in ['digitals', 'digital setup', 'digital refresh']:
-            slots = EventTimeSettings.get_digital_setup_slots()
-            for slot in slots:
-                start = slot['start']
-                allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
-        elif event_type_lower == 'digital teardown':
-            slots = EventTimeSettings.get_digital_teardown_slots()
-            for slot in slots:
-                start = slot['start']
-                allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
+        elif event_type_lower in ['digitals', 'digital setup', 'digital refresh', 'digital teardown']:
+            # Get event name from query params for teardown detection
+            event_name = request.args.get('event_name', '').lower()
+
+            # Check if this is a teardown event (by event type OR project name)
+            if 'teardown' in event_type_lower or 'tear down' in event_name:
+                # Digital Teardown
+                slots = EventTimeSettings.get_digital_teardown_slots()
+                for slot in slots:
+                    start = slot['start']
+                    allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
+            else:
+                # Digital Setup/Refresh
+                slots = EventTimeSettings.get_digital_setup_slots()
+                for slot in slots:
+                    start = slot['start']
+                    allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
         elif event_type_lower == 'other':
             times = EventTimeSettings.get_other_times()
             allowed_times.append(f"{times['start'].hour:02d}:{times['start'].minute:02d}")
@@ -1121,17 +1162,28 @@ def get_event_allowed_times(event_type):
                     from datetime import time as dt_time
                     h, m = map(int, t_str.split(':'))
                     dt = datetime.combine(target_date, dt_time(h, m))
-                    
-                    count = db.session.query(Schedule).filter(
-                        Schedule.schedule_datetime == dt
-                    ).count()
-                    
+
+                    # For Core events, only count Core event schedules at this time
+                    if event_type_lower == 'core':
+                        Event = current_app.config['Event']
+                        count = db.session.query(Schedule).join(
+                            Event, Schedule.event_ref_num == Event.project_ref_num
+                        ).filter(
+                            Schedule.schedule_datetime == dt,
+                            Event.event_type == 'Core'
+                        ).count()
+                    else:
+                        # For other event types, count all schedules at this time
+                        count = db.session.query(Schedule).filter(
+                            Schedule.schedule_datetime == dt
+                        ).count()
+
                     # Format label
                     t_obj = dt_time(h, m)
                     hour_12 = t_obj.hour % 12 or 12
                     am_pm = 'AM' if t_obj.hour < 12 else 'PM'
                     label = f"{hour_12}:{t_obj.minute:02d} {am_pm}"
-                    
+
                     time_details.append({
                         'value': t_str,
                         'label': f"{label} ({count} scheduled)",
@@ -1396,6 +1448,26 @@ def reschedule():
         parsed_date = datetime.strptime(new_date, '%Y-%m-%d').date()
         parsed_time = datetime.strptime(new_time, '%H:%M').time()
         new_datetime = datetime.combine(parsed_date, parsed_time)
+
+        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            # Check if current schedule date is locked
+            old_date = schedule.schedule_datetime.date()
+            old_locked_info = LockedDay.get_locked_day(old_date)
+            if old_locked_info:
+                reason = old_locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
+            # Check if new date is locked
+            new_locked_info = LockedDay.get_locked_day(parsed_date)
+            if new_locked_info:
+                reason = new_locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot reschedule: target date {parsed_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
 
         # CRITICAL VALIDATION: Ensure new datetime is within event period
         # This prevents rescheduling events outside their valid start/due date window
@@ -1821,6 +1893,26 @@ def reschedule_event_with_validation(schedule_id):
         except ValueError as e:
             return jsonify({'error': f'Invalid date or time format: {str(e)}'}), 400
 
+        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            # Check if current schedule date is locked
+            old_date = schedule.schedule_datetime.date()
+            old_locked_info = LockedDay.get_locked_day(old_date)
+            if old_locked_info:
+                reason = old_locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
+            # Check if new date is locked
+            new_locked_info = LockedDay.get_locked_day(new_date)
+            if new_locked_info:
+                reason = new_locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot reschedule: target date {new_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
         # Validate using ConstraintValidator
         from app.services.constraint_validator import ConstraintValidator
 
@@ -2192,6 +2284,17 @@ def change_employee_assignment(schedule_id):
         if not schedule:
             return jsonify({'error': 'Schedule not found'}), 404
 
+        # CHECK LOCKED DAYS: Cannot change employee on a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            schedule_date = schedule.schedule_datetime.date()
+            locked_info = LockedDay.get_locked_day(schedule_date)
+            if locked_info:
+                reason = locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
         # Get related event
         event = Event.query.filter_by(project_ref_num=schedule.event_ref_num).first()
         if not event:
@@ -2397,6 +2500,17 @@ def unschedule_event(schedule_id):
         if not event:
             return jsonify({'error': 'Related event not found'}), 404
 
+        # CHECK LOCKED DAYS: Cannot unschedule from a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            schedule_date = schedule.schedule_datetime.date()
+            locked_info = LockedDay.get_locked_day(schedule_date)
+            if locked_info:
+                reason = locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
         # Call Crossmark API BEFORE deleting local record
         from app.integrations.external_api.session_api_service import session_api as external_api
 
@@ -2550,6 +2664,25 @@ def unschedule_event_by_id(event_id):
 
         if not schedules:
             return jsonify({'error': 'No schedules found for this event'}), 404
+
+        # CHECK LOCKED DAYS: Cannot unschedule from locked days
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            locked_dates = []
+            for schedule in schedules:
+                schedule_date = schedule.schedule_datetime.date()
+                locked_info = LockedDay.get_locked_day(schedule_date)
+                if locked_info:
+                    locked_dates.append({
+                        'date': schedule_date.isoformat(),
+                        'reason': locked_info.reason or 'No reason provided'
+                    })
+
+            if locked_dates:
+                return jsonify({
+                    'error': f'Cannot unschedule: {len(locked_dates)} date(s) are locked. Unlock them first.',
+                    'locked_dates': locked_dates
+                }), 409
 
         # Call Crossmark API BEFORE deleting local records
         from app.integrations.external_api.session_api_service import session_api as external_api
@@ -3032,15 +3165,48 @@ def bulk_reassign_supervisor_events():
                 'employee_job_title': new_employee.job_title
             }), 400
 
-        # Define supervisor event types
-        supervisor_event_types = ['Supervisor', 'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Other']
+        # Check if new employee has time off on the target date
+        EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+        time_off = EmployeeTimeOff.query.filter(
+            EmployeeTimeOff.employee_id == new_employee_id,
+            EmployeeTimeOff.start_date <= target_date,
+            EmployeeTimeOff.end_date >= target_date
+        ).first()
 
-        # Find all supervisor events scheduled for the target date
+        if time_off:
+            return jsonify({
+                'error': f'{new_employee.name} has time off on {target_date_str}',
+                'time_off_start': str(time_off.start_date),
+                'time_off_end': str(time_off.end_date)
+            }), 400
+
+        # Check weekly availability
+        EmployeeWeeklyAvailability = current_app.config.get('EmployeeWeeklyAvailability')
+        if EmployeeWeeklyAvailability:
+            day_of_week = target_date.weekday()
+            day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+            day_column = day_names[day_of_week]
+
+            weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                employee_id=new_employee_id
+            ).first()
+
+            if weekly_avail and not getattr(weekly_avail, day_column, True):
+                return jsonify({
+                    'error': f'{new_employee.name} is not available on {day_column.capitalize()}s',
+                    'day_of_week': day_column
+                }), 400
+
+        # Only reassign Supervisor type events
+        supervisor_event_types = ['Supervisor']
+
+        # Find all Supervisor events scheduled for the target date (exclude already submitted)
         supervisor_schedules = db.session.query(Schedule).join(
             Event, Schedule.event_ref_num == Event.project_ref_num
         ).filter(
             db.func.date(Schedule.schedule_datetime) == target_date,
-            Event.event_type.in_(supervisor_event_types)
+            Event.event_type.in_(supervisor_event_types),
+            Event.condition != 'Submitted'  # Don't reassign already submitted events
         ).all()
 
         if not supervisor_schedules:
@@ -3063,8 +3229,18 @@ def bulk_reassign_supervisor_events():
         # Process each supervisor event
         reassigned_events = []
         failed_events = []
+        skipped_events = []
 
         for schedule in supervisor_schedules:
+            # Skip if already assigned to the target employee
+            if schedule.employee_id == new_employee_id:
+                skipped_events.append({
+                    'schedule_id': schedule.id,
+                    'event_name': schedule.event.project_name if schedule.event else 'Unknown',
+                    'reason': 'Already assigned to this employee'
+                })
+                continue
+
             # Get the event details
             event = Event.query.filter_by(project_ref_num=schedule.event_ref_num).first()
             if not event:
@@ -3166,19 +3342,34 @@ def bulk_reassign_supervisor_events():
         db.session.commit()
 
         # Prepare response
+        total_processed = len(reassigned_events) + len(skipped_events)
+        
+        # Build message
+        message_parts = []
+        if reassigned_events:
+            message_parts.append(f'{len(reassigned_events)} reassigned')
+        if skipped_events:
+            message_parts.append(f'{len(skipped_events)} already assigned')
+        if failed_events:
+            message_parts.append(f'{len(failed_events)} failed')
+
         response_data = {
-            'success': len(reassigned_events) > 0,
-            'message': f'Successfully reassigned {len(reassigned_events)} supervisor event(s)',
+            'success': len(reassigned_events) > 0 or len(skipped_events) > 0,
+            'message': f'Supervisor events: {", ".join(message_parts)}' if message_parts else 'No events processed',
             'reassigned_count': len(reassigned_events),
+            'skipped_count': len(skipped_events),
             'failed_count': len(failed_events),
             'reassigned_events': reassigned_events
         }
 
+        if skipped_events:
+            response_data['skipped_events'] = skipped_events
+
         if failed_events:
             response_data['failed_events'] = failed_events
-            response_data['message'] += f', {len(failed_events)} failed'
 
-        status_code = 200 if len(reassigned_events) > 0 else 500
+        # Return 200 if any were reassigned or all were already assigned (no action needed)
+        status_code = 200 if (len(reassigned_events) > 0 or len(skipped_events) == len(supervisor_schedules)) else 500
         return jsonify(response_data), status_code
 
     except Exception as e:
@@ -3775,6 +3966,36 @@ def schedule_event():
         if not (event.start_datetime.date() <= schedule_date <= event.due_datetime.date()):
             return jsonify({'success': False, 'error': 'Date must be within event date range'}), 400
 
+        # CHECK LOCKED DAYS: Cannot schedule to a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            locked_info = LockedDay.get_locked_day(schedule_date)
+            if locked_info:
+                reason = locked_info.reason or 'No reason provided'
+                return jsonify({
+                    'success': False,
+                    'error': f'Cannot schedule event: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                }), 409
+
+        # Validate time is allowed for this event type (Core events must use shift block times)
+        if event.event_type == 'Core':
+            from app.services.shift_block_config import ShiftBlockConfig
+            blocks = ShiftBlockConfig.get_all_blocks()
+            allowed_times = [block['arrive'] for block in blocks]
+
+            schedule_time = schedule_datetime.time()
+            time_is_valid = any(
+                schedule_time.hour == allowed.hour and schedule_time.minute == allowed.minute
+                for allowed in allowed_times
+            )
+
+            if not time_is_valid:
+                allowed_time_strs = [f"{t.hour:02d}:{t.minute:02d}" for t in allowed_times]
+                return jsonify({
+                    'success': False,
+                    'error': f'Core events must be scheduled at one of the shift block times: {", ".join(allowed_time_strs)}'
+                }), 400
+
         # Check if employee can work this event type
         if not employee.can_work_event_type(event.event_type):
             if event.event_type in ['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean']:
@@ -4255,6 +4476,17 @@ def change_event_employee(schedule_id):
     schedule = db.session.get(Schedule, schedule_id)
     if not schedule:
         return jsonify({'error': f'Schedule not found: {schedule_id}'}), 404
+
+    # CHECK LOCKED DAYS: Cannot change employee on a locked day
+    LockedDay = current_app.config.get('LockedDay')
+    if LockedDay:
+        schedule_date = schedule.schedule_datetime.date()
+        locked_info = LockedDay.get_locked_day(schedule_date)
+        if locked_info:
+            reason = locked_info.reason or 'No reason provided'
+            return jsonify({
+                'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+            }), 409
 
     # Parse request body
     data = request.get_json()

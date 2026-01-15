@@ -51,6 +51,12 @@ def create_event_model(db):
         # Sales tools document URL for Core events
         sales_tools_url = db.Column(db.Text)
 
+        # EDR (Event Detail Report) status from Walmart API
+        # Stores the status code from Walmart EDR system (e.g., 'Cancelled', 'Active', 'Completed')
+        # This is separate from the local 'condition' field which tracks internal workflow status
+        edr_status = db.Column(db.String(50), nullable=True)
+        edr_status_updated = db.Column(db.DateTime, nullable=True)
+
         # Auto-scheduler: Link supervisor events to their corresponding core event
         parent_event_ref_num = db.Column(
             db.Integer,

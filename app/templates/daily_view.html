@@ -107,6 +107,14 @@
         <span class="icon">🔄</span>
         <span class="btn-text">Reassign Supervisor Events</span>
       </button>
+
+      <!-- Lock/Unlock Day Button -->
+      <button type="button" class="btn btn-lock" id="btn-lock-day"
+        data-date="{{ selected_date.strftime('%Y-%m-%d') }}"
+        aria-label="Lock or unlock this day">
+        <span class="icon" id="lock-icon">🔓</span>
+        <span class="btn-text" id="lock-text">Lock Day</span>
+      </button>
     </div>
 
     <!-- Role Assignments -->

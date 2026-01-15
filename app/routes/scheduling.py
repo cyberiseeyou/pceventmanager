@@ -45,12 +45,12 @@ def schedule_event(event_id):
                          return_url=return_url)
 
 
-def get_allowed_times_for_event_type(event_type):
+def get_allowed_times_for_event_type(event_type, project_name=None):
     """Get allowed times for a specific event type from database settings"""
     from app.services.event_time_settings import get_allowed_times_for_event_type as get_times
 
     try:
-        return get_times(event_type)
+        return get_times(event_type, project_name)
     except Exception as e:
         current_app.logger.error(f"Error loading event times for {event_type}: {e}")
         # Fallback to default times if settings not available
@@ -63,9 +63,9 @@ def get_allowed_times_for_event_type(event_type):
         return time_restrictions.get(event_type, None)
 
 
-def is_valid_time_for_event_type(event_type, time_obj):
+def is_valid_time_for_event_type(event_type, time_obj, project_name=None):
     """Check if a time is valid for a specific event type"""
-    allowed_times = get_allowed_times_for_event_type(event_type)
+    allowed_times = get_allowed_times_for_event_type(event_type, project_name)
 
     # If no restrictions, all times are valid
     if not allowed_times:
@@ -524,6 +524,15 @@ def save_schedule():
             flash(f'Date must be between {event_start_date} and {event_due_date}.', 'error')
             return redirect(url_for('scheduling.schedule_event', event_id=event_id))
 
+        # CHECK LOCKED DAYS: Cannot schedule to a locked day
+        LockedDay = current_app.config.get('LockedDay')
+        if LockedDay:
+            locked_info = LockedDay.get_locked_day(parsed_date)
+            if locked_info:
+                reason = locked_info.reason or 'No reason provided'
+                flash(f'Cannot schedule event: {parsed_date.isoformat()} is locked ({reason}). Unlock the day first.', 'error')
+                return redirect(url_for('scheduling.schedule_event', event_id=event_id))
+
         # Parse start time
         try:
             parsed_time = datetime.strptime(actual_start_time, '%H:%M').time()
@@ -532,8 +541,8 @@ def save_schedule():
             return redirect(url_for('scheduling.schedule_event', event_id=event_id))
 
         # Validate time restrictions for specific event types (skip if override enabled)
-        if not override_constraints and not is_valid_time_for_event_type(event.event_type, parsed_time):
-            allowed_times = get_allowed_times_for_event_type(event.event_type)
+        if not override_constraints and not is_valid_time_for_event_type(event.event_type, parsed_time, event.project_name):
+            allowed_times = get_allowed_times_for_event_type(event.event_type, event.project_name)
             if allowed_times:
                 flash(f'{event.event_type} events can only be scheduled at: {", ".join(allowed_times)}', 'error')
             return redirect(url_for('scheduling.schedule_event', event_id=event_id))

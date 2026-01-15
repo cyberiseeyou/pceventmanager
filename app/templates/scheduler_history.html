@@ -1,0 +1,356 @@
+{% extends 'base.html' %}
+
+{% block title %}Scheduler Run History - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+    .history-container {
+        padding: var(--spacing-lg);
+    }
+
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .history-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        color: var(--pc-navy);
+    }
+
+    .history-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--primary-color);
+        color: white;
+        text-decoration: none;
+        border-radius: var(--border-radius);
+        font-weight: 600;
+    }
+
+    .history-back-btn:hover {
+        background: var(--primary-dark);
+    }
+
+    .runs-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .run-row {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+    }
+
+    .run-row-header {
+        display: grid;
+        grid-template-columns: 200px 1fr 120px 120px 40px;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md) var(--spacing-lg);
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .run-row-header:hover {
+        background: var(--bg-secondary);
+    }
+
+    .run-datetime {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .run-date {
+        font-weight: 600;
+        color: var(--pc-navy);
+        font-size: 1rem;
+    }
+
+    .run-time {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+
+    .run-type-counts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+    }
+
+    .type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .type-Core {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .type-Supervisor {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+    .type-Freeosk {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .type-Digitals {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .type-Other {
+        background: #f5f5f5;
+        color: #616161;
+    }
+
+    .stat-scheduled {
+        color: #2e7d32;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .stat-failed {
+        color: #c62828;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .expand-icon {
+        font-size: 1.2rem;
+        color: var(--text-secondary);
+        transition: transform 0.2s;
+        text-align: center;
+    }
+
+    .run-row.expanded .expand-icon {
+        transform: rotate(180deg);
+    }
+
+    .run-details {
+        display: none;
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+    }
+
+    .run-row.expanded .run-details {
+        display: block;
+    }
+
+    .events-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        background: white;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+    }
+
+    .events-table th,
+    .events-table td {
+        padding: var(--spacing-sm) var(--spacing-md);
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .events-table th {
+        background: var(--pc-navy);
+        color: white;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    .events-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .status-scheduled {
+        color: #2e7d32;
+        font-weight: 600;
+    }
+
+    .status-failed {
+        color: #c62828;
+        font-weight: 600;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        padding: var(--spacing-lg);
+        color: var(--text-secondary);
+    }
+
+    .no-events {
+        text-align: center;
+        padding: var(--spacing-lg);
+        color: var(--text-secondary);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl);
+        color: var(--text-secondary);
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .approved-badge {
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        margin-left: 6px;
+    }
+
+    @media (max-width: 768px) {
+        .run-row-header {
+            grid-template-columns: 1fr;
+            gap: var(--spacing-sm);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="history-container">
+    <div class="history-header">
+        <h1>📋 Scheduler Run History</h1>
+        <a href="{{ url_for('auto_scheduler.index') }}" class="history-back-btn">
+            ← Back to Auto-Scheduler
+        </a>
+    </div>
+
+    {% if runs_data %}
+    <div class="runs-list">
+        {% for item in runs_data %}
+        {% set run = item.run %}
+        {% set type_counts = item.type_counts %}
+        <div class="run-row" data-run-id="{{ run.id }}">
+            <div class="run-row-header" onclick="toggleRun({{ run.id }})">
+                <div class="run-datetime">
+                    <span class="run-date">{{ run.started_at.strftime('%B %d, %Y') }}</span>
+                    <span class="run-time">{{ run.started_at.strftime('%I:%M %p') }}
+                        {% if run.approved_at %}<span class="approved-badge">✓ Approved</span>{% endif %}
+                    </span>
+                </div>
+                <div class="run-type-counts">
+                    {% for event_type, count in type_counts.items() %}
+                    <span class="type-badge type-{{ event_type }}">{{ event_type }}: {{ count }}</span>
+                    {% endfor %}
+                    {% if not type_counts %}
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">No events</span>
+                    {% endif %}
+                </div>
+                <div class="stat-scheduled">✓ {{ run.events_scheduled }} scheduled</div>
+                <div class="stat-failed">
+                    {% if run.events_failed > 0 %}✗ {{ run.events_failed }} failed{% else %}—{% endif %}
+                </div>
+                <div class="expand-icon">▼</div>
+            </div>
+            <div class="run-details">
+                <div class="loading-spinner">Loading events...</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <h2>No Scheduler Runs Yet</h2>
+        <p>Run the auto-scheduler to see history here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const loadedRuns = new Set();
+
+    function toggleRun(runId) {
+        const row = document.querySelector(`[data-run-id="${runId}"]`);
+        const isExpanded = row.classList.contains('expanded');
+
+        if (isExpanded) {
+            row.classList.remove('expanded');
+        } else {
+            row.classList.add('expanded');
+
+            if (!loadedRuns.has(runId)) {
+                loadRunEvents(runId);
+            }
+        }
+    }
+
+    async function loadRunEvents(runId) {
+        const row = document.querySelector(`[data-run-id="${runId}"]`);
+        const details = row.querySelector('.run-details');
+
+        try {
+            const response = await fetch(`/auto-schedule/api/history/${runId}`);
+            const data = await response.json();
+
+            if (data.success && data.events.length > 0) {
+                details.innerHTML = `
+                <table class="events-table">
+                    <thead>
+                        <tr>
+                            <th>Event Name</th>
+                            <th>Type</th>
+                            <th>Assigned To</th>
+                            <th>Scheduled Time</th>
+                            <th>Event Period</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.events.map(event => `
+                            <tr>
+                                <td>${event.event_name}</td>
+                                <td><span class="type-badge type-${event.event_type}">${event.event_type}</span></td>
+                                <td>${event.employee_name}</td>
+                                <td>${event.scheduled_time || 'N/A'}</td>
+                                <td>${event.start_date} to ${event.due_date}</td>
+                                <td class="status-${event.status}">${event.status === 'scheduled' ? '✓ Scheduled' : '✗ Failed'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            } else if (data.success) {
+                details.innerHTML = '<div class="no-events">No events in this run</div>';
+            } else {
+                details.innerHTML = `<div class="no-events">Error: ${data.error}</div>`;
+            }
+
+            loadedRuns.add(runId);
+        } catch (error) {
+            details.innerHTML = `<div class="no-events">Error: ${error.message}</div>`;
+        }
+    }
+</script>
+{% endblock %}

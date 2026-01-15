@@ -1,0 +1,769 @@
+{% extends "base.html" %}
+
+{% block title %}Event Time Settings - Product Connections Scheduler{% endblock %}
+
+{% block content %}
+<div class="event-times-container">
+    <div class="page-header">
+        <h2>Event Time Settings</h2>
+        <p class="page-description">
+            Configure scheduling times for all event types. These times are used for auto-scheduling, EDR paperwork, and validation.
+        </p>
+    </div>
+
+    <div id="loading-indicator" class="loading-message">
+        Loading event time settings...
+    </div>
+
+    <div id="settings-container" style="display: none;">
+        <!-- Simple Event Times Section -->
+        <section class="settings-section">
+            <h3>Simple Event Times</h3>
+            <p class="section-description">Single time slot events with start and end times</p>
+
+            <div class="simple-events-grid">
+                <!-- Freeosk -->
+                <div class="event-card">
+                    <div class="event-header">
+                        <span class="event-title">Freeosk</span>
+                    </div>
+                    <div class="time-fields-simple">
+                        <div class="time-field">
+                            <label for="freeosk_start_time">Start Time</label>
+                            <input type="time" id="freeosk_start_time" name="freeosk_start_time" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="freeosk_end_time">End Time</label>
+                            <input type="time" id="freeosk_end_time" name="freeosk_end_time" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Supervisor -->
+                <div class="event-card">
+                    <div class="event-header">
+                        <span class="event-title">Supervisor</span>
+                    </div>
+                    <div class="time-fields-simple">
+                        <div class="time-field">
+                            <label for="supervisor_start_time">Start Time</label>
+                            <input type="time" id="supervisor_start_time" name="supervisor_start_time" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="supervisor_end_time">End Time</label>
+                            <input type="time" id="supervisor_end_time" name="supervisor_end_time" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other -->
+                <div class="event-card">
+                    <div class="event-header">
+                        <span class="event-title">Other</span>
+                    </div>
+                    <div class="time-fields-simple">
+                        <div class="time-field">
+                            <label for="other_start_time">Start Time</label>
+                            <input type="time" id="other_start_time" name="other_start_time" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="other_end_time">End Time</label>
+                            <input type="time" id="other_end_time" name="other_end_time" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-actions">
+                <button type="button" id="save-simple-btn" class="btn btn-primary">Save Simple Event Times</button>
+            </div>
+            <div id="simple-save-status" class="save-status"></div>
+        </section>
+
+        <!-- Digital Setup Slots Section -->
+        <section class="settings-section">
+            <h3>Digital Setup Slots</h3>
+            <p class="section-description">4 rotating time slots for Digital Setup and Refresh events</p>
+
+            <div class="slots-grid">
+                {% for slot in range(1, 5) %}
+                <div class="slot-card">
+                    <div class="slot-header">
+                        <span class="slot-title">Slot {{ slot }}</span>
+                    </div>
+                    <div class="time-fields-simple">
+                        <div class="time-field">
+                            <label for="digital_setup_{{ slot }}_start_time">Start</label>
+                            <input type="time" id="digital_setup_{{ slot }}_start_time" name="digital_setup_{{ slot }}_start_time" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="digital_setup_{{ slot }}_end_time">End</label>
+                            <input type="time" id="digital_setup_{{ slot }}_end_time" name="digital_setup_{{ slot }}_end_time" required>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="section-actions">
+                <button type="button" id="save-digital-setup-btn" class="btn btn-primary">Save Digital Setup Times</button>
+            </div>
+            <div id="digital-setup-save-status" class="save-status"></div>
+        </section>
+
+        <!-- Digital Teardown Slots Section -->
+        <section class="settings-section">
+            <h3>Digital Teardown Slots</h3>
+            <p class="section-description">4 rotating time slots for Digital Teardown events</p>
+
+            <div class="slots-grid">
+                {% for slot in range(1, 5) %}
+                <div class="slot-card">
+                    <div class="slot-header">
+                        <span class="slot-title">Slot {{ slot }}</span>
+                    </div>
+                    <div class="time-fields-simple">
+                        <div class="time-field">
+                            <label for="digital_teardown_{{ slot }}_start_time">Start</label>
+                            <input type="time" id="digital_teardown_{{ slot }}_start_time" name="digital_teardown_{{ slot }}_start_time" required>
+                        </div>
+                        <div class="time-field">
+                            <label for="digital_teardown_{{ slot }}_end_time">End</label>
+                            <input type="time" id="digital_teardown_{{ slot }}_end_time" name="digital_teardown_{{ slot }}_end_time" required>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="section-actions">
+                <button type="button" id="save-digital-teardown-btn" class="btn btn-primary">Save Digital Teardown Times</button>
+            </div>
+            <div id="digital-teardown-save-status" class="save-status"></div>
+        </section>
+
+        <!-- Core Shift Blocks Section -->
+        <section class="settings-section">
+            <h3>Core Event Shift Blocks</h3>
+            <p class="section-description">
+                8 shift blocks for Core event scheduling with arrive/depart times and staggered lunch breaks.
+                Primary Lead always gets Block 1.
+            </p>
+
+            <div class="info-box">
+                <strong>Block Times Explained:</strong>
+                <ul>
+                    <li><strong>Arrive:</strong> Scheduled start time (stored in MVRetail)</li>
+                    <li><strong>On Floor:</strong> Actual floor time (shown on EDR paperwork)</li>
+                    <li><strong>Lunch:</strong> Break period</li>
+                    <li><strong>Off Floor / Depart:</strong> End of shift</li>
+                </ul>
+            </div>
+
+            <div id="blocks-container" class="blocks-grid">
+                <!-- Blocks rendered by JavaScript -->
+            </div>
+
+            <div class="section-actions">
+                <button type="button" id="save-blocks-btn" class="btn btn-primary">Save Shift Blocks</button>
+                <button type="button" id="reset-blocks-btn" class="btn btn-secondary">Reset to Defaults</button>
+            </div>
+            <div id="blocks-save-status" class="save-status"></div>
+        </section>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('admin.settings_page') }}" class="btn btn-link">Back to Settings</a>
+    </div>
+</div>
+
+<style>
+    .event-times-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .page-header {
+        margin-bottom: 25px;
+    }
+
+    .page-header h2 {
+        color: #2E4C73;
+        margin-bottom: 10px;
+    }
+
+    .page-description {
+        color: #666;
+        font-size: 0.95em;
+    }
+
+    .settings-section {
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .settings-section h3 {
+        color: #2E4C73;
+        margin-top: 0;
+        margin-bottom: 8px;
+    }
+
+    .section-description {
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 20px;
+    }
+
+    .info-box {
+        background: #e7f3ff;
+        border: 1px solid #b3d7ff;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 20px;
+        color: #004085;
+        font-size: 0.9em;
+    }
+
+    .info-box ul {
+        margin: 10px 0 0 0;
+        padding-left: 20px;
+    }
+
+    .info-box li {
+        margin-bottom: 4px;
+    }
+
+    .loading-message {
+        text-align: center;
+        padding: 60px;
+        color: #666;
+        font-style: italic;
+        font-size: 1.1em;
+    }
+
+    /* Simple events grid */
+    .simple-events-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .event-card, .slot-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 15px;
+    }
+
+    .event-header, .slot-header {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #2E4C73;
+    }
+
+    .event-title, .slot-title {
+        font-weight: bold;
+        color: #2E4C73;
+    }
+
+    .time-fields-simple {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .time-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .time-field label {
+        font-size: 0.8em;
+        color: #666;
+        margin-bottom: 4px;
+    }
+
+    .time-field input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .time-field input:focus {
+        border-color: #2E4C73;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(46, 76, 115, 0.1);
+    }
+
+    /* Slots grid */
+    .slots-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    /* Shift blocks grid */
+    .blocks-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .block-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 15px;
+    }
+
+    .block-card.block-primary {
+        border-color: #28a745;
+        border-width: 2px;
+    }
+
+    .block-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #2E4C73;
+    }
+
+    .block-title {
+        font-weight: bold;
+        color: #2E4C73;
+    }
+
+    .block-badge {
+        background: #28a745;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.75em;
+    }
+
+    .block-time-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .lunch-divider {
+        grid-column: span 2;
+        text-align: center;
+        color: #999;
+        font-size: 0.8em;
+        margin: 4px 0;
+    }
+
+    /* Actions */
+    .section-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .page-actions {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #ddd;
+    }
+
+    .save-status {
+        display: none;
+        padding: 10px;
+        margin-top: 10px;
+        border-radius: 4px;
+    }
+
+    .save-status.success {
+        display: block;
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .save-status.error {
+        display: block;
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-primary {
+        background: #2E4C73;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #1a2f4a;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+
+    .btn-link {
+        background: transparent;
+        color: #2E4C73;
+    }
+
+    .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+        .simple-events-grid,
+        .slots-grid,
+        .blocks-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .time-fields-simple,
+        .block-time-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .lunch-divider {
+            grid-column: span 1;
+        }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const settingsContainer = document.getElementById('settings-container');
+
+    // Load all settings on page load
+    loadAllSettings();
+
+    async function loadAllSettings() {
+        try {
+            // Load simple event times and digital slots
+            await loadEventTimes();
+            // Load shift blocks
+            await loadShiftBlocks();
+
+            loadingIndicator.style.display = 'none';
+            settingsContainer.style.display = 'block';
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            loadingIndicator.innerHTML = '<div style="color: #721c24;">Error loading settings. Please refresh.</div>';
+        }
+    }
+
+    async function loadEventTimes() {
+        // Load from SystemSetting via a simple fetch to settings page data
+        // For now, we'll load from the API or use defaults
+        const simpleEvents = ['freeosk', 'supervisor', 'other'];
+        const defaults = {
+            'freeosk_start_time': '09:00', 'freeosk_end_time': '09:15',
+            'supervisor_start_time': '12:00', 'supervisor_end_time': '12:05',
+            'other_start_time': '10:00', 'other_end_time': '10:15'
+        };
+
+        // Try to fetch current values
+        try {
+            const response = await fetch('/api/event-times');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.times) {
+                    Object.keys(data.times).forEach(key => {
+                        const input = document.getElementById(key);
+                        if (input && data.times[key]) {
+                            input.value = data.times[key];
+                        }
+                    });
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Could not fetch event times, using defaults');
+        }
+
+        // Use defaults if fetch failed
+        Object.keys(defaults).forEach(key => {
+            const input = document.getElementById(key);
+            if (input) {
+                input.value = defaults[key];
+            }
+        });
+    }
+
+    async function loadShiftBlocks() {
+        try {
+            const response = await fetch('/api/shift-blocks/');
+            const data = await response.json();
+
+            if (data.success && data.blocks) {
+                renderBlocks(data.blocks);
+
+                // Show info message if displaying .env defaults
+                if (data.source === 'environment') {
+                    const status = document.getElementById('blocks-save-status');
+                    status.textContent = 'Displaying default values from configuration. Click "Save Shift Blocks" to customize.';
+                    status.className = 'save-status info-message';
+                    status.style.display = 'block';
+                    status.style.background = '#e7f3ff';
+                    status.style.color = '#004085';
+                    status.style.border = '1px solid #b3d7ff';
+                    status.style.padding = '12px';
+                    status.style.borderRadius = '4px';
+                    status.style.marginTop = '10px';
+
+                    // Auto-hide after 8 seconds
+                    setTimeout(() => {
+                        status.style.display = 'none';
+                    }, 8000);
+                }
+            } else {
+                // Render empty blocks
+                renderBlocks([]);
+            }
+        } catch (error) {
+            console.error('Error loading shift blocks:', error);
+            renderBlocks([]);
+        }
+    }
+
+    function renderBlocks(blocks) {
+        const container = document.getElementById('blocks-container');
+        let html = '';
+
+        for (let i = 1; i <= 8; i++) {
+            const block = blocks.find(b => b.block === i) || {
+                block: i,
+                arrive_str: '', on_floor_str: '',
+                lunch_begin_str: '', lunch_end_str: '',
+                off_floor_str: '', depart_str: ''
+            };
+
+            const isPrimary = i === 1;
+            html += `
+                <div class="block-card ${isPrimary ? 'block-primary' : ''}" data-block="${i}">
+                    <div class="block-header">
+                        <span class="block-title">Block ${i}</span>
+                        ${isPrimary ? '<span class="block-badge">Primary Lead</span>' : ''}
+                    </div>
+                    <div class="block-time-fields">
+                        <div class="time-field">
+                            <label>Arrive</label>
+                            <input type="time" id="block_${i}_arrive" value="${block.arrive_str || ''}">
+                        </div>
+                        <div class="time-field">
+                            <label>On Floor</label>
+                            <input type="time" id="block_${i}_on_floor" value="${block.on_floor_str || ''}">
+                        </div>
+                        <div class="lunch-divider">Lunch Break</div>
+                        <div class="time-field">
+                            <label>Begin</label>
+                            <input type="time" id="block_${i}_lunch_begin" value="${block.lunch_begin_str || ''}">
+                        </div>
+                        <div class="time-field">
+                            <label>End</label>
+                            <input type="time" id="block_${i}_lunch_end" value="${block.lunch_end_str || ''}">
+                        </div>
+                        <div class="time-field">
+                            <label>Off Floor</label>
+                            <input type="time" id="block_${i}_off_floor" value="${block.off_floor_str || ''}">
+                        </div>
+                        <div class="time-field">
+                            <label>Depart</label>
+                            <input type="time" id="block_${i}_depart" value="${block.depart_str || ''}">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    // Save handlers
+    document.getElementById('save-simple-btn').addEventListener('click', async function() {
+        const btn = this;
+        const status = document.getElementById('simple-save-status');
+
+        const data = {
+            freeosk_start_time: document.getElementById('freeosk_start_time').value,
+            freeosk_end_time: document.getElementById('freeosk_end_time').value,
+            supervisor_start_time: document.getElementById('supervisor_start_time').value,
+            supervisor_end_time: document.getElementById('supervisor_end_time').value,
+            other_start_time: document.getElementById('other_start_time').value,
+            other_end_time: document.getElementById('other_end_time').value
+        };
+
+        await saveEventTimes(data, btn, status);
+    });
+
+    document.getElementById('save-digital-setup-btn').addEventListener('click', async function() {
+        const btn = this;
+        const status = document.getElementById('digital-setup-save-status');
+
+        const data = {};
+        for (let slot = 1; slot <= 4; slot++) {
+            data[`digital_setup_${slot}_start_time`] = document.getElementById(`digital_setup_${slot}_start_time`).value;
+            data[`digital_setup_${slot}_end_time`] = document.getElementById(`digital_setup_${slot}_end_time`).value;
+        }
+
+        await saveEventTimes(data, btn, status);
+    });
+
+    document.getElementById('save-digital-teardown-btn').addEventListener('click', async function() {
+        const btn = this;
+        const status = document.getElementById('digital-teardown-save-status');
+
+        const data = {};
+        for (let slot = 1; slot <= 4; slot++) {
+            data[`digital_teardown_${slot}_start_time`] = document.getElementById(`digital_teardown_${slot}_start_time`).value;
+            data[`digital_teardown_${slot}_end_time`] = document.getElementById(`digital_teardown_${slot}_end_time`).value;
+        }
+
+        await saveEventTimes(data, btn, status);
+    });
+
+    document.getElementById('save-blocks-btn').addEventListener('click', async function() {
+        const btn = this;
+        const status = document.getElementById('blocks-save-status');
+
+        const blocks = [];
+        for (let i = 1; i <= 8; i++) {
+            blocks.push({
+                block: i,
+                arrive: document.getElementById(`block_${i}_arrive`).value,
+                on_floor: document.getElementById(`block_${i}_on_floor`).value,
+                lunch_begin: document.getElementById(`block_${i}_lunch_begin`).value,
+                lunch_end: document.getElementById(`block_${i}_lunch_end`).value,
+                off_floor: document.getElementById(`block_${i}_off_floor`).value,
+                depart: document.getElementById(`block_${i}_depart`).value
+            });
+        }
+
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            const response = await fetch('/api/shift-blocks/', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ blocks })
+            });
+
+            const data = await response.json();
+            showStatus(status, data.success ? 'Shift blocks saved!' : data.error, data.success);
+        } catch (error) {
+            showStatus(status, 'Error saving shift blocks', false);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Shift Blocks';
+        }
+    });
+
+    document.getElementById('reset-blocks-btn').addEventListener('click', async function() {
+        if (!confirm('Reset all shift blocks to environment defaults?')) return;
+
+        const btn = this;
+        const status = document.getElementById('blocks-save-status');
+
+        try {
+            btn.disabled = true;
+            const response = await fetch('/api/shift-blocks/initialize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ force: true })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                showStatus(status, 'Reset complete. Reloading...', true);
+                setTimeout(() => loadShiftBlocks(), 1000);
+            } else {
+                showStatus(status, data.error, false);
+            }
+        } catch (error) {
+            showStatus(status, 'Error resetting blocks', false);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    async function saveEventTimes(data, btn, statusEl) {
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            const response = await fetch('/api/settings/event-times', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            showStatus(statusEl, result.success ? 'Saved successfully!' : result.message, result.success);
+        } catch (error) {
+            showStatus(statusEl, 'Error saving settings', false);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = btn.textContent.replace('Saving...', 'Save');
+            // Restore original text
+            if (btn.id === 'save-simple-btn') btn.textContent = 'Save Simple Event Times';
+            if (btn.id === 'save-digital-setup-btn') btn.textContent = 'Save Digital Setup Times';
+            if (btn.id === 'save-digital-teardown-btn') btn.textContent = 'Save Digital Teardown Times';
+        }
+    }
+
+    function showStatus(el, message, success) {
+        el.textContent = message;
+        el.className = 'save-status ' + (success ? 'success' : 'error');
+        if (success) {
+            setTimeout(() => { el.className = 'save-status'; }, 4000);
+        }
+    }
+
+    function getCsrfToken() {
+        return document.cookie.split('; ')
+            .find(row => row.startsWith('csrf_token='))
+            ?.split('=')[1] || '';
+    }
+});
+</script>
+{% endblock %}

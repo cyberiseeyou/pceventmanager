@@ -45,258 +45,43 @@ def refresh_database():
     Completely refresh database with latest planning events from Crossmark API
     Clears all existing events and replaces with fresh data
     Fetches events from 1 month before to 1 month after current date
+
+    Note: This uses the shared DatabaseRefreshService for consistency with
+    the post-login refresh that shows progress on the loading page.
     """
     try:
-        db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
-        Employee = current_app.config['Employee']
-        from app.integrations.external_api.session_api_service import session_api as external_api
+        from app.services.database_refresh_service import DatabaseRefreshService
 
-        current_app.logger.info("Starting complete database refresh from Crossmark API")
+        current_app.logger.info("Starting complete database refresh from Crossmark API (manual trigger)")
 
-        # Get all planning events using the new comprehensive method
-        events_data = external_api.get_all_planning_events()
+        # Use the shared service without progress tracking for manual refresh
+        service = DatabaseRefreshService()
+        result = service.refresh()
 
-        if not events_data:
+        if result['success']:
+            stats = result.get('stats', {})
+            warning_message = result.get('warning')
+
+            if warning_message:
+                current_app.logger.warning(f"WARNING: {warning_message}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Database completely refreshed with fresh data',
+                'stats': {
+                    'total_fetched': stats.get('total_fetched', 0),
+                    'cleared': stats.get('cleared', 0),
+                    'created': stats.get('created', 0)
+                },
+                'warning': warning_message
+            })
+        else:
             return jsonify({
                 'success': False,
-                'message': 'Failed to fetch events from Crossmark API'
+                'message': result.get('message', 'Database refresh failed')
             }), 500
 
-        # Process and completely replace database
-        # Events are in 'mplans' array, not 'records'
-        records = events_data.get('mplans', [])
-        total_fetched = len(records)
-
-        # CLEAR ALL EXISTING EVENTS FIRST
-        current_app.logger.info("Clearing all existing events from database")
-        existing_count = Event.query.count()
-
-        # Use database-agnostic context manager to disable FK constraints
-        with disable_foreign_keys(db.session):
-            # Clear all related tables in order (to handle foreign key constraints)
-            # Import AutoSchedulerResult if available
-            try:
-                from models.auto_scheduler import AutoSchedulerResult
-                AutoSchedulerResult.query.delete()
-                current_app.logger.info("Cleared auto scheduler results")
-            except (ImportError, AttributeError):
-                pass  # Table doesn't exist or not imported
-
-            # Clear schedules (has FK to events)
-            Schedule.query.delete()
-            current_app.logger.info("Cleared schedules")
-
-            # Clear all events
-            Event.query.delete()
-            current_app.logger.info(f"Cleared {existing_count} events")
-
-            # Commit the deletions
-            db.session.commit()
-
-        current_app.logger.info(f"Successfully cleared {existing_count} existing events from database")
-
-        # Now insert all fresh events
-        created_count = 0
-
-        # Log first event structure to see all available fields
-        if records:
-            current_app.logger.info(f"Sample event record keys: {list(records[0].keys())}")
-            current_app.logger.info(f"Sample event record: {records[0]}")
-
-        for event_record in records:
-            try:
-                # Extract event data
-                mplan_id = event_record.get('mPlanID')
-                if not mplan_id:
-                    continue
-
-                # Create new event (all events are new since we cleared the database)
-                # Map the mplans field names to Event model fields
-
-                # Parse dates from MM/DD/YYYY format
-                start_date = None
-                end_date = None
-                schedule_date = None
-
-                try:
-                    if event_record.get('startDate'):
-                        start_date = datetime.strptime(event_record['startDate'], '%m/%d/%Y')
-                except ValueError:
-                    start_date = datetime.utcnow()
-
-                try:
-                    if event_record.get('endDate'):
-                        end_date = datetime.strptime(event_record['endDate'], '%m/%d/%Y')
-                except ValueError:
-                    end_date = datetime.utcnow()
-
-                try:
-                    # Parse scheduleDate which is in format "MM/DD/YYYY HH:MM:SS AM/PM"
-                    if event_record.get('scheduleDate'):
-                        schedule_date = datetime.strptime(event_record['scheduleDate'], '%m/%d/%Y %I:%M:%S %p')
-                except ValueError:
-                    schedule_date = start_date
-
-                # Get the condition from the event record
-                condition = event_record.get('condition', 'Unstaffed')
-
-                # Determine if event is scheduled based on comprehensive logic
-                # An event is scheduled if:
-                # 1. condition is not 'Unstaffed' (API marked as staffed/scheduled), OR
-                # 2. scheduleDate exists (manually scheduled on Crossmark website)
-                # This handles cases where Crossmark's API sets scheduleDate without updating condition
-                is_event_scheduled = (condition != 'Unstaffed') or (schedule_date is not None)
-
-                # Extract SalesToolURL from the event record
-                # It's nested under salesTools array: salesTools[0].salesToolURL
-                sales_tools_url = None
-                sales_tools = event_record.get('salesTools', [])
-                if sales_tools and len(sales_tools) > 0 and isinstance(sales_tools, list):
-                    sales_tools_url = sales_tools[0].get('salesToolURL') if isinstance(sales_tools[0], dict) else None
-
-                try:
-                    # Log types before creating event
-                    current_app.logger.debug(f"Event {mplan_id}: Creating event with datetime types - start_date: {type(start_date)}, end_date: {type(end_date)}")
-
-                    new_event = Event(
-                        external_id=str(mplan_id),
-                        project_name=event_record.get('name', ''),
-                        project_ref_num=int(mplan_id) if str(mplan_id).isdigit() else 0,
-                        location_mvid=event_record.get('storeID', ''),
-                        store_name=event_record.get('storeName', ''),
-                        start_datetime=start_date or datetime.utcnow(),  # Scheduling window start
-                        due_datetime=end_date or datetime.utcnow(),  # Scheduling window end/due
-                        is_scheduled=is_event_scheduled,
-                        condition=condition,  # Store the actual condition
-                        sales_tools_url=sales_tools_url,  # Store SalesToolURL
-                        last_synced=datetime.utcnow(),
-                        sync_status='synced'
-                    )
-                    # Detect event type based on project name
-                    new_event.event_type = new_event.detect_event_type()
-                    db.session.add(new_event)
-                    created_count += 1
-                except Exception as event_error:
-                    import traceback
-                    current_app.logger.error(f"Event {mplan_id}: Failed to create event: {str(event_error)}")
-                    current_app.logger.error(f"Event {mplan_id}: Event creation traceback: {traceback.format_exc()}")
-                    raise
-
-                # Log if SalesToolURL was found for this event
-                if sales_tools_url:
-                    current_app.logger.info(f"Event {mplan_id} ({event_record.get('name', 'Unknown')}): Found SalesToolURL: {sales_tools_url}")
-                else:
-                    current_app.logger.warning(f"Event {mplan_id} ({event_record.get('name', 'Unknown')}): No SalesToolURL found in salesTools array")
-
-                # If event has a schedule date, create a Schedule record
-                if not schedule_date:
-                    current_app.logger.info(f"Event {mplan_id}: No schedule_date found (raw: {event_record.get('scheduleDate', 'N/A')})")
-                if not is_event_scheduled:
-                    current_app.logger.info(f"Event {mplan_id}: Not scheduled (condition: {condition})")
-
-                if schedule_date and is_event_scheduled:
-                    # Get the assigned employee from the API data
-                    staffed_reps = event_record.get('staffedReps', '')
-                    schedule_rep_id = event_record.get('scheduleRepID', '')
-
-                    # Log what we're seeing
-                    current_app.logger.info(f"Event {mplan_id}: schedule_date={schedule_date}, staffed_reps={staffed_reps}, schedule_rep_id={schedule_rep_id}")
-
-                    # Try to find the employee by name or RepID (external_id)
-                    employee_id = None
-                    employee = None
-
-                    if staffed_reps:
-                        # Get the first staffed rep name
-                        first_rep_name = staffed_reps.split(',')[0].strip()
-
-                        # Try to find the employee by name
-                        employee = Employee.query.filter_by(name=first_rep_name).first()
-                        if employee:
-                            employee_id = employee.id
-                            current_app.logger.info(f"Event {mplan_id}: Found employee by name: {first_rep_name} -> {employee_id}")
-
-                    # If not found by name and we have a RepID, try to find by external_id
-                    if not employee and schedule_rep_id:
-                        employee = Employee.query.filter_by(external_id=str(schedule_rep_id)).first()
-                        if employee:
-                            employee_id = employee.id
-                            current_app.logger.info(f"Event {mplan_id}: Found employee by RepID {schedule_rep_id}: {employee.name} -> {employee_id}")
-                        else:
-                            current_app.logger.warning(f"Event {mplan_id}: No employee found with RepID {schedule_rep_id} or name '{staffed_reps}'")
-
-                    # Fallback: try RepID lookup if we still don't have an employee
-                    if not employee and schedule_rep_id:
-                        current_app.logger.warning(f"Event {mplan_id}: Could not find employee for RepID {schedule_rep_id}, skipping schedule creation")
-
-                    if employee_id:
-                        try:
-                            # Get the scheduleEventID from Crossmark - this is the ID we need to unschedule
-                            scheduled_event_id = event_record.get('scheduleEventID')
-
-                            # Log types before creating schedule
-                            current_app.logger.info(f"Event {mplan_id}: Creating schedule with types - schedule_date type: {type(schedule_date)}, value: {schedule_date}")
-                            current_app.logger.info(f"Event {mplan_id}: Extracted scheduleEventID: {scheduled_event_id}")
-
-                            schedule = Schedule(
-                                event_ref_num=int(mplan_id) if str(mplan_id).isdigit() else 0,
-                                employee_id=employee_id,
-                                schedule_datetime=schedule_date,
-                                external_id=str(scheduled_event_id) if scheduled_event_id else None,
-                                last_synced=datetime.utcnow(),
-                                sync_status='synced'
-                            )
-                            db.session.add(schedule)
-                            current_app.logger.info(f"Created schedule for event {mplan_id} with employee {employee_id} on {schedule_date}, external_id={schedule.external_id}")
-                        except Exception as schedule_error:
-                            import traceback
-                            current_app.logger.error(f"Event {mplan_id}: Failed to create schedule: {str(schedule_error)}")
-                            current_app.logger.error(f"Event {mplan_id}: Schedule creation traceback: {traceback.format_exc()}")
-                            raise
-                    else:
-                        current_app.logger.warning(f"Event {mplan_id} is scheduled but has no employee assignment")
-
-            except Exception as e:
-                import traceback
-                current_app.logger.error(f"Error processing event {event_record.get('mPlanID', 'unknown')}: {str(e)}")
-                current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-                continue
-
-        # Commit all new events
-        db.session.commit()
-
-        current_app.logger.info(f"Database refresh completed: Cleared {existing_count} old events, created {created_count} new events from {total_fetched} fetched")
-
-        # Check for Staffed events without schedule records - these need attention
-        from sqlalchemy import select
-        staffed_without_schedule = Event.query.filter(
-            Event.condition == 'Staffed',
-            ~Event.project_ref_num.in_(
-                select(Schedule.event_ref_num)
-            )
-        ).all()
-
-        warning_message = None
-        if staffed_without_schedule:
-            warning_message = f"WARNING: {len(staffed_without_schedule)} events are marked as 'Staffed' but have no schedule records. Please schedule these events or the system will not handle them properly."
-            current_app.logger.warning(warning_message)
-
-        return jsonify({
-            'success': True,
-            'message': f'Database completely refreshed with fresh data',
-            'stats': {
-                'total_fetched': total_fetched,
-                'cleared': existing_count,
-                'created': created_count
-            },
-            'warning': warning_message
-        })
-
     except Exception as e:
-        db = current_app.extensions['sqlalchemy']
-        db.session.rollback()
         current_app.logger.error(f"Database refresh failed: {str(e)}")
         return jsonify({
             'success': False,
@@ -1901,7 +1686,7 @@ def employee_analytics():
 @admin_bp.route('/api/print_weekly_summary/<week_start_str>')
 @require_authentication()
 def print_weekly_summary(week_start_str):
-    """Print weekly schedule summary for all employees (Core events + separate Juicer section)"""
+    """Print weekly schedule summary for all employees (Core events with Juicer days highlighted in orange)"""
     try:
         from collections import defaultdict
         from xhtml2pdf import pisa
@@ -1916,7 +1701,7 @@ def print_weekly_summary(week_start_str):
         week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         week_end = week_start + timedelta(days=6)
 
-        # Query CORE schedules for the week (for main table - includes Juicers if they have Core events)
+        # Query CORE schedules for the week
         core_schedules = db.session.query(
             Employee.name,
             Schedule.schedule_datetime,
@@ -1933,7 +1718,7 @@ def print_weekly_summary(week_start_str):
             Employee.name, Schedule.schedule_datetime
         ).all()
 
-        # Query JUICER schedules for the week (for orange section)
+        # Query JUICER schedules for the week (to determine which days to highlight)
         juicer_schedules = db.session.query(
             Employee.name,
             Schedule.schedule_datetime,
@@ -1957,12 +1742,19 @@ def print_weekly_summary(week_start_str):
             time_str = schedule_dt.strftime('%I:%M %p')
             core_employee_schedules[name][day_name].append(time_str)
 
-        # Group JUICER schedules by employee and day
-        juicer_employee_schedules = defaultdict(lambda: defaultdict(list))
+        # Track Juicer events by employee/day with times and types
+        # Structure: juicer_employee_schedules[name][day] = {'Production': [times], 'Survey': [times]}
+        juicer_employee_schedules = defaultdict(lambda: defaultdict(lambda: {'Production': [], 'Survey': []}))
         for name, schedule_dt, event_type in juicer_schedules:
-            day_name = schedule_dt.strftime('%a')  # Mon, Tue, Wed
+            day_name = schedule_dt.strftime('%a')
             time_str = schedule_dt.strftime('%I:%M %p')
-            juicer_employee_schedules[name][day_name].append(time_str)
+            if 'Production' in event_type:
+                juicer_employee_schedules[name][day_name]['Production'].append(time_str)
+            elif 'Survey' in event_type:
+                juicer_employee_schedules[name][day_name]['Survey'].append(time_str)
+            # Also add employee to core_employee_schedules if not already present
+            if name not in core_employee_schedules:
+                core_employee_schedules[name] = defaultdict(list)
 
         # Calculate dates for each day of the week
         day_dates = []
@@ -1989,17 +1781,17 @@ def print_weekly_summary(week_start_str):
                 .date-header {{ font-size: 8pt; font-weight: normal; }}
                 td {{ padding: 6px 8px; border: 1px solid #ddd; font-size: 9pt; }}
                 tr:nth-child(even) {{ background: #f9f9f9; }}
-                .section-header {{ margin-top: 30px; margin-bottom: 10px; padding: 10px; border-radius: 4px; }}
-                .juicer-section {{ background: #FFF3E0; border: 2px solid #FF9800; }}
-                .juicer-section h3 {{ color: #E65100; margin: 0; font-size: 14pt; }}
-                .juicer-table th {{ background: #FF9800; }}
-                .juicer-table tr:nth-child(even) {{ background: #FFF8E1; }}
+                .juicer-day {{ background: #FFE0B2 !important; }}
+                .juicer-time {{ color: #E65100; font-size: 8pt; }}
+                .juicer-label {{ font-weight: bold; color: #E65100; }}
+                .legend {{ margin-top: 10px; font-size: 9pt; color: #666; }}
+                .legend-box {{ display: inline-block; width: 15px; height: 15px; background: #FFE0B2; border: 1px solid #FF9800; vertical-align: middle; margin-right: 5px; }}
             </style>
         </head>
         <body>
             <div class="header">
                 <h2>Weekly Schedule Summary - {week_start.strftime('%B %d')} to {week_end.strftime('%B %d, %Y')}</h2>
-                <p>(CORE Events)</p>
+                <p>(CORE + Juicer Events)</p>
             </div>
             <table>
                 <thead>
@@ -2017,57 +1809,37 @@ def print_weekly_summary(week_start_str):
                 <tbody>
         """
 
-        # Add employee rows for CORE events
+        # Add employee rows - highlight cells orange if employee has Juicer event that day
         for employee_name in sorted(core_employee_schedules.keys()):
             html += f"<tr><td><strong>{employee_name}</strong></td>"
             for day in day_abbrevs:
-                times = core_employee_schedules[employee_name].get(day, [])
-                html += f"<td>{'<br>'.join(times) if times else '-'}</td>"
+                core_times = core_employee_schedules[employee_name].get(day, [])
+                juicer_data = juicer_employee_schedules.get(employee_name, {}).get(day, {'Production': [], 'Survey': []})
+                has_juicer = juicer_data['Production'] or juicer_data['Survey']
+                cell_class = 'class="juicer-day"' if has_juicer else ''
+
+                # Build cell content
+                cell_parts = []
+                if core_times:
+                    cell_parts.append('<br>'.join(core_times))
+                if juicer_data['Production']:
+                    cell_parts.append(f'<span class="juicer-time"><span class="juicer-label">P:</span> {", ".join(juicer_data["Production"])}</span>')
+                if juicer_data['Survey']:
+                    cell_parts.append(f'<span class="juicer-time"><span class="juicer-label">S:</span> {", ".join(juicer_data["Survey"])}</span>')
+
+                cell_content = '<br>'.join(cell_parts) if cell_parts else '-'
+                html += f"<td {cell_class}>{cell_content}</td>"
             html += "</tr>"
 
         if not core_employee_schedules:
-            html += f'<tr><td colspan="8" style="text-align: center; color: #666;">No Core events scheduled for this week</td></tr>'
+            html += f'<tr><td colspan="8" style="text-align: center; color: #666;">No events scheduled for this week</td></tr>'
 
         html += """
                 </tbody>
             </table>
-        """
-
-        # Add JUICER section (orange)
-        html += f"""
-            <div class="section-header juicer-section">
-                <h3>🍊 Juicer Schedule</h3>
+            <div class="legend">
+                <span class="legend-box"></span> Orange cell = Juicer day | <strong style="color: #E65100;">P:</strong> Production time | <strong style="color: #E65100;">S:</strong> Survey time
             </div>
-            <table class="juicer-table">
-                <thead>
-                    <tr>
-                        <th style="width: 20%;">Juicer Barista</th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[0].strftime('%a')}</div><div class="date-header">{day_dates[0].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[1].strftime('%a')}</div><div class="date-header">{day_dates[1].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[2].strftime('%a')}</div><div class="date-header">{day_dates[2].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[3].strftime('%a')}</div><div class="date-header">{day_dates[3].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[4].strftime('%a')}</div><div class="date-header">{day_dates[4].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[5].strftime('%a')}</div><div class="date-header">{day_dates[5].strftime('%b %d')}</div></th>
-                        <th style="width: 11.4%;"><div class="day-header">{day_dates[6].strftime('%a')}</div><div class="date-header">{day_dates[6].strftime('%b %d')}</div></th>
-                    </tr>
-                </thead>
-                <tbody>
-        """
-
-        # Add employee rows for JUICER events
-        for employee_name in sorted(juicer_employee_schedules.keys()):
-            html += f"<tr><td><strong>{employee_name}</strong></td>"
-            for day in day_abbrevs:
-                times = juicer_employee_schedules[employee_name].get(day, [])
-                html += f"<td>{'<br>'.join(times) if times else '-'}</td>"
-            html += "</tr>"
-
-        if not juicer_employee_schedules:
-            html += f'<tr><td colspan="8" style="text-align: center; color: #666;">No Juicer events scheduled for this week</td></tr>'
-
-        html += """
-                </tbody>
-            </table>
         </body>
         </html>
         """
@@ -2281,13 +2053,25 @@ def settings_page():
                 event_times[f'{event_type}_{slot}_start_time'] = SystemSetting.get_setting(f'{event_type}_{slot}_start_time', '')
                 event_times[f'{event_type}_{slot}_end_time'] = SystemSetting.get_setting(f'{event_type}_{slot}_end_time', '')
 
-            # Core slots with lunch times
-            event_times[f'core_{slot}_start_time'] = SystemSetting.get_setting(f'core_{slot}_start_time', '')
-            event_times[f'core_{slot}_lunch_begin_time'] = SystemSetting.get_setting(f'core_{slot}_lunch_begin_time', '')
-            event_times[f'core_{slot}_lunch_end_time'] = SystemSetting.get_setting(f'core_{slot}_lunch_end_time', '')
-            event_times[f'core_{slot}_end_time'] = SystemSetting.get_setting(f'core_{slot}_end_time', '')
+            # Note: Core event times are now managed via Shift Blocks (/admin/shift-blocks)
 
     return render_template('settings.html', settings=settings, event_times=event_times)
+
+
+@admin_bp.route('/event-times')
+@require_authentication()
+def event_times_page():
+    """Display consolidated event time settings page"""
+    return render_template('event_times.html')
+
+
+# Keep old route for backwards compatibility
+@admin_bp.route('/shift-blocks')
+@require_authentication()
+def shift_blocks_page():
+    """Redirect to new event times page"""
+    from flask import redirect, url_for
+    return redirect(url_for('admin.event_times_page'))
 
 
 @admin_bp.route('/api/settings/edr', methods=['POST'])
@@ -2439,19 +2223,12 @@ def save_event_time_settings():
             'other_start_time', 'other_end_time'
         ]
 
-        # Add multi-slot settings
+        # Add multi-slot settings for Digital Setup/Teardown
         for slot in range(1, 5):
             for event_type in ['digital_setup', 'digital_teardown']:
                 expected_settings.append(f'{event_type}_{slot}_start_time')
                 expected_settings.append(f'{event_type}_{slot}_end_time')
-
-            # Core slots with lunch times
-            expected_settings.extend([
-                f'core_{slot}_start_time',
-                f'core_{slot}_lunch_begin_time',
-                f'core_{slot}_lunch_end_time',
-                f'core_{slot}_end_time'
-            ])
+            # Note: Core event times are now managed via Shift Blocks (/admin/shift-blocks)
 
         # Save each setting
         for key, value in data.items():
@@ -2502,6 +2279,36 @@ def save_event_time_settings():
     except Exception as e:
         current_app.logger.error(f"Failed to save event time settings: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@admin_bp.route('/api/event-times', methods=['GET'])
+@require_authentication()
+def get_event_times():
+    """Get all event time settings"""
+    try:
+        SystemSetting = current_app.config.get('SystemSetting')
+
+        if not SystemSetting:
+            return jsonify({'success': False, 'error': 'SystemSetting not available'}), 500
+
+        times = {}
+
+        # Load simple event times
+        for event_type in ['freeosk', 'supervisor', 'other']:
+            times[f'{event_type}_start_time'] = SystemSetting.get_setting(f'{event_type}_start_time', '')
+            times[f'{event_type}_end_time'] = SystemSetting.get_setting(f'{event_type}_end_time', '')
+
+        # Load multi-slot event times
+        for slot in range(1, 5):
+            for event_type in ['digital_setup', 'digital_teardown']:
+                times[f'{event_type}_{slot}_start_time'] = SystemSetting.get_setting(f'{event_type}_{slot}_start_time', '')
+                times[f'{event_type}_{slot}_end_time'] = SystemSetting.get_setting(f'{event_type}_{slot}_end_time', '')
+
+        return jsonify({'success': True, 'times': times})
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to get event times: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @admin_bp.route('/api/sync/employees', methods=['POST'])

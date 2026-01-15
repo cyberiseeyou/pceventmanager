@@ -14,6 +14,9 @@ from .paperwork_template import create_paperwork_template_model
 from .user_session import create_user_session_model
 from .company_holiday import create_company_holiday_model
 from .ignored_validation_issue import create_ignored_validation_issue_model
+from .shift_block_setting import create_shift_block_setting_model
+from .notes import create_notes_models
+from .inventory import create_inventory_models
 
 
 def init_models(db):
@@ -30,7 +33,7 @@ def init_models(db):
     Event = create_event_model(db)
     Schedule = create_schedule_model(db)
     EmployeeWeeklyAvailability, EmployeeAvailability, EmployeeTimeOff, EmployeeAvailabilityOverride = create_availability_models(db)
-    RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride = create_auto_scheduler_models(db)
+    RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay = create_auto_scheduler_models(db)
     SystemSetting = create_system_setting_model(db)
     AuditLog, AuditNotificationSettings = create_audit_models(db)
     EmployeeAttendance = create_employee_attendance_model(db)
@@ -38,6 +41,9 @@ def init_models(db):
     UserSession = create_user_session_model(db)
     CompanyHoliday = create_company_holiday_model(db)
     IgnoredValidationIssue = create_ignored_validation_issue_model(db)
+    ShiftBlockSetting = create_shift_block_setting_model(db)
+    Note, RecurringReminder = create_notes_models(db)
+    inventory_models = create_inventory_models(db)
 
     return {
         'Employee': Employee,
@@ -52,6 +58,7 @@ def init_models(db):
         'SchedulerRunHistory': SchedulerRunHistory,
         'ScheduleException': ScheduleException,
         'EventSchedulingOverride': EventSchedulingOverride,
+        'LockedDay': LockedDay,
         'SystemSetting': SystemSetting,
         'AuditLog': AuditLog,
         'AuditNotificationSettings': AuditNotificationSettings,
@@ -59,7 +66,16 @@ def init_models(db):
         'PaperworkTemplate': PaperworkTemplate,
         'UserSession': UserSession,
         'CompanyHoliday': CompanyHoliday,
-        'IgnoredValidationIssue': IgnoredValidationIssue
+        'IgnoredValidationIssue': IgnoredValidationIssue,
+        'ShiftBlockSetting': ShiftBlockSetting,
+        'Note': Note,
+        'RecurringReminder': RecurringReminder,
+        'SupplyCategory': inventory_models['SupplyCategory'],
+        'Supply': inventory_models['Supply'],
+        'SupplyAdjustment': inventory_models['SupplyAdjustment'],
+        'PurchaseOrder': inventory_models['PurchaseOrder'],
+        'OrderItem': inventory_models['OrderItem'],
+        'InventoryReminder': inventory_models['InventoryReminder']
     }
 
 
