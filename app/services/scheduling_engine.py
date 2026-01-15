@@ -176,10 +176,6 @@ class SchedulingEngine:
         # Key: event.project_ref_num, Value: bump count
         self.bump_count = {}
         self.MAX_BUMPS_PER_EVENT = 3  # Maximum times an event can be bumped
-        
-        # Track bumped posted schedule IDs to prevent duplicate bumping
-        # Posted schedules can't be marked as superseded (no status field), so we track them here
-        self.bumped_posted_schedule_ids = set()
 
         # Track time slot rotation per day
         self.daily_time_slot_index = {}  # {date_str: slot_index} for Core events
@@ -493,19 +489,22 @@ class SchedulingEngine:
 
         STRICT RULES:
         - Schedule Date must be >= Start Date (on or after)
-        - Schedule Date must be < Due Date (strictly before, not on)
+        - Schedule Date must be <= Due Date (on or before, inclusive)
+
+        Note: Events can be scheduled ON their due date, as "due on X" typically means
+        "by end of day X", not "before day X begins".
 
         Args:
             event: Event object
             schedule_datetime: Proposed schedule datetime
 
         Returns:
-            bool: True if the datetime is within [start_datetime, due_datetime), False otherwise
+            bool: True if the datetime is within [start_datetime, due_datetime], False otherwise
         """
         if not schedule_datetime:
             return False
 
-        return event.start_datetime <= schedule_datetime < event.due_datetime
+        return event.start_datetime <= schedule_datetime <= event.due_datetime
 
     def _try_move_event_forward(self, run: object, event_to_move: object, current_schedule: object,
                                  earliest_allowed_date: datetime, employee: object) -> bool:
@@ -690,20 +689,35 @@ class SchedulingEngine:
         
         # Get rotation employee for this specific date
         employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
-        if not employee:
-            # No Juicer assigned for this day in rotation
-            self._create_failed_pending_schedule(
-                run, event, 
-                f"No Juicer rotation employee assigned for {target_date.date()}"
-            )
-            run.events_failed += 1
-            return
 
         schedule_datetime = datetime.combine(target_date.date(), juicer_time)
 
-        # Check if employee is available (time off, weekly availability, etc.)
-        # But SKIP the daily Core events limit check - we'll bump Core events if needed
-        validation = self.validator.validate_assignment(event, employee, schedule_datetime)
+        # If no rotation employee or rotation employee is unavailable, try fallbacks
+        if employee:
+            validation = self.validator.validate_assignment(event, employee, schedule_datetime)
+        else:
+            validation = None  # Will trigger fallback logic
+
+        # If primary rotation employee has blocking violations, try fallback options
+        if not employee or (validation and not self._is_valid_for_juicer_scheduling(validation)):
+            fallback_employee = self._try_juicer_fallback(event, target_date, juicer_time)
+            if fallback_employee:
+                employee = fallback_employee
+                schedule_datetime = datetime.combine(target_date.date(), juicer_time)
+                validation = self.validator.validate_assignment(event, employee, schedule_datetime)
+                current_app.logger.info(
+                    f"Wave 1: Using fallback Juicer {employee.name} for event {event.project_ref_num}"
+                )
+            else:
+                # No fallback available - fail the event
+                reason = "No Juicer rotation employee assigned" if not employee else \
+                         "Rotation Juicer unavailable and no fallback found"
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"{reason} for {target_date.date()}"
+                )
+                run.events_failed += 1
+                return
 
         # Check if employee has Core events scheduled on this day
         core_events_to_bump = self._get_core_events_for_employee_on_date(
@@ -740,6 +754,58 @@ class SchedulingEngine:
             f"Wave 1: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {target_date.date()}"
             + (f" (bumped {len(core_events_to_bump)} Core events)" if core_events_to_bump else "")
         )
+
+    def _is_valid_for_juicer_scheduling(self, validation: object) -> bool:
+        """
+        Check if validation result is acceptable for Juicer scheduling
+
+        Juicer events can bump Core events, so ignore DAILY_LIMIT and ALREADY_SCHEDULED
+
+        Returns:
+            bool: True if no blocking violations exist
+        """
+        from .validation_types import ConstraintType
+        bumpable_constraints = {ConstraintType.DAILY_LIMIT, ConstraintType.ALREADY_SCHEDULED}
+        blocking_violations = [v for v in validation.violations if v.constraint_type not in bumpable_constraints]
+        return len(blocking_violations) == 0
+
+    def _try_juicer_fallback(self, event: object, target_date: datetime, juicer_time: time) -> Optional[object]:
+        """
+        Try fallback options when primary rotation Juicer is unavailable
+
+        Fallback priority:
+        1. Other Juicer Baristas (not on rotation)
+        2. Next day's rotation Juicer if available for this date
+
+        Args:
+            event: The Juicer event to schedule
+            target_date: The target date for scheduling
+            juicer_time: The time to schedule the event
+
+        Returns:
+            Employee object if fallback found, None otherwise
+        """
+        schedule_datetime = datetime.combine(target_date.date(), juicer_time)
+
+        # Try all Juicer Baristas (excluding primary rotation)
+        all_juicers = self.db.query(self.Employee).filter(
+            self.Employee.job_title == 'Juicer Barista',
+            self.Employee.is_active == True
+        ).all()
+
+        for juicer in all_juicers:
+            validation = self.validator.validate_assignment(event, juicer, schedule_datetime)
+            if self._is_valid_for_juicer_scheduling(validation):
+                current_app.logger.info(
+                    f"Wave 1 Fallback: Found alternative Juicer {juicer.name} for {target_date.date()}"
+                )
+                return juicer
+
+        # No fallback found
+        current_app.logger.warning(
+            f"Wave 1 Fallback: No available Juicer found for event {event.project_ref_num} on {target_date.date()}"
+        )
+        return None
 
     def _get_core_events_for_employee_on_date(self, run: object, employee_id: str, target_date: date) -> List[object]:
         """
@@ -851,8 +917,12 @@ class SchedulingEngine:
 
         # Process posted schedules
         for schedule in bumpable_posted:
-            # Skip schedules already bumped in this run
-            if schedule.id in self.bumped_posted_schedule_ids:
+            # Skip schedules already bumped in this run (check database)
+            already_bumped = self.db.query(self.PendingSchedule).filter(
+                self.PendingSchedule.scheduler_run_id == run.id,
+                self.PendingSchedule.bumped_posted_schedule_id == schedule.id
+            ).first()
+            if already_bumped:
                 continue  # Already bumped in this run
             bump_count = self.bump_count.get(schedule.event.project_ref_num, 0)
             if bump_count >= self.MAX_BUMPS_PER_EVENT:
@@ -1053,29 +1123,36 @@ class SchedulingEngine:
             # The approval process will look for schedules with matching bumped_event_ref_num
             # CRITICAL: Set is_scheduled back to False so the bumped event can be rescheduled
             existing_event.is_scheduled = False
-            # Track this posted schedule as bumped to prevent double-bumping
-            self.bumped_posted_schedule_ids.add(existing_schedule.id)
             
             # Also mark matching Supervisor event for deletion
-            core_event_number = self._extract_event_number(existing_event.project_name)
-            if core_event_number:
-                # Look for Supervisor events scheduled on the same date
-                supervisor_schedules = self.db.query(self.Schedule).join(
-                    self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
-                ).filter(
-                    func.date(self.Schedule.schedule_datetime) == schedule_datetime.date(),
-                    self.Event.event_type == 'Supervisor'
-                ).all()
+            # Look for Supervisor events scheduled on the same date
+            supervisor_schedules = self.db.query(self.Schedule).join(
+                self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+            ).filter(
+                func.date(self.Schedule.schedule_datetime) == schedule_datetime.date(),
+                self.Event.event_type == 'Supervisor'
+            ).all()
 
-                # Check each Supervisor to see if it matches the Core event number
-                for supervisor_schedule in supervisor_schedules:
+            # Check each Supervisor to see if it matches using FK first, then regex
+            for supervisor_schedule in supervisor_schedules:
+                is_match = False
+                # Primary: Check FK relationship
+                if hasattr(supervisor_schedule.event, 'parent_event_ref_num') and \
+                   supervisor_schedule.event.parent_event_ref_num == existing_event.project_ref_num:
+                    is_match = True
+                # Fallback: Regex matching
+                else:
+                    core_event_number = self._extract_event_number(existing_event.project_name)
                     supervisor_event_number = self._extract_event_number(supervisor_schedule.event.project_name)
-                    if supervisor_event_number == core_event_number:
-                        current_app.logger.info(
-                            f"{wave_label} BUMP POSTED: Also marking matching Supervisor event {supervisor_schedule.event.project_ref_num} for deletion"
-                        )
-                        # Supervisor will also be handled during approval
-                        break
+                    if core_event_number and supervisor_event_number == core_event_number:
+                        is_match = True
+
+                if is_match:
+                    current_app.logger.info(
+                        f"{wave_label} BUMP POSTED: Also marking matching Supervisor event {supervisor_schedule.event.project_ref_num} for deletion"
+                    )
+                    # Supervisor will also be handled during approval
+                    break
         else:
             # Event is in pending run - mark as superseded
             existing_schedule.status = 'superseded'
@@ -1087,8 +1164,9 @@ class SchedulingEngine:
         # Schedule the new event in its place, marking it as a swap
         bump_type = "POSTED" if is_posted else "PENDING"
         swap_reason = f"Bumped {bump_type} event {existing_event.project_ref_num} (due {existing_event.due_datetime.date()})"
-        self._create_pending_schedule(run, new_event, employee, schedule_datetime, True, 
-                                     existing_event.project_ref_num, swap_reason)
+        bumped_posted_id = existing_schedule.id if is_posted else None
+        self._create_pending_schedule(run, new_event, employee, schedule_datetime, True,
+                                     existing_event.project_ref_num, swap_reason, bumped_posted_id)
         run.events_scheduled += 1
 
         current_app.logger.info(
@@ -1712,21 +1790,22 @@ class SchedulingEngine:
 
         IMPORTANT: This now TRACKS bumps without executing them. Actual bumps happen during approval.
 
-        NOTE: Bumping IS allowed on locked days because it only changes which event is assigned,
-        not the employee or time slot. This preserves the schedule structure while optimizing
-        event assignment.
+        NOTE: Bumping is NOT allowed on locked days. Locked days must remain unchanged to
+        preserve printed paperwork and finalized schedules.
 
         Returns the bumped event if successful, None otherwise
         """
         target_date_obj = target_date.date()
 
-        # NOTE: Locked day check REMOVED for bumping
-        # Bumping only swaps events (doesn't change employee or time), so it's safe on locked days
+        # CHECK LOCKED DAYS: Cannot bump events on a locked day
+        # Locked days must remain unchanged to preserve printed paperwork/finalized schedules
         if self._is_day_locked(target_date):
+            locked_info = self._get_locked_day_info(target_date)
+            reason = locked_info.reason if locked_info else "Unknown"
             current_app.logger.info(
-                f"    Day {target_date_obj} is locked, but bumping is allowed (only changes event assignment)"
+                f"    Day {target_date_obj} is LOCKED (reason: {reason}). Cannot bump events on locked days."
             )
-            # Continue with bumping - don't return None
+            return None
 
         # Find all Core events scheduled on this day (both pending and posted)
         # IMPORTANT: Exclude superseded schedules
@@ -1792,8 +1871,6 @@ class SchedulingEngine:
             # Matching Supervisor events will also be deleted during approval
             # CRITICAL: Set is_scheduled back to False so the bumped event can be rescheduled
             bumped_event.is_scheduled = False
-            # Track this posted schedule as bumped to prevent double-bumping
-            self.bumped_posted_schedule_ids.add(best_sched.id)
         else:
             current_app.logger.info(f"    Marking pending schedule as superseded")
             best_sched.status = 'superseded'
@@ -1805,8 +1882,9 @@ class SchedulingEngine:
         # Schedule the new event in its place, marking it as a swap
         bump_type = "POSTED" if is_posted else "PENDING"
         swap_reason = f"Bumped {bump_type} event {bumped_event.project_ref_num} (due {bumped_event.due_datetime.date()})"
-        self._create_pending_schedule(run, event, employee, schedule_datetime, True, 
-                                     bumped_event.project_ref_num, swap_reason)
+        bumped_posted_id = best_sched.id if is_posted else None
+        self._create_pending_schedule(run, event, employee, schedule_datetime, True,
+                                     bumped_event.project_ref_num, swap_reason, bumped_posted_id)
         run.events_scheduled += 1
 
         # Schedule matching Supervisor event
@@ -2654,26 +2732,33 @@ class SchedulingEngine:
         """
         Schedule the matching Supervisor event inline when a Core event is scheduled
 
+        Uses parent_event_ref_num FK relationship first, falls back to regex name matching.
+
         Args:
             run: Current scheduler run
             core_event: The Core event that was just scheduled
             scheduled_date: The date the Core event was scheduled for
             events: List of all events to search for matching Supervisor event
         """
-        # Extract event number from Core event name
-        core_event_number = self._extract_event_number(core_event.project_name)
-        if not core_event_number:
-            # No event number found - no Supervisor event to pair
-            return
-
-        # Find matching Supervisor event
+        # Find matching Supervisor event using FK relationship first
         supervisor_event = None
         for event in events:
             if event.event_type == 'Supervisor' and not event.is_scheduled:
-                supervisor_event_number = self._extract_event_number(event.project_name)
-                if supervisor_event_number == core_event_number:
+                # Primary: Check if parent_event_ref_num links to this Core event
+                if hasattr(event, 'parent_event_ref_num') and event.parent_event_ref_num == core_event.project_ref_num:
                     supervisor_event = event
                     break
+
+        # Fallback to regex matching if no FK relationship found
+        if not supervisor_event:
+            core_event_number = self._extract_event_number(core_event.project_name)
+            if core_event_number:
+                for event in events:
+                    if event.event_type == 'Supervisor' and not event.is_scheduled:
+                        supervisor_event_number = self._extract_event_number(event.project_name)
+                        if supervisor_event_number == core_event_number:
+                            supervisor_event = event
+                            break
 
         if not supervisor_event:
             # No matching Supervisor event found (this is OK - not all Core events have Supervisor events)
@@ -3154,9 +3239,13 @@ class SchedulingEngine:
 
     def _create_pending_schedule(self, run: object, event: object, employee: Optional[object],
                                  schedule_datetime: datetime, is_swap: bool,
-                                 bumped_event_ref: Optional[int], swap_reason: Optional[str]) -> bool:
+                                 bumped_event_ref: Optional[int], swap_reason: Optional[str],
+                                 bumped_posted_schedule_id: Optional[int] = None) -> bool:
         """Create a PendingSchedule record
-        
+
+        Args:
+            bumped_posted_schedule_id: ID of posted schedule being bumped (if applicable)
+
         Returns:
             True if schedule was created, False if blocked (e.g., locked day)
         """
@@ -3210,6 +3299,7 @@ class SchedulingEngine:
             status='proposed',
             is_swap=is_swap,
             bumped_event_ref_num=bumped_event_ref,
+            bumped_posted_schedule_id=bumped_posted_schedule_id,
             swap_reason=swap_reason
         )
         self.db.add(pending)

@@ -55,6 +55,7 @@ class ConstraintValidator:
         self.CompanyHoliday = models.get('CompanyHoliday')
         self.SchedulerRunHistory = models.get('SchedulerRunHistory')
         self.current_run_id = None  # Track current scheduler run
+        self._active_run_ids_cache = None  # Cache for active run IDs
 
     def set_current_run(self, run_id: int) -> None:
         """
@@ -64,6 +65,31 @@ class ConstraintValidator:
             run_id: The scheduler run ID to track pending assignments
         """
         self.current_run_id = run_id
+        # Invalidate cache when run changes
+        self._active_run_ids_cache = None
+
+    def _get_active_run_ids(self) -> list:
+        """
+        Get all active (unapproved) scheduler run IDs with caching
+
+        Returns:
+            list: List of active run IDs
+        """
+        # Return cached value if available
+        if self._active_run_ids_cache is not None:
+            return self._active_run_ids_cache
+
+        # Query active runs
+        if self.SchedulerRunHistory:
+            active_runs = self.db.query(self.SchedulerRunHistory.id).filter(
+                self.SchedulerRunHistory.approved_at.is_(None),
+                self.SchedulerRunHistory.status.in_(['completed', 'running'])
+            ).all()
+            self._active_run_ids_cache = [r.id for r in active_runs]
+        else:
+            self._active_run_ids_cache = []
+
+        return self._active_run_ids_cache
 
     def validate_assignment(self, event: object, employee: object,
                            schedule_datetime: datetime, duration_minutes: int = None,
@@ -236,12 +262,8 @@ class ConstraintValidator:
         # Also count pending core events from ALL unapproved runs (not just current run)
         # This prevents scheduling conflicts when multiple scheduler runs have pending schedules
         if self.PendingSchedule and self.SchedulerRunHistory:
-            # Get all unapproved/active scheduler runs
-            active_run_ids = self.db.query(self.SchedulerRunHistory.id).filter(
-                self.SchedulerRunHistory.approved_at.is_(None),
-                self.SchedulerRunHistory.status.in_(['completed', 'running'])
-            ).all()
-            active_run_ids = [r.id for r in active_run_ids]
+            # Get all unapproved/active scheduler runs (cached)
+            active_run_ids = self._get_active_run_ids()
 
             if active_run_ids:
                 pending_core_count = self.db.query(func.count(self.PendingSchedule.id)).join(
@@ -304,13 +326,9 @@ class ConstraintValidator:
 
         core_events_count = query.scalar()
 
-        # Also count pending core events from ALL unapproved runs
+        # Also count pending core events from ALL unapproved runs (cached)
         if self.PendingSchedule and self.SchedulerRunHistory:
-            active_run_ids = self.db.query(self.SchedulerRunHistory.id).filter(
-                self.SchedulerRunHistory.approved_at.is_(None),
-                self.SchedulerRunHistory.status.in_(['completed', 'running'])
-            ).all()
-            active_run_ids = [r.id for r in active_run_ids]
+            active_run_ids = self._get_active_run_ids()
 
             if active_run_ids:
                 pending_core_count = self.db.query(func.count(self.PendingSchedule.id)).join(

@@ -179,6 +179,8 @@ def create_auto_scheduler_models(db):
             db.ForeignKey('events.project_ref_num'),
             nullable=True
         )
+        # Track which posted schedule was bumped (if bumping a posted schedule)
+        bumped_posted_schedule_id = db.Column(db.Integer, nullable=True)
         swap_reason = db.Column(db.Text, nullable=True)
 
         # Failure tracking
