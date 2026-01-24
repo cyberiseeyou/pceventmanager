@@ -1,8 +1,7 @@
 """
 Database compatibility utilities for cross-database support (SQLite and PostgreSQL)
 """
-from sqlalchemy import func, cast, Time, text
-from sqlalchemy.sql import expression
+from sqlalchemy import cast, Time, text
 from contextlib import contextmanager
 
 
