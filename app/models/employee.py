@@ -21,6 +21,7 @@ def create_employee_model(db):
             is_supervisor: Whether employee has supervisor privileges
             job_title: Employee's job role
             adult_beverage_trained: Required for certain event types
+            juicer_trained: Can work Juicer events even if not a Juicer Barista
             external_id: ID in external scheduling system
             last_synced: Last successful sync timestamp
             sync_status: Current sync state (pending/synced/failed)
@@ -35,6 +36,7 @@ def create_employee_model(db):
         is_supervisor = db.Column(db.Boolean, nullable=False, default=False)
         job_title = db.Column(db.String(50), nullable=False, default='Event Specialist')
         adult_beverage_trained = db.Column(db.Boolean, nullable=False, default=False)
+        juicer_trained = db.Column(db.Boolean, nullable=False, default=False)
         created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
         termination_date = db.Column(db.Date, nullable=True)  # FR34: Track employee termination date
 
@@ -72,8 +74,8 @@ def create_employee_model(db):
             Check if employee can work events of the given type based on job title
 
             Business Rules:
-            - Supervisor, Freeosk, Digitals: Requires Club Supervisor or Lead Event Specialist
-            - Juicer Production/Survey/Deep Clean: Requires Club Supervisor or Juicer Barista
+            - Supervisor, Freeosk, Digital Setup/Refresh/Teardown: Requires Club Supervisor or Lead Event Specialist
+            - Juicer Production/Survey/Deep Clean: Requires Club Supervisor, Juicer Barista, or Juicer Trained
             - Core, Other: All employees can work these
 
             Args:
@@ -83,10 +85,12 @@ def create_employee_model(db):
                 bool: True if employee is qualified for this event type
             """
             # Restricted event types that require specific roles
-            if event_type in ['Supervisor', 'Freeosk', 'Digitals']:
+            if event_type in ['Supervisor', 'Freeosk', 'Digital Setup', 'Digital Refresh', 'Digital Teardown']:
                 return self.job_title in ['Club Supervisor', 'Lead Event Specialist']
             elif event_type in ['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean']:
-                return self.job_title in ['Club Supervisor', 'Juicer Barista']
+                # Allow Club Supervisor, Juicer Barista, or employees marked as Juicer Trained
+                return (self.job_title in ['Club Supervisor', 'Juicer Barista'] or 
+                        self.juicer_trained)
 
             # All employees can work other event types (Core, Other)
             return True

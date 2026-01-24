@@ -306,6 +306,60 @@
     </form>
   </div>
 </div>
+
+<!-- Change Event Type Modal -->
+<div class="modal-backdrop" id="change-event-type-modal" style="display: none;">
+  <div class="action-modal">
+    <button class="modal-close" onclick="window.dailyView.closeChangeEventTypeModal()">&times;</button>
+    <h3>Change Event Type</h3>
+    <form id="change-event-type-form" onsubmit="event.preventDefault(); window.dailyView.submitEventTypeChange();">
+      <input type="hidden" id="change-type-event-ref">
+      <input type="hidden" id="change-type-schedule-id">
+
+      <div class="form-group">
+        <label>Event:</label>
+        <div id="change-type-event-info" style="font-weight: 600;"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Current Type:</label>
+        <div id="change-type-current" style="padding: 8px; background: #f0f0f0; border-radius: 4px;"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="change-type-new-type">New Event Type: <span style="color: red;">*</span></label>
+        <select id="change-type-new-type" required>
+          <option value="">Select event type...</option>
+          <option value="Core">Core</option>
+          <option value="Juicer Production">Juicer Production</option>
+          <option value="Juicer Survey">Juicer Survey</option>
+          <option value="Juicer Deep Clean">Juicer Deep Clean</option>
+          <option value="Digital Setup">Digital Setup</option>
+          <option value="Digital Refresh">Digital Refresh</option>
+          <option value="Digital Teardown">Digital Teardown</option>
+          <option value="Freeosk">Freeosk</option>
+          <option value="Supervisor">Supervisor</option>
+          <option value="Digitals">Digitals</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="change-type-reason">Reason (optional):</label>
+        <textarea id="change-type-reason" rows="3" placeholder="Why is this event type being changed?"></textarea>
+      </div>
+
+      <div class="alert alert-info" style="margin-top: 15px; padding: 10px; background: #d1ecf1; border-radius: 4px;">
+        <strong>Note:</strong> This change will persist through database refreshes. Existing employee assignment will remain.
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="window.dailyView.closeChangeEventTypeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Change Event Type</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

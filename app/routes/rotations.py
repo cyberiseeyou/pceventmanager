@@ -28,7 +28,8 @@ def index():
     all_employees = db.session.query(Employee).order_by(Employee.name).all()
 
     # Filter employees by role for dropdowns
-    juicers = [e for e in all_employees if e.job_title == 'Juicer Barista']
+    # Include Juicer Baristas and employees marked as Juicer Trained
+    juicers = [e for e in all_employees if e.job_title == 'Juicer Barista' or e.juicer_trained]
     leads = [e for e in all_employees if e.job_title in ['Lead Event Specialist', 'Club Supervisor']]
 
     return render_template('rotations.html',

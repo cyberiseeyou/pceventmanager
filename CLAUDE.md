@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Flask Schedule Webapp is an employee scheduling system for Crossmark that manages event scheduling, employee availability, and integrates with external systems (Walmart Retail Link EDR, MVRetail API). It features an auto-scheduler, AI assistant, and PDF report generation.
 
+**Stack**: Flask 2.0+, SQLAlchemy, PostgreSQL/SQLite, Celery, Redis, Docker, Ollama AI
+**Size**: 286 files, ~993k tokens
+**Architecture**: Application Factory, Model Registry, Blueprint-based routing
+
+📖 **For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md)**
+
 ## Commands
 
 ### Development

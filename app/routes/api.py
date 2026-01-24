@@ -1126,8 +1126,43 @@ def get_event_allowed_times(event_type):
                 for slot in slots:
                     start = slot['start']
                     allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
+            elif event_type_lower == 'digital refresh':
+                # Digital Refresh: Check if Digital Setup exists on the same date
+                # If yes, use Digital Teardown times; otherwise use Digital Setup times
+                date_str = request.args.get('date')
+                use_teardown_times = False
+
+                if date_str:
+                    try:
+                        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        db = current_app.extensions['sqlalchemy']
+                        Event = current_app.config['Event']
+                        Schedule = current_app.config['Schedule']
+
+                        # Check if any Digital Setup events are scheduled on this date
+                        digital_setup_count = db.session.query(Schedule).join(
+                            Event, Schedule.event_ref_num == Event.project_ref_num
+                        ).filter(
+                            db.func.date(Schedule.schedule_datetime) == target_date,
+                            Event.event_type == 'Digital Setup'
+                        ).count()
+
+                        use_teardown_times = digital_setup_count > 0
+                    except Exception:
+                        # If date parsing fails, default to setup times
+                        pass
+
+                # Use appropriate time slots
+                if use_teardown_times:
+                    slots = EventTimeSettings.get_digital_teardown_slots()
+                else:
+                    slots = EventTimeSettings.get_digital_setup_slots()
+
+                for slot in slots:
+                    start = slot['start']
+                    allowed_times.append(f"{start.hour:02d}:{start.minute:02d}")
             else:
-                # Digital Setup/Refresh
+                # Digital Setup
                 slots = EventTimeSettings.get_digital_setup_slots()
                 for slot in slots:
                     start = slot['start']
@@ -5095,6 +5130,97 @@ def verify_schedule():
             'error': 'Failed to verify schedule',
             'details': str(e)
         }), 500
+
+
+@api_bp.route('/event/<int:event_ref>/change-type', methods=['POST'])
+@require_authentication()
+def change_event_type(event_ref):
+    """Change event type with persistence through refreshes."""
+    from datetime import datetime
+
+    # Get models
+    Event = current_app.config['Event']
+    EventTypeOverride = current_app.config['EventTypeOverride']
+
+    # Parse request
+    data = request.get_json()
+    new_type = data.get('new_event_type')
+    reason = data.get('reason', '')
+
+    # Validate
+    valid_types = ['Core', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean',
+                   'Digital Setup', 'Digital Refresh', 'Digital Teardown',
+                   'Freeosk', 'Supervisor', 'Digitals', 'Other']
+    if not new_type or new_type not in valid_types:
+        return jsonify({'error': 'Invalid event type'}), 400
+
+    # Find event
+    event = Event.query.filter_by(project_ref_num=event_ref).first()
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    # Get user
+    from app.routes.auth import get_current_user
+    current_user = get_current_user()
+    username = current_user.get('username') if current_user else 'system'
+
+    # Create or update override
+    override = EventTypeOverride.query.filter_by(project_ref_num=event_ref).first()
+    old_type = event.event_type
+
+    if override:
+        override.override_event_type = new_type
+        override.updated_by = username
+        override.updated_at = datetime.utcnow()
+        if reason:
+            override.reason = reason
+    else:
+        override = EventTypeOverride(
+            project_ref_num=event_ref,
+            override_event_type=new_type,
+            created_by=username,
+            updated_by=username,
+            reason=reason,
+            event_name_snapshot=event.project_name
+        )
+        db.session.add(override)
+
+    # Update event
+    event.event_type = new_type
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Event type changed from {old_type} to {new_type}',
+        'old_type': old_type,
+        'new_type': new_type
+    })
+
+
+@api_bp.route('/event/<int:event_ref>/remove-type-override', methods=['DELETE'])
+@require_authentication()
+def remove_event_type_override(event_ref):
+    """Remove override and return to auto-detection."""
+    Event = current_app.config['Event']
+    EventTypeOverride = current_app.config['EventTypeOverride']
+
+    override = EventTypeOverride.query.filter_by(project_ref_num=event_ref).first()
+    if not override:
+        return jsonify({'error': 'No override found'}), 404
+
+    db.session.delete(override)
+
+    # Re-detect type
+    event = Event.query.filter_by(project_ref_num=event_ref).first()
+    if event:
+        event.event_type = event.detect_event_type()
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'new_auto_detected_type': event.event_type if event else None
+    })
 
 
 # Register modular API endpoint routes

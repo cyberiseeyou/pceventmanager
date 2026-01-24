@@ -50,6 +50,7 @@ def manage_employees(employee_id=None):
                 'is_supervisor': emp.is_supervisor,
                 'job_title': emp.job_title,
                 'adult_beverage_trained': emp.adult_beverage_trained,
+                'juicer_trained': emp.juicer_trained,
                 'weekly_availability': {
                     'monday': weekly_availability.monday if weekly_availability else True,
                     'tuesday': weekly_availability.tuesday if weekly_availability else True,
@@ -106,7 +107,8 @@ def manage_employees(employee_id=None):
                         is_active=data.get('is_active', True),
                         is_supervisor=data.get('is_supervisor', False),
                         job_title=data.get('job_title', 'Event Specialist'),
-                        adult_beverage_trained=data.get('adult_beverage_trained', False)
+                        adult_beverage_trained=data.get('adult_beverage_trained', False),
+                        juicer_trained=data.get('juicer_trained', False)
                     )
                     db.session.add(employee)
                 else:
@@ -124,6 +126,7 @@ def manage_employees(employee_id=None):
                     employee.is_supervisor = data.get('is_supervisor', False)
                     employee.job_title = data.get('job_title', 'Event Specialist')
                     employee.adult_beverage_trained = data.get('adult_beverage_trained', False)
+                    employee.juicer_trained = data.get('juicer_trained', False)
                 else:
                     # Create new employee
                     employee = Employee(
@@ -134,7 +137,8 @@ def manage_employees(employee_id=None):
                         is_active=data.get('is_active', True),
                         is_supervisor=data.get('is_supervisor', False),
                         job_title=data.get('job_title', 'Event Specialist'),
-                        adult_beverage_trained=data.get('adult_beverage_trained', False)
+                        adult_beverage_trained=data.get('adult_beverage_trained', False),
+                        juicer_trained=data.get('juicer_trained', False)
                     )
                     db.session.add(employee)
 

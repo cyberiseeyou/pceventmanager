@@ -33,7 +33,7 @@ def init_models(db):
     Event = create_event_model(db)
     Schedule = create_schedule_model(db)
     EmployeeWeeklyAvailability, EmployeeAvailability, EmployeeTimeOff, EmployeeAvailabilityOverride = create_availability_models(db)
-    RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay = create_auto_scheduler_models(db)
+    RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay, EventTypeOverride = create_auto_scheduler_models(db)
     SystemSetting = create_system_setting_model(db)
     AuditLog, AuditNotificationSettings = create_audit_models(db)
     EmployeeAttendance = create_employee_attendance_model(db)
@@ -59,6 +59,7 @@ def init_models(db):
         'ScheduleException': ScheduleException,
         'EventSchedulingOverride': EventSchedulingOverride,
         'LockedDay': LockedDay,
+        'EventTypeOverride': EventTypeOverride,
         'SystemSetting': SystemSetting,
         'AuditLog': AuditLog,
         'AuditNotificationSettings': AuditNotificationSettings,

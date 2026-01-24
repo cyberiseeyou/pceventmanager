@@ -337,6 +337,78 @@
             </div>
         </div>
     </div>
+
+    <!-- Bakery Prep List Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background-color: #8B4513;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-birthday-cake"></i> Bakery Prep List
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Generate a list of upcoming events for bakery prep (tomorrow to 2 weeks out)</p>
+                    <ul class="text-muted small">
+                        <li>Shows Event ID, Date, Item Description, and Item Number</li>
+                        <li>Only includes bakery departments (77 and 37)</li>
+                        <li>Sorted by event date</li>
+                    </ul>
+                    <div class="mt-3">
+                        <button class="btn text-white" style="background-color: #8B4513;" id="generate-bakery-prep-btn">
+                            <i class="fas fa-clipboard-list"></i> Generate Bakery Prep List
+                        </button>
+                        <button class="btn btn-outline-secondary ms-2" id="print-bakery-prep-btn" style="display: none;">
+                            <i class="fas fa-print"></i> Print List
+                        </button>
+                        <small class="text-muted ms-2">Requires Walmart credentials in Settings</small>
+                    </div>
+                    <!-- Bakery Prep List Preview Area -->
+                    <div id="bakery-prep-preview" class="mt-4" style="display: none;">
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0"><i class="fas fa-birthday-cake"></i> Bakery Prep List Preview</h6>
+                            <span id="bakery-prep-date-range" class="badge bg-secondary"></span>
+                        </div>
+                        <div id="bakery-prep-content" class="bakery-prep-list">
+                            <!-- Prep list will be inserted here -->
+                        </div>
+                        <div class="mt-2 text-muted small">
+                            <span id="bakery-prep-total">Total: 0 items</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Freeosk Manual Test Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header" style="background-color: #6F42C1;">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-book"></i> Freeosk Manual Test
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Test Freeosk manual download for a specific date</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="freeosk-manual-date" class="form-label">Select Date (defaults to upcoming Friday)</label>
+                            <input type="date" class="form-control" id="freeosk-manual-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn text-white" style="background-color: #6F42C1;" id="generate-freeosk-manual-btn">
+                            <i class="fas fa-download"></i> Download Freeosk Manual
+                        </button>
+                        <small class="text-muted ms-2">Test feature for Freeosk manual API integration</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Loading Modal -->
@@ -564,6 +636,60 @@
         color: #721c24;
         border: 1px solid #f5c6cb;
     }
+
+    /* Bakery Prep List Styles */
+    .bakery-prep-list {
+        max-height: 500px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+
+    .bakery-prep-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid #dee2e6;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .bakery-prep-item:last-child {
+        border-bottom: none;
+    }
+
+    .bakery-prep-item:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+
+    .bakery-prep-item .field-label {
+        color: #6c757d;
+        font-weight: 600;
+        min-width: 80px;
+        display: inline-block;
+    }
+
+    .bakery-prep-item .field-value {
+        color: #212529;
+    }
+
+    .bakery-prep-item .item-date {
+        color: #8B4513;
+        font-weight: bold;
+    }
+
+    #bakery-prep-preview {
+        background-color: #fef9f3;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        border: 1px solid #e6d5c3;
+    }
+
+    @media print {
+        .bakery-prep-item {
+            page-break-inside: avoid;
+        }
+    }
 </style>
 
 <script>
@@ -577,6 +703,26 @@
         document.getElementById('instructions-batch-date').value = today;
         document.getElementById('edr-batch-date').value = today;
         document.getElementById('item-list-date').value = today;
+
+        // Set default date for Freeosk manual test to upcoming Friday
+        const freeoskDateInput = document.getElementById('freeosk-manual-date');
+        if (freeoskDateInput) {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // 0=Sunday, 5=Friday
+
+            let targetDate;
+            if (dayOfWeek === 5) {
+                // Today is Friday, use today
+                targetDate = today;
+            } else {
+                // Calculate days until next Friday
+                const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+                targetDate = new Date(today);
+                targetDate.setDate(today.getDate() + daysUntilFriday);
+            }
+
+            freeoskDateInput.value = targetDate.toISOString().split('T')[0];
+        }
 
         // Load employees for employee schedule dropdown
         loadEmployees();
@@ -632,6 +778,13 @@
 
         // Single Event Paperwork handler
         document.getElementById('generate-event-paperwork-btn').addEventListener('click', generateEventPaperwork);
+
+        // Bakery Prep List handlers
+        document.getElementById('generate-bakery-prep-btn').addEventListener('click', generateBakeryPrepList);
+        document.getElementById('print-bakery-prep-btn').addEventListener('click', printBakeryPrepList);
+
+        // Freeosk Manual Test handler
+        document.getElementById('generate-freeosk-manual-btn').addEventListener('click', generateFreeoskManual);
     });
 
     function viewDailySchedule() {
@@ -2248,9 +2401,9 @@
                 })
                     .then(response => response.json())
                     .then(data => {
-                        hideLoading();
-
                         if (!data.success) {
+                            hideLoading();
+
                             // Check for specific error codes that allow retry
                             if (data.error_code === 'mfa_expired' || data.error_code === 'session_expired') {
                                 // Code expired - offer to request a new one
@@ -2276,10 +2429,22 @@
                         // Mark as authenticated
                         edrAuthenticated = true;
 
-                        // Execute the callback
-                        if (callback) {
-                            callback();
+                        // Update loading message to show we're starting paperwork generation
+                        // Don't hide loading yet - let the progress modal take over
+                        const loadingDiv = document.getElementById('loading');
+                        const loadingMsg = document.getElementById('loading-message');
+                        if (loadingMsg) {
+                            loadingMsg.innerHTML = '✅ Authentication successful!\n\n📄 Starting paperwork generation...\n\nPlease wait...';
                         }
+
+                        // Small delay to show the success message, then execute callback
+                        setTimeout(() => {
+                            hideLoading();
+                            // Execute the callback (which will show the progress modal)
+                            if (callback) {
+                                callback();
+                            }
+                        }, 500);
                     })
                     .catch(error => {
                         hideLoading();
@@ -3088,6 +3253,248 @@
         if (backdrop) {
             backdrop.remove();
         }
+    }
+
+    // ========================================
+    // Bakery Prep List Functions
+    // ========================================
+
+    function generateBakeryPrepList() {
+        // Check if already authenticated
+        if (edrAuthenticated) {
+            fetchBakeryPrepList();
+            return;
+        }
+
+        // Need to authenticate first
+        authenticateWalmartEDR(() => {
+            fetchBakeryPrepList();
+        });
+    }
+
+    function fetchBakeryPrepList() {
+        showLoading('🎂 Fetching bakery prep list...\n\nRetrieving upcoming events from Walmart.');
+
+        fetch('/printing/bakery-prep-list')
+            .then(async response => {
+                // Handle auth errors
+                if (response.status === 401 || response.status === 404) {
+                    hideLoading();
+                    edrAuthenticated = false;
+                    if (confirm('Session expired or not authenticated. Would you like to authenticate now?')) {
+                        authenticateWalmartEDR(() => {
+                            fetchBakeryPrepList();
+                        });
+                    }
+                    return null;
+                }
+
+                // Check content type before parsing
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error('Server returned an invalid response. Please re-authenticate.');
+                }
+
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                if (!data) return; // Already handled 401/404
+
+                if (data.success) {
+                    displayBakeryPrepList(data);
+                } else {
+                    // Check if it's an auth-related error
+                    if (data.error && (data.error.includes('expired') || data.error.includes('authenticate'))) {
+                        edrAuthenticated = false;
+                        if (confirm(data.error + '\n\nWould you like to re-authenticate?')) {
+                            authenticateWalmartEDR(() => {
+                                fetchBakeryPrepList();
+                            });
+                        }
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                // Offer to re-authenticate on any error
+                edrAuthenticated = false;
+                if (confirm('Error fetching data. Would you like to re-authenticate?\n\n' + error.message)) {
+                    authenticateWalmartEDR(() => {
+                        fetchBakeryPrepList();
+                    });
+                }
+            });
+    }
+
+    function displayBakeryPrepList(data) {
+        const previewDiv = document.getElementById('bakery-prep-preview');
+        const contentDiv = document.getElementById('bakery-prep-content');
+        const dateRangeSpan = document.getElementById('bakery-prep-date-range');
+        const totalSpan = document.getElementById('bakery-prep-total');
+        const printBtn = document.getElementById('print-bakery-prep-btn');
+
+        // Update date range badge
+        dateRangeSpan.textContent = data.dateRange.formatted;
+
+        // Update total count
+        totalSpan.textContent = `Total: ${data.totalItems} items`;
+
+        if (data.items.length === 0) {
+            contentDiv.innerHTML = '<div class="p-3 text-center text-muted">No upcoming bakery prep items found.</div>';
+        } else {
+            let html = '';
+            data.items.forEach((item, index) => {
+                html += `
+                    <div class="bakery-prep-item">
+                        <div><span class="field-label">Event ID:</span> <span class="field-value">${item.eventId}</span></div>
+                        <div><span class="field-label">Date:</span> <span class="field-value item-date">${item.eventDate}</span></div>
+                        <div><span class="field-label">Item:</span> <span class="field-value">${item.itemDesc}</span></div>
+                        <div><span class="field-label">Item #:</span> <span class="field-value">${item.itemNbr}</span></div>
+                    </div>
+                `;
+            });
+            contentDiv.innerHTML = html;
+        }
+
+        // Show preview and print button
+        previewDiv.style.display = 'block';
+        printBtn.style.display = 'inline-block';
+    }
+
+    function printBakeryPrepList() {
+        // Open a new window with print-friendly version
+        const printWindow = window.open('', '_blank');
+
+        // Get the current data from the preview
+        const dateRange = document.getElementById('bakery-prep-date-range').textContent;
+        const total = document.getElementById('bakery-prep-total').textContent;
+        const items = document.querySelectorAll('.bakery-prep-item');
+
+        let itemsHtml = '';
+        items.forEach(item => {
+            itemsHtml += item.outerHTML;
+        });
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Bakery Prep List</title>
+                <style>
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        margin: 20px;
+                        line-height: 1.4;
+                    }
+                    h1 {
+                        font-size: 18px;
+                        margin-bottom: 5px;
+                        text-align: center;
+                    }
+                    .header-info {
+                        text-align: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 10px;
+                        border-bottom: 2px solid #000;
+                    }
+                    .bakery-prep-item {
+                        padding: 8px 0;
+                        border-bottom: 1px dashed #ccc;
+                        page-break-inside: avoid;
+                    }
+                    .bakery-prep-item:last-child {
+                        border-bottom: none;
+                    }
+                    .field-label {
+                        font-weight: bold;
+                        display: inline-block;
+                        min-width: 70px;
+                    }
+                    .item-date {
+                        font-weight: bold;
+                    }
+                    .footer {
+                        margin-top: 20px;
+                        padding-top: 10px;
+                        border-top: 2px solid #000;
+                        text-align: center;
+                    }
+                    @media print {
+                        body { margin: 10px; }
+                        .bakery-prep-item { page-break-inside: avoid; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header-info">
+                    <h1>🎂 BAKERY PREP LIST</h1>
+                    <div>${dateRange}</div>
+                    <div>Generated: ${new Date().toLocaleString()}</div>
+                </div>
+                ${itemsHtml}
+                <div class="footer">
+                    <strong>${total}</strong>
+                </div>
+            </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+        printWindow.focus();
+
+        // Trigger print after content loads
+        setTimeout(() => {
+            printWindow.print();
+        }, 250);
+    }
+
+    // ========================================
+    // Freeosk Manual Test Functions
+    // ========================================
+
+    function generateFreeoskManual() {
+        const date = document.getElementById('freeosk-manual-date').value;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        // No Walmart authentication needed - uses MVRetail credentials from app config
+        showLoading('📚 <strong>Downloading Freeosk manual</strong>...<br><small>This may take a few seconds</small>');
+
+        fetch('/printing/freeosk-manual-test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ date: date })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Failed to download manual');
+                });
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            hideLoading();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        })
+        .catch(error => {
+            hideLoading();
+            alert('Error downloading Freeosk manual: ' + error.message);
+        });
     }
 
     // Helper function to get CSRF token from cookie

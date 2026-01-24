@@ -1156,7 +1156,8 @@ class ScheduleVerificationService:
         # Get the expected Juicer for this day from rotation
         expected_juicer_id = None
         if self.RotationAssignment:
-            day_of_week = (verify_date.weekday() + 1) % 7  # Convert to 0=Sunday format
+            # RotationAssignment uses Python's weekday() format: 0=Monday, 6=Sunday
+            day_of_week = verify_date.weekday()
             rotation = self.db.query(self.RotationAssignment).filter(
                 self.RotationAssignment.day_of_week == day_of_week,
                 self.RotationAssignment.rotation_type == 'juicer'
@@ -1182,8 +1183,8 @@ class ScheduleVerificationService:
         for schedule, event, employee in juicer_schedules:
             juicer_employee_ids.add(employee.id)
 
-            # Check if employee is qualified
-            if employee.job_title not in ['Club Supervisor', 'Juicer Barista']:
+            # Check if employee is qualified (include Juicer Trained)
+            if employee.job_title not in ['Club Supervisor', 'Juicer Barista'] and not employee.juicer_trained:
                 issues.append(VerificationIssue(
                     severity='critical',
                     rule_name='Juicer Qualification',

@@ -7,6 +7,8 @@ Issues can be ignored by:
 - Rule-wide (ignore all issues of a certain rule type)
 """
 
+from sqlalchemy import or_
+
 
 def create_ignored_validation_issue_model(db):
     """Create IgnoredValidationIssue model with the provided db instance"""
@@ -75,7 +77,7 @@ def create_ignored_validation_issue_model(db):
             from datetime import datetime
             ignored = db_session.query(cls).filter(
                 cls.issue_hash == issue_hash,
-                db.or_(
+                or_(
                     cls.expires_at.is_(None),
                     cls.expires_at > datetime.now()
                 )

@@ -217,18 +217,28 @@ def unscheduled_events():
                 except (ValueError, IndexError, AttributeError):
                     pass  # If date parsing fails, skip this term
 
-            # Check if it's all uppercase (employee name) - only if no date prefix
+            # Check if it's all uppercase (employee name or location) - only if no date prefix
             elif not date_prefix and original_term.isupper() and len(original_term) > 1:
-                # Only search by employee for scheduled events
-                if condition_filter in ['scheduled', 'submitted', 'reissued']:
-                    # Subquery to find events assigned to this employee
-                    employee_ids = db.session.query(Employee.id).filter(
-                        Employee.name.ilike(f'%{original_term}%')
-                    )
-                    scheduled_by_employee = db.session.query(Schedule.event_ref_num).filter(
-                        Schedule.employee_id.in_(employee_ids)
-                    ).distinct()
-                    term_conditions.append(Event.project_ref_num.in_(scheduled_by_employee))
+                # Try matching as employee name first (for events with schedules)
+                # Subquery to find events assigned to this employee
+                employee_ids = db.session.query(Employee.id).filter(
+                    Employee.name.ilike(f'%{original_term}%')
+                )
+                scheduled_by_employee = db.session.query(Schedule.event_ref_num).filter(
+                    Schedule.employee_id.in_(employee_ids)
+                ).distinct()
+                
+                # Also check if it matches a location/store name
+                location_condition = or_(
+                    Event.store_name.ilike(f'%{original_term}%'),
+                    Event.location_mvid.ilike(f'%{original_term}%')
+                )
+                
+                # Combine: match either by employee OR by location
+                term_conditions.append(or_(
+                    Event.project_ref_num.in_(scheduled_by_employee),
+                    location_condition
+                ))
 
             # Check if it's all digits (event number) - only if no date prefix
             elif not date_prefix and original_term.isdigit():
@@ -247,8 +257,26 @@ def unscheduled_events():
             query = query.filter(and_(*search_conditions))
 
     # Order results
-    events = query.order_by(
+    # For scheduled events, sort by scheduled date; for unscheduled, sort by start date
+    Schedule = current_app.config['Schedule']
+    
+    # Use a subquery to get the minimum (earliest) schedule datetime for each event
+    # This handles events with multiple schedules
+    min_schedule_subquery = db.session.query(
+        Schedule.event_ref_num,
+        db.func.min(Schedule.schedule_datetime).label('min_schedule_datetime')
+    ).group_by(Schedule.event_ref_num).subquery()
+    
+    # Left join with the subquery to include events without schedules
+    events = query.outerjoin(
+        min_schedule_subquery,
+        Event.project_ref_num == min_schedule_subquery.c.event_ref_num
+    ).order_by(
+        # Primary sort: scheduled datetime (NULLs last for unscheduled events)
+        db.func.coalesce(min_schedule_subquery.c.min_schedule_datetime, Event.start_datetime).asc(),
+        # Secondary sort: start datetime
         Event.start_datetime.asc(),
+        # Tertiary sort: due datetime
         Event.due_datetime.asc()
     ).all()
 
@@ -444,7 +472,7 @@ def calendar_view():
     unscheduled_by_date = {}
     unscheduled_events = Event.query.filter(
         Event.condition == 'Unstaffed',
-        db.or_(
+        or_(
             db.and_(
                 Event.start_datetime >= start_of_month,
                 Event.start_datetime < end_of_month
@@ -769,7 +797,7 @@ def print_schedule_by_date(date):
         Employee, Schedule.employee_id == Employee.id
     ).filter(
         db.func.date(Schedule.schedule_datetime) == selected_date,
-        db.or_(
+        or_(
             Event.event_type == 'Core',
             Event.event_type == 'Juicer Production'
         )

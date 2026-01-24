@@ -513,7 +513,7 @@ async function initializeTimeRestrictions() {
     const eventType = window.eventData.eventType;
 
     // Event types that have time restrictions (dropdown instead of free input)
-    const restrictedEventTypes = ['Core', 'Supervisor', 'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh', 'Digital Teardown'];
+    const restrictedEventTypes = ['Core', 'Supervisor', 'Freeosk', 'Digital Setup', 'Digital Refresh', 'Digital Teardown'];
 
     // Check if this event type has time restrictions
     if (restrictedEventTypes.includes(eventType)) {
@@ -814,15 +814,31 @@ function initializeRescheduleTimeRestrictions(eventType, currentTime, eventName 
         'Core': ['10:15', '10:45', '11:15', '11:45'],
         'Supervisor': ['12:00'],
         'Freeosk': ['10:00', '12:00'],
-        'Digitals': ['09:15', '09:30', '09:45', '10:00'],
+        'Digital Setup': ['09:15', '09:30', '09:45', '10:00'],
+        'Digital Refresh': ['09:15', '09:30', '09:45', '10:00'],
         'Digital Teardown': ['17:00', '17:15', '17:30', '17:45']
     };
 
-    // Determine effective event type (detect Digital Teardown from event name)
+    // Determine effective event type and time restrictions
     let effectiveEventType = eventType;
     const eventNameLower = (eventName || '').toLowerCase();
-    if (eventType === 'Digitals' && (eventNameLower.includes('tear down') || eventNameLower.includes('teardown'))) {
-        effectiveEventType = 'Digital Teardown';
+    
+    // Special case: If this is Digital Refresh, check if Digital Setup exists on the same date
+    // If Digital Setup exists, use teardown times for Digital Refresh
+    if (eventType === 'Digital Refresh') {
+        const selectedDate = document.getElementById('reschedule-date')?.value;
+        if (selectedDate && window.eventsData) {
+            // Check if there are Digital Setup events on the selected date
+            const hasDigitalSetup = window.eventsData.some(event => {
+                const eventDate = new Date(event.start_datetime).toISOString().split('T')[0];
+                return eventDate === selectedDate && event.event_type === 'Digital Setup';
+            });
+            
+            if (hasDigitalSetup) {
+                // Use teardown times for Digital Refresh when Digital Setup exists
+                effectiveEventType = 'Digital Teardown';
+            }
+        }
     }
 
     // Check if this event type has time restrictions

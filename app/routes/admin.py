@@ -7,7 +7,7 @@ from app.routes.auth import require_authentication
 from app.utils.db_compat import disable_foreign_keys, is_sqlite
 from datetime import datetime, timedelta, date, time
 from io import BytesIO
-from sqlalchemy import func
+from sqlalchemy import func, or_
 import requests
 import re
 import logging
@@ -343,7 +343,7 @@ def universal_search():
     if context in ['all', 'scheduling', 'tracking']:
         # Search by event name, project ref number, store name, or location
         event_query = Event.query.filter(
-            db.or_(
+            or_(
                 Event.project_name.ilike(f'%{query}%'),
                 Event.project_ref_num == query if query.isdigit() else False,
                 Event.store_name.ilike(f'%{query}%') if Event.store_name else False,
@@ -402,7 +402,7 @@ def universal_search():
         employee_query = Employee.query.filter(
             db.and_(
                 Employee.is_active == True,
-                db.or_(
+                or_(
                     Employee.name.ilike(f'%{query}%'),
                     Employee.id.ilike(f'%{query}%'),
                     Employee.email.ilike(f'%{query}%') if Employee.email else False
@@ -430,7 +430,7 @@ def universal_search():
             ).join(
                 Employee, Schedule.employee_id == Employee.id
             ).filter(
-                db.or_(
+                or_(
                     Event.project_name.ilike(f'%{query}%'),
                     Event.project_ref_num == query if query.isdigit() else False,
                     Employee.name.ilike(f'%{query}%'),

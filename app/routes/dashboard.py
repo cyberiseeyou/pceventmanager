@@ -830,7 +830,7 @@ def list_ignored_issues():
     
     # Get all non-expired ignored issues
     ignored_list = db.session.query(IgnoredValidationIssue).filter(
-        db.or_(
+        or_(
             IgnoredValidationIssue.expires_at.is_(None),
             IgnoredValidationIssue.expires_at > datetime.now()
         )

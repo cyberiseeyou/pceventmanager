@@ -395,10 +395,19 @@ class WeeklyValidationService:
         issues = []
 
         # Find Primary Lead Event Specialist
+        # Note: MICHELLE MONTAGUE is the designated primary lead
         primary_lead = self.db.query(self.Employee).filter(
+            self.Employee.name == 'MICHELLE MONTAGUE',
             self.Employee.job_title == 'Lead Event Specialist',
             self.Employee.is_active == True
-        ).order_by(self.Employee.id).first()
+        ).first()
+        
+        # Fallback to first active Lead Event Specialist if Michelle not found
+        if not primary_lead:
+            primary_lead = self.db.query(self.Employee).filter(
+                self.Employee.job_title == 'Lead Event Specialist',
+                self.Employee.is_active == True
+            ).order_by(self.Employee.id).first()
 
         if not primary_lead:
             return issues
@@ -417,8 +426,45 @@ class WeeklyValidationService:
             # No Core events this day, skip validation
             return issues
 
+        # Check if Primary Lead is on time off or unavailable this day
+        EmployeeTimeOff = self.models.get('EmployeeTimeOff')
+        EmployeeAvailability = self.models.get('EmployeeAvailability')
+        
+        # Check time off
+        on_time_off = False
+        if EmployeeTimeOff:
+            on_time_off = self.db.query(EmployeeTimeOff).filter(
+                EmployeeTimeOff.employee_id == primary_lead.id,
+                EmployeeTimeOff.start_date <= verify_date,
+                EmployeeTimeOff.end_date >= verify_date
+            ).first()
+        
+        # Check availability (is_available = False means day off)
+        unavailable = False
+        if EmployeeAvailability:
+            availability = self.db.query(EmployeeAvailability).filter(
+                EmployeeAvailability.employee_id == primary_lead.id,
+                EmployeeAvailability.date == verify_date
+            ).first()
+            if availability and not availability.is_available:
+                unavailable = True
+        
+        # If Primary Lead is on time off or unavailable, skip validation
+        if on_time_off or unavailable:
+            return issues
+
+        # Check if Primary Lead is working this day (scheduled for ANY event)
+        lead_any_schedule = self.db.query(self.Schedule).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Schedule.employee_id == primary_lead.id
+        ).first()
+        
+        # If Primary Lead is not working at all this day, skip validation
+        if not lead_any_schedule:
+            return issues
+
         # Check if Primary Lead has a Core event scheduled
-        lead_schedule = self.db.query(
+        lead_core_schedule = self.db.query(
             self.Schedule, self.Event
         ).join(
             self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
@@ -428,20 +474,37 @@ class WeeklyValidationService:
             self.Event.event_type == 'Core'
         ).first()
 
-        if not lead_schedule:
-            # Primary Lead not scheduled for Core events when Core events exist
+        if not lead_core_schedule:
+            # Primary Lead is working but not scheduled for Core events
+            # Get what they ARE scheduled for
+            non_core_schedules = self.db.query(
+                self.Schedule, self.Event
+            ).join(
+                self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+            ).filter(
+                func.date(self.Schedule.schedule_datetime) == verify_date,
+                self.Schedule.employee_id == primary_lead.id,
+                self.Event.event_type != 'Core'
+            ).all()
+            
+            non_core_types = [event.event_type for _, event in non_core_schedules]
+            
             issues.append(VerificationIssue(
                 severity='critical',
                 rule_name='Primary Lead Not Scheduled',
-                message=f"Primary Lead {primary_lead.name} is not scheduled for Core events on {verify_date}, but Core events exist.",
+                message=f"Primary Lead {primary_lead.name} is working on {verify_date} but not scheduled for Core events. Scheduled for: {', '.join(non_core_types)}. Core events exist and should be assigned to Primary Lead.",
                 details={
                     'employee_id': primary_lead.id,
                     'employee_name': primary_lead.name,
                     'date': verify_date.isoformat(),
-                    'expected_block': 1
+                    'expected_block': 1,
+                    'actual_event_types': non_core_types
                 }
             ))
             return issues
+        
+        # Primary Lead is scheduled for Core, continue to check if it's Block 1
+        lead_schedule = lead_core_schedule
 
         schedule, event = lead_schedule
 
@@ -534,8 +597,8 @@ class WeeklyValidationService:
         """
         issues = []
 
-        # Get all Digital events (Digital Setup, Digital Refresh, Digital Teardown, Digitals)
-        digital_types = ['Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Digitals']
+        # Get all Digital events (Digital Setup, Digital Refresh, Digital Teardown)
+        digital_types = ['Digital Setup', 'Digital Refresh', 'Digital Teardown']
 
         # Get Digital events scheduled with Club Supervisors
         supervisor_digitals = self.db.query(

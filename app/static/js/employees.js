@@ -44,6 +44,7 @@ function updateStatistics(employees) {
     const eventSpecialists = employees.filter(emp => emp.job_title === 'Event Specialist').length;
     const leadSpecialists = employees.filter(emp => emp.job_title === 'Lead Event Specialist').length;
     const abTrained = employees.filter(emp => emp.adult_beverage_trained).length;
+    const juicerTrained = employees.filter(emp => emp.juicer_trained).length;
 
     // Update DOM
     document.getElementById('stat-total').textContent = totalEmployees;
@@ -73,6 +74,9 @@ function createEmployeeCard(employee) {
     // Additional badges
     if (employee.adult_beverage_trained) {
         badges.push('<span class="employee-badge badge-ab-trained">AB TRAINED</span>');
+    }
+    if (employee.juicer_trained) {
+        badges.push('<span class="employee-badge badge-juicer-trained">JUICER TRAINED</span>');
     }
     if (!employee.is_active) {
         badges.push('<span class="employee-badge badge-inactive">INACTIVE</span>');
@@ -207,6 +211,7 @@ async function handleAddEmployeeSubmit(e) {
         job_title: document.getElementById('job-title').value,
         is_active: document.getElementById('is-active').checked,
         adult_beverage_trained: document.getElementById('adult-beverage-trained').checked,
+        juicer_trained: document.getElementById('juicer-trained').checked,
         weekly_availability: {
             monday: document.getElementById('avail-monday').checked,
             tuesday: document.getElementById('avail-tuesday').checked,
@@ -569,6 +574,7 @@ async function editEmployee(employeeId) {
         document.getElementById('job-title').value = employee.job_title;
         document.getElementById('is-active').checked = employee.is_active;
         document.getElementById('adult-beverage-trained').checked = employee.adult_beverage_trained;
+        document.getElementById('juicer-trained').checked = employee.juicer_trained;
 
         // Set availability
         ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {

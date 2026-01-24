@@ -550,42 +550,60 @@ class SessionAPIService:
 
     def get_scheduled_events(self, start_date: datetime = None, end_date: datetime = None, filters: Dict = None) -> Optional[Dict]:
         """
-        Get scheduled events from Crossmark API according to specification.
+        Get scheduled events from Crossmark API using multipart form data.
+        This endpoint returns EstimatedTime which is needed for event type detection.
+        
         Args:
-            start_date: Start date (YYYY-MM-DD format)
-            end_date: End date (YYYY-MM-DD format)
+            start_date: Start date (defaults to today)
+            end_date: End date (defaults to 7 days from start)
             filters: Optional filters (repId, locationId, status)
         Returns:
             dict or None: Scheduled events data if successful, None otherwise
         """
         try:
-            # Prepare request body according to API spec
-            request_data = {}
+            # Calculate default date range if not provided
+            if start_date is None:
+                start_date = datetime.now()
+            if end_date is None:
+                end_date = start_date + timedelta(days=7)
 
-            if start_date:
-                request_data['startDate'] = start_date.strftime('%Y-%m-%d') if isinstance(start_date, datetime) else start_date
-            if end_date:
-                request_data['endDate'] = end_date.strftime('%Y-%m-%d') if isinstance(end_date, datetime) else end_date
+            # Format dates for multipart form: "MM/DD/YYYY HH:MM:SS,MM/DD/YYYY HH:MM:SS"
+            start_str = start_date.strftime("%m/%d/%Y 00:00:00") if isinstance(start_date, datetime) else start_date
+            end_str = end_date.strftime("%m/%d/%Y 23:59:59") if isinstance(end_date, datetime) else end_date
+            project_value = f"{start_str},{end_str}"
 
-            # Add optional filters
-            if filters:
-                if 'repId' in filters:
-                    request_data['repId'] = filters['repId']
-                if 'locationId' in filters:
-                    request_data['locationId'] = filters['locationId']
-                if 'status' in filters:
-                    request_data['status'] = filters['status']
+            # Prepare multipart form data (matches curl format)
+            files = {
+                'project': (None, project_value),
+                'priorities': (None, ''),
+                'projectsDropdownCustomSearchValues': (None, ''),
+                'repsDropdownCustomSearchValues': (None, '')
+            }
+
+            headers = {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'en-US,en;q=0.9',
+                'origin': self.base_url,
+                'priority': 'u=1, i',
+                'referer': f'{self.base_url}/scheduling/hourly/',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin'
+            }
+
+            self.logger.info(f"Fetching scheduled events for: {project_value}")
 
             response = self.make_request(
                 'POST',
                 '/schedulingcontroller/getScheduledEvents',
-                json=request_data
+                files=files,
+                headers=headers
             )
 
             if response.status_code == 200:
                 events_data = self._safe_json(response)
                 if events_data:
-                    self.logger.info("Retrieved scheduled events successfully")
+                    self.logger.info(f"Retrieved {len(events_data) if isinstance(events_data, list) else 'N/A'} scheduled events")
                     return events_data
                 return None
             else:
@@ -598,6 +616,74 @@ class SessionAPIService:
 
         except Exception as e:
             self.logger.error("Error getting scheduled events: %s", e)
+            return None
+
+    def get_non_scheduled_visits_with_details(self, start_date: datetime = None, end_date: datetime = None) -> Optional[Dict]:
+        """
+        Get non-scheduled visits with full details including EstimatedTime.
+        Uses multipart form data format matching the curl command.
+        
+        Args:
+            start_date: Start date (defaults to today)
+            end_date: End date (defaults to 7 days from start)
+        Returns:
+            dict or None: Non-scheduled visits data if successful, None otherwise
+        """
+        try:
+            # Calculate default date range if not provided  
+            if start_date is None:
+                start_date = datetime.now()
+            if end_date is None:
+                end_date = start_date + timedelta(days=7)
+
+            # Format dates for multipart form: "MM/DD/YYYY,MM/DD/YYYY"
+            start_str = start_date.strftime("%m/%d/%Y") if isinstance(start_date, datetime) else start_date
+            end_str = end_date.strftime("%m/%d/%Y") if isinstance(end_date, datetime) else end_date
+            project_value = f"{start_str},{end_str}"
+
+            # Prepare multipart form data (matches curl format)
+            files = {
+                'project': (None, project_value),
+                'priorities': (None, ''),
+                'projectsDropdownCustomSearchValues': (None, '')
+            }
+
+            headers = {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'en-US,en;q=0.9',
+                'origin': self.base_url,
+                'priority': 'u=1, i',
+                'referer': f'{self.base_url}/scheduling/hourly/',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin'
+            }
+
+            self.logger.info(f"Fetching non-scheduled visits for: {project_value}")
+
+            response = self.make_request(
+                'POST',
+                '/schedulingcontroller/getNonScheduledVisits',
+                files=files,
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                visits_data = self._safe_json(response)
+                if visits_data:
+                    self.logger.info(f"Retrieved {len(visits_data) if isinstance(visits_data, list) else 'N/A'} non-scheduled visits")
+                    return visits_data
+                return None
+            else:
+                self.logger.warning(
+                    "Failed to get non-scheduled visits: %s %s",
+                    response.status_code,
+                    response.text[:300],
+                )
+                return None
+
+        except Exception as e:
+            self.logger.error("Error getting non-scheduled visits: %s", e)
             return None
 
     def get_unscheduled_events(self, start_date: datetime = None, end_date: datetime = None) -> Optional[Dict]:

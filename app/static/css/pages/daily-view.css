@@ -895,6 +895,25 @@
 }
 
 /**
+ * Core Event Badge
+ * Bright, eye-catching badge to identify Core events by their time slot
+ */
+.badge-core {
+  background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.4);
+  margin-left: 6px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/**
  * Event Card Details
  * Contains time, event info - ultra compact
  */

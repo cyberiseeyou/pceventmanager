@@ -3,21 +3,44 @@
  * Database sync progress page after login
  */
 
-/* Loading Page Specific Overrides */
-.loading-body {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Loading Page Specific Overrides - Use body.loading-body for higher specificity */
+body.loading-body,
+body.login-body.loading-body {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 100vh !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
 }
 
-.loading-container {
-    width: auto;
-    max-width: 900px;
-    padding: 2rem;
-    margin: 0 !important; /* Override login-container margin and let flexbox handle centering */
-    border: 2px solid var(--pc-blue);
-    border-radius: 16px;
+.loading-body .loading-container,
+.login-body.loading-body .loading-container,
+body.loading-body .login-container.loading-container {
+    width: 90% !important;
+    max-width: 900px !important;
+    padding: 2rem !important;
+    margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border: 2px solid var(--pc-blue) !important;
+    border-radius: 16px !important;
+    position: relative !important;
+    z-index: 10 !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    transform: none !important;
 }
 
 .loading-header {

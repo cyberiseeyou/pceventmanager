@@ -37,6 +37,9 @@ class Config:
     # Session settings
     SESSION_INACTIVITY_TIMEOUT = config('SESSION_INACTIVITY_TIMEOUT', default=600, cast=int)  # 10 minutes
 
+    # Test instance indicator
+    IS_TEST_INSTANCE = config('IS_TEST_INSTANCE', default=False, cast=bool)
+
     # Walmart Retail Link EDR settings
     # SECURITY: No default values - must be set in environment variables
     WALMART_EDR_USERNAME = config('WALMART_EDR_USERNAME', default='')
@@ -46,6 +49,15 @@ class Config:
 
     # Settings encryption key (should be set in environment for production)
     SETTINGS_ENCRYPTION_KEY = config('SETTINGS_ENCRYPTION_KEY', default=None)
+
+    # ML (Machine Learning) settings
+    ML_ENABLED = config('ML_ENABLED', default=False, cast=bool)
+    ML_EMPLOYEE_RANKING_ENABLED = config('ML_EMPLOYEE_RANKING_ENABLED', default=True, cast=bool)
+    ML_BUMP_PREDICTION_ENABLED = config('ML_BUMP_PREDICTION_ENABLED', default=False, cast=bool)
+    ML_FEASIBILITY_ENABLED = config('ML_FEASIBILITY_ENABLED', default=False, cast=bool)
+    ML_CONFIDENCE_THRESHOLD = config('ML_CONFIDENCE_THRESHOLD', default=0.6, cast=float)
+    ML_EMPLOYEE_RANKER_PATH = config('ML_EMPLOYEE_RANKER_PATH', default='app/ml/models/artifacts/employee_ranker_latest.pkl')
+    ML_SHADOW_MODE = config('ML_SHADOW_MODE', default=False, cast=bool)  # Log predictions without using them
 
     @classmethod
     def validate(cls, validate_walmart: bool = True) -> None:

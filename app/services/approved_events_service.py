@@ -13,6 +13,7 @@ Business Rule: APPROVED events must be scanned out by 6 PM on:
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 from calendar import monthrange
+from sqlalchemy import or_
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,34 +121,132 @@ class ApprovedEventsService:
 
         if event_ids:
             # Search for events where project_name contains the Walmart event ID
-            # This matches how the main events page searches
+            # ONLY look at CORE events that are NOT cancelled
             for event_id in event_ids:
                 event_id_str = str(event_id)
-                matching_events = self.Event.query.filter(
+                
+                # First, let's see ALL events that match this ID for debugging
+                all_matching = self.Event.query.filter(
                     self.Event.project_name.contains(event_id_str)
                 ).all()
+                
+                if all_matching:
+                    logger.info(f"Event {event_id}: Found {len(all_matching)} total matches in DB")
+                    for e in all_matching:
+                        logger.info(f"  - {e.project_ref_num}: type={e.event_type}, condition={e.condition}, edr_status={e.edr_status}, is_scheduled={e.is_scheduled}")
+                
+                # Filter: Only Core events, exclude cancelled events (check both condition AND edr_status)
+                matching_events = self.Event.query.filter(
+                    self.Event.project_name.contains(event_id_str),
+                    self.Event.event_type == 'Core',
+                    self.Event.condition != 'Cancelled',
+                    or_(
+                        self.Event.edr_status.is_(None),
+                        self.Event.edr_status != 'Cancelled'
+                    )
+                ).all()
+                
+                logger.info(f"Event {event_id}: After Core + not-cancelled filter: {len(matching_events)} matches")
 
-                # If no match found by event ID, try matching by event name (for Juicer Production events)
+                # If no Core match found, try Juicer Production events (for Juicer events)
                 if not matching_events:
                     walmart_event = event_id_to_walmart_event.get(event_id)
                     if walmart_event:
                         event_name = walmart_event.get('eventName') or walmart_event.get('event_name', '')
-                        if event_name and 'Juicer' in event_name:
-                            # Search by event name for Juicer events
-                            matching_events = self.Event.query.filter(
-                                self.Event.project_name.contains(event_name)
-                            ).all()
-                            logger.info(f"Juicer event {event_id} matched by name: {event_name}")
+                        
+                        # Check if this is a Juicer event by name
+                        # Walmart calls them "Juice Production" not "Juicer Production"
+                        if event_name and ('Juicer' in event_name or 'Juice Production' in event_name or 'Juice Survey' in event_name or 'JUICER' in event_name.upper()):
+                            logger.info(f"Event {event_id}: Detected as Juicer event, trying date-based matching")
+                            
+                            # Try matching by date + event type
+                            # Get Walmart event date
+                            walmart_date_str = walmart_event.get('eventDate') or walmart_event.get('demoDate', '')
+                            if walmart_date_str:
+                                try:
+                                    from datetime import datetime
+                                    walmart_date = datetime.strptime(walmart_date_str, '%Y-%m-%d').date()
+                                    
+                                    # Detect Juicer event type from name
+                                    # Walmart uses "Juice Production" not "Juicer Production"
+                                    juicer_type = None
+                                    event_name_upper = event_name.upper()
+                                    if 'DEEP CLEAN' in event_name_upper or 'DEEPCLEAN' in event_name_upper:
+                                        juicer_type = 'Juicer Deep Clean'
+                                    elif 'SURVEY' in event_name_upper:
+                                        juicer_type = 'Juicer Survey'
+                                    elif 'PRODUCTION' in event_name_upper or 'JUICE PRODUCTION' in event_name_upper:
+                                        juicer_type = 'Juicer Production'
+                                    
+                                    logger.info(f"Event {event_id}: Searching for Juicer event on {walmart_date}, type={juicer_type}")
+                                    
+                                    # Search for Juicer events on this date
+                                    query = self.Event.query.filter(
+                                        self.Event.event_type.like('Juicer%'),
+                                        self.Event.condition != 'Cancelled',
+                                        or_(
+                                            self.Event.edr_status.is_(None),
+                                            self.Event.edr_status != 'Cancelled'
+                                        )
+                                    )
+                                    
+                                    # Filter by specific type if detected
+                                    if juicer_type:
+                                        query = query.filter(self.Event.event_type == juicer_type)
+                                    
+                                    # Get all Juicer events and filter by date
+                                    all_juicer_events = query.all()
+                                    
+                                    # Log what we're looking for
+                                    logger.info(f"Event {event_id}: Found {len(all_juicer_events)} Juicer events of type {juicer_type}")
+                                    
+                                    # Try matching by start_datetime date
+                                    matching_events = [
+                                        e for e in all_juicer_events 
+                                        if e.start_datetime and e.start_datetime.date() == walmart_date
+                                    ]
+                                    
+                                    logger.info(f"Event {event_id}: Looking for walmart_date={walmart_date}")
+                                    if all_juicer_events:
+                                        sample_dates = [(e.project_ref_num, e.start_datetime.date() if e.start_datetime else None, e.due_datetime.date() if e.due_datetime else None) for e in all_juicer_events[:3]]
+                                        logger.info(f"Event {event_id}: Sample dates - {sample_dates}")
+                                    
+                                    # If no match by start_datetime, try matching by due_datetime
+                                    if not matching_events:
+                                        logger.info(f"Event {event_id}: No match by start_datetime, trying due_datetime")
+                                        matching_events = [
+                                            e for e in all_juicer_events 
+                                            if e.due_datetime and e.due_datetime.date() == walmart_date
+                                        ]
+                                    
+                                    if matching_events:
+                                        logger.info(f"Event {event_id}: Matched {len(matching_events)} Juicer event(s) by date+type")
+                                        for match in matching_events:
+                                            logger.info(f"  - {match.project_ref_num}: {match.project_name}, scheduled={match.is_scheduled}")
+                                    else:
+                                        # Log available dates for debugging
+                                        available_dates = [e.start_datetime.date() if e.start_datetime else None for e in all_juicer_events[:5]]
+                                        logger.warning(f"Event {event_id}: No Juicer events found for date {walmart_date}, type={juicer_type}")
+                                        logger.warning(f"  Available dates: {available_dates}")
+                                        
+                                except (ValueError, AttributeError) as e:
+                                    logger.error(f"Event {event_id}: Failed to parse Juicer event date: {e}")
+                            else:
+                                logger.warning(f"Event {event_id}: Juicer event has no date, cannot match")
+                                
+                        # If still no match, log that we couldn't find this Juicer event
+                        if not matching_events:
+                            logger.warning(f"Event {event_id}: Juicer event '{event_name}' could not be matched to local database")
 
-                # If multiple matches, prioritize CORE events
+                # If multiple matches remain, prioritize scheduled ones
                 if matching_events:
-                    # Sort: Core first, then Supervisor, then others
+                    # Sort by scheduled status (scheduled first)
                     matching_events.sort(key=lambda e: (
-                        0 if e.event_type == 'Core' else
-                        1 if e.event_type == 'Supervisor' else 2
+                        0 if e.condition == 'Scheduled' else (1 if e.is_scheduled else 2)
                     ))
                     # Use the first (highest priority) match
                     best_match = matching_events[0]
+                    logger.info(f"Event {event_id}: Selected best match = {best_match.project_ref_num} ({best_match.project_name[:50]}...)")
                     local_events[event_id] = best_match
 
                     # Get schedule for this event using its actual project_ref_num
@@ -156,6 +255,9 @@ class ApprovedEventsService:
                     ).first()
                     if schedule:
                         local_schedules[event_id] = schedule
+                        logger.info(f"Event {event_id}: Found schedule with employee_id={schedule.employee_id}")
+                    else:
+                        logger.warning(f"Event {event_id}: No schedule found for project_ref_num={best_match.project_ref_num}")
 
             # Get pending schedules if model available
             if self.PendingSchedule:
@@ -182,6 +284,20 @@ class ApprovedEventsService:
             local_event = local_events.get(event_id)
             schedule = local_schedules.get(event_id)
             pending = local_pending.get(event_id)
+            
+            # Debug logging for Juicer events
+            walmart_event_name = walmart_event.get('eventName') or walmart_event.get('event_name', '')
+            if 'Juicer' in walmart_event_name or 'Juice Production' in walmart_event_name or 'JUICER' in walmart_event_name.upper():
+                logger.info(f"Processing Walmart Juicer event {event_id}: {walmart_event_name}")
+                logger.info(f"  Local event found: {local_event is not None}")
+                if local_event:
+                    logger.info(f"    - Local ref: {local_event.project_ref_num}, type: {local_event.event_type}, scheduled: {local_event.is_scheduled}")
+                logger.info(f"  Schedule found: {schedule is not None}")
+                if schedule:
+                    logger.info(f"    - Employee ID: {schedule.employee_id}")
+                logger.info(f"  Pending found: {pending is not None}")
+                if pending:
+                    logger.info(f"    - Employee ID: {pending.employee_id}")
 
             # Determine local status
             local_status = self._determine_local_status(local_event, schedule, pending)
@@ -192,6 +308,12 @@ class ApprovedEventsService:
             employee_id = None
             if schedule and schedule.employee_id:
                 employee = self.Employee.query.get(schedule.employee_id)
+                if employee:
+                    employee_name = employee.name
+                    employee_id = employee.id
+            # Fallback: Check PendingSchedule if no Schedule record or no employee in Schedule
+            elif pending and pending.employee_id:
+                employee = self.Employee.query.get(pending.employee_id)
                 if employee:
                     employee_name = employee.name
                     employee_id = employee.id
@@ -233,12 +355,17 @@ class ApprovedEventsService:
                 'is_scheduled': local_event.is_scheduled if local_event else False,
                 'local_event_type': local_event.event_type if local_event else None,
                 'condition': local_event.condition if local_event else None,
+                'due_datetime': local_event.due_datetime.isoformat() if local_event and local_event.due_datetime else None,
+                'start_datetime': local_event.start_datetime.isoformat() if local_event and local_event.start_datetime else None,
 
-                # Schedule data
+                # Schedule data - use Schedule if available, fallback to PendingSchedule
                 'assigned_employee_id': employee_id,
                 'assigned_employee_name': employee_name,
-                'schedule_datetime': schedule.schedule_datetime.isoformat() if schedule and schedule.schedule_datetime else None,
-                'schedule_sync_status': schedule.sync_status if schedule else None,
+                'schedule_datetime': (
+                    schedule.schedule_datetime.isoformat() if schedule and schedule.schedule_datetime
+                    else (pending.schedule_datetime.isoformat() if pending and pending.schedule_datetime else None)
+                ),
+                'schedule_sync_status': schedule.sync_status if schedule else (pending.status if pending else None),
                 'last_synced': schedule.last_synced.isoformat() if schedule and schedule.last_synced else None,
                 'needs_rolling': needs_rolling,
 

@@ -14,7 +14,6 @@ class EventType(str, Enum):
     DIGITAL_REFRESH = "Digital Refresh"
     DIGITAL_TEARDOWN = "Digital Teardown"
     FREEOSK = "Freeosk"
-    DIGITALS = "Digitals"  # Generic digital events
     OTHER = "Other"
     JUICER = "Juicer"
 
@@ -368,4 +367,32 @@ def create_auto_scheduler_models(db):
             """Get all locked days, ordered by date"""
             return db.session.query(cls).order_by(cls.locked_date).all()
 
-    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay
+    class EventTypeOverride(db.Model):
+        """
+        Manual event type overrides that persist through database refreshes.
+        Stores user-specified event types, reapplied after data imports.
+        """
+        __tablename__ = 'event_type_overrides'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        project_ref_num = db.Column(db.Integer, nullable=False, unique=True, index=True)
+        override_event_type = db.Column(db.String(20), nullable=False)
+
+        # Audit trail
+        created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+        created_by = db.Column(db.String(100), nullable=True)
+        updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        updated_by = db.Column(db.String(100), nullable=True)
+        reason = db.Column(db.Text, nullable=True)
+        event_name_snapshot = db.Column(db.Text, nullable=True)  # For reference when event deleted
+
+        __table_args__ = (
+            db.CheckConstraint(
+                "override_event_type IN ('Core', 'Juicer Production', 'Juicer Survey', "
+                "'Juicer Deep Clean', 'Digital Setup', 'Digital Refresh', 'Digital Teardown', "
+                "'Freeosk', 'Supervisor', 'Other')",
+                name='ck_valid_event_type'
+            ),
+        )
+
+    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay, EventTypeOverride

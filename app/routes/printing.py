@@ -16,6 +16,7 @@ Author: Schedule Management System
 
 from flask import Blueprint, render_template, request, jsonify, send_file, current_app
 from datetime import datetime, timedelta, date
+from sqlalchemy import or_
 from app.routes.auth import require_authentication, get_current_user
 import os
 import logging
@@ -152,7 +153,7 @@ def get_daily_schedule():
             Employee, Schedule.employee_id == Employee.id
         ).filter(
             db.func.date(Schedule.schedule_datetime) == target_date,
-            db.or_(
+            or_(
                 Event.event_type == 'Core',
                 Event.event_type == 'Juicer Production'
             )
@@ -226,7 +227,7 @@ def get_weekly_schedule():
         ).filter(
             db.func.date(Schedule.schedule_datetime) >= start_date,
             db.func.date(Schedule.schedule_datetime) <= end_date,
-            db.or_(
+            or_(
                 Event.event_type == 'Core',
                 Event.event_type == 'Juicer Production'
             )
@@ -328,7 +329,7 @@ def get_employee_schedule():
             Schedule.employee_id == employee_id,
             db.func.date(Schedule.schedule_datetime) >= start_date,
             db.func.date(Schedule.schedule_datetime) <= end_date,
-            db.or_(
+            or_(
                 Event.event_type == 'Core',
                 Event.event_type == 'Juicer Production'
             )
@@ -675,6 +676,7 @@ def get_complete_paperwork():
     try:
         # Import the DailyPaperworkGenerator
         from app.services.daily_paperwork_generator import DailyPaperworkGenerator
+        from app.integrations.external_api.session_api_service import SessionAPIService
 
         data = request.get_json()
         date_str = data.get('date')
@@ -691,14 +693,14 @@ def get_complete_paperwork():
             'Event': current_app.config['Event'],
             'Schedule': current_app.config['Schedule'],
             'Employee': current_app.config['Employee'],
-            'PaperworkTemplate': current_app.config['PaperworkTemplate']
+            'PaperworkTemplate': current_app.config['PaperworkTemplate'],
+            'SystemSetting': current_app.config.get('SystemSetting')
         }
 
         # Create DailyPaperworkGenerator instance
         paperwork_generator = DailyPaperworkGenerator(
             db_session=db.session,
             models_dict=models_dict,
-            session_api_service=None,  # Optional authenticated session for Crossmark URLs
             edr_generator=edr_authenticator  # Pass authenticated EDR generator
         )
 
@@ -1017,6 +1019,147 @@ def get_event_paperwork():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@printing_bp.route('/freeosk-manual-test', methods=['POST'])
+@require_authentication()
+def freeosk_manual_test():
+    """
+    Test endpoint to download Freeosk manual for a specific date.
+
+    This standalone endpoint helps test the Freeosk manual API integration
+    without the complexity of complete paperwork generation.
+
+    Note: Uses MVRetail API (SessionAPIService), NOT Walmart Retail Link EDR
+    """
+    try:
+        data = request.get_json()
+        date_str = data.get('date')
+
+        if not date_str:
+            return jsonify({'success': False, 'error': 'Date is required'}), 400
+
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        logger.info(f"Freeosk manual test for date: {target_date}")
+
+        # Get database and models
+        db = current_app.extensions['sqlalchemy']
+        Event = current_app.config['Event']
+        Schedule = current_app.config['Schedule']
+        Employee = current_app.config['Employee']
+        SystemSetting = current_app.config.get('SystemSetting')
+
+        # Initialize SessionAPIService for MVRetail authentication
+        from app.integrations.external_api.session_api_service import SessionAPIService
+        session_api_service = None
+        try:
+            session_api_service = SessionAPIService(current_app)
+            if session_api_service.login():
+                logger.info("SessionAPIService authenticated for Freeosk test")
+            else:
+                logger.warning("SessionAPIService authentication failed")
+        except Exception as e:
+            logger.warning(f"Could not initialize SessionAPIService: {e}")
+
+        # Create paperwork generator (just to use the manual download method)
+        from app.services.daily_paperwork_generator import DailyPaperworkGenerator
+
+        models_dict = {
+            'Event': Event,
+            'Schedule': Schedule,
+            'Employee': Employee,
+            'SystemSetting': SystemSetting
+        }
+
+        generator = DailyPaperworkGenerator(
+            db_session=db.session,
+            models_dict=models_dict,
+            session_api_service=session_api_service
+        )
+
+        # Query for Freeosk events scheduled on this date
+        # Filter for actual Freeosk events (has "LKD-FSK" in name)
+        # This excludes "Interactive Demo Tablet" and "Freeosk Troubleshooting" events
+        freeosk_events = db.session.query(Schedule, Event, Employee).join(
+            Event, Schedule.event_ref_num == Event.project_ref_num
+        ).join(
+            Employee, Schedule.employee_id == Employee.id
+        ).filter(
+            db.func.date(Schedule.schedule_datetime) == target_date,
+            Event.event_type == 'Freeosk',
+            Event.project_name.like('%LKD-FSK%')  # Only actual Freeosk events
+        ).all()
+
+        if not freeosk_events:
+            return jsonify({
+                'success': False,
+                'error': f'No Freeosk events (LKD-FSK) scheduled for {target_date.strftime("%Y-%m-%d")}'
+            }), 404
+
+        logger.info(f"Found {len(freeosk_events)} Freeosk event(s) for {target_date}")
+
+        # Use the first Freeosk event
+        schedule, event, employee = freeosk_events[0]
+
+        # Get mPlanID from project_ref_num
+        mplan_id = str(event.project_ref_num)
+        logger.info(f"Using project_ref_num as mPlanID: {mplan_id}")
+        logger.info(f"Event: {event.project_name}")
+
+        # Get store number
+        store_number = None
+
+        if hasattr(event, 'store_number') and event.store_number:
+            store_number = str(event.store_number)
+            logger.info(f"Store number from event: {store_number}")
+        elif hasattr(event, 'location_mvid') and event.location_mvid:
+            import re
+            store_match = re.search(r'\d+', str(event.location_mvid))
+            if store_match:
+                store_number = store_match.group(0).lstrip('0')
+                logger.info(f"Store number from location_mvid: {store_number}")
+
+        if not store_number:
+            store_number = SystemSetting.get_setting('store_number')
+            if store_number:
+                logger.info(f"Store number from settings: {store_number}")
+
+        if not store_number:
+            return jsonify({
+                'success': False,
+                'error': 'Could not determine store number for this event'
+            }), 400
+
+        # Download the manual
+        logger.info(f"Calling get_freeosk_setup_manual(mplan_id={mplan_id}, store_id={store_number})")
+        manual_path = generator.get_freeosk_setup_manual(mplan_id, store_number)
+
+        if not manual_path:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to download Freeosk manual from MVRetail API'
+            }), 500
+
+        logger.info(f"✓ Freeosk manual downloaded: {manual_path}")
+
+        # Return the PDF
+        filename = f'Freeosk_Manual_{event.project_ref_num}_{target_date.strftime("%Y%m%d")}.pdf'
+
+        return send_file(
+            manual_path,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=filename
+        )
+
+    except Exception as e:
+        logger.error(f"Error in Freeosk manual test: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+
 # ========================================
 # EDR (Event Detail Report) Endpoints
 # ========================================
@@ -1148,6 +1291,17 @@ def edr_authenticate():
                 'error': 'Session expired during authentication. Please request a new MFA code.',
                 'error_code': 'session_expired'
             }), 400
+
+        # Verify auth token was actually extracted
+        if not edr_authenticator.auth_token:
+            logger.error("Step 6 returned success but auth_token is empty/None")
+            return jsonify({
+                'success': False,
+                'error': 'Authentication succeeded but token extraction failed. Please try again.',
+                'error_code': 'token_extraction_failed'
+            }), 400
+
+        logger.info(f"Authentication complete, auth_token length: {len(edr_authenticator.auth_token)}")
 
         # Clear the timestamp on successful auth
         mfa_request_timestamp = None
@@ -1489,6 +1643,193 @@ def edr_daily_items_list():
 
     except Exception as e:
         logger.error(f"Failed to generate daily items list: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@printing_bp.route('/bakery-prep-list', methods=['GET'])
+@require_authentication()
+def get_bakery_prep_list():
+    """
+    Get upcoming events for bakery prep - items they need to prepare.
+
+    Fetches events from Walmart Event Management API:
+    - From tomorrow to 2 weeks out
+    - Keeps ONLY deptNbr 77 and 37 (bakery departments)
+    - Returns EventId, eventDate, itemDesc, itemNbr
+    - Sorted by date
+
+    Returns:
+        JSON with formatted bakery prep list or plain text for printing
+    """
+    global edr_authenticator
+
+    logger.info("Bakery prep list request received")
+
+    if not edr_available:
+        logger.error("EDR modules not available")
+        return jsonify({'success': False, 'error': 'EDR modules not available'}), 500
+
+    if not edr_authenticator or not edr_authenticator.auth_token:
+        logger.error("Not authenticated - auth_token missing")
+        return jsonify({
+            'success': False,
+            'error': 'Not authenticated. Please authenticate with Walmart credentials first.'
+        }), 401
+
+    try:
+        # Calculate date range: tomorrow to 2 weeks out
+        tomorrow = (datetime.now() + timedelta(days=1)).date()
+        two_weeks_out = (datetime.now() + timedelta(days=14)).date()
+
+        # Store number from settings or default
+        SystemSetting = current_app.config.get('SystemSetting')
+        store_number = "8135"  # Default store number
+        if SystemSetting:
+            store_number = SystemSetting.get_setting('store_number') or store_number
+
+        # Build API request
+        api_url = "https://retaillink2.wal-mart.com/EventManagement/api/browse-event/browse-data"
+
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://retaillink2.wal-mart.com',
+            'referer': 'https://retaillink2.wal-mart.com/EventManagement/browse-event',
+            'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
+        }
+
+        # All event types (1-57)
+        all_event_types = list(range(1, 58))
+
+        payload = {
+            "itemNbr": None,
+            "vendorNbr": None,
+            "startDate": tomorrow.strftime('%Y-%m-%d'),
+            "endDate": two_weeks_out.strftime('%Y-%m-%d'),
+            "billType": None,
+            "eventType": all_event_types,
+            "userId": None,
+            "primItem": None,
+            "storeNbr": store_number,
+            "deptNbr": None
+        }
+
+        logger.info(f"Fetching bakery prep events from {tomorrow} to {two_weeks_out} for store {store_number}")
+
+        # Use the authenticated session from edr_authenticator
+        response = edr_authenticator.session.post(api_url, headers=headers, json=payload, timeout=30)
+
+        logger.info(f"API response status: {response.status_code}")
+        logger.info(f"API response headers: {dict(response.headers)}")
+
+        if response.status_code == 404:
+            logger.error(f"API endpoint not found. Response: {response.text[:500]}")
+            return jsonify({
+                'success': False,
+                'error': 'Walmart API endpoint not found. The session may have expired - please re-authenticate.'
+            }), 404
+
+        if response.status_code != 200:
+            logger.error(f"API request failed with status {response.status_code}. Response: {response.text[:500]}")
+            return jsonify({
+                'success': False,
+                'error': f'Walmart API returned status {response.status_code}. Try re-authenticating.'
+            }), 500
+
+        # Try to parse JSON, handle non-JSON responses
+        try:
+            data = response.json()
+        except Exception as json_err:
+            logger.error(f"Failed to parse JSON response: {json_err}. Response text: {response.text[:500]}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid response from Walmart API. Session may have expired - please re-authenticate.'
+            }), 500
+
+        # Handle both response formats: list directly or {'data': [...]}
+        if isinstance(data, list):
+            events = data
+        elif isinstance(data, dict):
+            events = data.get('data', [])
+        else:
+            events = []
+
+        logger.info(f"Retrieved {len(events)} events from API")
+
+        # Keep ONLY deptNbr 77 and 37 (bakery departments)
+        filtered_events = [
+            event for event in events
+            if event.get('deptNbr') in [77, 37, '77', '37']
+        ]
+
+        logger.info(f"After filtering to bakery dept 77 and 37: {len(filtered_events)} events")
+
+        # Extract required fields and sort by date
+        prep_items = []
+        for event in filtered_events:
+            item = {
+                'eventId': event.get('eventId') or event.get('EventId') or 'N/A',
+                'eventDate': event.get('eventDate') or event.get('EventDate') or 'N/A',
+                'itemDesc': event.get('itemDesc') or event.get('ItemDesc') or 'N/A',
+                'itemNbr': event.get('itemNbr') or event.get('ItemNbr') or 'N/A'
+            }
+            prep_items.append(item)
+
+        # Sort by eventDate
+        prep_items.sort(key=lambda x: x['eventDate'] if x['eventDate'] != 'N/A' else '9999-99-99')
+
+        # Check if plain text format requested (for printing)
+        output_format = request.args.get('format', 'json')
+
+        if output_format == 'text':
+            # Generate plain text output - each field on its own line
+            lines = []
+            lines.append(f"BAKERY PREP LIST")
+            lines.append(f"Generated: {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
+            lines.append(f"Date Range: {tomorrow.strftime('%B %d')} - {two_weeks_out.strftime('%B %d, %Y')}")
+            lines.append(f"Store: {store_number}")
+            lines.append("=" * 50)
+            lines.append("")
+
+            for item in prep_items:
+                lines.append(f"Event ID: {item['eventId']}")
+                lines.append(f"Date: {item['eventDate']}")
+                lines.append(f"Item: {item['itemDesc']}")
+                lines.append(f"Item #: {item['itemNbr']}")
+                lines.append("-" * 30)
+
+            lines.append("")
+            lines.append(f"Total Items: {len(prep_items)}")
+
+            return '\n'.join(lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+        # Return JSON format
+        return jsonify({
+            'success': True,
+            'dateRange': {
+                'start': tomorrow.strftime('%Y-%m-%d'),
+                'end': two_weeks_out.strftime('%Y-%m-%d'),
+                'formatted': f"{tomorrow.strftime('%B %d')} - {two_weeks_out.strftime('%B %d, %Y')}"
+            },
+            'store': store_number,
+            'totalItems': len(prep_items),
+            'items': prep_items
+        })
+
+    except requests.exceptions.Timeout:
+        logger.error("Walmart API request timed out")
+        return jsonify({'success': False, 'error': 'Request timed out. Please try again.'}), 504
+    except Exception as e:
+        logger.error(f"Failed to get bakery prep list: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

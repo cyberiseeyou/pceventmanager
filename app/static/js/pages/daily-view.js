@@ -368,6 +368,34 @@ class DailyView {
     }
 
     /**
+     * Check if a time is a Core event time slot
+     * Core times are: 10:15, 10:45, 11:15, 11:45 AM
+     *
+     * @param {string} time12h - Time in 12-hour format (e.g., "10:15 AM")
+     * @returns {boolean} True if this is a Core time slot
+     */
+    isCoreTime(time12h) {
+        if (!time12h) return false;
+        const coreTimes = ['10:15 AM', '10:45 AM', '11:15 AM', '11:45 AM'];
+        // Normalize the time string and check if it matches
+        const normalized = time12h.trim().toUpperCase();
+        return coreTimes.some(ct => normalized.startsWith(ct.toUpperCase()));
+    }
+
+    /**
+     * Get Core badge HTML if the time is a Core time slot
+     *
+     * @param {string} startTime - Start time in 12-hour format
+     * @returns {string} HTML for Core badge or empty string
+     */
+    getCoreBadge(startTime) {
+        if (this.isCoreTime(startTime)) {
+            return '<span class="badge-core">CORE</span>';
+        }
+        return '';
+    }
+
+    /**
      * Show error message
      */
     showError(message) {
@@ -871,7 +899,7 @@ class DailyView {
                 </div>
 
                 <div class="event-card__details">
-                    <div class="event-time">⏰ ${event.start_time} - ${event.end_time}</div>
+                    <div class="event-time">⏰ ${event.start_time} - ${event.end_time} ${this.getCoreBadge(event.start_time)}</div>
                     <div class="event-info">
                         ${this.getEventIcon(event.event_type)} ${event.event_name}
                     </div>
@@ -906,6 +934,14 @@ class DailyView {
                                     role="menuitem"
                                     data-schedule-id="${event.schedule_id}">
                                 Change Employee
+                            </button>
+                            <button class="dropdown-item btn-change-event-type"
+                                    role="menuitem"
+                                    data-schedule-id="${event.schedule_id}"
+                                    data-event-ref="${event.event_id}"
+                                    data-current-type="${event.event_type}"
+                                    data-event-name="${event.event_name}">
+                                Change Event Type
                             </button>
                             ${event.event_type === 'Core' ? `
                             <button class="dropdown-item btn-trade-event"
@@ -972,6 +1008,17 @@ class DailyView {
             btn.addEventListener('click', (e) => {
                 const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
                 this.handleChangeEmployee(scheduleId);
+            });
+        });
+
+        // Change event type buttons
+        document.querySelectorAll('.btn-change-event-type').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
+                const eventRef = e.currentTarget.getAttribute('data-event-ref');
+                const currentType = e.currentTarget.getAttribute('data-current-type');
+                const eventName = e.currentTarget.getAttribute('data-event-name');
+                this.handleChangeEventType(scheduleId, eventRef, currentType, eventName);
             });
         });
 
@@ -1948,6 +1995,88 @@ class DailyView {
         }
 
         return `${hours.toString().padStart(2, '0')}:${minutes}`;
+    }
+
+    /**
+     * Handle change event type button click
+     *
+     * Opens a modal to change the event type with persistence through database refreshes.
+     *
+     * @param {number} scheduleId - Schedule ID
+     * @param {number} eventRef - Event reference number (project_ref_num)
+     * @param {string} currentType - Current event type
+     * @param {string} eventName - Event name
+     */
+    handleChangeEventType(scheduleId, eventRef, currentType, eventName) {
+        const modal = document.getElementById('change-event-type-modal');
+        if (!modal) {
+            console.error('Change event type modal not found');
+            return;
+        }
+
+        document.getElementById('change-type-event-ref').value = eventRef;
+        document.getElementById('change-type-schedule-id').value = scheduleId;
+        document.getElementById('change-type-event-info').textContent = eventName;
+        document.getElementById('change-type-current').textContent = currentType;
+        document.getElementById('change-type-new-type').value = '';
+        document.getElementById('change-type-reason').value = '';
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Submit event type change to backend
+     */
+    async submitEventTypeChange() {
+        const eventRef = document.getElementById('change-type-event-ref').value;
+        const newType = document.getElementById('change-type-new-type').value;
+        const reason = document.getElementById('change-type-reason').value;
+
+        if (!newType) {
+            alert('Please select a new event type');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/event/${eventRef}/change-type`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({new_event_type: newType, reason: reason})
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to change event type');
+            }
+
+            const result = await response.json();
+            this.closeChangeEventTypeModal();
+            this.showSuccessMessage(`Event type changed to ${newType}`);
+            await this.loadDailyEvents();  // Reload to show changes
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    }
+
+    /**
+     * Close the change event type modal
+     */
+    closeChangeEventTypeModal() {
+        const modal = document.getElementById('change-event-type-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * Show a success notification toast
+     */
+    showSuccessMessage(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.textContent = message;
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 20px;border-radius:8px;z-index:10000;';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
     }
 
     /**

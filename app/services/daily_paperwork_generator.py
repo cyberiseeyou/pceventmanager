@@ -240,12 +240,16 @@ class DailyPaperworkGenerator:
             return None
 
     def get_events_for_date(self, target_date: datetime.date) -> List[Any]:
-        """Get all scheduled Core events for a specific date"""
+        """
+        Get all scheduled events for a specific date
+
+        Returns only Core events for paperwork generation
+        """
         Event = self.models['Event']
         Schedule = self.models['Schedule']
         Employee = self.models['Employee']
 
-        # Query scheduled Core events for the date
+        # Query for Core events only
         schedules = self.db.query(
             Schedule, Event, Employee
         ).join(
@@ -255,10 +259,12 @@ class DailyPaperworkGenerator:
         ).filter(
             Schedule.schedule_datetime >= target_date,
             Schedule.schedule_datetime < target_date + timedelta(days=1),
-            Event.event_type == 'Core'  # Only Core events
+            Event.event_type == 'Core'
         ).order_by(
             Schedule.schedule_datetime
         ).all()
+
+        logger.info(f" Found {len(schedules)} Core events for {target_date}")
 
         return schedules
 
@@ -611,6 +617,331 @@ class DailyPaperworkGenerator:
 
         except Exception as e:
             logger.error(f" Error generating EDR PDF for {event_mplan_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def get_digital_setup_manual(self, mplan_id: str, store_id: str) -> Optional[str]:
+        """
+        Get Digital Setup instruction manual from MVRetail API
+
+        Uses the same API endpoint as Freeosk manuals.
+        The API returns a JSON response with a URL to the merged PDF, which we then download.
+
+        Args:
+            mplan_id: The mPlan ID from the Digital Setup event name (number in parentheses)
+            store_id: The store number
+
+        Returns:
+            Path to downloaded PDF or None if failed
+        """
+        if not mplan_id or not store_id:
+            logger.warning(f" Missing mplan_id ({mplan_id}) or store_id ({store_id}) for Digital Setup manual")
+            return None
+
+        try:
+            import json
+            import urllib.parse
+
+            # Build the API request
+            api_url = "https://crossmark.mvretail.com/planningextcontroller/bulkPrintMplanLocations"
+
+            # Create the data payload
+            mplan_locations = [{"mPlanID": mplan_id, "storeID": store_id}]
+            data = {
+                'mplanLocationIDs': json.dumps(mplan_locations),
+                'includeAttachment': 'true'
+            }
+
+            logger.info(f" Fetching Digital Setup manual for mPlanID {mplan_id}, store {store_id}")
+            logger.info(f" Request data: {data}")
+
+            # Use authenticated session if available (for Crossmark URLs)
+            if self.session_api_service and hasattr(self.session_api_service, 'session'):
+                logger.info(f" Using authenticated session for Digital Setup manual")
+                # When using authenticated session, just set minimal headers
+                # The session already has cookies and authentication
+                headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+
+                # Disable retries to see actual error response
+                from requests.adapters import HTTPAdapter
+                from urllib3.util.retry import Retry
+
+                # Create a session with no retries
+                retry_strategy = Retry(total=0)
+                adapter = HTTPAdapter(max_retries=retry_strategy)
+                self.session_api_service.session.mount("https://", adapter)
+
+                response = self.session_api_service.session.post(
+                    api_url,
+                    headers=headers,
+                    data=data,
+                    timeout=30
+                )
+            else:
+                logger.warning(f" No authenticated session available for Digital Setup manual - request may fail")
+                # Without authenticated session, include full browser headers
+                headers = {
+                    'accept': '*/*',
+                    'accept-language': 'en-US,en;q=0.9',
+                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'origin': 'https://crossmark.mvretail.com',
+                    'referer': 'https://crossmark.mvretail.com/planning/',
+                    'x-requested-with': 'XMLHttpRequest'
+                }
+                response = requests.post(api_url, headers=headers, data=data, timeout=30)
+
+            logger.info(f" Response status: {response.status_code}")
+            logger.info(f" Response headers: {dict(response.headers)}")
+
+            # Log response content before raising for status
+            if response.status_code >= 400:
+                logger.error(f" Error response body: {response.text[:2000]}")
+
+            response.raise_for_status()
+
+            # Parse JSON response
+            try:
+                json_response = response.json()
+                logger.info(f" API response: {json_response}")
+            except Exception as json_err:
+                logger.error(f" Failed to parse JSON response: {json_err}")
+                logger.error(f" Response text: {response.text[:500]}")
+                return None
+
+            # Extract PDF URL from response
+            if not json_response.get('success'):
+                logger.error(f" API returned success=false: {json_response.get('message', 'No message')}")
+                return None
+
+            pdf_url = json_response.get('mergedPdf')
+            if not pdf_url:
+                logger.error(f" No mergedPdf URL in response: {json_response}")
+                return None
+
+            logger.info(f" Downloading PDF from: {pdf_url}")
+
+            # S3 URLs use pre-signed authentication, not cookies
+            # Use plain request with exact browser headers from HAR analysis
+            pdf_headers = {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive',
+                'Referer': 'https://crossmark.mvretail.com/',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'cross-site',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+                'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"'
+            }
+
+            logger.info(f" Downloading PDF from S3 with exact browser headers (no cookies)")
+            pdf_response = requests.get(pdf_url, headers=pdf_headers, timeout=60)
+
+            if pdf_response.status_code != 200:
+                logger.error(f" PDF download failed with status {pdf_response.status_code}")
+                logger.error(f" Response headers: {dict(pdf_response.headers)}")
+                logger.error(f" Response body: {pdf_response.text[:500]}")
+
+            pdf_response.raise_for_status()
+
+            # Verify it's a PDF
+            if len(pdf_response.content) > 4:
+                pdf_magic = pdf_response.content[:4]
+                if pdf_magic != b'%PDF':
+                    logger.warning(f" Downloaded file does not start with PDF magic bytes: {pdf_magic}")
+                    return None
+
+            # Save the downloaded PDF temporarily
+            temp_pdf_path = os.path.join(tempfile.gettempdir(), f'digital_original_{mplan_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+            with open(temp_pdf_path, 'wb') as f:
+                f.write(pdf_response.content)
+
+            # Save as final output and return
+            output_path = os.path.join(tempfile.gettempdir(), f'digital_setup_manual_{mplan_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+
+            # Rename temp file to final output path
+            import shutil
+            shutil.move(temp_pdf_path, output_path)
+
+            logger.info(f" ✓ Digital Setup manual saved successfully ({len(pdf_response.content):,} bytes)")
+
+            self.temp_files.append(output_path)
+            return output_path
+
+        except Exception as e:
+            logger.error(f" ✗ Failed to download Digital Setup manual for mPlanID {mplan_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def get_freeosk_setup_manual(self, mplan_id: str, store_id: str) -> Optional[str]:
+        """
+        Get Freeosk setup manual from MVRetail API
+
+        The API returns a JSON response with a URL to the merged PDF, which we then download.
+
+        Args:
+            mplan_id: The mPlan ID from the Freeosk event name (number in parentheses)
+            store_id: The store number
+
+        Returns:
+            Path to downloaded PDF or None if failed
+        """
+        if not mplan_id or not store_id:
+            logger.warning(f" Missing mplan_id ({mplan_id}) or store_id ({store_id}) for Freeosk manual")
+            return None
+
+        try:
+            import json
+            import urllib.parse
+
+            # Build the API request
+            api_url = "https://crossmark.mvretail.com/planningextcontroller/bulkPrintMplanLocations"
+
+            # Create the data payload
+            mplan_locations = [{"mPlanID": mplan_id, "storeID": store_id}]
+            data = {
+                'mplanLocationIDs': json.dumps(mplan_locations),
+                'includeAttachment': 'true'
+            }
+
+            logger.info(f" Fetching Freeosk setup manual for mPlanID {mplan_id}, store {store_id}")
+            logger.info(f" Request data: {data}")
+
+            # Use authenticated session if available (for Crossmark URLs)
+            if self.session_api_service and hasattr(self.session_api_service, 'session'):
+                logger.info(f" Using authenticated session for Freeosk manual")
+
+                # Full headers matching working browser request
+                headers = {
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Origin': 'https://crossmark.mvretail.com',
+                    'Referer': 'https://crossmark.mvretail.com/planning/',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
+                }
+
+                # Log cookies being sent for debugging
+                cookies = self.session_api_service.session.cookies.get_dict()
+                logger.info(f" Cookies in session: {list(cookies.keys())}")
+                if 'PHPSESSID' in cookies:
+                    logger.info(f" ✓ PHPSESSID cookie present: {cookies['PHPSESSID'][:10]}...")
+                else:
+                    logger.warning(f" ✗ PHPSESSID cookie missing!")
+
+                # Disable retries to see actual error response
+                from requests.adapters import HTTPAdapter
+                from urllib3.util.retry import Retry
+
+                # Create a session with no retries
+                retry_strategy = Retry(total=0)
+                adapter = HTTPAdapter(max_retries=retry_strategy)
+                self.session_api_service.session.mount("https://", adapter)
+
+                logger.info(f" Making authenticated POST to {api_url}")
+
+                response = self.session_api_service.session.post(
+                    api_url,
+                    headers=headers,
+                    data=data,
+                    timeout=90  # Increased timeout - MVRetail API can be slow
+                )
+            else:
+                logger.warning(f" No authenticated session available for Freeosk manual - request may fail")
+                # Without authenticated session, include full browser headers
+                headers = {
+                    'accept': '*/*',
+                    'accept-language': 'en-US,en;q=0.9',
+                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'origin': 'https://crossmark.mvretail.com',
+                    'referer': 'https://crossmark.mvretail.com/planning/',
+                    'x-requested-with': 'XMLHttpRequest'
+                }
+                response = requests.post(api_url, headers=headers, data=data, timeout=90)
+
+            logger.info(f" Response status: {response.status_code}")
+            logger.info(f" Response headers: {dict(response.headers)}")
+
+            # Log response content before raising for status
+            if response.status_code >= 400:
+                logger.error(f" Error response body: {response.text[:2000]}")
+
+            response.raise_for_status()
+
+            # Parse JSON response
+            try:
+                json_response = response.json()
+                logger.info(f" API response: {json_response}")
+            except Exception as json_err:
+                logger.error(f" Failed to parse JSON response: {json_err}")
+                logger.error(f" Response text: {response.text[:500]}")
+                return None
+
+            # Extract PDF URL from response
+            if not json_response.get('success'):
+                logger.error(f" API returned success=false: {json_response.get('message', 'No message')}")
+                return None
+
+            pdf_url = json_response.get('mergedPdf')
+            if not pdf_url:
+                logger.error(f" No mergedPdf URL in response: {json_response}")
+                return None
+
+            logger.info(f" Downloading PDF from: {pdf_url}")
+
+            # CRITICAL: S3 pre-signed URLs contain authentication in query parameters
+            # Any extra headers can break the signature and cause 403 Forbidden
+            # Use absolutely NO headers - the URL signature is all we need
+            logger.info(f" Downloading PDF from S3 (no headers - using pre-signed URL)")
+
+            # Use completely fresh request with no session, no cookies, no headers
+            pdf_response = requests.get(pdf_url, timeout=60)
+
+            if pdf_response.status_code != 200:
+                logger.error(f" PDF download failed with status {pdf_response.status_code}")
+                logger.error(f" Response headers: {dict(pdf_response.headers)}")
+                logger.error(f" Response body: {pdf_response.text[:500]}")
+
+            pdf_response.raise_for_status()
+
+            # Verify it's a PDF
+            if len(pdf_response.content) > 4:
+                pdf_magic = pdf_response.content[:4]
+                if pdf_magic != b'%PDF':
+                    logger.warning(f" Downloaded file does not start with PDF magic bytes: {pdf_magic}")
+                    return None
+
+            # Save the downloaded PDF temporarily
+            temp_pdf_path = os.path.join(tempfile.gettempdir(), f'freeosk_original_{mplan_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+            with open(temp_pdf_path, 'wb') as f:
+                f.write(pdf_response.content)
+
+            # Save as final output and return
+            output_path = os.path.join(tempfile.gettempdir(), f'freeosk_manual_{mplan_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+
+            # Rename temp file to final output path
+            import shutil
+            shutil.move(temp_pdf_path, output_path)
+
+            logger.info(f" ✓ Freeosk manual saved successfully ({len(pdf_response.content):,} bytes)")
+
+            self.temp_files.append(output_path)
+            return output_path
+
+        except Exception as e:
+            logger.error(f" ✗ Failed to download Freeosk manual for mPlanID {mplan_id}: {e}")
             import traceback
             traceback.print_exc()
             return None

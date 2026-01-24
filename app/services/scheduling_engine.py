@@ -5,13 +5,21 @@ Orchestrates the automatic scheduling process
 from datetime import datetime, timedelta, time, date
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from flask import current_app
 
 from .rotation_manager import RotationManager
 from .constraint_validator import ConstraintValidator
 from .conflict_resolver import ConflictResolver
 from .validation_types import SchedulingDecision
+
+# Optional ML integration (gracefully handles import failure)
+try:
+    from app.ml.inference.ml_scheduler_adapter import MLSchedulerAdapter
+    ML_AVAILABLE = True
+except ImportError as e:
+    MLSchedulerAdapter = None
+    ML_AVAILABLE = False
 
 
 class SchedulingEngine:
@@ -172,6 +180,19 @@ class SchedulingEngine:
         self.validator = ConstraintValidator(db_session, models)
         self.conflict_resolver = ConflictResolver(db_session, models)
 
+        # Initialize ML adapter (optional, with graceful fallback)
+        self.ml_adapter = None
+        if ML_AVAILABLE:
+            try:
+                # Pass Flask app config if available
+                config = current_app.config if current_app else {}
+                self.ml_adapter = MLSchedulerAdapter(db_session, models, config)
+                if self.ml_adapter.use_ml:
+                    current_app.logger.info("ML Scheduler Adapter initialized successfully")
+            except Exception as e:
+                current_app.logger.warning(f"ML adapter initialization failed: {e}. Using rule-based scheduling.")
+                self.ml_adapter = None
+
         # Track bump count per event to prevent infinite loops
         # Key: event.project_ref_num, Value: bump count
         self.bump_count = {}
@@ -181,6 +202,9 @@ class SchedulingEngine:
         self.daily_time_slot_index = {}  # {date_str: slot_index} for Core events
         self.digital_time_slot_index = {}  # {date_str: slot_index} for Digital Setup/Refresh
         self.teardown_time_slot_index = {}  # {date_str: slot_index} for Digital Teardown
+
+        # Track posted schedules that have been bumped in this run (prevents duplicate bumps)
+        self.bumped_posted_schedule_ids = set()
 
         # Load time settings from database
         self.DEFAULT_TIMES = self._get_default_times()
@@ -353,6 +377,9 @@ class SchedulingEngine:
 
         # Set current run ID in validator to check pending schedules
         self.validator.set_current_run(run.id)
+
+        # Reset bumped posted schedule tracking for this run
+        self.bumped_posted_schedule_ids = set()
 
         try:
             # Get events to schedule
@@ -554,8 +581,8 @@ class SchedulingEngine:
                 current_date += timedelta(days=1)
                 continue
 
-            # If employee is a Juicer, check they don't have a Juicer event on this day
-            if employee.job_title == 'Juicer Barista':
+            # If employee is a Juicer or Juicer Trained, check they don't have a Juicer event on this day
+            if employee.job_title == 'Juicer Barista' or employee.juicer_trained:
                 juicer_event_that_day = self.db.query(self.PendingSchedule).join(
                     self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
                 ).filter(
@@ -787,9 +814,12 @@ class SchedulingEngine:
         """
         schedule_datetime = datetime.combine(target_date.date(), juicer_time)
 
-        # Try all Juicer Baristas (excluding primary rotation)
+        # Try all Juicer Baristas and Juicer Trained employees (excluding primary rotation)
         all_juicers = self.db.query(self.Employee).filter(
-            self.Employee.job_title == 'Juicer Barista',
+            or_(
+                self.Employee.job_title == 'Juicer Barista',
+                self.Employee.juicer_trained == True
+            ),
             self.Employee.is_active == True
         ).all()
 
@@ -1169,6 +1199,10 @@ class SchedulingEngine:
                                      existing_event.project_ref_num, swap_reason, bumped_posted_id)
         run.events_scheduled += 1
 
+        # Track that we've bumped this posted schedule in this run
+        if bumped_posted_id:
+            self.bumped_posted_schedule_ids.add(bumped_posted_id)
+
         current_app.logger.info(
             f"{wave_label}: Scheduled Core event {new_event.project_ref_num} to {employee.name} "
             f"(will bump {bump_type} event {existing_event.project_ref_num} on approval)"
@@ -1401,9 +1435,12 @@ class SchedulingEngine:
         ).all()
         employee_pool.extend([(emp, 'Specialist') for emp in specialists])
         
-        # Get Juicers (only if not juicing that day)
+        # Get Juicers and Juicer Trained (only if not juicing that day)
         juicers = self.db.query(self.Employee).filter(
-            self.Employee.job_title == 'Juicer Barista',
+            or_(
+                self.Employee.job_title == 'Juicer Barista',
+                self.Employee.juicer_trained == True
+            ),
             self.Employee.is_active == True
         ).all()
         for juicer in juicers:
@@ -1887,6 +1924,10 @@ class SchedulingEngine:
                                      bumped_event.project_ref_num, swap_reason, bumped_posted_id)
         run.events_scheduled += 1
 
+        # Track that we've bumped this posted schedule in this run
+        if bumped_posted_id:
+            self.bumped_posted_schedule_ids.add(bumped_posted_id)
+
         # Schedule matching Supervisor event
         self._schedule_matching_supervisor_event(run, event, schedule_datetime.date(), events)
 
@@ -1929,9 +1970,12 @@ class SchedulingEngine:
         ).all()
         employee_pool.extend([(emp, 'Specialist') for emp in specialists])
 
-        # Get Juicers (only if not juicing that day)
+        # Get Juicers and Juicer Trained (only if not juicing that day)
         juicers = self.db.query(self.Employee).filter(
-            self.Employee.job_title == 'Juicer Barista',
+            or_(
+                self.Employee.job_title == 'Juicer Barista',
+                self.Employee.juicer_trained == True
+            ),
             self.Employee.is_active == True
         ).all()
 
@@ -3179,6 +3223,8 @@ class SchedulingEngine:
         Get available Lead Event Specialists for an event
 
         Note: Club Supervisor is excluded from Core events but can do other event types
+
+        Enhanced with ML ranking when enabled - orders employees by predicted success probability
         """
         # For Core events, only get Lead Event Specialists (exclude Club Supervisor)
         if event.event_type == 'Core':
@@ -3193,26 +3239,56 @@ class SchedulingEngine:
                 self.Employee.is_active == True
             ).all()
 
+        # Step 1: Filter by hard constraints (unchanged)
         available = []
         for lead in leads:
             validation = self.validator.validate_assignment(event, lead, schedule_datetime)
             if validation.is_valid:
                 available.append(lead)
 
+        # Step 2: ML ranking (when enabled)
+        if self.ml_adapter and self.ml_adapter.use_ml and self.ml_adapter.use_employee_ranking:
+            try:
+                # Rank employees by predicted success probability
+                ranked = self.ml_adapter.rank_employees(available, event, schedule_datetime)
+                # Return employees in ML-predicted order
+                return [emp for emp, confidence in ranked]
+            except Exception as e:
+                current_app.logger.warning(f"ML ranking failed for leads: {e}. Using rule-based ordering.")
+                # Fall through to return original ordering
+
+        # Step 3: Rule-based fallback (original behavior)
         return available
 
     def _get_available_specialists(self, event: object, schedule_datetime: datetime) -> List[object]:
-        """Get available Event Specialists for an event"""
+        """
+        Get available Event Specialists for an event
+
+        Enhanced with ML ranking when enabled - orders employees by predicted success probability
+        """
         specialists = self.db.query(self.Employee).filter_by(
             job_title='Event Specialist'
         ).all()
 
+        # Step 1: Filter by hard constraints (unchanged)
         available = []
         for specialist in specialists:
             validation = self.validator.validate_assignment(event, specialist, schedule_datetime)
             if validation.is_valid:
                 available.append(specialist)
 
+        # Step 2: ML ranking (when enabled)
+        if self.ml_adapter and self.ml_adapter.use_ml and self.ml_adapter.use_employee_ranking:
+            try:
+                # Rank employees by predicted success probability
+                ranked = self.ml_adapter.rank_employees(available, event, schedule_datetime)
+                # Return employees in ML-predicted order
+                return [emp for emp, confidence in ranked]
+            except Exception as e:
+                current_app.logger.warning(f"ML ranking failed for specialists: {e}. Using rule-based ordering.")
+                # Fall through to return original ordering
+
+        # Step 3: Rule-based fallback (original behavior)
         return available
 
     def _try_resolve_conflict(self, event: object, schedule_datetime: datetime) -> Optional[object]:

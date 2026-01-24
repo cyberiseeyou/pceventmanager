@@ -310,39 +310,83 @@ class EDRReportGenerator:
         print("➡️ Step 6: Authenticating with Event Management API...")
         try:
             response = self.session.get(auth_url, headers=headers)
+            print(f"   Response status: {response.status_code}")
+            
             if response.status_code == 200:
                 print("✅ Event Management authentication successful!")
 
-                # Extract auth token from cookies (regardless of response body)
+                # Debug: Log all cookies to see what's available
+                print(f"   Available cookies ({len(self.session.cookies)} total):")
                 for cookie in self.session.cookies:
-                    if cookie.name == 'auth-token' and cookie.value:
+                    # Show first 30 chars of value for debugging
+                    value_preview = cookie.value[:30] + "..." if len(cookie.value) > 30 else cookie.value
+                    print(f"      - {cookie.name}: {value_preview}")
+
+                # Try multiple possible cookie names for auth token
+                token_cookie_names = ['auth-token', 'authToken', 'token', 'auth_token', 'Authorization', 'jwt']
+                
+                for cookie in self.session.cookies:
+                    if cookie.name in token_cookie_names and cookie.value:
+                        print(f"   Found token cookie: {cookie.name}")
                         # Parse the URL-encoded cookie value
                         cookie_data = urllib.parse.unquote(cookie.value)
+                        
+                        # Try parsing as JSON first
                         try:
-                            token_data = json.loads(cookie_data)
-                            self.auth_token = token_data.get('token')
-                            print(f"🔑 Auth token extracted: {self.auth_token[:50]}...")
-                            return True
+                            token_obj = json.loads(cookie_data)
+                            if isinstance(token_obj, dict):
+                                # Look for token in various fields
+                                self.auth_token = (token_obj.get('token') or 
+                                                   token_obj.get('access_token') or
+                                                   token_obj.get('accessToken') or
+                                                   token_obj.get('jwt'))
+                            elif isinstance(token_obj, str):
+                                self.auth_token = token_obj
+                                
+                            if self.auth_token:
+                                print(f"🔑 Auth token extracted from cookie: {self.auth_token[:50]}...")
+                                return True
                         except json.JSONDecodeError:
-                            print("⚠️ Could not parse auth-token cookie")
+                            # Cookie value might be the token itself
+                            if len(cookie_data) > 20:  # Tokens are typically long
+                                self.auth_token = cookie_data
+                                print(f"🔑 Auth token extracted (raw cookie value): {self.auth_token[:50]}...")
+                                return True
 
-                # If no auth-token cookie, try to extract from response body
+                # If no token cookie found, try to extract from response body
+                print("   Checking response body for token...")
                 try:
+                    response_text = response.text[:500]
+                    print(f"   Response preview: {response_text}")
+                    
                     auth_data = response.json()
-                    if 'token' in auth_data:
-                        self.auth_token = auth_data['token']
-                        print(f"🔑 Auth token extracted from response: {self.auth_token[:50]}...")
-                        return True
-                except json.JSONDecodeError:
+                    print(f"   Response JSON keys: {list(auth_data.keys()) if isinstance(auth_data, dict) else 'not a dict'}")
+                    
+                    # Look for token in various response fields
+                    if isinstance(auth_data, dict):
+                        self.auth_token = (auth_data.get('token') or 
+                                           auth_data.get('access_token') or
+                                           auth_data.get('accessToken') or
+                                           auth_data.get('jwt') or
+                                           auth_data.get('data', {}).get('token') if isinstance(auth_data.get('data'), dict) else None)
+                        
+                        if self.auth_token:
+                            print(f"🔑 Auth token extracted from response: {self.auth_token[:50]}...")
+                            return True
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"   Could not parse response as JSON: {e}")
                     pass
 
                 print("⚠️ auth-token not found in cookies or response")
+                print("   This may indicate Walmart changed their authentication flow")
                 return False
             else:
                 print(f"❌ Authentication failed: {response.status_code}")
+                print(f"   Response: {response.text[:300]}")
                 return False
         except requests.exceptions.RequestException as e:
             print(f"❌ Authentication API call failed: {e}")
+            return False
             return False
 
     def authenticate(self, mfa_code: Optional[str] = None) -> bool:

@@ -1,5 +1,7 @@
 # AGENTS.md
 
+📖 **For comprehensive codebase documentation, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md)**
+
 ## Commands
 ```bash
 pytest                           # run all tests

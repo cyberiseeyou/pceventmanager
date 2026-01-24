@@ -25,7 +25,9 @@ def create_event_model(db):
             'Juicer Survey': 15,      # 15 minutes
             'Juicer Deep Clean': 240, # 4 hours
             'Supervisor': 5,          # 5 minutes
-            'Digitals': 15,           # 15 minutes
+            'Digital Setup': 15,      # 15 minutes
+            'Digital Refresh': 15,    # 15 minutes
+            'Digital Teardown': 15,   # 15 minutes
             'Freeosk': 15,            # 15 minutes
             'Other': 15               # 15 minutes
         }
@@ -83,43 +85,77 @@ def create_event_model(db):
 
         def detect_event_type(self):
             """
-            Automatically detect event type based on project name
+            Automatically detect event type based on project name and estimated time.
 
             Event types determine which employees can be assigned:
-            - Core: Standard events, all employees
-            - Digitals: Digital displays, requires supervisor/lead
+            - Core: Standard events, all employees (390 minutes / 6.5 hours)
+            - Digital Setup: Digital display setup, requires supervisor/lead
+            - Digital Refresh: Digital display refresh, requires supervisor/lead
+            - Digital Teardown: Digital display teardown, requires supervisor/lead
             - Juicer Production: Juice bar production (juice + Production-SPCLTY)
             - Juicer Survey: Juice bar surveys (juice + Survey-SPCLTY)
             - Juicer Deep Clean: Deep cleaning (Juicer Deep Clean)
-            - Supervisor: Requires supervisor/lead
+            - Supervisor: Requires supervisor/lead (5 minutes)
             - Freeosk: Kiosk events, requires supervisor/lead
             - Other: Catch-all for unclassified events
+
+            Detection Priority:
+            1. Keyword matching in project_name (primary method)
+            2. Fallback to estimated_time for events with unique durations:
+               - 390 minutes -> Core
+               - 5 minutes -> Supervisor
+            This fallback helps when event names are truncated and keywords are cut off.
 
             Returns:
                 str: Detected event type
             """
-            if not self.project_name:
-                return 'Other'
+            detected_type = 'Other'
+            
+            if self.project_name:
+                project_name_upper = self.project_name.upper()
 
-            project_name_upper = self.project_name.upper()
-
-            if 'CORE' in project_name_upper:
-                return 'Core'
-            elif 'DIGITAL' in project_name_upper:
-                return 'Digitals'
-            # Juicer types - check specific patterns
-            elif 'JUICER DEEP CLEAN' in project_name_upper:
-                return 'Juicer Deep Clean'
-            elif 'JUICE' in project_name_upper and 'PRODUCTION-SPCLTY' in project_name_upper:
-                return 'Juicer Production'
-            elif 'JUICE' in project_name_upper and 'SURVEY-SPCLTY' in project_name_upper:
-                return 'Juicer Survey'
-            elif 'SUPERVISOR' in project_name_upper or 'V2-SUPER' in project_name_upper or 'SUPERVISO' in project_name_upper:
-                return 'Supervisor'
-            elif 'FREEOSK' in project_name_upper:
-                return 'Freeosk'
-            else:
-                return 'Other'
+                if 'CORE' in project_name_upper:
+                    detected_type = 'Core'
+                # Digital types - check specific patterns
+                elif 'DIGITAL' in project_name_upper:
+                    if 'SETUP' in project_name_upper:
+                        detected_type = 'Digital Setup'
+                    elif 'REFRESH' in project_name_upper:
+                        detected_type = 'Digital Refresh'
+                    elif 'TEARDOWN' in project_name_upper or 'TEAR DOWN' in project_name_upper:
+                        detected_type = 'Digital Teardown'
+                    else:
+                        # Default to Digital Setup if no specific keyword found
+                        detected_type = 'Digital Setup'
+                # Juicer types - check specific patterns
+                elif 'JUICER DEEP CLEAN' in project_name_upper:
+                    detected_type = 'Juicer Deep Clean'
+                elif 'JUICE' in project_name_upper and 'PRODUCTION-SPCLTY' in project_name_upper:
+                    detected_type = 'Juicer Production'
+                elif 'JUICE' in project_name_upper and 'SURVEY-SPCLTY' in project_name_upper:
+                    detected_type = 'Juicer Survey'
+                elif 'SUPERVISOR' in project_name_upper or 'V2-SUPER' in project_name_upper or 'SUPERVISO' in project_name_upper:
+                    detected_type = 'Supervisor'
+                elif 'FREEOSK' in project_name_upper:
+                    detected_type = 'Freeosk'
+            
+            # Fallback: Use estimated_time to detect event type when keyword matching fails
+            # This handles cases where event names are truncated and keywords are cut off
+            if detected_type == 'Other' and self.estimated_time:
+                # Core events have duration of 360 or 390 minutes (6-6.5 hours)
+                if self.estimated_time in (360, 390):
+                    detected_type = 'Core'
+                # Supervisor events have unique duration of 5 minutes
+                elif self.estimated_time == 5:
+                    detected_type = 'Supervisor'
+                # Juicer Production has durations of 480 (8hr) or 540 (9hr) minutes
+                elif self.estimated_time in (480, 540):
+                    detected_type = 'Juicer Production'
+                # Juicer Deep Clean has unique duration of 240 minutes (4 hours)
+                elif self.estimated_time == 240:
+                    detected_type = 'Juicer Deep Clean'
+            
+            return detected_type
 
         @classmethod
         def get_default_duration(cls, event_type):

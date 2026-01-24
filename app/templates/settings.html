@@ -123,12 +123,12 @@
                         <div class="form-group">
                             <label for="holiday-name">Closure Name:</label>
                             <input type="text" id="holiday-name" class="form-control"
-                                placeholder="e.g., Christmas Day, Store Renovation" required>
+                                placeholder="e.g., Christmas Day, Store Renovation">
                         </div>
 
                         <div class="form-group">
                             <label for="holiday-date">Date:</label>
-                            <input type="date" id="holiday-date" class="form-control" required>
+                            <input type="date" id="holiday-date" class="form-control">
                         </div>
 
                         <div class="form-group">
@@ -237,8 +237,20 @@
                     </div>
                     <div class="event-type-toggle-item">
                         <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_digitals" name="enabled_event_types" value="Digitals" checked>
-                            <span class="toggle-label">Digital Events</span>
+                            <input type="checkbox" id="auto_schedule_digital_setup" name="enabled_event_types" value="Digital Setup" checked>
+                            <span class="toggle-label">Digital Setup</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_digital_refresh" name="enabled_event_types" value="Digital Refresh" checked>
+                            <span class="toggle-label">Digital Refresh</span>
+                        </label>
+                    </div>
+                    <div class="event-type-toggle-item">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_digital_teardown" name="enabled_event_types" value="Digital Teardown" checked>
+                            <span class="toggle-label">Digital Teardown</span>
                         </label>
                     </div>
                     <div class="event-type-toggle-item">
@@ -754,7 +766,7 @@
                     }
                 }
 
-                // Save Event Time settings
+                // Save Event Time settings (only if there are event time fields with values)
                 const eventTimes = {};
 
                 // Collect all event time inputs
@@ -764,18 +776,21 @@
                     }
                 });
 
-                const eventTimesResponse = await fetch('/api/settings/event-times', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(eventTimes)
-                });
-                const eventTimesData = await eventTimesResponse.json();
+                // Only save event times if there are values to save
+                if (Object.keys(eventTimes).length > 0) {
+                    const eventTimesResponse = await fetch('/api/settings/event-times', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(eventTimes)
+                    });
+                    const eventTimesData = await eventTimesResponse.json();
 
-                if (!eventTimesData.success) {
-                    showStatus('Settings partially saved. Event time settings failed: ' + (eventTimesData.message || 'Failed'), 'error');
-                    return;
+                    if (!eventTimesData.success) {
+                        showStatus('Settings partially saved. Event time settings failed: ' + (eventTimesData.message || 'Failed'), 'error');
+                        return;
+                    }
                 }
 
                 // Success
@@ -799,23 +814,18 @@
         });
 
         function showStatus(message, type) {
-            saveStatus.textContent = message;
-            saveStatus.style.display = 'block';
-
-            if (type === 'success') {
-                saveStatus.style.background = '#d4edda';
-                saveStatus.style.border = '1px solid #c3e6cb';
-                saveStatus.style.color = '#155724';
+            // Use toast notification instead of inline status div
+            if (window.toaster) {
+                if (type === 'success') {
+                    window.toaster.success(message);
+                } else {
+                    window.toaster.error(message);
+                }
             } else {
-                saveStatus.style.background = '#f8d7da';
-                saveStatus.style.border = '1px solid #f5c6cb';
-                saveStatus.style.color = '#721c24';
+                console.error('[Settings] Toast notification system not available');
+                // Fallback to alert if toaster not available
+                alert(message);
             }
-
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                saveStatus.style.display = 'none';
-            }, 5000);
         }
 
         // ===== COMPANY HOLIDAYS MANAGEMENT =====
@@ -1011,23 +1021,18 @@
         };
 
         function showHolidayStatus(message, type) {
-            const statusEl = document.getElementById('holiday-save-status');
-            statusEl.textContent = message;
-            statusEl.style.display = 'block';
-
-            if (type === 'success') {
-                statusEl.style.background = '#d4edda';
-                statusEl.style.border = '1px solid #c3e6cb';
-                statusEl.style.color = '#155724';
+            // Use toast notification for consistency
+            if (window.toaster) {
+                if (type === 'success') {
+                    window.toaster.success(message);
+                } else {
+                    window.toaster.error(message);
+                }
             } else {
-                statusEl.style.background = '#f8d7da';
-                statusEl.style.border = '1px solid #f5c6cb';
-                statusEl.style.color = '#721c24';
+                console.error('[Settings] Toast notification system not available');
+                // Fallback to alert if toaster not available
+                alert(message);
             }
-
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 3000);
         }
 
         // ===== PAPERWORK TEMPLATES MANAGEMENT =====
@@ -1355,7 +1360,7 @@
                     const settings = data.settings;
 
                     // Set enabled event types
-                    const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digitals', 'Supervisor', 'Other'];
+                    const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Supervisor', 'Other'];
                     const enabledTypes = settings.enabled_event_types || allEventTypes;
 
                     allEventTypes.forEach(type => {
@@ -1384,7 +1389,7 @@
         // Save auto-scheduler settings
         async function saveAutoSchedulerSettings() {
             const enabledTypes = [];
-            const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digitals', 'Supervisor', 'Other'];
+            const allEventTypes = ['Core', 'Juicer', 'Freeosk', 'Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Supervisor', 'Other'];
 
             allEventTypes.forEach(type => {
                 const checkbox = document.getElementById('auto_schedule_' + type.toLowerCase());
