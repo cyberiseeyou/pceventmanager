@@ -116,17 +116,10 @@ def create_event_model(db):
 
                 if 'CORE' in project_name_upper:
                     detected_type = 'Core'
-                # Digital types - check specific patterns
+                # Digital types - use generic "Digitals" category
+                # (specific types like Digital Setup/Refresh/Teardown can be set via manual overrides)
                 elif 'DIGITAL' in project_name_upper:
-                    if 'SETUP' in project_name_upper:
-                        detected_type = 'Digital Setup'
-                    elif 'REFRESH' in project_name_upper:
-                        detected_type = 'Digital Refresh'
-                    elif 'TEARDOWN' in project_name_upper or 'TEAR DOWN' in project_name_upper:
-                        detected_type = 'Digital Teardown'
-                    else:
-                        # Default to Digital Setup if no specific keyword found
-                        detected_type = 'Digital Setup'
+                    detected_type = 'Digitals'
                 # Juicer types - check specific patterns
                 elif 'JUICER DEEP CLEAN' in project_name_upper:
                     detected_type = 'Juicer Deep Clean'
