@@ -1636,9 +1636,8 @@ class SchedulingEngine:
         """
         Wave 2: Schedule a Juicer event to the rotation-assigned Juicer Barista
 
-        IMPORTANT: Juicer events are ALWAYS scheduled on their start date.
-        They should NOT be automatically moved to different days - only manual
-        user intervention can change the scheduled date for Juicer events.
+        UPDATED: If start date is in the past, schedule for today or earliest valid date
+        instead of failing. Only fail if due date has also passed.
 
         Scheduling times:
         - JUICER-PRODUCTION-SPCLTY: 9:00 AM
@@ -1648,15 +1647,36 @@ class SchedulingEngine:
         # Determine the appropriate time for this Juicer event
         juicer_time = self._get_juicer_time(event)
 
-        # ONLY try to schedule on the event's START DATE
-        # Juicer events should not be auto-moved to different days
-        target_date = event.start_datetime
-        
+        # NEW: Check if start date is in the past
+        today = datetime.now().date()
+        event_start_date = event.start_datetime.date()
+
+        if event_start_date < today:
+            # Start date has passed - use today instead
+            target_date = datetime.combine(today, time(0, 0))
+            current_app.logger.info(
+                f"Event {event.project_ref_num} start date {event_start_date} is in the past. "
+                f"Using today {today} as target date."
+            )
+        else:
+            # Start date is today or future - use it
+            target_date = event.start_datetime
+
+        # Validate target date is not past the due date
+        if target_date.date() > event.due_datetime.date():
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {event_start_date} is in the past and due date {event.due_datetime.date()} has also passed"
+            )
+            run.events_failed += 1
+            return
+
+        # Get rotation employee for target date
         employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
         if not employee:
             # No Juicer assigned for this day in rotation
             self._create_failed_pending_schedule(
-                run, event, 
+                run, event,
                 f"No Juicer rotation employee assigned for {target_date.date()}"
             )
             run.events_failed += 1
@@ -1674,11 +1694,11 @@ class SchedulingEngine:
             )
             return
 
-        # Juicer not available on start date - fail (do not auto-move to different day)
+        # Juicer not available on target date - fail
         violation_reasons = ", ".join([v.message for v in validation.violations])
         self._create_failed_pending_schedule(
-            run, event, 
-            f"Juicer unavailable on start date ({target_date.date()}): {violation_reasons}"
+            run, event,
+            f"Juicer unavailable on {target_date.date()}: {violation_reasons}"
         )
         run.events_failed += 1
 
