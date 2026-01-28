@@ -15,7 +15,7 @@ def test_juicer_event_past_start_date_uses_today(db_session, models):
     db_session.commit()
 
     # Create rotation for today
-    today = datetime.now()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     rotation = RotationAssignment(
         day_of_week=today.weekday(),
         rotation_type='juicer',
@@ -66,7 +66,7 @@ def test_juicer_event_past_start_and_due_fails(db_session, models):
     db_session.add(juicer)
     db_session.commit()
 
-    today = datetime.now()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     rotation = RotationAssignment(
         day_of_week=today.weekday(),
         rotation_type='juicer',
@@ -118,7 +118,7 @@ def test_juicer_event_future_start_date_unchanged(db_session, models):
     db_session.commit()
 
     # Future date
-    future_start = datetime.now() + timedelta(days=5)
+    future_start = (datetime.now() + timedelta(days=5)).replace(hour=0, minute=0, second=0, microsecond=0)
     future_due = future_start + timedelta(days=7)
 
     rotation = RotationAssignment(

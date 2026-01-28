@@ -17,7 +17,7 @@ def test_backup_used_when_primary_unavailable(db_session, models):
     db_session.commit()
 
     # Create rotation with backup
-    today = datetime.now()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     rotation = RotationAssignment(
         day_of_week=today.weekday(),
         rotation_type='juicer',
@@ -75,7 +75,7 @@ def test_primary_preferred_when_both_available(db_session, models):
     db_session.add_all([primary, backup])
     db_session.commit()
 
-    today = datetime.now()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     rotation = RotationAssignment(
         day_of_week=today.weekday(),
         rotation_type='juicer',
@@ -123,7 +123,7 @@ def test_both_unavailable_creates_failed_schedule(db_session, models):
     db_session.add_all([primary, backup])
     db_session.commit()
 
-    today = datetime.now()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     rotation = RotationAssignment(
         day_of_week=today.weekday(),
         rotation_type='juicer',
