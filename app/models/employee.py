@@ -85,12 +85,12 @@ def create_employee_model(db):
                 bool: True if employee is qualified for this event type
             """
             # Restricted event types that require specific roles
-            if event_type in ['Supervisor', 'Freeosk', 'Digital Setup', 'Digital Refresh', 'Digital Teardown']:
+            if event_type in ['Supervisor', 'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh', 'Digital Teardown']:
                 return self.job_title in ['Club Supervisor', 'Lead Event Specialist']
             elif event_type in ['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean']:
                 # Allow Club Supervisor, Juicer Barista, or employees marked as Juicer Trained
-                return (self.job_title in ['Club Supervisor', 'Juicer Barista'] or 
-                        self.juicer_trained)
+                return (self.job_title in ['Club Supervisor', 'Juicer Barista'] or
+                        bool(self.juicer_trained))
 
             # All employees can work other event types (Core, Other)
             return True

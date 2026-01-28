@@ -52,11 +52,23 @@ def get_rotations():
     rotation_mgr = RotationManager(db.session, models)
     rotations = rotation_mgr.get_all_rotations()
 
-    # Convert to JSON-friendly format
-    result = {
-        'juicer': {str(day): emp_id for day, emp_id in rotations['juicer'].items()},
-        'primary_lead': {str(day): emp_id for day, emp_id in rotations['primary_lead'].items()}
-    }
+    # Get employee names for display
+    Employee = current_app.config['Employee']
+
+    # Convert to JSON-friendly format with employee names
+    result = {}
+    for rotation_type in ['juicer', 'primary_lead']:
+        result[rotation_type] = {}
+        for day, emp_data in rotations[rotation_type].items():
+            primary_emp = db.session.query(Employee).get(emp_data['primary']) if emp_data['primary'] else None
+            backup_emp = db.session.query(Employee).get(emp_data['backup']) if emp_data['backup'] else None
+
+            result[rotation_type][str(day)] = {
+                'primary': emp_data['primary'],
+                'primary_name': primary_emp.name if primary_emp else None,
+                'backup': emp_data['backup'],
+                'backup_name': backup_emp.name if backup_emp else None
+            }
 
     return jsonify(result)
 

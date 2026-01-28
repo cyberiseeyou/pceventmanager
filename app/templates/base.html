@@ -193,6 +193,11 @@
                                 <span class="dropdown-icon">🕐</span>
                                 Event Time Settings
                             </a>
+                            <a href="{{ url_for('rotations.index') }}"
+                               class="dropdown-item {% if request.endpoint and request.endpoint.startswith('rotations.') %}active{% endif %}">
+                                <span class="dropdown-icon">🔄</span>
+                                Rotation Management
+                            </a>
                             <div class="dropdown-divider"></div>
                             <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
                                 <span class="dropdown-icon">🚪</span>

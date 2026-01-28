@@ -30,7 +30,12 @@ class RotationManager:
         self.ScheduleException = models['ScheduleException']
         self.Employee = models['Employee']
 
-    def get_rotation_employee(self, target_date: datetime, rotation_type: str) -> Optional[object]:
+    def get_rotation_employee(
+        self,
+        target_date: datetime,
+        rotation_type: str,
+        try_backup: bool = False
+    ) -> Optional[object]:
         """
         Get the assigned employee for a given date and rotation type
 
@@ -39,6 +44,7 @@ class RotationManager:
         Args:
             target_date: The date to check
             rotation_type: 'juicer' or 'primary_lead'
+            try_backup: If True, return backup employee instead of primary
 
         Returns:
             Employee object or None if no assignment
@@ -60,7 +66,14 @@ class RotationManager:
             rotation_type=rotation_type
         ).first()
 
-        return rotation.employee if rotation else None
+        if not rotation:
+            return None
+
+        # Return backup if requested and available, otherwise return primary
+        if try_backup and rotation.backup_employee_id:
+            return rotation.backup_employee
+        else:
+            return rotation.employee
 
     def get_rotation_employee_id(self, target_date: datetime, rotation_type: str) -> Optional[str]:
         """
@@ -75,6 +88,25 @@ class RotationManager:
         """
         employee = self.get_rotation_employee(target_date, rotation_type)
         return employee.id if employee else None
+
+    def get_rotation_with_backup(
+        self,
+        target_date: datetime,
+        rotation_type: str
+    ) -> Tuple[Optional[object], Optional[object]]:
+        """
+        Get both primary and backup employees for a rotation
+
+        Args:
+            target_date: The date to check
+            rotation_type: 'juicer' or 'primary_lead'
+
+        Returns:
+            Tuple of (primary_employee, backup_employee) - either can be None
+        """
+        primary = self.get_rotation_employee(target_date, rotation_type, try_backup=False)
+        backup = self.get_rotation_employee(target_date, rotation_type, try_backup=True)
+        return (primary, backup)
 
     def set_rotation(self, day_of_week: int, rotation_type: str, employee_id: str) -> bool:
         """
@@ -115,15 +147,22 @@ class RotationManager:
         self.db.commit()
         return True
 
-    def get_all_rotations(self) -> Dict[str, Dict[int, str]]:
+    def get_all_rotations(self) -> Dict[str, Dict[int, Dict[str, str]]]:
         """
         Get all rotation assignments grouped by type
 
         Returns:
-            Dict with rotation_type as keys, each containing day->employee_id mapping
+            Dict with rotation_type as keys, each containing day->employee mapping
             Example: {
-                'juicer': {0: 'EMP001', 1: 'EMP002', ...},
-                'primary_lead': {0: 'LEAD001', ...}
+                'juicer': {
+                    0: {'primary': 'EMP001', 'backup': 'EMP002'},
+                    1: {'primary': 'EMP003', 'backup': None},
+                    ...
+                },
+                'primary_lead': {
+                    0: {'primary': 'LEAD001', 'backup': 'LEAD002'},
+                    ...
+                }
             }
         """
         rotations = self.db.query(self.RotationAssignment).all()
@@ -134,16 +173,22 @@ class RotationManager:
         }
 
         for rotation in rotations:
-            result[rotation.rotation_type][rotation.day_of_week] = rotation.employee_id
+            result[rotation.rotation_type][rotation.day_of_week] = {
+                'primary': rotation.employee_id,
+                'backup': rotation.backup_employee_id
+            }
 
         return result
 
-    def set_all_rotations(self, rotations: Dict[str, Dict[int, str]]) -> Tuple[bool, List[str]]:
+    def set_all_rotations(self, rotations: Dict[str, Dict[int, any]]) -> Tuple[bool, List[str]]:
         """
         Set multiple rotation assignments at once
 
         Args:
-            rotations: Dict of rotation_type -> {day_of_week: employee_id}
+            rotations: Dict of rotation_type -> {day_of_week: employee_data}
+                     employee_data can be:
+                       - string (employee_id for backward compatibility)
+                       - dict with 'primary' and optionally 'backup' keys
 
         Returns:
             Tuple of (success: bool, errors: List[str])
@@ -160,21 +205,48 @@ class RotationManager:
                     errors.append(f"Invalid rotation type: {rotation_type}")
                     continue
 
-                for day_of_week, employee_id in assignments.items():
+                for day_of_week, employee_data in assignments.items():
                     if day_of_week < 0 or day_of_week > 6:
                         errors.append(f"Invalid day: {day_of_week}")
                         continue
 
-                    # Verify employee exists
-                    employee = self.db.query(self.Employee).get(employee_id)
-                    if not employee:
-                        errors.append(f"Employee not found: {employee_id}")
+                    # Handle both old format (string) and new format (dict)
+                    if isinstance(employee_data, str):
+                        # Backward compatibility: string is just primary employee
+                        primary_id = employee_data
+                        backup_id = None
+                    elif isinstance(employee_data, dict):
+                        # New format with primary and backup
+                        primary_id = employee_data.get('primary')
+                        backup_id = employee_data.get('backup')
+                    else:
+                        errors.append(f"Invalid employee data format for day {day_of_week}")
                         continue
+
+                    # Verify primary employee exists
+                    if primary_id:
+                        employee = self.db.query(self.Employee).get(primary_id)
+                        if not employee:
+                            errors.append(f"Primary employee not found: {primary_id}")
+                            continue
+
+                    # Verify backup employee exists (if provided)
+                    if backup_id:
+                        backup_employee = self.db.query(self.Employee).get(backup_id)
+                        if not backup_employee:
+                            errors.append(f"Backup employee not found: {backup_id}")
+                            continue
+
+                        # Validate backup is different from primary
+                        if backup_id == primary_id:
+                            errors.append(f"Backup employee must be different from primary for day {day_of_week}")
+                            continue
 
                     rotation = self.RotationAssignment(
                         day_of_week=day_of_week,
                         rotation_type=rotation_type,
-                        employee_id=employee_id
+                        employee_id=primary_id,
+                        backup_employee_id=backup_id
                     )
                     self.db.add(rotation)
 

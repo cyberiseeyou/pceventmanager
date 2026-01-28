@@ -1632,13 +1632,96 @@ class SchedulingEngine:
         else:
             return self.DEFAULT_TIMES['Juicer']
 
+    def _try_schedule_with_rotation_and_backup(
+        self,
+        run: object,
+        event: object,
+        target_date: datetime,
+        schedule_time: time,
+        rotation_type: str
+    ) -> bool:
+        """
+        Try to schedule event with rotation employee, fallback to backup if needed
+
+        Algorithm:
+        1. Try primary rotation employee
+        2. If primary invalid, try backup employee
+        3. If both fail, create failed pending schedule
+
+        Args:
+            run: SchedulerRunHistory object
+            event: Event to schedule
+            target_date: Date to schedule on
+            schedule_time: Time to schedule at
+            rotation_type: 'juicer' or 'primary_lead'
+
+        Returns:
+            True if scheduled successfully, False otherwise
+        """
+        # Try primary rotation employee first
+        primary_employee = self.rotation_manager.get_rotation_employee(
+            target_date, rotation_type, try_backup=False
+        )
+
+        if primary_employee:
+            schedule_datetime = datetime.combine(target_date.date(), schedule_time)
+            validation = self.validator.validate_assignment(event, primary_employee, schedule_datetime)
+
+            if validation.is_valid:
+                # Primary is available - schedule it
+                self._create_pending_schedule(run, event, primary_employee, schedule_datetime, False, None, None)
+                run.events_scheduled += 1
+                current_app.logger.info(
+                    f"Scheduled {rotation_type} event {event.project_ref_num} to {primary_employee.name} (primary) on {target_date.date()}"
+                )
+                return True
+            else:
+                # Log why primary was rejected
+                primary_reasons = ", ".join([v.message for v in validation.violations])
+                current_app.logger.info(
+                    f"Primary {rotation_type} {primary_employee.name} unavailable: {primary_reasons}. Trying backup..."
+                )
+
+        # Primary unavailable or doesn't exist - try backup
+        backup_employee = self.rotation_manager.get_rotation_employee(
+            target_date, rotation_type, try_backup=True
+        )
+
+        if backup_employee and (not primary_employee or backup_employee.id != primary_employee.id):
+            schedule_datetime = datetime.combine(target_date.date(), schedule_time)
+            validation = self.validator.validate_assignment(event, backup_employee, schedule_datetime)
+
+            if validation.is_valid:
+                # Backup is available - schedule it
+                self._create_pending_schedule(run, event, backup_employee, schedule_datetime, False, None, None)
+                run.events_scheduled += 1
+                current_app.logger.info(
+                    f"Scheduled {rotation_type} event {event.project_ref_num} to {backup_employee.name} (BACKUP) on {target_date.date()}"
+                )
+                return True
+            else:
+                backup_reasons = ", ".join([v.message for v in validation.violations])
+                current_app.logger.warning(
+                    f"Backup {rotation_type} {backup_employee.name} also unavailable: {backup_reasons}"
+                )
+
+        # Both primary and backup failed
+        primary_reason = f"No primary {rotation_type} assigned" if not primary_employee else "Primary unavailable"
+        backup_reason = f"No backup configured" if not backup_employee else "Backup also unavailable"
+
+        self._create_failed_pending_schedule(
+            run, event,
+            f"{primary_reason} and {backup_reason} for {target_date.date()}"
+        )
+        run.events_failed += 1
+        return False
+
     def _schedule_juicer_event_wave2(self, run: object, event: object) -> None:
         """
         Wave 2: Schedule a Juicer event to the rotation-assigned Juicer Barista
 
-        IMPORTANT: Juicer events are ALWAYS scheduled on their start date.
-        They should NOT be automatically moved to different days - only manual
-        user intervention can change the scheduled date for Juicer events.
+        UPDATED: If start date is in the past, schedule for today or earliest valid date
+        instead of failing. Only fail if due date has also passed.
 
         Scheduling times:
         - JUICER-PRODUCTION-SPCLTY: 9:00 AM
@@ -1648,39 +1731,34 @@ class SchedulingEngine:
         # Determine the appropriate time for this Juicer event
         juicer_time = self._get_juicer_time(event)
 
-        # ONLY try to schedule on the event's START DATE
-        # Juicer events should not be auto-moved to different days
-        target_date = event.start_datetime
-        
-        employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
-        if not employee:
-            # No Juicer assigned for this day in rotation
+        # NEW: Check if start date is in the past
+        today = datetime.now().date()
+        event_start_date = event.start_datetime.date()
+
+        if event_start_date < today:
+            # Start date has passed - use today instead
+            target_date = datetime.combine(today, time(0, 0))
+            current_app.logger.info(
+                f"Event {event.project_ref_num} start date {event_start_date} is in the past. "
+                f"Using today {today} as target date."
+            )
+        else:
+            # Start date is today or future - use it
+            target_date = event.start_datetime
+
+        # Validate target date is not past the due date
+        if target_date.date() > event.due_datetime.date():
             self._create_failed_pending_schedule(
-                run, event, 
-                f"No Juicer rotation employee assigned for {target_date.date()}"
+                run, event,
+                f"Event start date {event_start_date} is in the past and due date {event.due_datetime.date()} has also passed"
             )
             run.events_failed += 1
             return
 
-        schedule_datetime = datetime.combine(target_date.date(), juicer_time)
-        validation = self.validator.validate_assignment(event, employee, schedule_datetime)
-
-        if validation.is_valid:
-            # Juicer is available - schedule it
-            self._create_pending_schedule(run, event, employee, schedule_datetime, False, None, None)
-            run.events_scheduled += 1
-            current_app.logger.info(
-                f"Wave 2: Scheduled Juicer event {event.project_ref_num} to {employee.name} on {target_date.date()}"
-            )
-            return
-
-        # Juicer not available on start date - fail (do not auto-move to different day)
-        violation_reasons = ", ".join([v.message for v in validation.violations])
-        self._create_failed_pending_schedule(
-            run, event, 
-            f"Juicer unavailable on start date ({target_date.date()}): {violation_reasons}"
+        # Try to schedule with rotation (primary first, backup if needed)
+        self._try_schedule_with_rotation_and_backup(
+            run, event, target_date, juicer_time, 'juicer'
         )
-        run.events_failed += 1
 
     def _schedule_core_events_wave2_new(self, run: object, events: List[object]) -> List[object]:
         """

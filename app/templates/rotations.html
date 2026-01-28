@@ -35,13 +35,44 @@
 .rotation-day {
     display: flex;
     flex-direction: column;
+    gap: 12px;
 }
 
-.rotation-day label {
+.primary-select-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.primary-select-group label {
     font-weight: 600;
     color: #34495e;
     margin-bottom: 8px;
     display: block;
+}
+
+.backup-select-group {
+    display: flex;
+    flex-direction: column;
+    padding-left: 15px;
+    border-left: 3px solid #3498db;
+}
+
+.backup-select-group label {
+    font-weight: 400;
+    color: #7f8c8d;
+    margin-bottom: 8px;
+    display: block;
+    font-size: 13px;
+}
+
+.backup-badge {
+    display: inline-block;
+    background: #3498db;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-left: 5px;
 }
 
 .rotation-day select {
@@ -57,6 +88,24 @@
     outline: none;
     border-color: #3498db;
     box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.rotation-day select.error {
+    border-color: #e74c3c;
+    border-width: 2px;
+}
+
+.backup-error {
+    color: #e74c3c;
+    font-size: 12px;
+    margin-top: 4px;
+    padding-left: 15px;
+}
+
+.backup-configured {
+    color: #27ae60;
+    font-size: 12px;
+    margin-left: 5px;
 }
 
 .button-group {
@@ -127,6 +176,48 @@
     z-index: 1000;
     max-width: 400px;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .rotation-grid {
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+
+    .rotation-container {
+        padding: 15px;
+    }
+
+    .rotation-section {
+        padding: 20px 15px;
+    }
+
+    .backup-select-group {
+        padding-left: 12px;
+        border-left-width: 2px;
+    }
+
+    .rotation-day select {
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+
+    #message-container {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .button-group {
+        flex-direction: column;
+    }
+
+    .btn-primary, .btn-secondary {
+        width: 100%;
+    }
+}
 </style>
 {% endblock %}
 
@@ -140,21 +231,48 @@
     <!-- Juicer Rotation -->
     <div class="rotation-section">
         <h2>Primary Juicer Rotation</h2>
-        <p class="help-text">Assign a Juicer Barista for each day of the week. Juicer events will be scheduled to these employees.</p>
+        <p class="help-text">Assign a Juicer Barista for each day of the week. Optionally configure backup employees who will be automatically used when the primary is unavailable.</p>
 
         <div class="rotation-grid">
             {% for day_index in range(7) %}
-            <div class="rotation-day">
-                <label for="juicer-{{ day_index }}">{{ day_names[day_index] }}</label>
-                <select id="juicer-{{ day_index }}" name="juicer-{{ day_index }}" data-rotation-type="juicer" data-day="{{ day_index }}">
-                    <option value="">-- Select Juicer --</option>
-                    {% for employee in juicers %}
-                    <option value="{{ employee.id }}"
-                        {% if rotations.juicer.get(day_index) == employee.id %}selected{% endif %}>
-                        {{ employee.name }}
-                    </option>
-                    {% endfor %}
-                </select>
+            <div class="rotation-day" data-rotation-type="juicer" data-day="{{ day_index }}">
+                <!-- Primary Select -->
+                <div class="primary-select-group">
+                    <label for="juicer-primary-{{ day_index }}">
+                        <strong>{{ day_names[day_index] }}</strong>
+                    </label>
+                    <select id="juicer-primary-{{ day_index }}"
+                            class="primary-select"
+                            name="juicer-primary-{{ day_index }}"
+                            data-rotation-type="juicer"
+                            data-day="{{ day_index }}">
+                        <option value="">-- Select Primary --</option>
+                        {% for employee in juicers %}
+                        <option value="{{ employee.id }}"
+                            {% if rotations.juicer.get(day_index) and (rotations.juicer[day_index] is mapping and rotations.juicer[day_index].primary == employee.id) or (rotations.juicer[day_index] is not mapping and rotations.juicer[day_index] == employee.id) %}selected{% endif %}>
+                            {{ employee.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Backup Select -->
+                <div class="backup-select-group">
+                    <label for="juicer-backup-{{ day_index }}">
+                        Backup <span class="backup-badge">Optional</span>
+                    </label>
+                    <select id="juicer-backup-{{ day_index }}"
+                            class="backup-select"
+                            name="juicer-backup-{{ day_index }}">
+                        <option value="">-- Select Backup (Optional) --</option>
+                        {% for employee in juicers %}
+                        <option value="{{ employee.id }}"
+                            {% if rotations.juicer.get(day_index) and rotations.juicer[day_index] is mapping and rotations.juicer[day_index].backup == employee.id %}selected{% endif %}>
+                            {{ employee.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -163,21 +281,48 @@
     <!-- Primary Lead Rotation -->
     <div class="rotation-section">
         <h2>Primary Lead Rotation</h2>
-        <p class="help-text">Assign a Lead Event Specialist for each day. Digital Setups, Refreshes, and Freeosk events will be scheduled to these leads.</p>
+        <p class="help-text">Assign a Lead Event Specialist for each day. Digital Setups, Refreshes, and Freeosk events will be scheduled to these leads. Optionally configure backup employees who will be automatically used when the primary is unavailable.</p>
 
         <div class="rotation-grid">
             {% for day_index in range(7) %}
-            <div class="rotation-day">
-                <label for="primary_lead-{{ day_index }}">{{ day_names[day_index] }}</label>
-                <select id="primary_lead-{{ day_index }}" name="primary_lead-{{ day_index }}" data-rotation-type="primary_lead" data-day="{{ day_index }}">
-                    <option value="">-- Select Lead --</option>
-                    {% for employee in leads %}
-                    <option value="{{ employee.id }}"
-                        {% if rotations.primary_lead.get(day_index) == employee.id %}selected{% endif %}>
-                        {{ employee.name }}
-                    </option>
-                    {% endfor %}
-                </select>
+            <div class="rotation-day" data-rotation-type="primary_lead" data-day="{{ day_index }}">
+                <!-- Primary Select -->
+                <div class="primary-select-group">
+                    <label for="primary_lead-primary-{{ day_index }}">
+                        <strong>{{ day_names[day_index] }}</strong>
+                    </label>
+                    <select id="primary_lead-primary-{{ day_index }}"
+                            class="primary-select"
+                            name="primary_lead-primary-{{ day_index }}"
+                            data-rotation-type="primary_lead"
+                            data-day="{{ day_index }}">
+                        <option value="">-- Select Primary --</option>
+                        {% for employee in leads %}
+                        <option value="{{ employee.id }}"
+                            {% if rotations.primary_lead.get(day_index) and (rotations.primary_lead[day_index] is mapping and rotations.primary_lead[day_index].primary == employee.id) or (rotations.primary_lead[day_index] is not mapping and rotations.primary_lead[day_index] == employee.id) %}selected{% endif %}>
+                            {{ employee.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Backup Select -->
+                <div class="backup-select-group">
+                    <label for="primary_lead-backup-{{ day_index }}">
+                        Backup <span class="backup-badge">Optional</span>
+                    </label>
+                    <select id="primary_lead-backup-{{ day_index }}"
+                            class="backup-select"
+                            name="primary_lead-backup-{{ day_index }}">
+                        <option value="">-- Select Backup (Optional) --</option>
+                        {% for employee in leads %}
+                        <option value="{{ employee.id }}"
+                            {% if rotations.primary_lead.get(day_index) and rotations.primary_lead[day_index] is mapping and rotations.primary_lead[day_index].backup == employee.id %}selected{% endif %}>
+                            {{ employee.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -205,21 +350,78 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     }
 
+    // Validate rotations (backup must be different from primary)
+    function validateRotations() {
+        let isValid = true;
+        const errors = [];
+
+        document.querySelectorAll('.rotation-day').forEach(day => {
+            const primarySelect = day.querySelector('.primary-select');
+            const backupSelect = day.querySelector('.backup-select');
+            const primary = primarySelect ? primarySelect.value : '';
+            const backup = backupSelect ? backupSelect.value : '';
+
+            // Clear previous errors
+            if (backupSelect) {
+                backupSelect.classList.remove('error');
+                const existingError = day.querySelector('.backup-error');
+                if (existingError) {
+                    existingError.remove();
+                }
+            }
+
+            // Validate: backup must differ from primary
+            if (backup && backup === primary) {
+                isValid = false;
+                backupSelect.classList.add('error');
+
+                const error = document.createElement('div');
+                error.className = 'backup-error';
+                error.innerHTML = '⚠️ Backup must be different from primary';
+                backupSelect.parentElement.appendChild(error);
+            }
+        });
+
+        return isValid;
+    }
+
+    // Add real-time validation on backup selection change
+    document.querySelectorAll('.backup-select').forEach(backupSelect => {
+        backupSelect.addEventListener('change', validateRotations);
+    });
+
+    // Also validate when primary changes (in case backup was already selected)
+    document.querySelectorAll('.primary-select').forEach(primarySelect => {
+        primarySelect.addEventListener('change', validateRotations);
+    });
+
     // Save rotations
     document.getElementById('save-rotations').addEventListener('click', async function() {
+        // Validate before saving
+        if (!validateRotations()) {
+            showMessage('Please fix validation errors before saving', 'error');
+            return;
+        }
+
         const rotations = {
             juicer: {},
             primary_lead: {}
         };
 
-        // Collect all rotation assignments
-        document.querySelectorAll('select[data-rotation-type]').forEach(select => {
-            const type = select.dataset.rotationType;
-            const day = select.dataset.day;
-            const value = select.value;
+        // Collect all rotation assignments with backup support
+        document.querySelectorAll('.rotation-day').forEach(day => {
+            const type = day.dataset.rotationType;
+            const dayIndex = day.dataset.day;
+            const primarySelect = day.querySelector('.primary-select');
+            const backupSelect = day.querySelector('.backup-select');
+            const primary = primarySelect ? primarySelect.value : '';
+            const backup = backupSelect ? backupSelect.value : '';
 
-            if (value) {
-                rotations[type][day] = value;
+            if (primary) {
+                rotations[type][dayIndex] = {
+                    primary: primary,
+                    backup: backup || null
+                };
             }
         });
 
@@ -235,7 +437,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (data.success) {
-                showMessage('Rotations saved successfully!', 'success');
+                // Count days with backups
+                let backupCount = 0;
+                for (const type in rotations) {
+                    for (const day in rotations[type]) {
+                        if (rotations[type][day].backup) {
+                            backupCount++;
+                        }
+                    }
+                }
+
+                let message = 'Rotations saved successfully!';
+                if (backupCount > 0) {
+                    message += ` Backup employees configured for ${backupCount} day${backupCount === 1 ? '' : 's'}.`;
+                }
+                showMessage(message, 'success');
             } else {
                 showMessage('Error: ' + (data.error || data.errors.join(', ')), 'error');
             }
