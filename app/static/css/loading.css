@@ -7,9 +7,10 @@
 body.loading-body,
 body.login-body.loading-body {
     margin: 0 !important;
-    padding: 0 !important;
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
     min-height: 100vh !important;
-    height: 100vh !important;
+    height: auto !important;  /* Let content determine height - fixes vertical centering */
     width: 100vw !important;
     display: flex !important;
     flex-direction: column !important;
@@ -25,18 +26,13 @@ body.loading-body .login-container.loading-container {
     width: 90% !important;
     max-width: 900px !important;
     padding: 2rem !important;
-    margin: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+    margin: auto !important;  /* Vertical + horizontal centering */
     border: 2px solid var(--pc-blue) !important;
     border-radius: 16px !important;
-    position: relative !important;
+    position: static !important;  /* No positioning conflicts */
     z-index: 10 !important;
     box-sizing: border-box !important;
     flex-shrink: 0 !important;
-    left: auto !important;
     right: auto !important;
     top: auto !important;
     bottom: auto !important;
