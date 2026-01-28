@@ -19,6 +19,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-states.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
@@ -295,6 +296,7 @@
         import { stateManager } from '{{ url_for('static', filename='js/modules/state-manager.js') }}';
         import { ariaAnnouncer } from '{{ url_for('static', filename='js/modules/aria-announcer.js') }}';
         import { toaster } from '{{ url_for('static', filename='js/modules/toast-notifications.js') }}';
+        import { loadingState } from '{{ url_for('static', filename='js/utils/loading-state.js') }}';
         import ValidationEngine from '{{ url_for('static', filename='js/modules/validation-engine.js') }}';
 
         // Make available globally for non-module scripts
@@ -302,6 +304,7 @@
         window.stateManager = stateManager;
         window.ariaAnnouncer = ariaAnnouncer;
         window.toaster = toaster;
+        window.loadingState = loadingState;
         window.ValidationEngine = ValidationEngine;
 
         console.log('[Base] Core infrastructure modules loaded');

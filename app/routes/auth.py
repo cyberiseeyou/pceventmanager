@@ -622,11 +622,26 @@ def start_loading_refresh(task_id):
         if progress.get('status') == 'running':
             return jsonify({'success': False, 'error': 'Refresh already in progress'}), 400
 
-        # Import and run the refresh service
+        # Import and run the refresh service IN BACKGROUND THREAD
+        # This prevents blocking the single gunicorn worker, allowing SSE to work
+        import threading
         from app.services.database_refresh_service import refresh_database_with_progress
-        result = refresh_database_with_progress(task_id)
 
-        return jsonify(result)
+        def run_refresh():
+            """Run refresh in background with Flask app context"""
+            with current_app.app_context():
+                try:
+                    refresh_database_with_progress(task_id)
+                except Exception as e:
+                    current_app.logger.error(f"Background refresh failed: {e}", exc_info=True)
+                    update_refresh_progress(task_id, status='error', error=str(e))
+
+        # Start background thread
+        thread = threading.Thread(target=run_refresh, daemon=True)
+        thread.start()
+
+        # Return immediately so SSE endpoint can be served
+        return jsonify({'success': True, 'message': 'Database refresh started'})
 
     except Exception as e:
         current_app.logger.error(f"Failed to start database refresh: {e}")
