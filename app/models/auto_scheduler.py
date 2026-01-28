@@ -69,8 +69,12 @@ def create_auto_scheduler_models(db):
         rotation_type = db.Column(db.String(20), nullable=False)  # 'juicer' or 'primary_lead'
         employee_id = db.Column(db.String, db.ForeignKey('employees.id'), nullable=False)
 
+        # NEW: Backup employee for when primary is unavailable
+        backup_employee_id = db.Column(db.String, db.ForeignKey('employees.id'), nullable=True)
+
         # Relationships
-        employee = db.relationship('Employee', backref='rotation_assignments')
+        employee = db.relationship('Employee', foreign_keys=[employee_id], backref='rotation_assignments')
+        backup_employee = db.relationship('Employee', foreign_keys=[backup_employee_id], backref='backup_rotation_assignments')
 
         # Constraints
         __table_args__ = (
@@ -84,7 +88,8 @@ def create_auto_scheduler_models(db):
 
         def __repr__(self):
             days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-            return f'<RotationAssignment {days[self.day_of_week]} {self.rotation_type}: {self.employee_id}>'
+            backup_info = f" (backup: {self.backup_employee_id})" if self.backup_employee_id else ""
+            return f'<RotationAssignment {days[self.day_of_week]} {self.rotation_type}: {self.employee_id}{backup_info}>'
 
 
     class SchedulerRunHistory(db.Model):
