@@ -30,7 +30,12 @@ class RotationManager:
         self.ScheduleException = models['ScheduleException']
         self.Employee = models['Employee']
 
-    def get_rotation_employee(self, target_date: datetime, rotation_type: str) -> Optional[object]:
+    def get_rotation_employee(
+        self,
+        target_date: datetime,
+        rotation_type: str,
+        try_backup: bool = False
+    ) -> Optional[object]:
         """
         Get the assigned employee for a given date and rotation type
 
@@ -39,6 +44,7 @@ class RotationManager:
         Args:
             target_date: The date to check
             rotation_type: 'juicer' or 'primary_lead'
+            try_backup: If True, return backup employee instead of primary
 
         Returns:
             Employee object or None if no assignment
@@ -60,7 +66,14 @@ class RotationManager:
             rotation_type=rotation_type
         ).first()
 
-        return rotation.employee if rotation else None
+        if not rotation:
+            return None
+
+        # Return backup if requested and available, otherwise return primary
+        if try_backup and rotation.backup_employee_id:
+            return rotation.backup_employee
+        else:
+            return rotation.employee
 
     def get_rotation_employee_id(self, target_date: datetime, rotation_type: str) -> Optional[str]:
         """
@@ -75,6 +88,25 @@ class RotationManager:
         """
         employee = self.get_rotation_employee(target_date, rotation_type)
         return employee.id if employee else None
+
+    def get_rotation_with_backup(
+        self,
+        target_date: datetime,
+        rotation_type: str
+    ) -> Tuple[Optional[object], Optional[object]]:
+        """
+        Get both primary and backup employees for a rotation
+
+        Args:
+            target_date: The date to check
+            rotation_type: 'juicer' or 'primary_lead'
+
+        Returns:
+            Tuple of (primary_employee, backup_employee) - either can be None
+        """
+        primary = self.get_rotation_employee(target_date, rotation_type, try_backup=False)
+        backup = self.get_rotation_employee(target_date, rotation_type, try_backup=True)
+        return (primary, backup)
 
     def set_rotation(self, day_of_week: int, rotation_type: str, employee_id: str) -> bool:
         """
