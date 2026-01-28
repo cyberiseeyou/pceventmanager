@@ -153,8 +153,8 @@ class DatabaseRefreshService:
                     )
                     continue
 
-                # Update progress every 50 events
-                if (i + 1) % 50 == 0 or i == len(records) - 1:
+                # Update progress every 10 events for smoother visual feedback
+                if (i + 1) % 10 == 0 or i == len(records) - 1:
                     self._update_progress(
                         self.STEP_PROCESSING,
                         'Processing events',

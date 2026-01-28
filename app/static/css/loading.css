@@ -70,22 +70,25 @@ body.loading-body .login-container.loading-container {
 
 /* Progress Bar */
 .progress-bar-container {
-    height: 12px;
+    height: 20px;
     background: var(--gray-200);
-    border-radius: 6px;
+    border-radius: 10px;
     overflow: hidden;
     margin-bottom: 0.75rem;
     position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--gray-300);
 }
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
-    border-radius: 6px;
+    background: linear-gradient(90deg, #0066cc, #0052a3);
+    border-radius: 10px;
     width: 0%;
-    transition: width 0.3s ease;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    box-shadow: 0 0 10px rgba(0, 102, 204, 0.5);
 }
 
 .progress-bar-shimmer {
@@ -97,10 +100,10 @@ body.loading-body .login-container.loading-container {
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.3),
+        rgba(255, 255, 255, 0.5),
         transparent
     );
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes shimmer {
@@ -114,10 +117,12 @@ body.loading-body .login-container.loading-container {
 
 .progress-percentage {
     text-align: center;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--primary-600);
+    font-size: 2rem;
+    font-weight: 700;
+    color: #0066cc;
     margin-bottom: 1.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.05em;
 }
 
 /* Current Step Display */

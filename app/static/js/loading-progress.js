@@ -96,8 +96,8 @@ class LoadingProgressManager {
             const stepWeight = 100 / totalSteps;
             percentage = Math.min(100, (currentStep - 1) * stepWeight);
 
-            // Add partial progress within current step (for step 3 - processing)
-            if (currentStep === 3 && data.total > 0 && data.processed > 0) {
+            // Add partial progress within current step (for ANY step with progress data)
+            if (data.total > 0 && data.processed >= 0) {
                 const stepProgress = (data.processed / data.total) * stepWeight;
                 percentage += stepProgress;
             } else if (currentStep > 0) {

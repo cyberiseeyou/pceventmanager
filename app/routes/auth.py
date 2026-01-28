@@ -575,7 +575,7 @@ def loading_progress(task_id):
     """Stream database refresh progress via Server-Sent Events"""
 
     def generate():
-        max_iterations = 600  # Max 5 minutes (600 * 0.5s)
+        max_iterations = 3000  # Max 5 minutes (3000 * 0.1s)
         iteration = 0
 
         while iteration < max_iterations:
@@ -590,7 +590,7 @@ def loading_progress(task_id):
             if progress.get('status') in ('completed', 'error'):
                 break
 
-            time.sleep(0.5)
+            time.sleep(0.1)  # 100ms delay - 5x faster updates
             iteration += 1
 
         # Cleanup progress data after completion
