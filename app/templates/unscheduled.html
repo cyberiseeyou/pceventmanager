@@ -783,7 +783,9 @@
 
         <div class="event-meta">
             <div class="event-actions">
-                {% if condition == 'scheduled' %}
+                {# Use event's actual condition, not page filter #}
+                {% set event_status = event.condition|lower if event.condition else 'unstaffed' %}
+                {% if event_status == 'scheduled' or event_status == 'reissued' %}
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Reschedule Event
                 </a>
@@ -791,16 +793,12 @@
                     class="btn btn-danger btn-sm">
                     Unschedule
                 </button>
-                {% elif condition == 'submitted' %}
+                {% elif event_status == 'submitted' %}
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Reissue Event
                 </a>
-                {% elif condition == 'reissued' %}
-                <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
-                    Reschedule Event
-                </a>
                 {% else %}
-                {# Unscheduled events - no remove button, only schedule options #}
+                {# Unscheduled/Unstaffed events - schedule options only #}
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Schedule Manually
                 </a>

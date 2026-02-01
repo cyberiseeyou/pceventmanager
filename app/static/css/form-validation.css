@@ -1,0 +1,224 @@
+/**
+ * Form Validation Styles
+ *
+ * Visual feedback for form validation states
+ * Works with ValidationEngine utility
+ */
+
+/* Form group container */
+.form-group {
+  position: relative;
+  margin-bottom: var(--space-4, 1rem);
+}
+
+/* Valid state */
+.form-control.is-valid,
+input.is-valid,
+select.is-valid,
+textarea.is-valid {
+  border-color: var(--color-success, #28a745);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2328a745' viewBox='0 0 16 16'%3E%3Cpath d='M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.25rem) center;
+  background-size: calc(0.75em + 0.5rem) calc(0.75em + 0.5rem);
+  padding-right: calc(1.5em + 0.75rem);
+}
+
+.form-control.is-valid:focus,
+input.is-valid:focus,
+select.is-valid:focus,
+textarea.is-valid:focus {
+  border-color: var(--color-success, #28a745);
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Invalid state */
+.form-control.is-invalid,
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: var(--color-danger, #dc3545);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23dc3545' viewBox='0 0 16 16'%3E%3Cpath d='M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z'/%3E%3Cpath d='M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.25rem) center;
+  background-size: calc(0.75em + 0.5rem) calc(0.75em + 0.5rem);
+  padding-right: calc(1.5em + 0.75rem);
+}
+
+.form-control.is-invalid:focus,
+input.is-invalid:focus,
+select.is-invalid:focus,
+textarea.is-invalid:focus {
+  border-color: var(--color-danger, #dc3545);
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+/* Validation feedback messages */
+.invalid-feedback,
+.field-error {
+  display: none;
+  width: 100%;
+  margin-top: var(--space-1, 0.25rem);
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-danger, #dc3545);
+}
+
+.invalid-feedback.visible,
+.field-error.visible {
+  display: block;
+}
+
+.valid-feedback {
+  display: none;
+  width: 100%;
+  margin-top: var(--space-1, 0.25rem);
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-success-dark, #1E7E34); /* 4.8:1 contrast ratio - WCAG AA compliant */
+}
+
+.valid-feedback.visible {
+  display: block;
+}
+
+/* Error icon for invalid fields */
+.form-group.has-error .form-control,
+.form-group.has-error input,
+.form-group.has-error select {
+  border-color: var(--color-danger, #dc3545);
+}
+
+.form-group.has-error label {
+  color: var(--color-danger, #dc3545);
+}
+
+/* Success icon for valid fields */
+.form-group.has-success .form-control,
+.form-group.has-success input,
+.form-group.has-success select {
+  border-color: var(--color-success, #28a745);
+}
+
+/* Required field indicator */
+.required,
+label.required::after {
+  content: " *";
+  color: var(--color-danger, #dc3545);
+  font-weight: var(--font-weight-bold, 700);
+}
+
+/* Focus states for accessibility */
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--color-primary, #003366);
+  outline-offset: 2px;
+  border-color: var(--color-primary, #003366);
+}
+
+/* Disabled state */
+.form-control:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: var(--color-neutral-100, #F9FAFB);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Validation summary (for multiple errors) */
+.validation-summary {
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  margin-bottom: var(--space-4, 1rem);
+  border: 1px solid var(--color-danger, #dc3545);
+  border-left: 4px solid var(--color-danger, #dc3545);
+  background-color: rgba(220, 53, 69, 0.1);
+  border-radius: var(--radius-md, 6px);
+}
+
+.validation-summary h4 {
+  margin: 0 0 var(--space-2, 0.5rem) 0;
+  color: var(--color-danger, #dc3545);
+  font-size: var(--font-size-base, 1rem);
+}
+
+.validation-summary ul {
+  margin: 0;
+  padding-left: var(--space-5, 1.25rem);
+}
+
+.validation-summary li {
+  color: var(--color-danger, #dc3545);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Real-time validation animations */
+.form-control.validating,
+input.validating,
+select.validating {
+  border-color: var(--color-info, #3B82F6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%233B82F6' viewBox='0 0 16 16'%3E%3Cpath d='M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.25rem) center;
+  background-size: calc(0.75em + 0.5rem) calc(0.75em + 0.5rem);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Smooth transitions */
+.form-control,
+input,
+select,
+textarea {
+  transition: border-color var(--transition-fast, 150ms ease),
+              box-shadow var(--transition-fast, 150ms ease),
+              background-image var(--transition-fast, 150ms ease);
+}
+
+/* Help text */
+.form-text,
+.help-text {
+  display: block;
+  margin-top: var(--space-1, 0.25rem);
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-neutral-600, #6B7280);
+}
+
+/* Inline validation (appears next to field) */
+.inline-validation {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 0.25rem);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.inline-validation.error {
+  color: var(--color-danger, #dc3545);
+}
+
+.inline-validation.success {
+  color: var(--color-success, #28a745);
+}
+
+/* Accessibility: High contrast mode support */
+@media (prefers-contrast: high) {
+  .form-control.is-invalid,
+  input.is-invalid,
+  select.is-invalid {
+    border-width: 2px;
+  }
+
+  .form-control.is-valid,
+  input.is-valid,
+  select.is-valid {
+    border-width: 2px;
+  }
+}

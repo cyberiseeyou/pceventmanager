@@ -31,11 +31,37 @@
     position: relative;
   }
 
+  .action-modal h2,
   .action-modal h3 {
     margin-top: 0;
     color: var(--text-primary);
-    border-bottom: 2px solid var(--pc-light-blue);
+  }
+
+  .action-modal header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
+    border-bottom: 2px solid var(--pc-light-blue);
+  }
+
+  .action-modal header h2 {
+    margin: 0;
+  }
+
+  .action-modal footer {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid #ddd;
+  }
+
+  .required-indicator {
+    color: #DC2626;
+    font-weight: 700;
   }
 
   .action-modal .form-group {
@@ -58,14 +84,7 @@
     box-sizing: border-box;
   }
 
-  .modal-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-    justify-content: flex-end;
-    margin-top: var(--spacing-lg);
-    padding-top: var(--spacing-md);
-    border-top: 1px solid #ddd;
-  }
+
 
   .hidden {
     display: none !important;
@@ -74,37 +93,39 @@
 {% endblock %}
 
 {% block content %}
-<div class="daily-view-container" data-selected-date="{{ selected_date.strftime('%Y-%m-%d') }}">
+<div class="daily-view-container" data-selected-date="{{ selected_date.strftime('%Y-%m-%d') }}" data-today="{{ today.strftime('%Y-%m-%d') }}" role="main" aria-label="Daily schedule view">
   <!-- Header Section -->
-  <div class="daily-view-header">
+  <header class="daily-view-header">
     <!-- Back to Calendar Button -->
-    <a href="{{ url_for('main.calendar_view') }}" class="btn-back" aria-label="Back to calendar">
+    <nav aria-label="Breadcrumb navigation">
+      <a href="{{ url_for('main.calendar_view') }}" class="btn-back" aria-label="Back to calendar">
       <span class="icon">←</span>
       <span class="btn-text">Back to Calendar</span>
-    </a>
+      </a>
+    </nav>
 
     <!-- Date Navigation -->
-    <div class="date-navigation">
+    <nav class="date-navigation" aria-label="Date navigation">
       <a href="{{ url_for('main.daily_schedule_view', date=prev_date.strftime('%Y-%m-%d')) }}"
-        class="btn-nav btn-nav-prev" aria-label="Previous day">
+        class="btn-nav btn-nav-prev" aria-label="Previous day, {{ prev_date.strftime('%A, %B %d') }}">
         ←
       </a>
 
-      <h1 class="daily-date">
-        {{ selected_date.strftime('%A, %B %d, %Y').upper() }}
+      <h1 class="daily-date" id="page-title">
+        <time datetime="{{ selected_date.strftime('%Y-%m-%d') }}">{{ selected_date.strftime('%A, %B %d, %Y').upper() }}</time>
       </h1>
 
       <a href="{{ url_for('main.daily_schedule_view', date=next_date.strftime('%Y-%m-%d')) }}"
-        class="btn-nav btn-nav-next" aria-label="Next day">
+        class="btn-nav btn-nav-next" aria-label="Next day, {{ next_date.strftime('%A, %B %d') }}">
         →
       </a>
-    </div>
+    </nav>
 
     <!-- Bulk Actions -->
-    <div class="bulk-actions">
+    <div role="toolbar" aria-label="Bulk actions" class="bulk-actions">
       <button type="button" class="btn btn-secondary" id="btn-bulk-reassign-supervisor"
         aria-label="Reassign all supervisor events">
-        <span class="icon">🔄</span>
+        <span class="icon"><span class="material-symbols-outlined">sync</span></span>
         <span class="btn-text">Reassign Supervisor Events</span>
       </button>
 
@@ -112,15 +133,16 @@
       <button type="button" class="btn btn-lock" id="btn-lock-day"
         data-date="{{ selected_date.strftime('%Y-%m-%d') }}"
         aria-label="Lock or unlock this day">
-        <span class="icon" id="lock-icon">🔓</span>
+        <span class="icon" id="lock-icon"><span class="material-symbols-outlined">lock_open</span></span>
         <span class="btn-text" id="lock-text">Lock Day</span>
       </button>
     </div>
 
     <!-- Role Assignments -->
-    <div class="role-assignments">
+    <section aria-labelledby="role-assignments-heading" class="role-assignments">
+      <h2 class="sr-only" id="role-assignments-heading">Daily Role Assignments</h2>
       <div class="role-item">
-        <span class="role-icon" aria-hidden="true">👤</span>
+        <span class="role-icon" aria-hidden="true"><span class="material-symbols-outlined">blender</span></span>
         <span class="role-label">Juicer:</span>
         {% if juicer and juicer.employee %}
         <strong class="role-value">{{ juicer.employee.name }}</strong>
@@ -132,7 +154,7 @@
       </div>
 
       <div class="role-item">
-        <span class="role-icon" aria-hidden="true">⭐</span>
+        <span class="role-icon" aria-hidden="true"><span class="material-symbols-outlined">star</span></span>
         <span class="role-label">Primary Lead Event Specialist:</span>
         {% if primary_lead and primary_lead.employee %}
         <strong class="role-value">{{ primary_lead.employee.name }}</strong>
@@ -143,10 +165,10 @@
         {% endif %}
       </div>
     </div>
-  </div>
+  </header>
 
   <!-- Main Content Area -->
-  <div class="daily-view-content">
+  <main class="daily-view-content" aria-label="Daily schedule content">
     <!-- Event Type Summary -->
     <div id="daily-summary" class="dashboard-section">
       <!-- JavaScript will populate this -->
@@ -188,10 +210,10 @@
           <!-- View Toggle -->
           <div class="view-toggle" role="group" aria-label="View mode">
             <button type="button" class="view-toggle-btn active" data-view="card" aria-pressed="true">
-              <span class="toggle-icon">☐</span> Card
+              <span class="toggle-icon"><span class="material-symbols-outlined">grid_view</span></span> Card
             </button>
             <button type="button" class="view-toggle-btn" data-view="list" aria-pressed="false">
-              <span class="toggle-icon">☰</span> List
+              <span class="toggle-icon"><span class="material-symbols-outlined">view_list</span></span> List
             </button>
           </div>
           <!-- Type Filter -->
@@ -199,13 +221,11 @@
             <label for="event-type-filter" class="filter-label">Filter:</label>
             <select id="event-type-filter" class="filter-select">
               <option value="all">All Types</option>
-              <option value="Core">Core</option>
-              <option value="Demo">Demo</option>
-              <option value="Setup">Setup</option>
               <option value="Juicer">Juicer</option>
+              <option value="Core">Core</option>
               <option value="Supervisor">Supervisor</option>
               <option value="Freeosk">Freeosk</option>
-              <option value="Digitals">Digitals</option>
+              <option value="Digital">Digital</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -218,15 +238,17 @@
           Loading events...
         </div>
       </div>
-    </div>
-  </div>
+    </section>
+  </header>
 </div>
 
 <!-- Reschedule Event Modal -->
-<div class="modal-backdrop" id="reschedule-modal" style="display: none;">
-  <div class="action-modal">
-    <button class="modal-close" onclick="window.dailyView.closeRescheduleModal()">&times;</button>
-    <h3>Reschedule Event</h3>
+<div class="modal-backdrop" id="reschedule-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="reschedule-modal-title">
+  <div class="action-modal" role="document">
+    <header>
+      <h2 id="reschedule-modal-title">Reschedule Event</h2>
+      <button class="modal-close" aria-label="Close reschedule modal" onclick="window.dailyView.closeRescheduleModal()"><span aria-hidden="true">&times;</span></button>
+    </header>
     <form id="reschedule-form">
       <input type="hidden" id="reschedule-schedule-id">
       <div class="form-group">
@@ -234,35 +256,35 @@
         <div id="reschedule-event-info"></div>
       </div>
       <div class="form-group">
-        <label for="reschedule-date">New Date:</label>
-        <input type="date" id="reschedule-date" required>
+        <label for="reschedule-date">New Date: <span class="required-indicator" aria-label="required">*</span></label>
+        <input type="date" id="reschedule-date" required aria-required="true">
       </div>
       <div class="form-group">
-        <label for="reschedule-time">New Time:</label>
-        <input type="time" id="reschedule-time" required>
+        <label for="reschedule-time">New Time: <span class="required-indicator" aria-label="required">*</span></label>
+        <input type="time" id="reschedule-time" required aria-required="true">
         <select id="reschedule-time-dropdown" class="hidden">
           <option value="">Select a time</option>
         </select>
       </div>
       <div class="form-group">
-        <label for="reschedule-employee">Employee:</label>
-        <select id="reschedule-employee" required>
+        <label for="reschedule-employee">Employee: <span class="required-indicator" aria-label="required">*</span></label>
+        <select id="reschedule-employee" required aria-required="true">
           <option value="">Loading...</option>
         </select>
       </div>
       <div class="form-group" style="margin-top: 15px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+        <label for="override-constraints" aria-describedby="override-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
           <input type="checkbox" id="reschedule-override-constraints" name="override_constraints" value="true"
             style="width: auto; margin: 0;">
           <span style="font-weight: 500; color: #e67e22;">
             Override Scheduling Constraints
           </span>
         </label>
-        <small style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
+        <small id="override-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
           Enable to bypass role restrictions, time constraints, and one-Core-per-day limits.
         </small>
       </div>
-      <div class="modal-actions">
+      <footer class="modal-actions">
         <button type="button" class="btn btn-secondary"
           onclick="window.dailyView.closeRescheduleModal()">Cancel</button>
         <button type="submit" class="btn btn-primary">Reschedule</button>
@@ -271,19 +293,67 @@
   </div>
 </div>
 
-<!-- Bulk Reassign Supervisor Events Modal -->
-<div class="modal-backdrop" id="bulk-reassign-modal" style="display: none;">
+<!-- Reissue Event Modal -->
+<div class="modal-backdrop" id="reissue-modal" style="display: none;">
   <div class="action-modal">
-    <button class="modal-close" onclick="window.dailyView.closeBulkReassignModal()">&times;</button>
-    <h3>Reassign All Supervisor Events</h3>
+    <button class="modal-close" onclick="window.dailyView.closeReissueModal()">&times;</button>
+    <h3>Reissue Event</h3>
+    <form id="reissue-form">
+      <input type="hidden" id="reissue-schedule-id">
+      <div class="form-group">
+        <label>Event:</label>
+        <div id="reissue-event-info"></div>
+      </div>
+      <div class="form-group">
+        <label for="reissue-date">New Date:</label>
+        <input type="date" id="reissue-date" required>
+      </div>
+      <div class="form-group">
+        <label for="reissue-time">New Time:</label>
+        <input type="time" id="reissue-time" required>
+      </div>
+      <div class="form-group">
+        <label for="reissue-employee">Employee:</label>
+        <select id="reissue-employee" required>
+          <option value="">Loading...</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label for="override-constraints" aria-describedby="override-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="reissue-include-responses" name="include_responses" value="true"
+            style="width: auto; margin: 0;">
+          <span style="font-weight: 500;">
+            Include Previous Responses
+          </span>
+        </label>
+        <small id="override-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
+          Enable to include responses from the original event submission.
+        </small>
+      </div>
+      <footer class="modal-actions">
+        <button type="button" class="btn btn-secondary"
+          onclick="window.dailyView.closeReissueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Reissue</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk Reassign Supervisor Events Modal -->
+<div class="modal-backdrop" id="bulk-reassign-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="bulk-reassign-modal-title">
+  <div class="action-modal" role="document">
+    <header>
+      <h2 id="bulk-reassign-modal-title">Reassign All Supervisor Events</h2>
+      <button class="modal-close" aria-label="Close reassign modal" onclick="window.dailyView.closeBulkReassignModal()"><span aria-hidden="true">&times;</span></button>
+    </header>
     <form id="bulk-reassign-form">
       <div class="form-group">
         <label>Date:</label>
         <div id="bulk-reassign-date-info">{{ selected_date.strftime('%A, %B %d, %Y') }}</div>
       </div>
       <div class="form-group">
-        <label for="bulk-reassign-employee">Reassign all Supervisor events to:</label>
-        <select id="bulk-reassign-employee" required>
+        <label for="bulk-reassign-employee">Reassign all Supervisor events to: <span class="required-indicator" aria-label="required">*</span></label>
+        <select id="bulk-reassign-employee" required aria-required="true">
           <option value="">Select an employee...</option>
           {% for employee in employees %}
           {% if employee.job_title in ['Club Supervisor', 'Lead Event Specialist'] %}
@@ -293,12 +363,24 @@
         </select>
         <small class="form-help">Only Club Supervisors and Lead Event Specialists can work supervisor events</small>
       </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label for="bulk-reassign-override" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="bulk-reassign-override" name="override_constraints" value="true"
+            style="width: auto; margin: 0;">
+          <span style="font-weight: 500; color: #e67e22;">
+            Override Availability Constraints
+          </span>
+        </label>
+        <small style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
+          Enable to bypass weekly availability and time-off restrictions (use for exceptions).
+        </small>
+      </div>
       <div id="bulk-reassign-preview" class="form-group" style="display: none;">
         <label>Events to reassign:</label>
         <div id="bulk-reassign-event-list" class="event-preview-list"></div>
       </div>
       <div id="bulk-reassign-error" class="error-message" style="display: none;"></div>
-      <div class="modal-actions">
+      <footer class="modal-actions">
         <button type="button" class="btn btn-secondary"
           onclick="window.dailyView.closeBulkReassignModal()">Cancel</button>
         <button type="submit" class="btn btn-primary">Reassign All Events</button>
@@ -308,10 +390,12 @@
 </div>
 
 <!-- Change Event Type Modal -->
-<div class="modal-backdrop" id="change-event-type-modal" style="display: none;">
-  <div class="action-modal">
-    <button class="modal-close" onclick="window.dailyView.closeChangeEventTypeModal()">&times;</button>
-    <h3>Change Event Type</h3>
+<div class="modal-backdrop" id="change-event-type-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="change-type-modal-title">
+  <div class="action-modal" role="document">
+    <header>
+      <h2 id="change-type-modal-title">Change Event Type</h2>
+      <button class="modal-close" aria-label="Close change event type modal" onclick="window.dailyView.closeChangeEventTypeModal()"><span aria-hidden="true">&times;</span></button>
+    </header>
     <form id="change-event-type-form" onsubmit="event.preventDefault(); window.dailyView.submitEventTypeChange();">
       <input type="hidden" id="change-type-event-ref">
       <input type="hidden" id="change-type-schedule-id">
@@ -327,8 +411,8 @@
       </div>
 
       <div class="form-group">
-        <label for="change-type-new-type">New Event Type: <span style="color: red;">*</span></label>
-        <select id="change-type-new-type" required>
+        <label for="change-type-new-type">New Event Type: <span class="required-indicator" aria-label="required">*</span></label>
+        <select id="change-type-new-type" required aria-required="true">
           <option value="">Select event type...</option>
           <option value="Core">Core</option>
           <option value="Juicer Production">Juicer Production</option>
@@ -353,7 +437,7 @@
         <strong>Note:</strong> This change will persist through database refreshes. Existing employee assignment will remain.
       </div>
 
-      <div class="modal-actions">
+      <footer class="modal-actions">
         <button type="button" class="btn btn-secondary" onclick="window.dailyView.closeChangeEventTypeModal()">Cancel</button>
         <button type="submit" class="btn btn-primary">Change Event Type</button>
       </div>

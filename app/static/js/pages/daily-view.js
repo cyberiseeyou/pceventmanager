@@ -18,6 +18,11 @@ class DailyView {
             }
         }
         this.date = date;
+
+        // Get today's date from DOM for reissue logic
+        const container = document.querySelector('.daily-view-container');
+        this.today = container ? container.getAttribute('data-today') : null;
+
         this.summaryContainer = document.getElementById('daily-summary');
         this.timeslotContainer = document.getElementById('timeslot-blocks');
         this.eventsContainer = document.getElementById('event-cards-container');  // NEW for Story 3.3
@@ -41,6 +46,7 @@ class DailyView {
         this.setupTypeFilter();        // Setup filter listener
         this.setupViewToggle();        // Setup view mode toggle
         this.setupLockButton();        // Setup lock/unlock button
+        this.setupKeyboardShortcuts(); // Setup keyboard navigation
     }
 
     /**
@@ -78,6 +84,24 @@ class DailyView {
     }
 
     /**
+     * Get the display category for an event type
+     * Maps specific event types to their display categories
+     */
+    getEventTypeCategory(eventType) {
+        const juicerTypes = ['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'];
+        const digitalTypes = ['Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Digitals'];
+
+        if (juicerTypes.includes(eventType)) {
+            return 'Juicer';
+        } else if (digitalTypes.includes(eventType)) {
+            return 'Digital';
+        } else if (['Core', 'Supervisor', 'Freeosk', 'Other'].includes(eventType)) {
+            return eventType;
+        }
+        return 'Other';
+    }
+
+    /**
      * Filter events by type and re-render based on view mode
      */
     filterAndRenderEvents() {
@@ -85,13 +109,11 @@ class DailyView {
         let filteredEvents = this.allEvents;
 
         if (selectedType !== 'all') {
-            if (selectedType === 'Juicer') {
-                // "Juicer" filter matches all 3 Juicer event types
-                const juicerTypes = ['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'];
-                filteredEvents = this.allEvents.filter(event => juicerTypes.includes(event.event_type));
-            } else {
-                filteredEvents = this.allEvents.filter(event => event.event_type === selectedType);
-            }
+            // Filter by category - matches all event types in that category
+            filteredEvents = this.allEvents.filter(event => {
+                const category = this.getEventTypeCategory(event.event_type);
+                return category === selectedType;
+            });
         }
 
         // Render based on view mode
@@ -225,9 +247,26 @@ class DailyView {
 
     /**
      * Render event type summary section
+     * Groups event types by category and displays in priority order:
+     * Juicer, Core, Supervisor, Freeosk, Digital, Other
      */
     renderEventTypeSummary(eventTypes, totalEvents) {
         if (!this.summaryContainer) return;
+
+        // Group event types by category
+        const categoryCounts = {};
+        Object.entries(eventTypes).forEach(([type, count]) => {
+            const category = this.getEventTypeCategory(type);
+            categoryCounts[category] = (categoryCounts[category] || 0) + count;
+        });
+
+        // Define display order
+        const displayOrder = ['Juicer', 'Core', 'Supervisor', 'Freeosk', 'Digital', 'Other'];
+
+        // Build sorted array with only types that have events
+        const sortedCategories = displayOrder
+            .filter(category => categoryCounts[category] > 0)
+            .map(category => [category, categoryCounts[category]]);
 
         const html = `
             <div class="event-summary">
@@ -237,10 +276,10 @@ class DailyView {
                     <span class="event-summary__label">Total Events</span>
                 </div>
                 <div class="event-summary__types">
-                    ${Object.entries(eventTypes).map(([type, count]) => `
+                    ${sortedCategories.map(([category, count]) => `
                         <div class="event-type-item">
-                            <span class="event-type-item__icon">${this.getEventIcon(type)}</span>
-                            <span class="event-type-item__label">${type}</span>
+                            <span class="event-type-item__icon">${this.getEventIcon(category)}</span>
+                            <span class="event-type-item__label">${category}</span>
                             <span class="event-type-item__count">${count}</span>
                         </div>
                     `).join('')}
@@ -351,20 +390,21 @@ class DailyView {
     }
 
     /**
-     * Get icon for event type
+     * Get Material Symbol icon HTML for event type
      */
     getEventIcon(eventType) {
         const icons = {
-            'Setup': '📦',
-            'Demo': '🎯',
-            'Juicer': '🏪',
-            'Other': '📋',
-            'Core': '🎯',
-            'Supervisor': '👔',
-            'Freeosk': '🆓',
-            'Digitals': '💻'
+            'Setup': '<span class="material-symbols-outlined">inventory_2</span>',
+            'Demo': '<span class="material-symbols-outlined">target</span>',
+            'Juicer': '<span class="material-symbols-outlined">blender</span>',
+            'Other': '<span class="material-symbols-outlined">description</span>',
+            'Core': '<span class="material-symbols-outlined">target</span>',
+            'Supervisor': '<span class="material-symbols-outlined">admin_panel_settings</span>',
+            'Freeosk': '<span class="material-symbols-outlined">redeem</span>',
+            'Digital': '<span class="material-symbols-outlined">devices</span>',
+            'Digitals': '<span class="material-symbols-outlined">devices</span>'
         };
-        return icons[eventType] || '📋';
+        return icons[eventType] || '<span class="material-symbols-outlined">event</span>';
     }
 
     /**
@@ -464,7 +504,7 @@ class DailyView {
             : '<span class="attendance-badge attendance-badge--no-record">⚪ No Record</span>';
 
         const notesPreview = employee.attendance_notes
-            ? `<span class="attendance-notes" title="${this.escapeHtml(employee.attendance_notes)}">📝 ${this.truncate(employee.attendance_notes, 40)}</span>`
+            ? `<span class="attendance-notes" title="${this.escapeHtml(employee.attendance_notes)}"><span class="material-symbols-outlined">notes</span> ${this.truncate(employee.attendance_notes, 40)}</span>`
             : '';
 
         const startTime = employee.earliest_start_time
@@ -704,7 +744,86 @@ class DailyView {
     }
 
     /**
+     * Group events by category
+     * @param {Array} events - Array of event objects
+     * @returns {Object} Events grouped by category
+     */
+    groupEventsByCategory(events) {
+        const grouped = {
+            'Juicer': [],
+            'Core': [],
+            'Supervisor': [],
+            'Freeosk': [],
+            'Digital': [],
+            'Other': []
+        };
+
+        events.forEach(event => {
+            const category = this.getEventTypeCategory(event.event_type);
+            if (grouped[category]) {
+                grouped[category].push(event);
+            } else {
+                grouped['Other'].push(event);
+            }
+        });
+
+        // Sort each group by time
+        Object.keys(grouped).forEach(category => {
+            grouped[category].sort((a, b) => a.start_time.localeCompare(b.start_time));
+        });
+
+        return grouped;
+    }
+
+    /**
+     * Pair Core and Supervisor events for display
+     * Core always on left, Supervisor on right
+     */
+    pairCoreSupervisorEvents(coreEvents, supervisorEvents) {
+        const paired = [];
+        const usedSupervisors = new Set();
+
+        coreEvents.forEach(coreEvent => {
+            const match = coreEvent.event_name.match(/^(\d{6})/);
+            let pairedSupervisor = null;
+
+            if (match) {
+                const eventNumber = match[1];
+                pairedSupervisor = supervisorEvents.find(supEvent => {
+                    const supMatch = supEvent.event_name.match(/^(\d{6})/);
+                    return supMatch && supMatch[1] === eventNumber && !usedSupervisors.has(supEvent.schedule_id);
+                });
+
+                if (pairedSupervisor) {
+                    usedSupervisors.add(pairedSupervisor.schedule_id);
+                }
+            }
+
+            paired.push({ core: coreEvent, supervisor: pairedSupervisor });
+        });
+
+        const unpairedSupervisors = supervisorEvents.filter(s => !usedSupervisors.has(s.schedule_id));
+        return { paired, unpairedSupervisors };
+    }
+
+    /**
+     * Create paired Core-Supervisor display
+     */
+    createCoreSupervisorPair(pair) {
+        const coreHTML = pair.core ? this.createEventCard(pair.core) : '<div class="event-card-placeholder"></div>';
+        const supervisorHTML = pair.supervisor ? this.createEventCard(pair.supervisor) : '<div class="event-card-placeholder"></div>';
+
+        return `
+            <div class="core-supervisor-pair">
+                <div class="pair-core">${coreHTML}</div>
+                <div class="pair-supervisor">${supervisorHTML}</div>
+            </div>
+        `;
+    }
+
+    /**
      * Render event cards into container
+     * Groups events by category with Core-Supervisor pairing
      *
      * @param {Array} events - Array of event objects from API
      */
@@ -715,7 +834,6 @@ class DailyView {
         this.eventsContainer.classList.remove('list-view');
 
         if (events.length === 0) {
-            // Empty state
             this.eventsContainer.innerHTML = `
                 <div class="empty-state" role="status">
                     <p class="empty-state__message">No events scheduled for this date</p>
@@ -724,18 +842,69 @@ class DailyView {
             return;
         }
 
-        // Check for cancelled events and show notification banner
-        // Supports both is_cancelled flag and reporting_status === 'cancelled'
+        // Check for cancelled events
         const cancelledEvents = events.filter(e => e.is_cancelled || e.reporting_status === 'cancelled');
         const cancelledBannerHTML = cancelledEvents.length > 0
             ? this.createCancelledEventsBanner(cancelledEvents)
             : '';
 
-        // Render event cards
-        const cardsHTML = events.map(event => this.createEventCard(event)).join('');
-        this.eventsContainer.innerHTML = cancelledBannerHTML + cardsHTML;
+        // Group events by category
+        const grouped = this.groupEventsByCategory(events);
+        const categoryOrder = ['Juicer', 'Core', 'Supervisor', 'Freeosk', 'Digital', 'Other'];
+        let cardsHTML = '';
 
-        // Attach event listeners after rendering
+        categoryOrder.forEach(category => {
+            if (category === 'Core') {
+                const pairingResult = this.pairCoreSupervisorEvents(grouped['Core'], grouped['Supervisor']);
+
+                if (pairingResult.paired.length > 0) {
+                    cardsHTML += `
+                        <div class="event-category-section event-category-section--paired">
+                            <h3 class="event-category-header">
+                                <span class="category-icon">${this.getEventIcon('Core')}</span>
+                                Core & Supervisor Events
+                            </h3>
+                            <div class="event-category-content">
+                                ${pairingResult.paired.map(pair => this.createCoreSupervisorPair(pair)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (pairingResult.unpairedSupervisors.length > 0) {
+                    cardsHTML += `
+                        <div class="event-category-section">
+                            <h3 class="event-category-header">
+                                <span class="category-icon">${this.getEventIcon('Supervisor')}</span>
+                                Unpaired Supervisor Events
+                            </h3>
+                            <div class="event-category-content">
+                                ${pairingResult.unpairedSupervisors.map(event => this.createEventCard(event)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (category === 'Supervisor') {
+                return; // Handled with Core
+            } else {
+                const categoryEvents = grouped[category];
+                if (categoryEvents.length > 0) {
+                    cardsHTML += `
+                        <div class="event-category-section">
+                            <h3 class="event-category-header">
+                                <span class="category-icon">${this.getEventIcon(category)}</span>
+                                ${category} Events
+                            </h3>
+                            <div class="event-category-content">
+                                ${categoryEvents.map(event => this.createEventCard(event)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        });
+
+        this.eventsContainer.innerHTML = cancelledBannerHTML + cardsHTML;
         this.attachEventCardListeners();
     }
 
@@ -753,7 +922,7 @@ class DailyView {
         return `
             <div class="cancelled-events-banner" role="alert">
                 <div class="cancelled-events-banner__header">
-                    <span class="cancelled-events-banner__icon">🚫</span>
+                    <span class="cancelled-events-banner__icon"><span class="material-symbols-outlined">cancel</span></span>
                     <strong>Action Required: ${cancelledEvents.length} Cancelled Event${cancelledEvents.length > 1 ? 's' : ''} Detected</strong>
                 </div>
                 <p class="cancelled-events-banner__message">
@@ -772,6 +941,7 @@ class DailyView {
 
     /**
      * Render events in list/table view
+     * Groups events by category with Core-Supervisor pairing
      *
      * @param {Array} events - Array of event objects from API
      */
@@ -790,19 +960,77 @@ class DailyView {
             return;
         }
 
-        // Build table-like list with header
-        const headerHTML = `
-            <div class="event-list-header">
-                <div>Time</div>
-                <div>Event</div>
-                <div>Employee</div>
-                <div>Type</div>
-                <div>Actions</div>
-            </div>
-        `;
+        // Group events by category
+        const grouped = this.groupEventsByCategory(events);
+        const categoryOrder = ['Juicer', 'Core', 'Supervisor', 'Freeosk', 'Digital', 'Other'];
+        let listHTML = '';
 
-        const rowsHTML = events.map(event => this.createEventListRow(event)).join('');
-        this.eventsContainer.innerHTML = headerHTML + rowsHTML;
+        categoryOrder.forEach(category => {
+            if (category === 'Core') {
+                const pairingResult = this.pairCoreSupervisorEvents(grouped['Core'], grouped['Supervisor']);
+
+                if (pairingResult.paired.length > 0 || pairingResult.unpairedSupervisors.length > 0) {
+                    listHTML += `
+                        <div class="event-category-section event-category-section--paired">
+                            <h3 class="event-category-header">
+                                <span class="category-icon">${this.getEventIcon('Core')}</span>
+                                Core & Supervisor Events
+                            </h3>
+                            <div class="event-category-content">
+                                <div class="event-list-header">
+                                    <div>Time</div>
+                                    <div>Event</div>
+                                    <div>Employee</div>
+                                    <div>Type</div>
+                                    <div>Actions</div>
+                                </div>
+                    `;
+
+                    // Add paired Core events first
+                    pairingResult.paired.forEach(pair => {
+                        if (pair.core) {
+                            listHTML += this.createEventListRow(pair.core);
+                        }
+                        if (pair.supervisor) {
+                            listHTML += this.createEventListRow(pair.supervisor);
+                        }
+                    });
+
+                    // Add unpaired supervisors
+                    pairingResult.unpairedSupervisors.forEach(event => {
+                        listHTML += this.createEventListRow(event);
+                    });
+
+                    listHTML += '</div></div>';
+                }
+            } else if (category === 'Supervisor') {
+                return; // Handled with Core
+            } else {
+                const categoryEvents = grouped[category];
+                if (categoryEvents.length > 0) {
+                    listHTML += `
+                        <div class="event-category-section">
+                            <h3 class="event-category-header">
+                                <span class="category-icon">${this.getEventIcon(category)}</span>
+                                ${category} Events
+                            </h3>
+                            <div class="event-category-content">
+                                <div class="event-list-header">
+                                    <div>Time</div>
+                                    <div>Event</div>
+                                    <div>Employee</div>
+                                    <div>Type</div>
+                                    <div>Actions</div>
+                                </div>
+                                ${categoryEvents.map(event => this.createEventListRow(event)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        });
+
+        this.eventsContainer.innerHTML = listHTML;
 
         // Attach event listeners
         this.attachEventListListeners();
@@ -827,12 +1055,12 @@ class DailyView {
                 <div class="event-list-row__employee">${event.employee_name}</div>
                 <div class="event-list-row__type">${event.event_type}</div>
                 <div class="event-list-row__actions">
-                    <button class="btn btn-primary btn-sm btn-reschedule-list" 
+                    <button class="btn btn-primary btn-sm btn-reschedule-list"
                             data-schedule-id="${event.schedule_id}"
-                            title="Reschedule">📅</button>
+                            title="Reschedule"><span class="material-symbols-outlined">edit_calendar</span></button>
                     <button class="btn btn-secondary btn-sm btn-more-list"
                             data-schedule-id="${event.schedule_id}"
-                            title="More actions">⋮</button>
+                            title="More actions"><span class="material-symbols-outlined">more_vert</span></button>
                 </div>
             </div>
         `;
@@ -870,19 +1098,27 @@ class DailyView {
         // Check for cancelled status from either is_cancelled flag or reporting_status
         const isCancelled = event.is_cancelled || event.reporting_status === 'cancelled';
         const statusBadge = this.getStatusBadge(event.reporting_status, isCancelled);
-        const overdueBadge = event.is_overdue ? '<span class="badge-overdue">⚠️ OVERDUE</span>' : '';
+        const overdueBadge = event.is_overdue ? '<span class="badge-overdue"><span class="material-symbols-outlined">warning</span> OVERDUE</span>' : '';
         const salesToolLink = event.sales_tool_url
             ? `<a href="${event.sales_tool_url}"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="link-sales-tool"
                    aria-label="View event details in sales tool (opens new tab)">
-                 🔗 View Event Details in Sales Tool (opens new tab)
+                 <span class="material-symbols-outlined">open_in_new</span> View Event Details
                </a>`
             : '';
 
         // Add cancelled class for special styling
         const cancelledClass = isCancelled ? 'event-card--cancelled' : '';
+
+        // Determine if this should be Reissue or Reschedule
+        const isReissue = this.shouldShowReissue(event);
+        const buttonLabel = isReissue ? 'Reissue' : 'Reschedule';
+        const buttonClass = isReissue ? 'btn-reissue' : 'btn-reschedule';
+
+        // Generate unique ID for ARIA labeling
+        const cardId = `event-${event.schedule_id}`;
 
         return `
             <article class="event-card ${cancelledClass}"
@@ -892,42 +1128,63 @@ class DailyView {
                      data-employee-id="${event.employee_id}"
                      data-event-name="${this.escapeHtml(event.event_name)}"
                      data-is-cancelled="${isCancelled}"
-                     aria-label="${event.employee_name} - ${event.start_time} ${event.event_name}${isCancelled ? ' - CANCELLED' : ''}">
-                <div class="event-card__header">
-                    <div class="employee-name">👤 ${event.employee_name.toUpperCase()}</div>
+                     data-event-condition="${event.condition || ''}"
+                     data-due-datetime="${event.due_datetime || ''}"
+                     role="article"
+                     aria-labelledby="${cardId}-title"
+                     aria-describedby="${cardId}-details">
+                <header class="event-card__header">
+                    <h3 class="employee-name" id="${cardId}-title">
+                        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                        <span class="sr-only">Assigned to </span>
+                        ${event.employee_name.toUpperCase()}
+                    </h3>
                     ${overdueBadge}
-                </div>
+                </header>
 
-                <div class="event-card__details">
-                    <div class="event-time">⏰ ${event.start_time} - ${event.end_time} ${this.getCoreBadge(event.start_time)}</div>
-                    <div class="event-info">
-                        ${this.getEventIcon(event.event_type)} ${event.event_name}
+                <div class="event-card__body" id="${cardId}-details">
+                    <div class="event-card__details">
+                        <div class="event-time" role="text">
+                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                            <span class="sr-only">Time: </span>
+                            <time datetime="${event.start_time}">${event.start_time}</time> - <time datetime="${event.end_time}">${event.end_time}</time> ${this.getCoreBadge(event.start_time)}
+                        </div>
+                        <div class="event-info">
+                            <span aria-hidden="true">${this.getEventIcon(event.event_type)}</span>
+                            <span class="sr-only">Event: </span>
+                            ${event.event_name}
+                        </div>
+                        <div class="event-type-display">
+                            <span class="material-symbols-outlined" aria-hidden="true">label</span>
+                            <span class="sr-only">Type: </span>
+                            ${event.event_type}
+                        </div>
+                        ${event.start_date ? `<div class="event-dates"><span class="material-symbols-outlined" aria-hidden="true">date_range</span> <span class="sr-only">Event dates: </span>${event.start_date} - ${event.due_date}</div>` : ''}
+                        ${salesToolLink}
                     </div>
-                    <div class="event-type-display">🏷️ ${event.event_type}</div>
-                    ${event.start_date ? `<div class="event-dates">📅 ${event.start_date} - ${event.due_date}</div>` : ''}
-                    ${salesToolLink}
+
+                    <div class="event-divider"></div>
+
+                    <div class="event-card__status" role="status" aria-live="polite">
+                        <span class="sr-only">Status: </span>
+                        ${statusBadge}
+                    </div>
+
+                    <div class="event-divider"></div>
                 </div>
 
-                <div class="event-divider"></div>
-
-                <div class="event-card__status">
-                    Status: ${statusBadge}
-                </div>
-
-                <div class="event-divider"></div>
-
-                <div class="event-card__actions">
-                    <button class="btn btn-primary btn-reschedule"
+                <footer class="event-card__actions">
+                    <button class="btn btn-primary ${buttonClass}"
                             data-schedule-id="${event.schedule_id}"
-                            aria-label="Reschedule event for ${event.employee_name}">
-                        Reschedule
+                            aria-label="${buttonLabel} event for ${event.employee_name} at ${event.start_time}">
+                        <span aria-hidden="true">${isReissue ? '🔄' : '📅'}</span> ${buttonLabel}
                     </button>
                     <div class="dropdown">
                         <button class="btn btn-secondary dropdown-toggle"
-                                aria-label="More actions for ${event.employee_name} event"
+                                aria-label="Additional actions for ${event.employee_name}'s ${event.event_type} event"
                                 aria-haspopup="true"
                                 aria-expanded="false">
-                            ⋮ More Actions ▼
+                            <span class="material-symbols-outlined" aria-hidden="true">more_vert</span> More
                         </button>
                         <div class="dropdown-menu" role="menu">
                             <button class="dropdown-item btn-change-employee"
@@ -957,9 +1214,40 @@ class DailyView {
                             </button>
                         </div>
                     </div>
-                </div>
+                </footer>
             </article>
         `;
+    }
+
+    /**
+     * Determine if event should show Reissue button vs Reschedule button
+     *
+     * Business logic:
+     * - Show "Reissue" if event.condition === 'Submitted'
+     * - Show "Reissue" if today >= event.due_datetime
+     * - Show "Reschedule" otherwise
+     *
+     * Uses string comparison to avoid timezone issues with Date objects
+     *
+     * @param {Object} event - Event object with condition and due_datetime
+     * @returns {boolean} True to show Reissue, false to show Reschedule
+     */
+    shouldShowReissue(event) {
+        // Check if event has been submitted
+        if (event.condition === 'Submitted') {
+            return true;
+        }
+
+        // Check if today is on or after the due date
+        // Use string comparison (YYYY-MM-DD format) to avoid timezone issues
+        if (event.due_datetime && this.today) {
+            // String comparison works for YYYY-MM-DD format
+            // "2026-01-28" >= "2026-01-26" → true
+            return this.today >= event.due_datetime;
+        }
+
+        // Default to Reschedule
+        return false;
     }
 
     /**
@@ -991,6 +1279,14 @@ class DailyView {
             btn.addEventListener('click', (e) => {
                 const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
                 this.handleReschedule(scheduleId);
+            });
+        });
+
+        // Reissue buttons
+        document.querySelectorAll('.btn-reissue').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
+                this.handleReissue(scheduleId);
             });
         });
 
@@ -1228,6 +1524,128 @@ class DailyView {
     }
 
     /* ===================================================================
+       Reissue Event Methods
+       =================================================================== */
+
+    /**
+     * Handle reissue event button click
+     *
+     * @param {number} scheduleId - Schedule ID
+     */
+    async handleReissue(scheduleId) {
+        console.log('Reissue event:', scheduleId);
+
+        // Get event card to extract event details
+        const eventCard = document.querySelector(`[data-schedule-id="${scheduleId}"]`);
+        if (!eventCard) {
+            this.showNotification('Event not found', 'error');
+            return;
+        }
+
+        const eventId = eventCard.getAttribute('data-event-id');
+        const eventName = eventCard.getAttribute('data-event-name') ||
+            eventCard.querySelector('.event-info')?.textContent?.trim()?.replace(/^[^\s]+\s/, '') ||
+            'Unknown Event';
+        const eventType = eventCard.getAttribute('data-event-type') || 'Unknown';
+        const currentEmployeeName = eventCard.querySelector('.employee-name')?.textContent?.replace(/👤|person/g, '').trim() || 'Unknown';
+        const currentEmployeeId = eventCard.getAttribute('data-employee-id');
+
+        // Get event datetime from card
+        const timeText = eventCard.querySelector('.event-time')?.textContent || '';
+        const timeMatch = timeText.match(/(\d{1,2}:\d{2}\s[AP]M)/);
+        const startTime = timeMatch ? timeMatch[1] : '';
+
+        console.log('Reissue data:', { eventId, eventName, eventType, currentEmployeeName, currentEmployeeId, startTime });
+
+        // Open reissue modal
+        await this.openReissueModal(scheduleId, eventId, eventName, eventType, startTime, currentEmployeeName, currentEmployeeId, this.date);
+    }
+
+    /**
+     * Open reissue modal
+     *
+     * @param {number} scheduleId - Schedule ID
+     * @param {number} eventId - Event ID
+     * @param {string} eventName - Event name
+     * @param {string} eventType - Event type
+     * @param {string} currentTime - Current scheduled time (12-hour format)
+     * @param {string} employeeName - Current employee name
+     * @param {string} employeeId - Current employee ID
+     * @param {string} currentDate - Current date (YYYY-MM-DD)
+     */
+    async openReissueModal(scheduleId, eventId, eventName, eventType, currentTime, employeeName, employeeId, currentDate) {
+        try {
+            // Store current reissue context
+            this.reissueContext = {
+                scheduleId,
+                eventId,
+                eventType,
+                eventName,
+                currentEmployeeId: employeeId
+            };
+
+            document.getElementById('reissue-schedule-id').value = scheduleId;
+            document.getElementById('reissue-event-info').innerHTML = `
+                <strong>${this.escapeHtml(eventName)}</strong> (${this.escapeHtml(eventType)})<br>
+                <small>Current: ${currentDate} at ${currentTime} with ${employeeName}</small>
+            `;
+
+            // Set default date and time to current schedule
+            document.getElementById('reissue-date').value = currentDate;
+
+            // Convert 12-hour to 24-hour format for time input
+            const time24 = this.convertTo24Hour(currentTime);
+            document.getElementById('reissue-time').value = time24;
+
+            // Load available employees
+            await this.loadEmployeesForReissue();
+
+            // Pre-select current employee if available
+            if (employeeId) {
+                document.getElementById('reissue-employee').value = employeeId;
+            }
+
+            // Show modal
+            document.getElementById('reissue-modal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        } catch (error) {
+            console.error('Error opening reissue modal:', error);
+            this.showNotification('Failed to open reissue modal', 'error');
+        }
+    }
+
+    /**
+     * Close reissue modal
+     */
+    closeReissueModal() {
+        document.getElementById('reissue-modal').style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Load employees for reissue dropdown
+     */
+    async loadEmployeesForReissue() {
+        try {
+            const response = await fetch('/api/employees/active');
+            if (response.ok) {
+                const employees = await response.json();
+                const select = document.getElementById('reissue-employee');
+                select.innerHTML = '<option value="">Select employee...</option>';
+
+                employees.forEach(emp => {
+                    const option = document.createElement('option');
+                    option.value = emp.id;
+                    option.textContent = `${emp.name} (${emp.job_title})`;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading employees for reissue:', error);
+        }
+    }
+
+    /* ===================================================================
        Bulk Reassign Supervisor Events Methods
        =================================================================== */
 
@@ -1316,6 +1734,10 @@ class DailyView {
             // Get CSRF token
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
+            // Get override checkbox value
+            const overrideCheckbox = document.getElementById('bulk-reassign-override');
+            const overrideConstraints = overrideCheckbox ? overrideCheckbox.checked : false;
+
             // Call bulk reassignment API
             const response = await fetch('/api/bulk-reassign-supervisor-events', {
                 method: 'POST',
@@ -1325,7 +1747,8 @@ class DailyView {
                 },
                 body: JSON.stringify({
                     date: dateToUse,
-                    new_employee_id: newEmployeeId
+                    new_employee_id: newEmployeeId,
+                    override_constraints: overrideConstraints
                 })
             });
 
@@ -2032,7 +2455,7 @@ class DailyView {
         const reason = document.getElementById('change-type-reason').value;
 
         if (!newType) {
-            alert('Please select a new event type');
+            window.toaster.warning('Please select a new event type');
             return;
         }
 
@@ -2053,7 +2476,7 @@ class DailyView {
             this.showSuccessMessage(`Event type changed to ${newType}`);
             await this.loadDailyEvents();  // Reload to show changes
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            window.toaster.error(`Error: ${error.message}`);
         }
     }
 
@@ -2937,7 +3360,7 @@ class DailyView {
         if (!lockBtn || !lockIcon || !lockText) return;
 
         if (this.isLocked) {
-            lockIcon.textContent = '🔒';
+            lockIcon.innerHTML = '<span class="material-symbols-outlined">lock</span>';
             lockText.textContent = 'Unlock Day';
             lockBtn.classList.add('btn-locked');
             lockBtn.classList.remove('btn-unlocked');
@@ -2946,7 +3369,7 @@ class DailyView {
                 `Locked by ${this.lockInfo.locked_by}${this.lockInfo.reason ? ': ' + this.lockInfo.reason : ''}` :
                 'Day is locked';
         } else {
-            lockIcon.textContent = '🔓';
+            lockIcon.innerHTML = '<span class="material-symbols-outlined">lock_open</span>';
             lockText.textContent = 'Lock Day';
             lockBtn.classList.add('btn-unlocked');
             lockBtn.classList.remove('btn-locked');
@@ -3035,6 +3458,278 @@ class DailyView {
             this.showNotification('Failed to unlock day', 'error');
         }
     }
+
+    /* ===================================================================
+       KEYBOARD SHORTCUTS
+       ================================================================ */
+
+    /**
+     * Setup keyboard shortcuts for daily view navigation
+     *
+     * Shortcuts:
+     * - Arrow Left (←): Navigate to previous day
+     * - Arrow Right (→): Navigate to next day
+     * - T: Go to today
+     * - ?: Show keyboard shortcuts help modal
+     * - Esc: Close modals
+     *
+     * Features:
+     * - Smart detection: Doesn't trigger in input fields
+     * - Modal awareness: Respects open modals (Esc only)
+     * - Accessible: Works with screen readers
+     */
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in input fields
+            const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
+
+            // Check if any modal is open
+            const isModalOpen = this.isAnyModalOpen();
+
+            // ESC key - Close modals (works even in input fields)
+            if (e.key === 'Escape' && isModalOpen) {
+                this.closeAllModals();
+                return;
+            }
+
+            // Don't process other shortcuts if typing in an input or modal is open
+            if (isInputActive || isModalOpen) {
+                return;
+            }
+
+            // Handle keyboard shortcuts
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    this.navigateToPreviousDay();
+                    break;
+
+                case 'ArrowRight':
+                    e.preventDefault();
+                    this.navigateToNextDay();
+                    break;
+
+                case 't':
+                case 'T':
+                    e.preventDefault();
+                    this.navigateToToday();
+                    break;
+
+                case '?':
+                    e.preventDefault();
+                    this.showKeyboardShortcutsHelp();
+                    break;
+            }
+        });
+    }
+
+    /**
+     * Check if any modal is currently open
+     */
+    isAnyModalOpen() {
+        const modals = [
+            'reschedule-modal',
+            'bulk-reassign-modal',
+            'change-event-type-modal',
+            'change-employee-modal',
+            'trade-event-modal',
+            'confirmation-modal',
+            'attendance-note-modal',
+            'keyboard-shortcuts-modal'
+        ];
+
+        return modals.some(modalId => {
+            const modal = document.getElementById(modalId);
+            return modal && modal.style.display !== 'none';
+        });
+    }
+
+    /**
+     * Close all open modals
+     */
+    closeAllModals() {
+        // Close known modals
+        this.closeRescheduleModal();
+        this.closeBulkReassignModal();
+        this.closeChangeEventTypeModal();
+
+        // Close keyboard shortcuts help
+        const helpModal = document.getElementById('keyboard-shortcuts-modal');
+        if (helpModal) {
+            helpModal.style.display = 'none';
+        }
+
+        // Close any dynamically created modals
+        const modals = document.querySelectorAll('.modal-backdrop');
+        modals.forEach(modal => {
+            modal.style.display = 'none';
+        });
+
+        // Restore body scroll
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Navigate to previous day
+     */
+    navigateToPreviousDay() {
+        const prevDayLink = document.querySelector('.btn-nav-prev');
+        if (prevDayLink) {
+            // Show loading overlay with date info
+            const currentDate = new Date(this.date);
+            currentDate.setDate(currentDate.getDate() - 1);
+            const formattedDate = currentDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            if (window.loadingState) {
+                window.loadingState.showOverlay(`Loading events for ${formattedDate}...`);
+            }
+
+            // Navigate
+            window.location.href = prevDayLink.href;
+        }
+    }
+
+    /**
+     * Navigate to next day
+     */
+    navigateToNextDay() {
+        const nextDayLink = document.querySelector('.btn-nav-next');
+        if (nextDayLink) {
+            // Show loading overlay with date info
+            const currentDate = new Date(this.date);
+            currentDate.setDate(currentDate.getDate() + 1);
+            const formattedDate = currentDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            if (window.loadingState) {
+                window.loadingState.showOverlay(`Loading events for ${formattedDate}...`);
+            }
+
+            // Navigate
+            window.location.href = nextDayLink.href;
+        }
+    }
+
+    /**
+     * Navigate to today's date
+     */
+    navigateToToday() {
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+
+        // Don't navigate if already on today
+        if (this.date === todayStr) {
+            if (window.toaster) {
+                window.toaster.info('Already viewing today\'s schedule');
+            }
+            return;
+        }
+
+        // Show loading overlay
+        const formattedDate = today.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        if (window.loadingState) {
+            window.loadingState.showOverlay(`Loading events for ${formattedDate}...`);
+        }
+
+        // Navigate to today
+        window.location.href = `/daily-schedule/${todayStr}`;
+    }
+
+    /**
+     * Show keyboard shortcuts help modal
+     */
+    showKeyboardShortcutsHelp() {
+        let modal = document.getElementById('keyboard-shortcuts-modal');
+
+        // Create modal if it doesn't exist
+        if (!modal) {
+            const modalHtml = `
+                <div class="modal-backdrop" id="keyboard-shortcuts-modal" style="display: none;">
+                    <div class="modal-dialog" role="dialog" aria-labelledby="shortcuts-title" aria-modal="true">
+                        <div class="modal-header">
+                            <h2 id="shortcuts-title" class="modal-title">Keyboard Shortcuts</h2>
+                            <button type="button" class="btn-close" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="keyboard-shortcuts-help">
+                                <dl class="shortcuts-list">
+                                    <dt><kbd>←</kbd> Arrow Left</dt>
+                                    <dd>Navigate to previous day</dd>
+
+                                    <dt><kbd>→</kbd> Arrow Right</dt>
+                                    <dd>Navigate to next day</dd>
+
+                                    <dt><kbd>T</kbd></dt>
+                                    <dd>Go to today's schedule</dd>
+
+                                    <dt><kbd>?</kbd></dt>
+                                    <dd>Show this help dialog</dd>
+
+                                    <dt><kbd>Esc</kbd></dt>
+                                    <dd>Close open modals</dd>
+
+                                    <dt><kbd>Tab</kbd></dt>
+                                    <dd>Navigate forward through elements</dd>
+
+                                    <dt><kbd>Shift</kbd> + <kbd>Tab</kbd></dt>
+                                    <dd>Navigate backward through elements</dd>
+                                </dl>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary btn-close-modal">Got it!</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('keyboard-shortcuts-modal');
+
+            // Setup close handlers
+            const closeBtn = modal.querySelector('.btn-close');
+            const closeModalBtn = modal.querySelector('.btn-close-modal');
+            const backdrop = modal;
+
+            const closeModal = () => {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            };
+
+            closeBtn.addEventListener('click', closeModal);
+            closeModalBtn.addEventListener('click', closeModal);
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Show modal
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Focus first focusable element
+        const firstButton = modal.querySelector('.btn-close-modal');
+        if (firstButton) {
+            firstButton.focus();
+        }
+    }
 }
 
 // Initialize on page load
@@ -3058,7 +3753,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const employeeId = document.getElementById('reschedule-employee').value;
 
             if (!date || !time || !employeeId) {
-                alert('Please fill in all fields');
+                window.toaster.warning('Please fill in all fields');
                 return;
             }
 
@@ -3083,9 +3778,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!data.conflicts && data.error) {
                         // Locked day error - show clear message with unlock instructions
                         if (data.error.includes('locked')) {
-                            alert(`🔒 Day is Locked\n\n${data.error}\n\nTo reschedule this event, first unlock the day using the "Lock Day" button.`);
+                            window.toaster.warning(`🔒 Day is Locked - ${data.error} - To reschedule this event, first unlock the day using the "Lock Day" button.`);
                         } else {
-                            alert('Error: ' + data.error);
+                            window.toaster.error('Error: ' + data.error);
                         }
                         return;
                     }
@@ -3119,15 +3814,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Reload the daily view data
                         window.dailyView.init();
                     } else {
-                        alert(data.message + warningMsg);
+                        if (overrideConflicts) {
+                            window.toaster.warning(data.message + warningMsg);
+                        } else {
+                            window.toaster.success(data.message + warningMsg);
+                        }
                         location.reload();
                     }
                 } else {
-                    alert('Error: ' + data.error);
+                    window.toaster.error('Error: ' + data.error);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error rescheduling event');
+                window.toaster.error('Error rescheduling event');
             }
         };
 
@@ -3195,6 +3894,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+    }
+
+    // Setup reissue form submission
+    const reissueForm = document.getElementById('reissue-form');
+    if (reissueForm) {
+        reissueForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const scheduleId = document.getElementById('reissue-schedule-id').value;
+            const date = document.getElementById('reissue-date').value;
+            const time = document.getElementById('reissue-time').value;
+            const employeeId = document.getElementById('reissue-employee').value;
+            const includeResponses = document.getElementById('reissue-include-responses').checked;
+
+            if (!scheduleId || !date || !time || !employeeId) {
+                window.toaster.warning('Please fill in all required fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/reissue-event', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        schedule_id: parseInt(scheduleId),
+                        employee_id: employeeId,
+                        schedule_date: date,
+                        schedule_time: time,
+                        include_responses: includeResponses
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    if (window.dailyView) {
+                        window.dailyView.showNotification(data.message || 'Event reissued successfully', 'success');
+                        window.dailyView.closeReissueModal();
+                        // Reload the daily view data
+                        window.dailyView.init();
+                    } else {
+                        window.toaster.success(data.message || 'Event reissued successfully');
+                        location.reload();
+                    }
+                } else {
+                    window.toaster.error('Error: ' + (data.error || 'Failed to reissue event'));
+                }
+            } catch (error) {
+                console.error('Error reissuing event:', error);
+                window.toaster.error('Error reissuing event');
+            }
+        });
     }
 
     // Setup bulk reassign supervisor events button

@@ -392,6 +392,8 @@ def get_daily_events(date):
             'location': evt.store_name,
             'start_date': evt.start_datetime.strftime('%m/%d/%Y') if evt.start_datetime else None,
             'due_date': evt.due_datetime.strftime('%m/%d/%Y') if evt.due_datetime else None,
+            'due_datetime': evt.due_datetime.strftime('%Y-%m-%d') if evt.due_datetime else None,
+            'condition': getattr(evt, 'condition', None),
             'sales_tool_url': getattr(evt, 'sales_tool_url', None),
             'reporting_status': rep_status,
             'is_overdue': _is_event_overdue(sched.schedule_datetime, rep_status),
@@ -2016,7 +2018,28 @@ def reschedule_event_with_validation(schedule_id):
             logger.error(f"Authentication error: {str(auth_error)}")
             return jsonify({'error': 'Failed to authenticate with Crossmark API'}), 500
 
-        # Submit to external API
+        # CRITICAL: Unschedule the old entry from Crossmark BEFORE creating the new one
+        # This prevents duplicate schedule entries after database refresh
+        old_external_id = schedule.external_id
+        if old_external_id:
+            try:
+                logger.info(f"Unscheduling old entry from Crossmark: external_id={old_external_id}")
+                unschedule_result = external_api.unschedule_mplan_event(old_external_id)
+                if not unschedule_result.get('success'):
+                    # Log warning but continue - the old entry may already be gone
+                    logger.warning(
+                        f"Failed to unschedule old entry (external_id={old_external_id}): "
+                        f"{unschedule_result.get('message')}. Continuing with reschedule."
+                    )
+                else:
+                    logger.info(f"Successfully unscheduled old entry from Crossmark")
+            except Exception as unschedule_error:
+                # Log warning but continue - don't block reschedule if unschedule fails
+                logger.warning(f"Error unscheduling old entry: {str(unschedule_error)}. Continuing with reschedule.")
+        else:
+            logger.info("No external_id on existing schedule - skipping unschedule step")
+
+        # Submit new schedule to external API
         try:
             logger.info(
                 f"Submitting reschedule to Crossmark API: "
@@ -2038,7 +2061,9 @@ def reschedule_event_with_validation(schedule_id):
                 logger.error(f"Crossmark API error: {error_message}")
                 return jsonify({'error': f'Failed to submit to Crossmark: {error_message}'}), 500
 
-            logger.info(f"Successfully submitted reschedule to Crossmark API")
+            # Extract new schedule_event_id from API response
+            new_external_id = api_result.get('schedule_event_id')
+            logger.info(f"Successfully submitted reschedule to Crossmark API (new external_id={new_external_id})")
 
         except Exception as api_error:
             logger.error(f"API submission error: {str(api_error)}")
@@ -2052,7 +2077,13 @@ def reschedule_event_with_validation(schedule_id):
                 old_datetime = schedule.schedule_datetime
                 old_employee_id = schedule.employee_id
                 schedule.schedule_datetime = new_datetime
-                
+
+                # Update external_id with the new schedule_event_id from Crossmark
+                if new_external_id:
+                    schedule.external_id = str(new_external_id)
+                    schedule.last_synced = datetime.utcnow()
+                    schedule.sync_status = 'synced'
+
                 # Update employee if a new one was provided
                 if new_employee_id:
                     schedule.employee_id = new_employee_id
@@ -2407,7 +2438,28 @@ def change_employee_assignment(schedule_id):
             logger.error(f"Authentication error: {str(auth_error)}")
             return jsonify({'error': 'Failed to authenticate with Crossmark API'}), 500
 
-        # Submit to external API
+        # CRITICAL: Unschedule the old entry from Crossmark BEFORE creating the new one
+        # This prevents duplicate schedule entries after database refresh
+        old_external_id = schedule.external_id
+        if old_external_id:
+            try:
+                logger.info(f"Unscheduling old entry from Crossmark: external_id={old_external_id}")
+                unschedule_result = external_api.unschedule_mplan_event(old_external_id)
+                if not unschedule_result.get('success'):
+                    # Log warning but continue - the old entry may already be gone
+                    logger.warning(
+                        f"Failed to unschedule old entry (external_id={old_external_id}): "
+                        f"{unschedule_result.get('message')}. Continuing with employee change."
+                    )
+                else:
+                    logger.info(f"Successfully unscheduled old entry from Crossmark")
+            except Exception as unschedule_error:
+                # Log warning but continue - don't block employee change if unschedule fails
+                logger.warning(f"Error unscheduling old entry: {str(unschedule_error)}. Continuing with employee change.")
+        else:
+            logger.info("No external_id on existing schedule - skipping unschedule step")
+
+        # Submit new schedule to external API
         try:
             logger.info(
                 f"Submitting employee change to Crossmark API: "
@@ -2429,7 +2481,9 @@ def change_employee_assignment(schedule_id):
                 logger.error(f"Crossmark API error: {error_message}")
                 return jsonify({'error': f'Failed to submit to Crossmark: {error_message}'}), 500
 
-            logger.info(f"Successfully submitted employee change to Crossmark API")
+            # Extract new schedule_event_id from API response
+            new_external_id = api_result.get('schedule_event_id')
+            logger.info(f"Successfully submitted employee change to Crossmark API (new external_id={new_external_id})")
 
         except Exception as api_error:
             logger.error(f"API submission error: {str(api_error)}")
@@ -2439,6 +2493,12 @@ def change_employee_assignment(schedule_id):
         old_employee_id = schedule.employee_id
         old_employee = Employee.query.get(old_employee_id)
         schedule.employee_id = new_employee_id
+
+        # Update external_id with the new schedule_event_id from Crossmark
+        if new_external_id:
+            schedule.external_id = str(new_external_id)
+            schedule.last_synced = datetime.utcnow()
+            schedule.sync_status = 'synced'
 
         # Update event sync status
         event.sync_status = 'synced'
@@ -3170,6 +3230,7 @@ def bulk_reassign_supervisor_events():
         data = request.get_json()
         target_date_str = data.get('date')
         new_employee_id = data.get('new_employee_id')
+        override_constraints = data.get('override_constraints', False)
 
         # Validate required fields with specific error messages
         missing_fields = []
@@ -3200,37 +3261,38 @@ def bulk_reassign_supervisor_events():
                 'employee_job_title': new_employee.job_title
             }), 400
 
-        # Check if new employee has time off on the target date
-        EmployeeTimeOff = current_app.config['EmployeeTimeOff']
-        time_off = EmployeeTimeOff.query.filter(
-            EmployeeTimeOff.employee_id == new_employee_id,
-            EmployeeTimeOff.start_date <= target_date,
-            EmployeeTimeOff.end_date >= target_date
-        ).first()
-
-        if time_off:
-            return jsonify({
-                'error': f'{new_employee.name} has time off on {target_date_str}',
-                'time_off_start': str(time_off.start_date),
-                'time_off_end': str(time_off.end_date)
-            }), 400
-
-        # Check weekly availability
-        EmployeeWeeklyAvailability = current_app.config.get('EmployeeWeeklyAvailability')
-        if EmployeeWeeklyAvailability:
-            day_of_week = target_date.weekday()
-            day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-            day_column = day_names[day_of_week]
-
-            weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
-                employee_id=new_employee_id
+        # Check if new employee has time off on the target date (skip if override)
+        if not override_constraints:
+            EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+            time_off = EmployeeTimeOff.query.filter(
+                EmployeeTimeOff.employee_id == new_employee_id,
+                EmployeeTimeOff.start_date <= target_date,
+                EmployeeTimeOff.end_date >= target_date
             ).first()
 
-            if weekly_avail and not getattr(weekly_avail, day_column, True):
+            if time_off:
                 return jsonify({
-                    'error': f'{new_employee.name} is not available on {day_column.capitalize()}s',
-                    'day_of_week': day_column
+                    'error': f'{new_employee.name} has time off on {target_date_str}',
+                    'time_off_start': str(time_off.start_date),
+                    'time_off_end': str(time_off.end_date)
                 }), 400
+
+            # Check weekly availability
+            EmployeeWeeklyAvailability = current_app.config.get('EmployeeWeeklyAvailability')
+            if EmployeeWeeklyAvailability:
+                day_of_week = target_date.weekday()
+                day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                day_column = day_names[day_of_week]
+
+                weekly_avail = EmployeeWeeklyAvailability.query.filter_by(
+                    employee_id=new_employee_id
+                ).first()
+
+                if weekly_avail and not getattr(weekly_avail, day_column, True):
+                    return jsonify({
+                        'error': f'{new_employee.name} is not available on {day_column.capitalize()}s',
+                        'day_of_week': day_column
+                    }), 400
 
         # Only reassign Supervisor type events
         supervisor_event_types = ['Supervisor']
@@ -4874,14 +4936,26 @@ def reissue_event():
             return jsonify({'error': 'Failed to authenticate with external system'}), 500
 
         # Get the employee's external ID (rep ID in Crossmark system)
-        rep_id = employee.external_id if employee.external_id else employee.id
+        # This MUST be the Crossmark rep ID (numeric), not the local employee ID
+        rep_id = employee.external_id
+        if not rep_id:
+            return jsonify({
+                'error': f'Employee {employee.name} does not have a Crossmark external_id configured. Cannot reissue.',
+                'details': 'The employee must have their Crossmark Rep ID set in the external_id field.'
+            }), 400
 
         # Get store ID and mPlan ID
         store_id = str(event.location_mvid) if event.location_mvid else ''
         mplan_id = str(event.external_id) if event.external_id else ''
 
-        # Get workLogEntryID from the schedule's external_id (the Crossmark scheduled event ID)
-        work_log_entry_id = schedule.external_id if schedule.external_id else ''
+        if not store_id or not mplan_id:
+            return jsonify({
+                'error': 'Event is missing required Crossmark IDs (location_mvid or external_id)',
+                'details': f'store_id={store_id}, mplan_id={mplan_id}'
+            }), 400
+
+        # workLogEntryID should be empty for reissue (we're creating new pending work)
+        work_log_entry_id = ''
 
         # Common headers for both API calls
         request_headers = {
@@ -4949,18 +5023,18 @@ def reissue_event():
             # ========================================
             # Calculate start and end times with timezone offset
             # Using Eastern Time offset (-05:00)
-            # Use midnight on the scheduled date (Crossmark expects midnight)
-            schedule_date_only = schedule_datetime.date()
-            start_midnight = datetime.combine(schedule_date_only, datetime.min.time())
-            end_midnight = start_midnight + timedelta(days=1)
+            # Use the ACTUAL scheduled time, not midnight
+            # End time = start time + event duration (default 360 min / 6 hours if not set)
+            event_duration = event.estimated_time if event.estimated_time else 360
+            end_datetime = schedule_datetime + timedelta(minutes=event_duration)
 
             schedule_data = {
                 'ClassName': 'MVScheduledmPlan',
                 'RepID': str(rep_id),
                 'mPlanID': mplan_id,
                 'LocationID': store_id,
-                'Start': start_midnight.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
-                'End': end_midnight.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
+                'Start': schedule_datetime.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
+                'End': end_datetime.strftime('%Y-%m-%dT%H:%M:%S') + '-05:00',
                 'hash': '',
                 'v': '3.0.1',
                 'PlanningOverride': 'true'

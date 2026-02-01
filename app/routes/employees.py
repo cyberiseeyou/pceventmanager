@@ -25,6 +25,27 @@ def time_off_requests():
     return render_template('time_off_requests.html')
 
 
+@employees_bp.route('/api/employees/active', methods=['GET'])
+def get_active_employees():
+    """
+    Get all active employees for dropdowns (reissue, assignment, etc.)
+
+    Returns list of active employees with id, name, and job_title
+    """
+    Employee = current_app.config['Employee']
+
+    employees = Employee.query.filter_by(is_active=True).order_by(Employee.name).all()
+
+    return jsonify([
+        {
+            'id': emp.id,
+            'name': emp.name,
+            'job_title': emp.job_title or 'Event Specialist'
+        }
+        for emp in employees
+    ])
+
+
 @employees_bp.route('/api/employees', methods=['GET', 'POST'])
 @employees_bp.route('/api/employees/<employee_id>', methods=['DELETE'])
 def manage_employees(employee_id=None):

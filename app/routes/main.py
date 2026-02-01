@@ -3,6 +3,7 @@ Main application routes blueprint
 Handles dashboard, events list, and calendar views
 """
 from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
+from sqlalchemy import or_
 from app.routes.auth import require_authentication
 from app.models import init_models
 from datetime import datetime, date, timedelta
@@ -405,10 +406,12 @@ def unreported_events():
 def calendar_view():
     """Display calendar view of scheduled events"""
     from flask import current_app
+    from app.models import get_models
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     # Get the date from query params, default to today
     date_str = request.args.get('date')
@@ -504,11 +507,13 @@ def calendar_view():
 def calendar_day_view(date):
     """Get events for a specific day (AJAX endpoint)"""
     from flask import current_app
+    from app.models import get_models
     import re
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         selected_date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -694,6 +699,9 @@ def daily_schedule_view(date: str) -> str:
     if Employee:
         employees = Employee.query.filter_by(is_active=True).order_by(Employee.name).all()
 
+    # Get today's date for reissue logic comparison
+    today = datetime.now().date()
+
     # Render template with context
     return render_template('daily_view.html',
         selected_date=selected_date,
@@ -701,7 +709,8 @@ def daily_schedule_view(date: str) -> str:
         primary_lead=primary_lead,
         prev_date=prev_date,
         next_date=next_date,
-        employees=employees
+        employees=employees,
+        today=today
     )
 
 

@@ -583,6 +583,37 @@ def save_schedule():
         # Submit to Crossmark API BEFORE creating local record
         from app.integrations.external_api.session_api_service import session_api as external_api
 
+        # CRITICAL: Check if this event already has a schedule (reschedule scenario)
+        # If so, unschedule the old entry from Crossmark first to prevent duplicates
+        existing_schedule = Schedule.query.filter_by(event_ref_num=event.project_ref_num).first()
+        if existing_schedule:
+            current_app.logger.info(
+                f"Event {event.project_ref_num} already has schedule (ID: {existing_schedule.id}). "
+                f"This is a reschedule - will remove old entry first."
+            )
+            old_external_id = existing_schedule.external_id
+
+            # Unschedule from Crossmark if we have an external_id
+            if old_external_id:
+                try:
+                    if external_api.ensure_authenticated():
+                        current_app.logger.info(f"Unscheduling old entry from Crossmark: external_id={old_external_id}")
+                        unschedule_result = external_api.unschedule_mplan_event(old_external_id)
+                        if not unschedule_result.get('success'):
+                            current_app.logger.warning(
+                                f"Failed to unschedule old entry (external_id={old_external_id}): "
+                                f"{unschedule_result.get('message')}. Continuing with reschedule."
+                            )
+                        else:
+                            current_app.logger.info(f"Successfully unscheduled old entry from Crossmark")
+                except Exception as unschedule_error:
+                    current_app.logger.warning(f"Error unscheduling old entry: {str(unschedule_error)}. Continuing.")
+
+            # Delete the old local schedule record
+            db.session.delete(existing_schedule)
+            db.session.flush()
+            current_app.logger.info(f"Deleted old local schedule record (ID: {existing_schedule.id})")
+
         # Calculate end datetime using event's default duration if not set
         end_datetime = event.calculate_end_datetime(schedule_datetime)
 

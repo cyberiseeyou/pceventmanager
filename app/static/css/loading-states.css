@@ -1,0 +1,115 @@
+/**
+ * Loading States CSS
+ *
+ * Styles for loading indicators across the application
+ * - Button spinners
+ * - Container loading states
+ * - Full-screen overlays
+ */
+
+/* Button Loading Spinner */
+.btn-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-spinner svg {
+  animation: spin 1s linear infinite;
+}
+
+/* Container Loading */
+.container-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px;
+}
+
+.loading-spinner-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loading-spinner {
+  color: #003366;
+}
+
+.loading-message {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Full-Screen Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.loading-overlay-content {
+  background: white;
+  padding: 40px 60px;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-overlay-spinner {
+  color: #003366;
+}
+
+.loading-overlay-message {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Accessibility: Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner svg,
+  .loading-spinner,
+  .loading-overlay-spinner {
+    animation: none;
+  }
+
+  .loading-overlay {
+    animation: none;
+  }
+}

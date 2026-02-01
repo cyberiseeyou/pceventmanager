@@ -708,6 +708,172 @@
         border-color: #0071ce;
     }
 
+    /* Print Styles */
+    @media print {
+        /* Hide non-essential elements */
+        .dashboard-header,
+        .scanout-warning,
+        .auth-section,
+        .session-info,
+        .filter-row,
+        .deadline-countdown,
+        .stats-row,
+        .table-header,
+        .action-btn,
+        .view-toggle,
+        .print-btn,
+        .print-all-container,
+        #rollAllScheduledBtn {
+            display: none !important;
+        }
+
+        /* Reset container width */
+        .container {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Show only targeted panels during individual print */
+        body.printing-scan-out #rollScheduledPanel,
+        body.printing-scan-out #rollUnscheduledPanel,
+        body.printing-roll-scheduled #scanOutPanel,
+        body.printing-roll-scheduled #rollUnscheduledPanel,
+        body.printing-roll-unscheduled #scanOutPanel,
+        body.printing-roll-unscheduled #rollScheduledPanel {
+            display: none !important;
+        }
+
+        /* Panel styling for print */
+        .action-panel {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+            margin-bottom: 16px !important;
+            page-break-inside: avoid;
+        }
+
+        .panel-header {
+            background: #f5f5f5 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .panel-header.scan-out-header {
+            background: #d1fae5 !important;
+            color: #065f46 !important;
+        }
+
+        .panel-header.roll-scheduled-header {
+            background: #fef3c7 !important;
+            color: #92400e !important;
+        }
+
+        .panel-header.roll-unscheduled-header {
+            background: #fee2e2 !important;
+            color: #991b1b !important;
+        }
+
+        /* Event card styling for print */
+        .event-card {
+            background: #fff !important;
+            border: 1px solid #e5e7eb !important;
+            padding: 8px 12px !important;
+            margin-bottom: 4px !important;
+        }
+
+        /* Print header */
+        .print-header {
+            display: block !important;
+            text-align: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+        }
+
+        .print-header h1 {
+            font-size: 18px;
+            margin: 0 0 4px 0;
+        }
+
+        .print-header .print-date {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Ensure text is readable */
+        .event-name,
+        .event-id,
+        .event-date,
+        .assigned-to {
+            font-size: 11px !important;
+        }
+
+        .roll-to-date {
+            font-size: 10px !important;
+            padding: 2px 8px !important;
+        }
+    }
+
+    /* Print header (hidden in screen) */
+    .print-header {
+        display: none;
+    }
+
+    /* Print buttons */
+    .print-btn {
+        padding: 6px 12px;
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .print-btn:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+    }
+
+    .print-btn i {
+        font-size: 12px;
+    }
+
+    /* Print All container */
+    .print-all-container {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+    }
+
+    .print-all-btn {
+        padding: 10px 20px;
+        background: #0071ce;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .print-all-btn:hover {
+        background: #005ea6;
+    }
+
+    .print-all-btn:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
         .stats-row {
@@ -877,13 +1043,31 @@
         </div>
     </div>
 
+    <!-- Print Header (only visible when printing) -->
+    <div class="print-header">
+        <h1>Left in Approved Events</h1>
+        <div class="print-date">Printed: <span id="printDate"></span></div>
+    </div>
+
+    <!-- Print All Button -->
+    <div id="printAllContainer" class="print-all-container" style="display: none;">
+        <button class="print-all-btn" onclick="printAllCategories()">
+            <i class="fas fa-print"></i> Print All Categories
+        </button>
+    </div>
+
     <!-- Action Panels (grouped by action type) -->
     <div id="actionPanels" style="display: none;">
         <!-- Needs Scan-Out Panel -->
         <div id="scanOutPanel" class="action-panel" style="display: none;">
             <div class="panel-header scan-out-header">
                 <h3><i class="fas fa-barcode"></i> Ready for Scan-Out</h3>
-                <span class="panel-count" id="scanOutPanelCount">0</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="panel-count" id="scanOutPanelCount">0</span>
+                    <button class="print-btn" onclick="printCategory('scan-out')" title="Print this category">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
             </div>
             <div class="panel-instruction">
                 These events are scheduled on or before today's date. Use handheld machine to scan out.
@@ -898,6 +1082,9 @@
                 <h3><i class="fas fa-calendar-check"></i> Roll to Scheduled Date</h3>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <span class="panel-count" id="rollScheduledPanelCount">0</span>
+                    <button class="print-btn" onclick="printCategory('roll-scheduled')" title="Print this category">
+                        <i class="fas fa-print"></i> Print
+                    </button>
                     <button id="rollAllScheduledBtn" class="action-btn primary" onclick="rollAllScheduledEvents()"
                         style="padding: 6px 14px;">
                         <i class="fas fa-sync-alt"></i> Roll All
@@ -914,7 +1101,12 @@
         <div id="rollUnscheduledPanel" class="action-panel" style="display: none;">
             <div class="panel-header roll-unscheduled-header">
                 <h3><i class="fas fa-calendar-plus"></i> Schedule First, Then Roll</h3>
-                <span class="panel-count" id="rollUnscheduledPanelCount">0</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="panel-count" id="rollUnscheduledPanelCount">0</span>
+                    <button class="print-btn" onclick="printCategory('roll-unscheduled')" title="Print this category">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
             </div>
             <div class="panel-instruction">
                 These events need scheduling. Either schedule them first, or roll to the latest possible date.
@@ -1296,6 +1488,9 @@
                 // Show empty state with appropriate messaging
                 showEmptyState(isAuthenticated);
             }
+
+            // Show/hide print all button
+            updatePrintAllVisibility();
 
         } catch (error) {
             document.getElementById('loadingState').style.display = 'none';
@@ -1923,5 +2118,38 @@
             }
         }
     });
+
+    // Print a specific category
+    function printCategory(category) {
+        // Set print date
+        document.getElementById('printDate').textContent = new Date().toLocaleString();
+
+        // Add class to body to control which panels are visible during print
+        document.body.classList.add('printing-' + category);
+
+        // Trigger print
+        window.print();
+
+        // Remove the class after printing
+        setTimeout(() => {
+            document.body.classList.remove('printing-' + category);
+        }, 500);
+    }
+
+    // Print all categories
+    function printAllCategories() {
+        // Set print date
+        document.getElementById('printDate').textContent = new Date().toLocaleString();
+
+        // Print without any category filter (shows all visible panels)
+        window.print();
+    }
+
+    // Show/hide print all button based on events
+    function updatePrintAllVisibility() {
+        const printAllContainer = document.getElementById('printAllContainer');
+        const hasEvents = currentEvents.length > 0;
+        printAllContainer.style.display = hasEvents && isAuthenticated ? 'flex' : 'none';
+    }
 </script>
 {% endblock %}

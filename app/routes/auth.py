@@ -627,13 +627,17 @@ def start_loading_refresh(task_id):
         import threading
         from app.services.database_refresh_service import refresh_database_with_progress
 
+        # CRITICAL: Capture the actual Flask app BEFORE starting the thread
+        # current_app is a proxy that doesn't work in background threads
+        app = current_app._get_current_object()
+
         def run_refresh():
             """Run refresh in background with Flask app context"""
-            with current_app.app_context():
+            with app.app_context():
                 try:
                     refresh_database_with_progress(task_id)
                 except Exception as e:
-                    current_app.logger.error(f"Background refresh failed: {e}", exc_info=True)
+                    app.logger.error(f"Background refresh failed: {e}", exc_info=True)
                     update_refresh_progress(task_id, status='error', error=str(e))
 
         # Start background thread

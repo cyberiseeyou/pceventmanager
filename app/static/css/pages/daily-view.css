@@ -879,10 +879,21 @@
   margin-bottom: 3px;
 }
 
+/**
+ * Event Card Body
+ * Wrapper for card details and status
+ */
+.event-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
 .employee-name {
   font-size: 12px;
   font-weight: 700;
   color: var(--color-neutral-900, #111827);
+  margin: 0;
+  padding: 0;
 }
 
 .badge-overdue {
@@ -1016,13 +1027,14 @@
 
 .btn-reschedule {
   flex: 1;
-  padding: 4px 8px;
+  min-height: 40px;
+  padding: 10px 12px;
   background: var(--color-primary, #3B82F6);
   color: white;
   border: none;
   border-radius: 4px;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 150ms ease;
 }
@@ -1036,6 +1048,29 @@
   outline-offset: 2px;
 }
 
+.btn-reissue {
+  flex: 1;
+  min-height: 40px;
+  padding: 10px 12px;
+  background: #f97316;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.btn-reissue:hover {
+  background: #ea580c;
+}
+
+.btn-reissue:focus {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
 /**
  * Dropdown Menu Component
  * More actions dropdown - compact
@@ -1045,13 +1080,14 @@
 }
 
 .dropdown-toggle {
-  padding: 4px 8px;
+  min-height: 40px;
+  padding: 10px 12px;
   background: var(--color-neutral-200, #E5E7EB);
   color: var(--color-neutral-700, #374151);
   border: none;
   border-radius: 4px;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 150ms ease;
   white-space: nowrap;
@@ -1159,6 +1195,15 @@
     gap: var(--spacing-xs, 4px);
   }
 
+/**
+ * Event Card Body
+ * Wrapper for card details and status
+ */
+.event-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
   .employee-name {
     font-size: 14px;
   }
@@ -1169,6 +1214,7 @@
   }
 
   .btn-reschedule,
+  .btn-reissue,
   .dropdown-toggle {
     width: 100%;
   }
@@ -2588,6 +2634,15 @@
   background: rgba(220, 38, 38, 0.1);
 }
 
+/**
+ * Event Card Body
+ * Wrapper for card details and status
+ */
+.event-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
 .event-card--cancelled .event-card__status {
   background: rgba(220, 38, 38, 0.1);
 }
@@ -2713,4 +2768,273 @@
   .shift-block__event-detail {
     display: block !important;
   }
+}
+
+/* ==========================================================================
+   Material Symbols Icon Styles
+   ========================================================================== */
+
+/**
+ * Material Symbols base styling for consistent icon display
+ */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+.event-type-item__icon .material-symbols-outlined {
+  font-size: 24px;
+  color: var(--color-primary, #3B82F6);
+}
+
+.category-icon .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--color-primary, #3B82F6);
+}
+
+/* Material Symbols in buttons - smaller size */
+.btn .material-symbols-outlined,
+.dropdown-toggle .material-symbols-outlined {
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+/* Material Symbols in small buttons */
+.btn-sm .material-symbols-outlined {
+  font-size: 14px;
+}
+
+/* Material Symbols in event card content */
+.event-card .material-symbols-outlined {
+  font-size: 14px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.employee-name .material-symbols-outlined {
+  font-size: 12px;
+}
+
+.event-time .material-symbols-outlined {
+  font-size: 13px;
+  color: var(--color-neutral-500, #9CA3AF);
+}
+
+.event-type-display .material-symbols-outlined,
+.event-dates .material-symbols-outlined {
+  font-size: 11px;
+  color: var(--color-neutral-400, #9CA3AF);
+}
+
+.link-sales-tool .material-symbols-outlined {
+  font-size: 12px;
+}
+
+/* Material Symbols in badges */
+.badge-overdue .material-symbols-outlined {
+  font-size: 11px;
+  color: inherit;
+}
+
+/* Material Symbols in attendance */
+.attendance-notes .material-symbols-outlined {
+  font-size: 12px;
+}
+
+/* Material Symbols in role items */
+.role-icon .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--color-primary, #3B82F6);
+}
+
+/* Material Symbols in view toggle */
+.toggle-icon .material-symbols-outlined {
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+/* Material Symbols in cancelled banner */
+.cancelled-events-banner__icon .material-symbols-outlined {
+  font-size: 24px;
+  color: #991B1B;
+}
+
+/* ==========================================================================
+   Event Category Section Styles
+   ========================================================================== */
+
+/**
+ * Event Category Section
+ * Container for each event category group
+ * Must span full width of parent grid
+ */
+.event-category-section {
+  display: block !important;
+  width: 100% !important;
+  grid-column: 1 / -1;  /* Span all columns in parent grid */
+  margin-bottom: var(--spacing-lg, 24px);
+  background: var(--color-neutral-50, #FFFFFF);
+  border-radius: var(--border-radius-md, 8px);
+  padding: var(--spacing-md, 16px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+}
+
+.event-category-section:last-child {
+  margin-bottom: 0;
+}
+
+/**
+ * Event Category Header
+ * Title bar for each category section
+ */
+.event-category-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  margin: 0 0 var(--spacing-md, 16px) 0;
+  padding-bottom: var(--spacing-sm, 8px);
+  border-bottom: 2px solid var(--color-primary, #3B82F6);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-neutral-800, #1F2937);
+}
+
+.category-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--color-primary-100, #DBEAFE);
+  border-radius: 6px;
+}
+
+/**
+ * Event Category Content
+ * Grid layout for event cards within a category
+ * Fixed 2-column layout for consistent card display
+ */
+.event-category-content {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-sm, 8px);
+}
+
+/**
+ * Core-Supervisor Paired Layout
+ * Two-column layout with Core on left, Supervisor on right
+ */
+.event-category-section--paired .event-category-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.core-supervisor-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md, 16px);
+  width: 100%;
+}
+
+.pair-core,
+.pair-supervisor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pair-core > *,
+.pair-supervisor > * {
+  flex: 1;
+}
+
+.event-card-placeholder {
+  background: var(--color-neutral-100, #F3F4F6);
+  border: 2px dashed var(--color-neutral-300, #D1D5DB);
+  border-radius: 6px;
+  min-height: 100px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-neutral-400, #9CA3AF);
+  font-size: 12px;
+  font-style: italic;
+  box-sizing: border-box;
+}
+
+.event-card-placeholder::before {
+  content: 'No supervisor scheduled';
+}
+
+/* ==========================================================================
+   Responsive Styles for Category Sections
+   ========================================================================== */
+
+@media (max-width: 767px) {
+  .event-category-section {
+    padding: var(--spacing-sm, 12px);
+  }
+
+  .event-category-header {
+    font-size: 14px;
+  }
+
+  .event-category-content {
+    grid-template-columns: 1fr;
+  }
+
+  .core-supervisor-pair {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm, 8px);
+  }
+
+  .category-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .category-icon .material-symbols-outlined {
+    font-size: 16px;
+  }
+}
+
+/* ==========================================================================
+   List View Category Styles
+   ========================================================================== */
+
+/**
+ * List view category sections maintain vertical stacking
+ */
+.event-cards.list-view .event-category-section {
+  display: block !important;
+}
+
+.event-cards.list-view .event-category-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.event-cards.list-view .event-list-row:first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.event-cards.list-view .event-list-row:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
 }

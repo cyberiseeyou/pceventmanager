@@ -243,13 +243,15 @@ class DailyPaperworkGenerator:
         """
         Get all scheduled events for a specific date
 
-        Returns only Core events for paperwork generation
+        Returns Core, Freeosk, and Digitals events for paperwork generation
         """
         Event = self.models['Event']
         Schedule = self.models['Schedule']
         Employee = self.models['Employee']
 
-        # Query for Core events only
+        # Query for Core, Freeosk, and Digitals events (needed for paperwork)
+        # Freeosk Setup manuals are included on Fridays
+        # Digital Setup manuals are included on Saturdays
         schedules = self.db.query(
             Schedule, Event, Employee
         ).join(
@@ -259,12 +261,15 @@ class DailyPaperworkGenerator:
         ).filter(
             Schedule.schedule_datetime >= target_date,
             Schedule.schedule_datetime < target_date + timedelta(days=1),
-            Event.event_type == 'Core'
+            Event.event_type.in_(['Core', 'Freeosk', 'Digitals'])
         ).order_by(
             Schedule.schedule_datetime
         ).all()
 
-        logger.info(f" Found {len(schedules)} Core events for {target_date}")
+        core_count = sum(1 for s, e, emp in schedules if e.event_type == 'Core')
+        freeosk_count = sum(1 for s, e, emp in schedules if e.event_type == 'Freeosk')
+        digitals_count = sum(1 for s, e, emp in schedules if e.event_type == 'Digitals')
+        logger.info(f" Found {len(schedules)} events for {target_date} (Core: {core_count}, Freeosk: {freeosk_count}, Digitals: {digitals_count})")
 
         return schedules
 
@@ -946,6 +951,49 @@ class DailyPaperworkGenerator:
             traceback.print_exc()
             return None
 
+    def _fetch_sales_tool_url_from_api(self, event) -> Optional[str]:
+        """
+        Fetch salesToolUrl from external API (getPlanningMplans) for an event.
+
+        Args:
+            event: Event object with external_id (mPlanID)
+
+        Returns:
+            salesToolUrl string or None if not found
+        """
+        if not self.session_api_service:
+            logger.warning(" No session API service available to fetch salesToolUrl")
+            return None
+
+        mplan_id = event.external_id or str(event.project_ref_num)
+        if not mplan_id:
+            logger.warning(f" No mPlanID for event: {event.project_name}")
+            return None
+
+        try:
+            logger.info(f" Fetching mplan data from API for mPlanID: {mplan_id}")
+            mplan_data = self.session_api_service.get_mplan_by_id(mplan_id)
+
+            if mplan_data:
+                # Extract salesToolUrl from salesTools array
+                sales_tools = mplan_data.get('salesTools', [])
+                if sales_tools and isinstance(sales_tools, list) and len(sales_tools) > 0:
+                    if isinstance(sales_tools[0], dict):
+                        sales_tool_url = sales_tools[0].get('salesToolURL')
+                        if sales_tool_url:
+                            logger.info(f" Found salesToolUrl: {sales_tool_url[:50]}...")
+                            return sales_tool_url
+
+                logger.warning(f" No salesTools found in API response for mPlanID: {mplan_id}")
+                return None
+            else:
+                logger.warning(f" No mplan data returned from API for mPlanID: {mplan_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f" Error fetching salesToolUrl from API: {e}")
+            return None
+
     def get_salestool_pdf(self, salestool_url: str, event_ref: str) -> Optional[str]:
         """
         Download SalesTool PDF from URL using authenticated session if available
@@ -1166,6 +1214,37 @@ class DailyPaperworkGenerator:
         items_pdf = self.generate_item_numbers_pdf(edr_data_list, target_date)
         all_pdfs.append(items_pdf)
 
+        # 3b. Add Freeosk Setup manuals (Fridays) or Digital Setup manuals (Saturdays) after items list
+        if target_date.weekday() == 4:  # Friday - add Freeosk Setup manuals
+            logger.info(" Friday detected - looking for Freeosk Setup (LKD-FSK) manuals...")
+            for schedule, event, employee in schedules:
+                if event.event_type == 'Freeosk' and 'LKD-FSK' in (event.project_name or ''):
+                    if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
+                        logger.info(f" Downloading Freeosk Setup manual for {event.project_name}...")
+                        freeosk_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
+                        if freeosk_pdf:
+                            all_pdfs.append(freeosk_pdf)
+                            logger.info(f" Freeosk Setup manual added after items list")
+                        else:
+                            logger.warning(f" Could not download Freeosk Setup manual for event {event.project_ref_num}")
+                    else:
+                        logger.warning(f" No sales_tools_url for Freeosk event: {event.project_name}")
+
+        elif target_date.weekday() == 5:  # Saturday - add Digital Setup manuals
+            logger.info(" Saturday detected - looking for Digital Setup manuals...")
+            for schedule, event, employee in schedules:
+                if event.event_type == 'Digitals' and 'Setup' in (event.project_name or ''):
+                    if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
+                        logger.info(f" Downloading Digital Setup manual for {event.project_name}...")
+                        digital_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
+                        if digital_pdf:
+                            all_pdfs.append(digital_pdf)
+                            logger.info(f" Digital Setup manual added after items list")
+                        else:
+                            logger.warning(f" Could not download Digital Setup manual for event {event.project_ref_num}")
+                    else:
+                        logger.warning(f" No sales_tools_url for Digital Setup event: {event.project_name}")
+
         # 4. For each event, generate EDR, SalesTool, and dynamic templates from database
         docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs')
 
@@ -1269,8 +1348,9 @@ class DailyPaperworkGenerator:
                 for template in event_templates:
                     all_pdfs.append(template['path'])
                     logger.info(f" Added event template: {template['name']}")
+
             else:
-                logger.info(f" Skipping documents - event type is '{event.event_type}' (Core events only)")
+                logger.info(f" Skipping documents - event type is '{event.event_type}' (not applicable for {target_date.strftime('%A')})")
 
         # 5. Add daily-level templates ONCE at the end (after all events)
         if daily_templates:

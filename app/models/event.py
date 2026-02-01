@@ -134,6 +134,7 @@ def create_event_model(db):
             
             # Fallback: Use estimated_time to detect event type when keyword matching fails
             # This handles cases where event names are truncated and keywords are cut off
+            # NOTE: Only use duration fallback for truly unique durations that can't be other event types
             if detected_type == 'Other' and self.estimated_time:
                 # Core events have duration of 360 or 390 minutes (6-6.5 hours)
                 if self.estimated_time in (360, 390):
@@ -141,9 +142,10 @@ def create_event_model(db):
                 # Supervisor events have unique duration of 5 minutes
                 elif self.estimated_time == 5:
                     detected_type = 'Supervisor'
-                # Juicer Production has durations of 480 (8hr) or 540 (9hr) minutes
-                elif self.estimated_time in (480, 540):
-                    detected_type = 'Juicer Production'
+                # NOTE: Removed 480/540 minute fallback for Juicer Production because
+                # 8-9 hour events can be specialty events (e.g., "Dipped Berries-SPCLTY")
+                # that should remain as "Other", not be classified as Juicer.
+                # Juicer Production should only match via keyword ("JUICE" + "PRODUCTION-SPCLTY")
                 # Juicer Deep Clean has unique duration of 240 minutes (4 hours)
                 elif self.estimated_time == 240:
                     detected_type = 'Juicer Deep Clean'

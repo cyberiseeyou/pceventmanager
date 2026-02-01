@@ -85,24 +85,42 @@ class LoadingProgressManager {
     }
 
     updateUI(data) {
-        // Calculate and update progress bar
+        // Calculate and update progress bar with custom step weights
         const currentStep = data.current_step || 0;
-        const totalSteps = data.total_steps || 5;
+
+        // Custom weights: chunks=60%, estimated times=20%, rest=20%
+        // Steps: 1=Fetching chunks, 2=Fetching times, 3=Clearing, 4=Processing, 5=Schedules, 6=Finalizing
+        const stepWeights = {
+            1: 60,  // Fetching events (parallel chunks) - 60%
+            2: 20,  // Fetching estimated times - 20%
+            3: 5,   // Clearing existing data - 5%
+            4: 10,  // Processing events - 10%
+            5: 2,   // Creating schedules - 2%
+            6: 3    // Finalizing - 3%
+        };
+
+        // Calculate cumulative start percentage for each step
+        const stepStarts = { 1: 0 };
+        let cumulative = 0;
+        for (let i = 1; i <= 6; i++) {
+            stepStarts[i] = cumulative;
+            cumulative += stepWeights[i] || 0;
+        }
 
         // Calculate percentage based on step progress
         let percentage = 0;
         if (currentStep > 0) {
             // Base percentage from completed steps
-            const stepWeight = 100 / totalSteps;
-            percentage = Math.min(100, (currentStep - 1) * stepWeight);
+            percentage = stepStarts[currentStep] || 0;
+            const currentWeight = stepWeights[currentStep] || 0;
 
             // Add partial progress within current step (for ANY step with progress data)
             if (data.total > 0 && data.processed >= 0) {
-                const stepProgress = (data.processed / data.total) * stepWeight;
+                const stepProgress = (data.processed / data.total) * currentWeight;
                 percentage += stepProgress;
             } else if (currentStep > 0) {
                 // For other active steps, add half the step weight
-                percentage += stepWeight * 0.5;
+                percentage += currentWeight * 0.5;
             }
         }
 
@@ -117,11 +135,16 @@ class LoadingProgressManager {
         // Update current step text
         this.currentStepText.textContent = data.step_label || 'Processing...';
 
-        // Show processing count for step 3
-        if (data.current_step === 3 && data.total > 0) {
+        // Show processing count for steps with progress data
+        // Step 1: Fetching chunks, Step 4: Processing events
+        if ((data.current_step === 1 || data.current_step === 4) && data.total > 0) {
             const processed = data.processed || 0;
-            this.currentStepDetail.textContent =
-                `${processed.toLocaleString()} of ${data.total.toLocaleString()} events`;
+            if (data.current_step === 1) {
+                this.currentStepDetail.textContent = `${processed}% complete`;
+            } else {
+                this.currentStepDetail.textContent =
+                    `${processed.toLocaleString()} of ${data.total.toLocaleString()} events`;
+            }
             this.currentStepDetail.style.display = 'block';
         } else {
             this.currentStepDetail.style.display = 'none';

@@ -113,7 +113,9 @@ class EmployeeImportService:
             None  # No duplicate found
         """
         from flask import current_app
-        Employee = current_app.config['Employee']
+        from app.models import get_models
+        models = get_models()
+        Employee = models['Employee']
 
         # Handle edge cases
         if name is None or not isinstance(name, str):
@@ -399,7 +401,9 @@ class EmployeeImportService:
             - No partial imports - either all succeed or all fail
         """
         from flask import current_app
-        Employee = current_app.config['Employee']
+        from app.models import get_models
+        models = get_models()
+        Employee = models['Employee']
 
         try:
             imported_count = 0

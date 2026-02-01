@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 class DatabaseRefreshService:
     """Service to refresh database with progress callbacks"""
 
-    STEP_FETCHING = 1
-    STEP_CLEARING = 2
-    STEP_PROCESSING = 3
-    STEP_SCHEDULES = 4
-    STEP_FINALIZING = 5
-    TOTAL_STEPS = 5
+    STEP_FETCHING = 1        # Fetching events from API (parallel chunks)
+    STEP_FETCHING_TIMES = 2  # Fetching estimated times from scheduling API
+    STEP_CLEARING = 3
+    STEP_PROCESSING = 4
+    STEP_SCHEDULES = 5
+    STEP_FINALIZING = 6
+    TOTAL_STEPS = 6
 
     def __init__(self, progress_callback=None):
         """
@@ -53,11 +54,13 @@ class DatabaseRefreshService:
         try:
             from app.integrations.external_api.session_api_service import session_api as external_api
             from app.utils.db_compat import disable_foreign_keys
+            from app.models import get_models
 
             db = current_app.extensions['sqlalchemy']
-            Event = current_app.config['Event']
-            Schedule = current_app.config['Schedule']
-            Employee = current_app.config['Employee']
+            models = get_models()
+            Event = models['Event']
+            Schedule = models['Schedule']
+            Employee = models['Employee']
 
             # Step 1: Fetching events from API
             self._update_progress(
@@ -101,20 +104,25 @@ class DatabaseRefreshService:
                        events_data.get('records') or [])
             total_fetched = len(records)
 
-            # Fetch EstimatedTime from scheduling endpoints (planning API doesn't include it)
+            # Step 2: Fetch EstimatedTime from scheduling endpoints (planning API doesn't include it)
             # Build a lookup map: mPlanID -> EstimatedTime
+            self._update_progress(
+                self.STEP_FETCHING_TIMES,
+                'Fetching event times from scheduling API',
+                processed=0,
+                total=100
+            )
             estimated_time_map = self._fetch_estimated_times(external_api)
             current_app.logger.info(f"Fetched EstimatedTime for {len(estimated_time_map)} events from scheduling API")
-
             self._update_progress(
-                self.STEP_FETCHING,
-                'Fetching events from Crossmark API',
-                processed=total_fetched,
-                total=total_fetched
+                self.STEP_FETCHING_TIMES,
+                'Fetching event times from scheduling API',
+                processed=100,
+                total=100
             )
 
 
-            # Step 2: Clearing existing data
+            # Step 3: Clearing existing data
             self._update_progress(
                 self.STEP_CLEARING,
                 'Clearing existing data',
@@ -138,7 +146,7 @@ class DatabaseRefreshService:
 
             current_app.logger.info(f"Cleared {existing_count} existing events")
 
-            # Step 3: Processing events
+            # Step 4: Processing events
             self._update_progress(
                 self.STEP_PROCESSING,
                 'Processing events',
@@ -174,7 +182,7 @@ class DatabaseRefreshService:
                         total=total_fetched
                     )
 
-            # Step 4: Creating schedules (already done in step 3, but keeping for progress display)
+            # Step 5: Creating schedules (already done in step 4, but keeping for progress display)
             self._update_progress(
                 self.STEP_SCHEDULES,
                 'Creating schedules',
@@ -182,7 +190,7 @@ class DatabaseRefreshService:
                 total=schedule_count
             )
 
-            # Step 5: Finalizing
+            # Step 6: Finalizing
             self._update_progress(
                 self.STEP_FINALIZING,
                 'Finalizing'
@@ -562,7 +570,9 @@ class DatabaseRefreshService:
             int: Number of overrides successfully reapplied
         """
         try:
-            EventTypeOverride = current_app.config['EventTypeOverride']
+            from app.models import get_models
+            models = get_models()
+            EventTypeOverride = models['EventTypeOverride']
             overrides = EventTypeOverride.query.all()
 
             if not overrides:
