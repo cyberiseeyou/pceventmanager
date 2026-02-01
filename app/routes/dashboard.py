@@ -596,22 +596,24 @@ def weekly_validation():
     """
     from flask import request
     from app.services.weekly_validation import WeeklyValidationService
+    from app.models import get_models
 
     db = current_app.extensions['sqlalchemy']
+    all_models = get_models()
 
-    # Build models dictionary
+    # Build models dictionary for WeeklyValidationService
     models = {
-        'Event': models['Event'],
-        'Schedule': models['Schedule'],
-        'Employee': models['Employee'],
-        'EmployeeTimeOff': models['EmployeeTimeOff'],
-        'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
-        'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability'),
-        'EmployeeAttendance': current_app.config.get('EmployeeAttendance'),
-        'RotationAssignment': models['RotationAssignment'],
-        'ScheduleException': current_app.config.get('ScheduleException'),
-        'PendingSchedule': current_app.config.get('PendingSchedule'),
-        'IgnoredValidationIssue': current_app.config.get('IgnoredValidationIssue')
+        'Event': all_models['Event'],
+        'Schedule': all_models['Schedule'],
+        'Employee': all_models['Employee'],
+        'EmployeeTimeOff': all_models['EmployeeTimeOff'],
+        'EmployeeAvailability': all_models.get('EmployeeAvailability'),
+        'EmployeeWeeklyAvailability': all_models.get('EmployeeWeeklyAvailability'),
+        'EmployeeAttendance': all_models.get('EmployeeAttendance'),
+        'RotationAssignment': all_models['RotationAssignment'],
+        'ScheduleException': all_models.get('ScheduleException'),
+        'PendingSchedule': all_models.get('PendingSchedule'),
+        'IgnoredValidationIssue': all_models.get('IgnoredValidationIssue')
     }
 
     # Get start date from query parameter or default to the start of the current week (Sunday)
@@ -653,22 +655,24 @@ def weekly_validation_api():
     """
     from flask import request
     from app.services.weekly_validation import WeeklyValidationService
+    from app.models import get_models
 
     db = current_app.extensions['sqlalchemy']
+    all_models = get_models()
 
-    # Build models dictionary
+    # Build models dictionary for WeeklyValidationService
     models = {
-        'Event': models['Event'],
-        'Schedule': models['Schedule'],
-        'Employee': models['Employee'],
-        'EmployeeTimeOff': models['EmployeeTimeOff'],
-        'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
-        'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability'),
-        'EmployeeAttendance': current_app.config.get('EmployeeAttendance'),
-        'RotationAssignment': models['RotationAssignment'],
-        'ScheduleException': current_app.config.get('ScheduleException'),
-        'PendingSchedule': current_app.config.get('PendingSchedule'),
-        'IgnoredValidationIssue': current_app.config.get('IgnoredValidationIssue')
+        'Event': all_models['Event'],
+        'Schedule': all_models['Schedule'],
+        'Employee': all_models['Employee'],
+        'EmployeeTimeOff': all_models['EmployeeTimeOff'],
+        'EmployeeAvailability': all_models.get('EmployeeAvailability'),
+        'EmployeeWeeklyAvailability': all_models.get('EmployeeWeeklyAvailability'),
+        'EmployeeAttendance': all_models.get('EmployeeAttendance'),
+        'RotationAssignment': all_models['RotationAssignment'],
+        'ScheduleException': all_models.get('ScheduleException'),
+        'PendingSchedule': all_models.get('PendingSchedule'),
+        'IgnoredValidationIssue': all_models.get('IgnoredValidationIssue')
     }
 
     # Get start date
