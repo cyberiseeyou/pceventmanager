@@ -2,7 +2,10 @@
 Auto-scheduler routes
 Handles scheduler runs, review, and approval workflow
 """
-from flask import Blueprint, render_template, request, jsonify, current_app
+import csv
+from io import StringIO
+
+from flask import Blueprint, render_template, request, jsonify, current_app, Response
 from app.models import get_models
 from datetime import datetime, timedelta, date
 from sqlalchemy import func
@@ -1538,8 +1541,13 @@ def history():
 
 
 @auto_scheduler_bp.route('/api/history/<int:run_id>')
+@require_authentication()
 def get_run_history(run_id):
-    """Get detailed event list for a specific scheduler run"""
+    """Get detailed event list for a specific scheduler run
+
+    Query Parameters:
+        status: Filter by status - 'all' (default), 'failed', 'scheduled'
+    """
     db = current_app.extensions['sqlalchemy']
     models = get_models()
     SchedulerRunHistory = models['SchedulerRunHistory']
@@ -1552,10 +1560,20 @@ def get_run_history(run_id):
     if not run:
         return jsonify({'success': False, 'error': 'Run not found'}), 404
 
-    # Get all pending schedules for this run (both successful and failed)
-    pending_schedules = db.session.query(PendingSchedule).filter_by(
-        scheduler_run_id=run_id
-    ).all()
+    # Get status filter parameter
+    status_filter = request.args.get('status', 'all')
+
+    # Build query for pending schedules
+    query = db.session.query(PendingSchedule).filter_by(scheduler_run_id=run_id)
+
+    # Apply status filter
+    if status_filter == 'failed':
+        query = query.filter(PendingSchedule.failure_reason.isnot(None))
+    elif status_filter == 'scheduled':
+        query = query.filter(PendingSchedule.failure_reason.is_(None))
+    # 'all' applies no filter
+
+    pending_schedules = query.all()
 
     events_data = []
     for ps in pending_schedules:
@@ -1576,6 +1594,15 @@ def get_run_history(run_id):
             'failure_reason': ps.failure_reason
         })
 
+    # Get counts for all statuses (for filter buttons)
+    all_count = db.session.query(PendingSchedule).filter_by(scheduler_run_id=run_id).count()
+    failed_count = db.session.query(PendingSchedule).filter_by(
+        scheduler_run_id=run_id
+    ).filter(PendingSchedule.failure_reason.isnot(None)).count()
+    scheduled_count = db.session.query(PendingSchedule).filter_by(
+        scheduler_run_id=run_id
+    ).filter(PendingSchedule.failure_reason.is_(None)).count()
+
     return jsonify({
         'success': True,
         'run': {
@@ -1589,6 +1616,100 @@ def get_run_history(run_id):
             'events_failed': run.events_failed,
             'approved_at': run.approved_at.strftime('%Y-%m-%d %I:%M %p') if run.approved_at else None
         },
-        'events': events_data
+        'events': events_data,
+        'counts': {
+            'all': all_count,
+            'scheduled': scheduled_count,
+            'failed': failed_count
+        },
+        'current_filter': status_filter
     })
+
+
+@auto_scheduler_bp.route('/api/history/<int:run_id>/export')
+@require_authentication()
+def export_run_history(run_id):
+    """Export scheduler run events to CSV
+
+    Query Parameters:
+        status: Filter by status - 'all' (default), 'failed', 'scheduled'
+    """
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
+    Employee = models['Employee']
+
+    # Get the run
+    run = db.session.query(SchedulerRunHistory).get(run_id)
+    if not run:
+        return jsonify({'success': False, 'error': 'Run not found'}), 404
+
+    # Get status filter parameter
+    status_filter = request.args.get('status', 'all')
+
+    # Build query for pending schedules
+    query = db.session.query(PendingSchedule).filter_by(scheduler_run_id=run_id)
+
+    # Apply status filter
+    if status_filter == 'failed':
+        query = query.filter(PendingSchedule.failure_reason.isnot(None))
+    elif status_filter == 'scheduled':
+        query = query.filter(PendingSchedule.failure_reason.is_(None))
+
+    pending_schedules = query.all()
+
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Write header row
+    writer.writerow([
+        'Event Name',
+        'Event Type',
+        'Employee',
+        'Scheduled Date',
+        'Event Period',
+        'Status',
+        'Failure Reason'
+    ])
+
+    # Write data rows
+    for ps in pending_schedules:
+        event = db.session.query(Event).filter_by(
+            project_ref_num=ps.event_ref_num
+        ).first()
+        employee = db.session.query(Employee).get(ps.employee_id) if ps.employee_id else None
+
+        # Determine status
+        status = 'Failed' if ps.failure_reason else 'Scheduled'
+
+        # Format event period
+        event_period = ''
+        if event and event.start_datetime and event.due_datetime:
+            event_period = f"{event.start_datetime.strftime('%Y-%m-%d')} to {event.due_datetime.strftime('%Y-%m-%d')}"
+
+        writer.writerow([
+            event.project_name if event else 'Unknown',
+            event.event_type if event else 'Unknown',
+            employee.name if employee else 'Unassigned',
+            ps.schedule_datetime.strftime('%Y-%m-%d %I:%M %p') if ps.schedule_datetime else '',
+            event_period,
+            status,
+            ps.failure_reason or ''
+        ])
+
+    # Prepare response
+    output.seek(0)
+    filename = f'scheduler_run_{run_id}_{status_filter}.csv'
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
 

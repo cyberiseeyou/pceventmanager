@@ -216,6 +216,65 @@
         margin-bottom: var(--spacing-md);
     }
 
+    .filter-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-radius: var(--border-radius);
+    }
+
+    .filter-buttons {
+        display: flex;
+        gap: var(--spacing-xs);
+    }
+
+    .filter-btn {
+        padding: var(--spacing-xs) var(--spacing-md);
+        border: 1px solid var(--border-color);
+        background: white;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+        background: var(--bg-secondary);
+    }
+
+    .filter-btn.active {
+        background: var(--pc-navy);
+        color: white;
+        border-color: var(--pc-navy);
+    }
+
+    .filter-btn.active:hover {
+        background: var(--primary-dark);
+    }
+
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-md);
+        background: #2e7d32;
+        color: white;
+        text-decoration: none;
+        border-radius: var(--border-radius);
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+    }
+
+    .export-btn:hover {
+        background: #1b5e20;
+    }
+
     .approved-badge {
         background: #e8f5e9;
         color: #2e7d32;
@@ -289,7 +348,16 @@
 
 {% block scripts %}
 <script>
-    const loadedRuns = new Set();
+    // HTML escape function to prevent XSS
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Track loaded runs and their current filter
+    const runFilters = {};
 
     function toggleRun(runId) {
         const row = document.querySelector(`[data-run-id="${runId}"]`);
@@ -300,56 +368,98 @@
         } else {
             row.classList.add('expanded');
 
-            if (!loadedRuns.has(runId)) {
-                loadRunEvents(runId);
+            if (!runFilters[runId]) {
+                runFilters[runId] = 'all';
+                loadRunEvents(runId, 'all');
             }
         }
     }
 
-    async function loadRunEvents(runId) {
+    function setFilter(runId, status) {
+        runFilters[runId] = status;
+        loadRunEvents(runId, status);
+    }
+
+    async function loadRunEvents(runId, status = 'all') {
         const row = document.querySelector(`[data-run-id="${runId}"]`);
         const details = row.querySelector('.run-details');
 
+        // Show loading state
+        details.innerHTML = '<div class="loading-spinner">Loading events...</div>';
+
         try {
-            const response = await fetch(`/auto-schedule/api/history/${runId}`);
+            const response = await fetch(`/auto-schedule/api/history/${runId}?status=${status}`);
             const data = await response.json();
 
-            if (data.success && data.events.length > 0) {
-                details.innerHTML = `
-                <table class="events-table">
-                    <thead>
-                        <tr>
-                            <th>Event Name</th>
-                            <th>Type</th>
-                            <th>Assigned To</th>
-                            <th>Scheduled Time</th>
-                            <th>Event Period</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.events.map(event => `
-                            <tr>
-                                <td>${event.event_name}</td>
-                                <td><span class="type-badge type-${event.event_type}">${event.event_type}</span></td>
-                                <td>${event.employee_name}</td>
-                                <td>${event.scheduled_time || 'N/A'}</td>
-                                <td>${event.start_date} to ${event.due_date}</td>
-                                <td class="status-${event.status}">${event.status === 'scheduled' ? '✓ Scheduled' : '✗ Failed'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-            } else if (data.success) {
-                details.innerHTML = '<div class="no-events">No events in this run</div>';
-            } else {
-                details.innerHTML = `<div class="no-events">Error: ${data.error}</div>`;
-            }
+            if (data.success) {
+                const counts = data.counts || { all: 0, scheduled: 0, failed: 0 };
+                const currentFilter = status;
+                const exportUrl = `/auto-schedule/api/history/${runId}/export?status=${currentFilter}`;
 
-            loadedRuns.add(runId);
+                // Build filter controls
+                const filterControls = `
+                    <div class="filter-controls">
+                        <div class="filter-buttons">
+                            <button class="filter-btn ${currentFilter === 'all' ? 'active' : ''}"
+                                    onclick="setFilter(${runId}, 'all')">
+                                All (${counts.all})
+                            </button>
+                            <button class="filter-btn ${currentFilter === 'scheduled' ? 'active' : ''}"
+                                    onclick="setFilter(${runId}, 'scheduled')">
+                                Scheduled (${counts.scheduled})
+                            </button>
+                            <button class="filter-btn ${currentFilter === 'failed' ? 'active' : ''}"
+                                    onclick="setFilter(${runId}, 'failed')">
+                                Failed (${counts.failed})
+                            </button>
+                        </div>
+                        <a href="${exportUrl}" class="export-btn" download>
+                            Export CSV
+                        </a>
+                    </div>
+                `;
+
+                if (data.events.length > 0) {
+                    details.innerHTML = `
+                        ${filterControls}
+                        <table class="events-table">
+                            <thead>
+                                <tr>
+                                    <th>Event Name</th>
+                                    <th>Type</th>
+                                    <th>Assigned To</th>
+                                    <th>Scheduled Time</th>
+                                    <th>Event Period</th>
+                                    <th>Status</th>
+                                    ${currentFilter === 'failed' || currentFilter === 'all' ? '<th>Failure Reason</th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.events.map(event => `
+                                    <tr>
+                                        <td>${escapeHtml(event.event_name)}</td>
+                                        <td><span class="type-badge type-${escapeHtml(event.event_type)}">${escapeHtml(event.event_type)}</span></td>
+                                        <td>${escapeHtml(event.employee_name)}</td>
+                                        <td>${escapeHtml(event.scheduled_time) || 'N/A'}</td>
+                                        <td>${escapeHtml(event.start_date)} to ${escapeHtml(event.due_date)}</td>
+                                        <td class="status-${escapeHtml(event.status)}">${event.status === 'scheduled' ? 'Scheduled' : 'Failed'}</td>
+                                        ${currentFilter === 'failed' || currentFilter === 'all' ? `<td>${escapeHtml(event.failure_reason) || ''}</td>` : ''}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    details.innerHTML = `
+                        ${filterControls}
+                        <div class="no-events">No ${currentFilter === 'all' ? '' : currentFilter} events in this run</div>
+                    `;
+                }
+            } else {
+                details.innerHTML = `<div class="no-events">Error: ${escapeHtml(data.error)}</div>`;
+            }
         } catch (error) {
-            details.innerHTML = `<div class="no-events">Error: ${error.message}</div>`;
+            details.innerHTML = `<div class="no-events">Error: ${escapeHtml(error.message)}</div>`;
         }
     }
 </script>
