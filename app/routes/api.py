@@ -5235,11 +5235,11 @@ def verify_schedule():
 def change_event_type(event_ref):
     """Change event type with persistence through refreshes."""
     from datetime import datetime
-    from app.models import get_models
+    from app.models import get_models, get_db
 
     # Get models and db
     models = get_models()
-    db = models['db']
+    db = get_db()
     Event = models['Event']
     EventTypeOverride = models['EventTypeOverride']
 
@@ -5302,9 +5302,9 @@ def change_event_type(event_ref):
 @require_authentication()
 def remove_event_type_override(event_ref):
     """Remove override and return to auto-detection."""
-    from app.models import get_models
+    from app.models import get_models, get_db
     models = get_models()
-    db = models['db']
+    db = get_db()
     Event = models['Event']
     EventTypeOverride = models['EventTypeOverride']
 
