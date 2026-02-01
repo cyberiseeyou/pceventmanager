@@ -5237,8 +5237,9 @@ def change_event_type(event_ref):
     from datetime import datetime
     from app.models import get_models
 
-    # Get models
+    # Get models and db
     models = get_models()
+    db = models['db']
     Event = models['Event']
     EventTypeOverride = models['EventTypeOverride']
 
@@ -5301,7 +5302,9 @@ def change_event_type(event_ref):
 @require_authentication()
 def remove_event_type_override(event_ref):
     """Remove override and return to auto-detection."""
+    from app.models import get_models
     models = get_models()
+    db = models['db']
     Event = models['Event']
     EventTypeOverride = models['EventTypeOverride']
 
