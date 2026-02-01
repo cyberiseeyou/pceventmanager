@@ -2351,6 +2351,7 @@ def change_employee_assignment(schedule_id):
         data = request.get_json()
         new_employee_id = data.get('new_employee_id')
         override_conflicts = data.get('override_conflicts', False)
+        override_notification = data.get('override_notification', False)
 
         # Validate required fields
         if not new_employee_id:
@@ -2384,6 +2385,34 @@ def change_employee_assignment(schedule_id):
 
         # Use existing schedule datetime
         schedule_datetime = schedule.schedule_datetime
+
+        # Check for same-week assignment notification requirement
+        # If the event is within 7 days and override_notification is not set, return 202 status
+        if not override_notification:
+            from datetime import date
+            today = date.today()
+            event_date = schedule_datetime.date()
+            days_until = (event_date - today).days
+
+            # Same-week = within 7 days from today (including today and past dates)
+            if days_until <= 7:
+                logger.info(
+                    f"Same-week schedule change detected: schedule_id={schedule_id}, "
+                    f"event_date={event_date.isoformat()}, days_until={days_until}, "
+                    f"new_employee={new_employee.name}"
+                )
+                return jsonify({
+                    'status': 'notification_required',
+                    'message': 'This is a same-week schedule change. The employee should be notified.',
+                    'employee': {
+                        'id': new_employee.id,
+                        'name': new_employee.name,
+                        'phone': new_employee.phone or ''
+                    },
+                    'event_date': event_date.isoformat(),
+                    'event_name': event.project_name if event else 'Unknown Event',
+                    'days_until': days_until
+                }), 202
 
         # Validate using ConstraintValidator
         from app.services.constraint_validator import ConstraintValidator

@@ -275,8 +275,10 @@ class ChangeEmployeeModal {
 
     /**
      * Execute employee change operation
+     *
+     * @param {boolean} overrideNotification - If true, skip notification modal
      */
-    async executeChange() {
+    async executeChange(overrideNotification = false) {
         if (!this.selectedEmployeeId) {
             console.error('No employee selected');
             return;
@@ -298,11 +300,22 @@ class ChangeEmployeeModal {
                     'X-CSRFToken': this.getCsrfToken()
                 },
                 body: JSON.stringify({
-                    new_employee_id: this.selectedEmployeeId
+                    new_employee_id: this.selectedEmployeeId,
+                    override_notification: overrideNotification
                 })
             });
 
             const result = await response.json();
+
+            // Handle same-week notification requirement (202 status)
+            if (response.status === 202 && result.status === 'notification_required') {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = originalText;
+
+                // Show notification modal
+                this.showNotificationModal(result);
+                return;
+            }
 
             if (response.status === 409) {
                 // Conflict detected
@@ -333,6 +346,38 @@ class ChangeEmployeeModal {
             confirmBtn.disabled = false;
             confirmBtn.textContent = originalText;
         }
+    }
+
+    /**
+     * Show notification modal for same-week schedule changes
+     *
+     * @param {Object} data - Notification data from API
+     */
+    showNotificationModal(data) {
+        // Check if NotificationModal is available
+        if (typeof NotificationModal === 'undefined') {
+            console.error('NotificationModal not loaded. Proceeding without notification.');
+            this.executeChange(true);
+            return;
+        }
+
+        const notificationModal = new NotificationModal({
+            employee: data.employee,
+            eventName: data.event_name,
+            eventDate: data.event_date,
+            daysUntil: data.days_until,
+            onConfirm: (selectedOption) => {
+                console.log(`[ChangeEmployeeModal] Notification acknowledged: ${selectedOption}`);
+                // Retry the API call with override flag
+                this.executeChange(true);
+            },
+            onCancel: () => {
+                console.log('[ChangeEmployeeModal] Notification modal cancelled');
+                // User cancelled, don't proceed with the change
+            }
+        });
+
+        notificationModal.open();
     }
 
     /**

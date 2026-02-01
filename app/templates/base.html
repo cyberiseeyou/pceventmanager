@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard-shortcuts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/form-validation.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/notification-modal.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 
@@ -584,6 +585,9 @@
 
     <!-- AI Assistant Logic -->
     <script src="{{ url_for('static', filename='js/components/ai-assistant.js') }}"></script>
+
+    <!-- Notification Modal Component (for same-week schedule changes) -->
+    <script src="{{ url_for('static', filename='js/components/notification-modal.js') }}"></script>
 
     <!-- Quick Note Widget -->
     {% include 'components/quick_note_widget.html' %}
