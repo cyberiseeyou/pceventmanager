@@ -125,17 +125,35 @@ class ChangeEmployeeModal {
     async loadAvailableEmployees() {
         const employeesList = this.modalElement.querySelector('#available-employees-list');
         const confirmBtn = this.modalElement.querySelector('#btn-confirm-change');
+        const apiUrl = `/api/available_employees_for_change/${this.eventDate}/${this.eventType}`;
+
+        // Debug logging
+        console.log('[ChangeEmployeeModal] Loading employees from:', apiUrl);
 
         try {
-            const response = await fetch(
-                `/api/available_employees_for_change/${this.eventDate}/${this.eventType}`
-            );
+            const response = await fetch(apiUrl);
 
+            console.log('[ChangeEmployeeModal] Response status:', response.status);
+
+            // Parse JSON response first to get error details
+            const data = await response.json();
+
+            console.log('[ChangeEmployeeModal] Response data:', data);
+
+            // Check if response is an error object (not an array)
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Extract error message from response body
+                const errorMessage = data.error || data.message || `HTTP ${response.status}: ${response.statusText}`;
+                throw new Error(errorMessage);
             }
 
-            const employees = await response.json();
+            // Validate that we received an array
+            if (!Array.isArray(data)) {
+                console.error('[ChangeEmployeeModal] Expected array but got:', typeof data, data);
+                throw new Error(data.error || 'Invalid response format from server');
+            }
+
+            const employees = data;
 
             // Filter out current employee
             const availableEmployees = employees.filter(emp => emp.id !== this.currentEmployeeId);
@@ -152,11 +170,13 @@ class ChangeEmployeeModal {
             }
 
         } catch (error) {
-            console.error('Failed to load available employees:', error);
+            console.error('[ChangeEmployeeModal] Failed to load available employees:', error);
+            // Display the actual error message to help with debugging
+            const errorText = error.message || 'Failed to load employees. Please try again.';
             employeesList.innerHTML = `
                 <div class="error-message" role="alert">
                     <span class="icon">×</span>
-                    Failed to load employees. Please try again.
+                    ${this._escapeHtml(errorText)}
                 </div>
             `;
         }
@@ -456,6 +476,20 @@ class ChangeEmployeeModal {
      */
     getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     *
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text
+     * @private
+     */
+    _escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 
