@@ -3,6 +3,7 @@ Notes and Tasks API Routes
 Manages notes, tasks, reminders, and recurring reminders
 """
 from flask import Blueprint, request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime, date, time, timedelta
 from app.routes.auth import require_authentication
 
@@ -25,7 +26,8 @@ def get_notes():
     - limit: Maximum number of notes to return
     """
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         query = db.session.query(Note)
@@ -92,7 +94,8 @@ def get_notes():
 def create_note():
     """Create a new note or task"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         data = request.get_json()
@@ -163,7 +166,8 @@ def create_note():
 def get_note(note_id):
     """Get a specific note"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -186,7 +190,8 @@ def get_note(note_id):
 def update_note(note_id):
     """Update a note"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -255,7 +260,8 @@ def update_note(note_id):
 def delete_note(note_id):
     """Delete a note"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -285,7 +291,8 @@ def delete_note(note_id):
 def complete_note(note_id):
     """Mark a note as complete"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -315,7 +322,8 @@ def complete_note(note_id):
 def reopen_note(note_id):
     """Mark a note as incomplete"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -345,7 +353,8 @@ def reopen_note(note_id):
 def get_notes_summary():
     """Get summary counts of notes by status and type"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         today = date.today()
@@ -393,7 +402,8 @@ def get_notes_summary():
 def get_employee_notes(employee_id):
     """Get all active notes for a specific employee"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         notes = db.session.query(Note).filter(
@@ -421,7 +431,8 @@ def get_employee_notes(employee_id):
 def get_event_notes(event_ref_num):
     """Get all notes for a specific event"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         notes = db.session.query(Note).filter(
@@ -445,7 +456,8 @@ def get_event_notes(event_ref_num):
 def get_pending_notifications():
     """Get notes that need browser notifications (due soon, not sent)"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         now = datetime.now()
@@ -494,7 +506,8 @@ def get_pending_notifications():
 def mark_notification_sent(note_id):
     """Mark that notification was sent for a note"""
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
 
     try:
         note = db.session.query(Note).get(note_id)
@@ -691,7 +704,8 @@ def trigger_due_reminders():
     Creates Note entries for reminders that should trigger.
     """
     db = current_app.extensions['sqlalchemy']
-    Note = current_app.config['Note']
+    models = get_models()
+    Note = models['Note']
     RecurringReminder = current_app.config['RecurringReminder']
 
     try:

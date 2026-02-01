@@ -108,7 +108,7 @@ def get_models() -> Dict[str, Any]:
     Helper to get all registered models from current app context
 
     This is a drop-in replacement for the old pattern:
-        Employee = current_app.config['Employee']
+        Employee = models['Employee']
 
     New pattern:
         models = get_models()

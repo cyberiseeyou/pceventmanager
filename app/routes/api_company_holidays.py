@@ -3,6 +3,7 @@ Company Holidays API Routes
 Manages company-wide holidays/closed days
 """
 from flask import Blueprint, request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime, date
 from app.routes.auth import require_authentication
 
@@ -14,7 +15,8 @@ api_company_holidays_bp = Blueprint('api_company_holidays', __name__, url_prefix
 def get_holidays():
     """Get all company holidays"""
     db = current_app.extensions['sqlalchemy']
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         # Get query parameters
@@ -52,7 +54,8 @@ def get_holidays():
 def create_holiday():
     """Create a new company holiday"""
     db = current_app.extensions['sqlalchemy']
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         data = request.get_json()
@@ -115,7 +118,8 @@ def create_holiday():
 def get_holiday(holiday_id):
     """Get a specific holiday"""
     db = current_app.extensions['sqlalchemy']
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         holiday = db.session.query(CompanyHoliday).get(holiday_id)
@@ -138,7 +142,8 @@ def get_holiday(holiday_id):
 def update_holiday(holiday_id):
     """Update a company holiday"""
     db = current_app.extensions['sqlalchemy']
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         holiday = db.session.query(CompanyHoliday).get(holiday_id)
@@ -196,7 +201,8 @@ def update_holiday(holiday_id):
 def delete_holiday(holiday_id):
     """Delete a company holiday"""
     db = current_app.extensions['sqlalchemy']
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         holiday = db.session.query(CompanyHoliday).get(holiday_id)
@@ -225,7 +231,8 @@ def delete_holiday(holiday_id):
 @require_authentication()
 def check_holiday():
     """Check if a specific date is a holiday"""
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         date_str = request.args.get('date')
@@ -255,7 +262,8 @@ def check_holiday():
 @require_authentication()
 def get_upcoming_holidays():
     """Get upcoming holidays"""
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         days_ahead = request.args.get('days', 30, type=int)
@@ -275,7 +283,8 @@ def get_upcoming_holidays():
 @require_authentication()
 def get_holidays_in_range():
     """Get all holiday dates in a range"""
-    CompanyHoliday = current_app.config['CompanyHoliday']
+    models = get_models()
+    CompanyHoliday = models['CompanyHoliday']
 
     try:
         start_str = request.args.get('start_date')

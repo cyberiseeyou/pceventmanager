@@ -3,6 +3,7 @@ Scheduling routes blueprint
 Handles event scheduling, rescheduling, and schedule management operations
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, abort
+from app.models import get_models
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta
 
@@ -15,7 +16,8 @@ def schedule_event(event_id):
     """Display scheduling form for an event"""
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
+    models = get_models()
+    Event = models['Event']
 
     event = db.session.get(Event, event_id)
     if event is None:
@@ -83,12 +85,13 @@ def available_employees(date, event_id=None):
     """Get list of available employees for a specific date and event"""
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
-    EmployeeAvailability = current_app.config['EmployeeAvailability']
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Employee = models['Employee']
+    Event = models['Event']
+    Schedule = models['Schedule']
+    EmployeeAvailability = models['EmployeeAvailability']
+    EmployeeTimeOff = models['EmployeeTimeOff']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     # Check if override constraints is enabled
     override_constraints = request.args.get('override', 'false').lower() == 'true'
@@ -276,11 +279,11 @@ def check_scheduling_conflicts():
 
     # Get all models
     models = {
-        'Employee': current_app.config['Employee'],
-        'Event': current_app.config['Event'],
-        'Schedule': current_app.config['Schedule'],
+        'Employee': models['Employee'],
+        'Event': models['Event'],
+        'Schedule': models['Schedule'],
         'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
-        'EmployeeTimeOff': current_app.config['EmployeeTimeOff'],
+        'EmployeeTimeOff': models['EmployeeTimeOff'],
         'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability')
     }
 
@@ -478,9 +481,10 @@ def save_schedule():
     """Save a new schedule assignment"""
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
+    models = get_models()
+    Employee = models['Employee']
+    Event = models['Event']
+    Schedule = models['Schedule']
 
     # Get form data
     event_id = request.form.get('event_id')

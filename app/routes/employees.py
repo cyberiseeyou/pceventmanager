@@ -3,6 +3,7 @@ Employees routes blueprint
 Handles employee management, availability, and time off operations
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from app.models import get_models
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -14,7 +15,8 @@ employees_bp = Blueprint('employees', __name__)
 @employees_bp.route('/employees')
 def employees():
     """Display employee management page"""
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
     employees = Employee.query.order_by(Employee.name).all()
     return render_template('employees.html', employees=employees)
 
@@ -32,7 +34,8 @@ def get_active_employees():
 
     Returns list of active employees with id, name, and job_title
     """
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
 
     employees = Employee.query.filter_by(is_active=True).order_by(Employee.name).all()
 
@@ -50,10 +53,11 @@ def get_active_employees():
 @employees_bp.route('/api/employees/<employee_id>', methods=['DELETE'])
 def manage_employees(employee_id=None):
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    Schedule = current_app.config['Schedule']
-    EmployeeAvailability = current_app.config['EmployeeAvailability']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Employee = models['Employee']
+    Schedule = models['Schedule']
+    EmployeeAvailability = models['EmployeeAvailability']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     if request.method == 'GET':
         # Get all employees with their weekly availability
@@ -233,8 +237,9 @@ def manage_employees(employee_id=None):
 def employee_availability(employee_id):
     """Manage specific date availability for an employee"""
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    EmployeeAvailability = current_app.config['EmployeeAvailability']
+    models = get_models()
+    Employee = models['Employee']
+    EmployeeAvailability = models['EmployeeAvailability']
 
     employee = Employee.query.filter_by(id=employee_id).first()
     if not employee:
@@ -299,8 +304,9 @@ def employee_availability(employee_id):
 def populate_employees():
     """Populate employees from the provided JSON data"""
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Employee = models['Employee']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     try:
         employees_data = request.get_json()
@@ -378,8 +384,9 @@ def populate_employees():
 def manage_employee_time_off(employee_id):
     """Manage time off requests for a specific employee"""
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+    models = get_models()
+    Employee = models['Employee']
+    EmployeeTimeOff = models['EmployeeTimeOff']
 
     employee = Employee.query.filter_by(id=employee_id).first()
     if not employee:
@@ -431,8 +438,8 @@ def manage_employee_time_off(employee_id):
                 return jsonify({'error': f'Time off request overlaps with existing request from {overlapping.start_date} to {overlapping.end_date}'}), 400
 
             # Check for conflicting scheduled events
-            Schedule = current_app.config['Schedule']
-            Event = current_app.config['Event']
+            Schedule = models['Schedule']
+            Event = models['Event']
             
             conflicting_schedules = Schedule.query.filter(
                 Schedule.employee_id == employee_id,
@@ -528,8 +535,9 @@ def manage_employee_time_off(employee_id):
 def delete_time_off(time_off_id):
     """Delete a time off request"""
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+    models = get_models()
+    Employee = models['Employee']
+    EmployeeTimeOff = models['EmployeeTimeOff']
 
     time_off_request = EmployeeTimeOff.query.get(time_off_id)
 
@@ -563,7 +571,8 @@ def get_available_reps():
     from app.integrations.external_api.session_api_service import session_api as external_api
 
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
 
     try:
         # Get available representatives from the API
@@ -794,8 +803,9 @@ def import_employees():
     Creates new employees with proper external_id (repId) and crossmark_employee_id (employeeId).
     """
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Employee = models['Employee']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     data = request.get_json()
     selected_employees = data.get('employees', [])

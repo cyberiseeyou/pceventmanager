@@ -5,6 +5,7 @@ FR32: Scenario 2 - Temporary Availability Change
 These endpoints should be added to api.py or imported into the api blueprint.
 """
 from flask import request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime, date
 import logging
 
@@ -32,7 +33,8 @@ def create_availability_override_endpoint():
     """
     db = current_app.extensions['sqlalchemy']
     EmployeeAvailabilityOverride = current_app.config['EmployeeAvailabilityOverride']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
 
     try:
         data = request.get_json()
@@ -100,7 +102,8 @@ def get_availability_overrides_endpoint(employee_id):
     """
     db = current_app.extensions['sqlalchemy']
     EmployeeAvailabilityOverride = current_app.config['EmployeeAvailabilityOverride']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
 
     try:
         employee = db.session.get(Employee, employee_id)

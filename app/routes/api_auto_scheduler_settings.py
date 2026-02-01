@@ -6,6 +6,7 @@ Provides configuration management for auto-scheduler behavior including
 event type filtering and per-event overrides.
 """
 from flask import request, jsonify, current_app
+from app.models import get_models
 import json
 import logging
 
@@ -163,7 +164,8 @@ def get_event_scheduling_override_endpoint(event_id):
     }
     """
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
+    models = get_models()
+    Event = models['Event']
     EventSchedulingOverride = current_app.config['EventSchedulingOverride']
 
     try:
@@ -223,7 +225,8 @@ def set_event_scheduling_override_endpoint():
     }
     """
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
+    models = get_models()
+    Event = models['Event']
     EventSchedulingOverride = current_app.config['EventSchedulingOverride']
 
     try:

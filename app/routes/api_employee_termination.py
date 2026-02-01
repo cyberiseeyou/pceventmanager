@@ -5,6 +5,7 @@ FR34: Scenario 4 - Employee Termination
 Automated workflow for handling employee terminations and reassigning future events.
 """
 from flask import request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime, date
 import logging
 
@@ -36,9 +37,10 @@ def get_employee_future_events_endpoint(employee_id):
     }
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get employee
@@ -135,9 +137,10 @@ def terminate_employee_endpoint():
     }
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         data = request.get_json()

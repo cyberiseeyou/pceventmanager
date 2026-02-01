@@ -12,6 +12,7 @@ Handles CRUD operations for paperwork templates including:
 """
 
 from flask import Blueprint, request, jsonify, current_app
+from app.models import get_models
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -34,7 +35,8 @@ def get_templates():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         templates = PaperworkTemplate.query.order_by(PaperworkTemplate.display_order).all()
 
@@ -81,7 +83,8 @@ def create_template():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         data = request.get_json()
 
@@ -151,7 +154,8 @@ def update_template(template_id):
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         template = PaperworkTemplate.query.get(template_id)
         if not template:
@@ -210,7 +214,8 @@ def delete_template(template_id):
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         template = PaperworkTemplate.query.get(template_id)
         if not template:
@@ -254,7 +259,8 @@ def reorder_templates():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         data = request.get_json()
         template_ids = data.get('template_ids', [])
@@ -301,7 +307,8 @@ def upload_template_file():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        PaperworkTemplate = current_app.config['PaperworkTemplate']
+        models = get_models()
+        PaperworkTemplate = models['PaperworkTemplate']
 
         # Check if file was uploaded
         if 'file' not in request.files:

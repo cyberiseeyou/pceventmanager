@@ -7,6 +7,7 @@ Returns conflicts (HARD violations) and warnings (SOFT violations).
 Epic 1, Story 1.2: Real-Time Validation API Endpoint
 """
 from flask import request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime
 import logging
 import time
@@ -120,11 +121,11 @@ def validate_schedule_endpoint():
         # Get database session and models
         db = current_app.extensions['sqlalchemy']
         models = {
-            'Employee': current_app.config['Employee'],
-            'Event': current_app.config['Event'],
-            'Schedule': current_app.config['Schedule'],
+            'Employee': models['Employee'],
+            'Event': models['Event'],
+            'Schedule': models['Schedule'],
             'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
-            'EmployeeTimeOff': current_app.config['EmployeeTimeOff'],
+            'EmployeeTimeOff': models['EmployeeTimeOff'],
             'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability')
         }
 

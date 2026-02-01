@@ -35,7 +35,7 @@ def unscheduled_events():
     """Events list view with filtering by condition and type"""
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
+    Event = models['Event']
 
     # Get filter parameters
     condition_filter = request.args.get('condition', 'all')  # Default to all events
@@ -108,8 +108,8 @@ def unscheduled_events():
         # Split search by commas for multiple criteria
         search_terms = [term.strip() for term in search_query.split(',') if term.strip()]
 
-        Schedule = current_app.config['Schedule']
-        Employee = current_app.config['Employee']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
 
         search_conditions = []
 
@@ -259,7 +259,7 @@ def unscheduled_events():
 
     # Order results
     # For scheduled events, sort by scheduled date; for unscheduled, sort by start date
-    Schedule = current_app.config['Schedule']
+    Schedule = models['Schedule']
     
     # Use a subquery to get the minimum (earliest) schedule datetime for each event
     # This handles events with multiple schedules
@@ -283,8 +283,8 @@ def unscheduled_events():
 
     # Calculate priority for each event (for visual coding)
     # Also fetch schedule/employee info for scheduled events
-    Schedule = current_app.config['Schedule']
-    Employee = current_app.config['Employee']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
 
     today = date.today()
     events_with_priority = []
@@ -356,9 +356,9 @@ def unreported_events():
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
 
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
-    Employee = current_app.config['Employee']
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
 
     today = date.today()
     two_weeks_ago = today - timedelta(days=14)
@@ -734,9 +734,9 @@ def attendance_calendar(employee_id=None):
     db = current_app.extensions['sqlalchemy']
 
     # Get models
-    Employee = current_app.config['Employee']
-    EmployeeAttendance = current_app.config['EmployeeAttendance']
-    Schedule = current_app.config['Schedule']
+    Employee = models['Employee']
+    EmployeeAttendance = models['EmployeeAttendance']
+    Schedule = models['Schedule']
 
     # Parse date parameter for month selection
     date_str = request.args.get('date')
@@ -790,9 +790,9 @@ def print_schedule_by_date(date):
     """Get schedule data for printing for a specific date"""
     from flask import current_app
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         selected_date = datetime.strptime(date, '%Y-%m-%d').date()

@@ -3,6 +3,7 @@ Admin routes blueprint
 Handles admin operations, sync management, testing, and utility endpoints
 """
 from flask import Blueprint, render_template, request, jsonify, current_app, abort, make_response
+from app.models import get_models
 from app.routes.auth import require_authentication
 from app.utils.db_compat import disable_foreign_keys, is_sqlite
 from datetime import datetime, timedelta, date, time
@@ -93,7 +94,8 @@ def refresh_database():
 def refresh_status():
     """Get status of database refresh progress"""
     try:
-        Event = current_app.config['Event']
+        models = get_models()
+        Event = models['Event']
 
         # Get total events count and last sync info
         total_events = Event.query.count()
@@ -120,8 +122,9 @@ def delete_event(event_id):
     """Delete an event from the database"""
     try:
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
 
         # Find the event
         event = db.session.get(Event, event_id)
@@ -200,9 +203,10 @@ def sync_status():
     """Get synchronization status overview"""
     try:
         db = current_app.extensions['sqlalchemy']
-        Employee = current_app.config['Employee']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Employee = models['Employee']
+        Event = models['Event']
+        Schedule = models['Schedule']
 
         # Get sync statistics
         pending_employees = Employee.query.filter_by(sync_status='pending').count()
@@ -262,7 +266,8 @@ def webhook_schedule_update():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Schedule = models['Schedule']
         from sync_engine import sync_engine
 
         data = request.get_json()
@@ -316,9 +321,10 @@ def sync_admin():
 def universal_search():
     """Universal search endpoint for events, employees, and schedules"""
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
-    Schedule = current_app.config['Schedule']
+    models = get_models()
+    Event = models['Event']
+    Employee = models['Employee']
+    Schedule = models['Schedule']
 
     query = request.args.get('q', '').strip()
     context = request.args.get('context', 'all')  # all, scheduling, tracking, reporting
@@ -1209,9 +1215,10 @@ def print_paperwork_internal(paperwork_type, target_date_override=None):
         from flask import session as flask_session
 
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Employee = models['Employee']
+        Schedule = models['Schedule']
 
         # Determine target date
         if target_date_override:
@@ -1400,8 +1407,9 @@ def print_salestools_by_date(date_str):
         from PyPDF2 import PdfWriter, PdfReader
 
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
 
         # Parse date
         try:
@@ -1498,9 +1506,10 @@ def print_event_paperwork(event_id):
         from io import BytesIO
 
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Employee = models['Employee']
+        Schedule = models['Schedule']
 
         # Get event details
         event = Event.query.get(event_id)
@@ -1558,8 +1567,9 @@ def auto_schedule_event(event_id):
     """Auto-schedule a single event using SchedulingEngine"""
     try:
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+        models = get_models()
+        Event = models['Event']
+        SchedulerRunHistory = models['SchedulerRunHistory']
 
         # Get event
         event = Event.query.get(event_id)
@@ -1599,7 +1609,7 @@ def auto_schedule_event(event_id):
             return jsonify({'error': 'Failed to find available employee for this event'}), 500
 
         # Single-event auto-scheduling always creates the schedule immediately (no approval needed)
-        Schedule = current_app.config['Schedule']
+        Schedule = models['Schedule']
 
         # Create the schedule
         schedule = Schedule(
@@ -1635,8 +1645,9 @@ def employee_analytics():
     from datetime import datetime, timedelta
     
     db = current_app.extensions['sqlalchemy']
-    Employee = current_app.config['Employee']
-    Schedule = current_app.config['Schedule']
+    models = get_models()
+    Employee = models['Employee']
+    Schedule = models['Schedule']
     
     # Get week_start parameter or default to current week's Sunday
     week_start_str = request.args.get('week_start')
@@ -1693,9 +1704,10 @@ def print_weekly_summary(week_start_str):
         from io import BytesIO
 
         db = current_app.extensions['sqlalchemy']
-        Employee = current_app.config['Employee']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
+        models = get_models()
+        Employee = models['Employee']
+        Schedule = models['Schedule']
+        Event = models['Event']
 
         # Parse week start
         week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
@@ -1876,9 +1888,10 @@ def print_employee_schedule(employee_id, week_start_str):
         from io import BytesIO
 
         db = current_app.extensions['sqlalchemy']
-        Employee = current_app.config['Employee']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
+        models = get_models()
+        Employee = models['Employee']
+        Schedule = models['Schedule']
+        Event = models['Event']
 
         # Get employee
         employee = Employee.query.get(employee_id)
@@ -2320,8 +2333,9 @@ def sync_employees_from_api():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        Employee = current_app.config['Employee']
-        Event = current_app.config['Event']
+        models = get_models()
+        Employee = models['Employee']
+        Event = models['Event']
         from app.integrations.external_api.session_api_service import session_api as external_api
 
         # Ensure authenticated
@@ -2498,8 +2512,9 @@ def generate_edr_reports_by_date():
 
         # Get database and models
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
 
         # Get all CORE events scheduled for the target date
         core_events = db.session.query(Event, Schedule).join(
@@ -2702,10 +2717,10 @@ def generate_daily_paperwork():
         # Get database and models
         db = current_app.extensions['sqlalchemy']
         models_dict = {
-            'Event': current_app.config['Event'],
-            'Schedule': current_app.config['Schedule'],
-            'Employee': current_app.config['Employee'],
-            'PaperworkTemplate': current_app.config['PaperworkTemplate']
+            'Event': models['Event'],
+            'Schedule': models['Schedule'],
+            'Employee': models['Employee'],
+            'PaperworkTemplate': models['PaperworkTemplate']
         }
 
         # Get authenticated SessionAPIService for downloading SalesTools

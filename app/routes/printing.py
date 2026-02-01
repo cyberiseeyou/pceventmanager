@@ -15,6 +15,7 @@ Author: Schedule Management System
 """
 
 from flask import Blueprint, render_template, request, jsonify, send_file, current_app
+from app.models import get_models
 from datetime import datetime, timedelta, date
 from sqlalchemy import or_
 from app.routes.auth import require_authentication, get_current_user
@@ -102,7 +103,8 @@ def get_employees():
     """
     try:
         db = current_app.extensions['sqlalchemy']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Employee = models['Employee']
 
         employees = db.session.query(Employee).filter(
             Employee.is_active == True
@@ -141,9 +143,10 @@ def get_daily_schedule():
 
         # Get models from app config
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Schedule = models['Schedule']
+        Event = models['Event']
+        Employee = models['Employee']
 
         # Get Core and Juicer Production events for the specific day
         # (same logic as dashboard)
@@ -215,9 +218,10 @@ def get_weekly_schedule():
 
         # Get models from app config
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Schedule = models['Schedule']
+        Event = models['Event']
+        Employee = models['Employee']
 
         # Get all events for the week (CORE and Juicer Production)
         scheduled_events = db.session.query(Schedule, Event, Employee).join(
@@ -313,9 +317,10 @@ def get_employee_schedule():
 
         # Get models from app config
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Schedule = models['Schedule']
+        Event = models['Event']
+        Employee = models['Employee']
 
         # Get employee info
         employee = db.session.query(Employee).filter(Employee.id == employee_id).first()
@@ -484,7 +489,8 @@ def get_event_instructions():
         date_str = request.args.get('date')
 
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
+        models = get_models()
+        Event = models['Event']
 
         if event_id:
             # Single event lookup - search by first 6 characters of project_name
@@ -523,7 +529,7 @@ def get_event_instructions():
             # Batch lookup - get all CORE events for the date
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
-            Schedule = current_app.config['Schedule']
+            Schedule = models['Schedule']
 
             # Get all CORE events scheduled for this date
             events_query = db.session.query(Event).join(
@@ -604,8 +610,9 @@ def get_core_events_count():
 
         # Get models from app config
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
+        models = get_models()
+        Schedule = models['Schedule']
+        Event = models['Event']
 
         # Get Core events for the specific day
         core_events = db.session.query(Schedule, Event).join(
@@ -690,10 +697,10 @@ def get_complete_paperwork():
         # Get database session and models
         db = current_app.extensions['sqlalchemy']
         models_dict = {
-            'Event': current_app.config['Event'],
-            'Schedule': current_app.config['Schedule'],
-            'Employee': current_app.config['Employee'],
-            'PaperworkTemplate': current_app.config['PaperworkTemplate'],
+            'Event': models['Event'],
+            'Schedule': models['Schedule'],
+            'Employee': models['Employee'],
+            'PaperworkTemplate': models['PaperworkTemplate'],
             'SystemSetting': current_app.config.get('SystemSetting')
         }
 
@@ -803,9 +810,10 @@ def get_event_paperwork():
 
         # Get database models
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
 
         # Find event by first 6 digits of project_name
         # IMPORTANT: Prioritize Core events over Supervisor events
@@ -1042,9 +1050,10 @@ def freeosk_manual_test():
 
         # Get database and models
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
         SystemSetting = current_app.config.get('SystemSetting')
 
         # Initialize SessionAPIService for MVRetail authentication
@@ -1343,9 +1352,10 @@ def edr_batch_download():
 
         # Get database models
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
+        Employee = models['Employee']
 
         # Query CORE events scheduled on this date
         events = db.session.query(Event).join(
@@ -1535,8 +1545,9 @@ def edr_daily_items_list():
 
         # Get database models
         db = current_app.extensions['sqlalchemy']
-        Event = current_app.config['Event']
-        Schedule = current_app.config['Schedule']
+        models = get_models()
+        Event = models['Event']
+        Schedule = models['Schedule']
 
         # Query CORE events scheduled on this date
         events = db.session.query(Event).join(

@@ -3,6 +3,7 @@ Auto-scheduler routes
 Handles scheduler runs, review, and approval workflow
 """
 from flask import Blueprint, render_template, request, jsonify, current_app
+from app.models import get_models
 from datetime import datetime, timedelta, date
 from sqlalchemy import func
 
@@ -17,8 +18,9 @@ auto_scheduler_bp = Blueprint('auto_scheduler', __name__, url_prefix='/auto-sche
 def index():
     """Main auto-scheduler page with scheduling progress"""
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    models = get_models()
+    Event = models['Event']
+    SchedulerRunHistory = models['SchedulerRunHistory']
 
     # Get today's date
     today = date.today()
@@ -107,7 +109,8 @@ def run_scheduler():
 @auto_scheduler_bp.route('/status/<int:run_id>', methods=['GET'])
 def get_run_status(run_id):
     """Get status of a scheduler run"""
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
     db = current_app.extensions['sqlalchemy']
 
     run = db.session.query(SchedulerRunHistory).get(run_id)
@@ -132,7 +135,8 @@ def get_run_status(run_id):
 def review():
     """Render proposal review page"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
 
     # Get latest unapproved run
     latest_run = db.session.query(SchedulerRunHistory).filter(
@@ -154,11 +158,12 @@ def get_pending_schedules():
     from datetime import date, timedelta
 
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
-    PendingSchedule = current_app.config['PendingSchedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
-    Schedule = current_app.config['Schedule']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    Schedule = models['Schedule']
 
     run_id = request.args.get('run_id', type=int)
 
@@ -345,8 +350,9 @@ def get_pending_schedules():
 def edit_pending_schedule(pending_id):
     """Edit a pending schedule before approval"""
     db = current_app.extensions['sqlalchemy']
-    PendingSchedule = current_app.config['PendingSchedule']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    PendingSchedule = models['PendingSchedule']
+    Employee = models['Employee']
 
     pending = db.session.query(PendingSchedule).get(pending_id)
     if not pending:
@@ -387,7 +393,8 @@ def edit_pending_schedule(pending_id):
 def delete_pending_by_ref(event_ref_num):
     """Delete a pending schedule by event reference number after manual scheduling"""
     db = current_app.extensions['sqlalchemy']
-    PendingSchedule = current_app.config['PendingSchedule']
+    models = get_models()
+    PendingSchedule = models['PendingSchedule']
 
     try:
         # Find pending schedules for this event reference number
@@ -773,6 +780,7 @@ def approve_schedule():
                         )
 
                     # API submission successful - create local schedule record
+                    models = get_models()
                     schedule = models['Schedule'](
                         event_ref_num=pending.event_ref_num,
                         employee_id=pending.employee_id,
@@ -1049,6 +1057,7 @@ def approve_single_schedule(pending_id):
                     )
 
                 # API submission successful - create local schedule record
+                models = get_models()
                 schedule = models['Schedule'](
                     event_ref_num=pending.event_ref_num,
                     employee_id=pending.employee_id,
@@ -1169,7 +1178,8 @@ def approve_single_schedule(pending_id):
 def mark_run_approved(run_id):
     """Mark a scheduler run as approved after all schedules are processed"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
 
     try:
         run = db.session.query(SchedulerRunHistory).get(run_id)
@@ -1202,9 +1212,10 @@ def mark_run_approved(run_id):
 def reject_schedule():
     """Reject/discard ALL pending schedule proposals"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
-    PendingSchedule = current_app.config['PendingSchedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
 
     data = request.get_json() or {}
     reject_all = data.get('reject_all', True)  # Default to rejecting all
@@ -1317,7 +1328,8 @@ def reject_schedule():
 def dashboard_status():
     """Check if there are pending scheduler runs for dashboard notification"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
 
     # Count runs that are completed but not approved and not rejected
     pending_count = db.session.query(func.count(SchedulerRunHistory.id)).filter(
@@ -1337,8 +1349,9 @@ def verify_pending_run(run_id):
     from app.services.schedule_verification import ScheduleVerificationService
 
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
-    PendingSchedule = current_app.config['PendingSchedule']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
 
     try:
         # Get the scheduler run
@@ -1489,9 +1502,10 @@ def verify_date_range_endpoint():
 def history():
     """Page showing all scheduler run history with scheduled events"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
-    PendingSchedule = current_app.config['PendingSchedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
 
     # Get all scheduler runs, ordered by date descending
     runs = db.session.query(SchedulerRunHistory).order_by(
@@ -1527,10 +1541,11 @@ def history():
 def get_run_history(run_id):
     """Get detailed event list for a specific scheduler run"""
     db = current_app.extensions['sqlalchemy']
-    SchedulerRunHistory = current_app.config['SchedulerRunHistory']
-    PendingSchedule = current_app.config['PendingSchedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     # Get the run
     run = db.session.query(SchedulerRunHistory).get(run_id)

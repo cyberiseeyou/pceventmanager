@@ -90,12 +90,12 @@ def daily_validation():
     db = current_app.extensions['sqlalchemy']
 
     # Get models
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
-    Employee = current_app.config['Employee']
-    RotationAssignment = current_app.config['RotationAssignment']
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+    RotationAssignment = models['RotationAssignment']
     ScheduleException = current_app.config.get('ScheduleException')
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+    EmployeeTimeOff = models['EmployeeTimeOff']
     PendingSchedule = current_app.config.get('PendingSchedule')
 
     # Get selected date from query parameter or default to today
@@ -535,8 +535,8 @@ def validation_summary_api():
     API endpoint for validation summary (for widgets or external monitoring)
     """
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
+    Event = models['Event']
+    Schedule = models['Schedule']
 
     today = date.today()
 
@@ -601,14 +601,14 @@ def weekly_validation():
 
     # Build models dictionary
     models = {
-        'Event': current_app.config['Event'],
-        'Schedule': current_app.config['Schedule'],
-        'Employee': current_app.config['Employee'],
-        'EmployeeTimeOff': current_app.config['EmployeeTimeOff'],
+        'Event': models['Event'],
+        'Schedule': models['Schedule'],
+        'Employee': models['Employee'],
+        'EmployeeTimeOff': models['EmployeeTimeOff'],
         'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
         'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability'),
         'EmployeeAttendance': current_app.config.get('EmployeeAttendance'),
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config.get('ScheduleException'),
         'PendingSchedule': current_app.config.get('PendingSchedule'),
         'IgnoredValidationIssue': current_app.config.get('IgnoredValidationIssue')
@@ -658,14 +658,14 @@ def weekly_validation_api():
 
     # Build models dictionary
     models = {
-        'Event': current_app.config['Event'],
-        'Schedule': current_app.config['Schedule'],
-        'Employee': current_app.config['Employee'],
-        'EmployeeTimeOff': current_app.config['EmployeeTimeOff'],
+        'Event': models['Event'],
+        'Schedule': models['Schedule'],
+        'Employee': models['Employee'],
+        'EmployeeTimeOff': models['EmployeeTimeOff'],
         'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
         'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability'),
         'EmployeeAttendance': current_app.config.get('EmployeeAttendance'),
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config.get('ScheduleException'),
         'PendingSchedule': current_app.config.get('PendingSchedule'),
         'IgnoredValidationIssue': current_app.config.get('IgnoredValidationIssue')
@@ -870,11 +870,11 @@ def assign_supervisor_event():
     import re
 
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    Schedule = current_app.config['Schedule']
-    Employee = current_app.config['Employee']
-    RotationAssignment = current_app.config['RotationAssignment']
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+    RotationAssignment = models['RotationAssignment']
+    EmployeeTimeOff = models['EmployeeTimeOff']
     EmployeeWeeklyAvailability = current_app.config.get('EmployeeWeeklyAvailability')
 
     data = request.get_json()

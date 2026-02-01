@@ -502,9 +502,10 @@ def get_daily_employees(date):
     """
     from sqlalchemy import func
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Employee = current_app.config['Employee']
-    EmployeeAttendance = current_app.config['EmployeeAttendance']
+    models = get_models()
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+    EmployeeAttendance = models['EmployeeAttendance']
 
     # Parse and validate date
     try:
@@ -574,7 +575,8 @@ def get_event_by_ref(ref_num):
     Returns:
         JSON with event id and basic details, or 404 if not found
     """
-    Event = current_app.config['Event']
+    models = get_models()
+    Event = models['Event']
     
     event = Event.query.filter_by(project_ref_num=ref_num).first()
     
@@ -630,8 +632,9 @@ def unschedule_event_quick(schedule_id):
         - had_attendance flag indicates if attendance record existed
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
 
     # Query schedule
     schedule = Schedule.query.get(schedule_id)
@@ -810,9 +813,10 @@ def unschedule_event_quick(schedule_id):
 def core_employees_for_trade(date, current_schedule_id):
     """Get employees with Core events on the same date for trading"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         parsed_date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -847,12 +851,13 @@ def core_employees_for_trade(date, current_schedule_id):
 def available_employees_for_change(date, event_type):
     """Get available employees for changing event assignment with proper role-based filtering"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
-    EmployeeAvailability = current_app.config['EmployeeAvailability']
-    EmployeeTimeOff = current_app.config['EmployeeTimeOff']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    EmployeeAvailability = models['EmployeeAvailability']
+    EmployeeTimeOff = models['EmployeeTimeOff']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     try:
         parsed_date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -1138,8 +1143,9 @@ def get_event_allowed_times(event_type):
                     try:
                         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                         db = current_app.extensions['sqlalchemy']
-                        Event = current_app.config['Event']
-                        Schedule = current_app.config['Schedule']
+                        models = get_models()
+                        Event = models['Event']
+                        Schedule = models['Schedule']
 
                         # Check if any Digital Setup events are scheduled on this date
                         digital_setup_count = db.session.query(Schedule).join(
@@ -1193,7 +1199,7 @@ def get_event_allowed_times(event_type):
             try:
                 target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 db = current_app.extensions['sqlalchemy']
-                Schedule = current_app.config['Schedule']
+                Schedule = models['Schedule']
                 
                 for t_str in unique_times:
                     from datetime import time as dt_time
@@ -1202,7 +1208,7 @@ def get_event_allowed_times(event_type):
 
                     # For Core events, only count Core event schedules at this time
                     if event_type_lower == 'core':
-                        Event = current_app.config['Event']
+                        Event = models['Event']
                         count = db.session.query(Schedule).join(
                             Event, Schedule.event_ref_num == Event.project_ref_num
                         ).filter(
@@ -1347,9 +1353,10 @@ def get_event_time_settings():
 def validate_schedule_for_export():
     """Validate scheduled events before export and return any errors"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         today = date.today()
@@ -1424,8 +1431,9 @@ def validate_schedule_for_export():
 def get_schedule_details(schedule_id):
     """Get details for a specific schedule"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
 
     try:
         schedule = db.session.get(Schedule, schedule_id)
@@ -1455,9 +1463,10 @@ def get_schedule_details(schedule_id):
 def reschedule():
     """Reschedule an event - handles both JSON and FormData"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Handle both JSON and FormData requests
@@ -1886,9 +1895,10 @@ def reschedule_event_with_validation(schedule_id):
         500: Server error
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get request data
@@ -2125,10 +2135,10 @@ def reschedule_event_with_validation(schedule_id):
                         logger.info(f"Scheduling Supervisor at {supervisor_new_datetime.isoformat()}")
 
                         # Find Supervisor's existing schedule (if any)
-                        Schedule = current_app.config['Schedule']
-                        Employee = current_app.config['Employee']
-                        EmployeeTimeOff = current_app.config['EmployeeTimeOff']
-                        EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+                        Schedule = models['Schedule']
+                        Employee = models['Employee']
+                        EmployeeTimeOff = models['EmployeeTimeOff']
+                        EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
                         
                         supervisor_schedule = Schedule.query.filter_by(
                             event_ref_num=supervisor_event.project_ref_num
@@ -2331,9 +2341,10 @@ def change_employee_assignment(schedule_id):
         500: Server error
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get request data
@@ -2581,8 +2592,9 @@ def reschedule_event():
 def unschedule_event(schedule_id):
     """Unschedule an event - calls Crossmark API first, then deletes schedule and marks event as unscheduled"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
 
     try:
         # Get the schedule
@@ -2745,8 +2757,9 @@ def unschedule_event_by_id(event_id):
         JSON response with success status
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
 
     try:
         # Get the event
@@ -2933,9 +2946,10 @@ def trade_events():
         - Performs atomic swap in single database transaction
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get request data
@@ -3221,9 +3235,10 @@ def bulk_reassign_supervisor_events():
         500: Server error
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get request data
@@ -3263,7 +3278,7 @@ def bulk_reassign_supervisor_events():
 
         # Check if new employee has time off on the target date (skip if override)
         if not override_constraints:
-            EmployeeTimeOff = current_app.config['EmployeeTimeOff']
+            EmployeeTimeOff = models['EmployeeTimeOff']
             time_off = EmployeeTimeOff.query.filter(
                 EmployeeTimeOff.employee_id == new_employee_id,
                 EmployeeTimeOff.start_date <= target_date,
@@ -3482,9 +3497,10 @@ def bulk_reassign_supervisor_events():
 def change_employee():
     """Change the employee for an event (keeping same date and time)"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         data = request.get_json()
@@ -3604,9 +3620,10 @@ def change_employee():
 def export_schedule():
     """Export scheduled events to CalendarSchedule.csv (from today forward only)"""
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Check if only valid events should be exported
@@ -3721,8 +3738,9 @@ def export_schedule():
 def import_events():
     """Import unscheduled events from WorkBankVisits.csv file"""
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Check if file is provided
@@ -3825,10 +3843,11 @@ def import_events():
 def import_scheduled_events():
     """Import already scheduled events from CSV file"""
     db = current_app.extensions['sqlalchemy']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
-    Schedule = current_app.config['Schedule']
-    EmployeeWeeklyAvailability = current_app.config['EmployeeWeeklyAvailability']
+    models = get_models()
+    Event = models['Event']
+    Employee = models['Employee']
+    Schedule = models['Schedule']
+    EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
 
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
@@ -4020,9 +4039,10 @@ def schedule_event():
     Response: {"success": true, "message": "Event scheduled successfully", "schedule_id": 123}
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Get request data
@@ -4401,9 +4421,10 @@ def get_employee_schedule_details():
     }
     """
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     try:
         # Parse query parameters
@@ -4565,9 +4586,10 @@ def change_event_employee(schedule_id):
     from app.services.conflict_validation import ConflictValidator
 
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     # Get schedule
     schedule = db.session.get(Schedule, schedule_id)
@@ -4742,9 +4764,10 @@ def get_available_employees():
     from app.services.conflict_validation import ConflictValidator
 
     db = current_app.extensions['sqlalchemy']
-    Schedule = current_app.config['Schedule']
-    Event = current_app.config['Event']
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
 
     # Parse query parameters
     date_str = request.args.get('date')
@@ -4883,9 +4906,10 @@ def reissue_event():
 
         # Get models
         db = current_app.extensions['sqlalchemy']
-        Schedule = current_app.config['Schedule']
-        Event = current_app.config['Event']
-        Employee = current_app.config['Employee']
+        models = get_models()
+        Schedule = models['Schedule']
+        Event = models['Event']
+        Employee = models['Employee']
 
         # Get the schedule
         schedule = db.session.query(Schedule).filter_by(id=schedule_id).first()
@@ -5277,8 +5301,9 @@ def change_event_type(event_ref):
 @require_authentication()
 def remove_event_type_override(event_ref):
     """Remove override and return to auto-detection."""
-    Event = current_app.config['Event']
-    EventTypeOverride = current_app.config['EventTypeOverride']
+    models = get_models()
+    Event = models['Event']
+    EventTypeOverride = models['EventTypeOverride']
 
     override = EventTypeOverride.query.filter_by(project_ref_num=event_ref).first()
     if not override:

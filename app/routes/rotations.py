@@ -3,6 +3,7 @@ Rotation management routes
 Handles weekly rotation assignments for Juicers and Primary Leads
 """
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
+from app.models import get_models
 from app.services.rotation_manager import RotationManager
 
 rotations_bp = Blueprint('rotations', __name__, url_prefix='/rotations')
@@ -13,9 +14,9 @@ def index():
     """Render rotation assignments page"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)
@@ -24,7 +25,8 @@ def index():
     rotations = rotation_mgr.get_all_rotations()
 
     # Get all employees for dropdowns
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
     all_employees = db.session.query(Employee).order_by(Employee.name).all()
 
     # Filter employees by role for dropdowns
@@ -44,16 +46,17 @@ def get_rotations():
     """Get current rotation assignments (AJAX)"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)
     rotations = rotation_mgr.get_all_rotations()
 
     # Get employee names for display
-    Employee = current_app.config['Employee']
+    models = get_models()
+    Employee = models['Employee']
 
     # Convert to JSON-friendly format with employee names
     result = {}
@@ -78,9 +81,9 @@ def save_rotations():
     """Save rotation assignments (AJAX)"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)
@@ -112,9 +115,9 @@ def add_exception():
     """Add a rotation exception for a specific date"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)
@@ -147,9 +150,9 @@ def get_exceptions():
     """Get rotation exceptions for a date range"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)
@@ -185,9 +188,9 @@ def delete_exception(exception_id):
     """Delete a rotation exception"""
     db = current_app.extensions['sqlalchemy']
     models = {
-        'RotationAssignment': current_app.config['RotationAssignment'],
+        'RotationAssignment': models['RotationAssignment'],
         'ScheduleException': current_app.config['ScheduleException'],
-        'Employee': current_app.config['Employee']
+        'Employee': models['Employee']
     }
 
     rotation_mgr = RotationManager(db.session, models)

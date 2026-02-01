@@ -66,10 +66,12 @@ pdf_generator = EDRPDFGenerator()
 # Helper function to get models from app config
 def get_models():
     """Get database models from current app config."""
+    from app.models import get_models as app_get_models
+    models = app_get_models()
     return {
-        'Event': current_app.config['Event'],
-        'Schedule': current_app.config['Schedule'],
-        'Employee': current_app.config['Employee'],
+        'Event': models['Event'],
+        'Schedule': models['Schedule'],
+        'Employee': models['Employee'],
         'db': current_app.extensions['sqlalchemy']
     }
 
