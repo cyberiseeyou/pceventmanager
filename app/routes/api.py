@@ -5211,10 +5211,12 @@ def verify_schedule():
 def change_event_type(event_ref):
     """Change event type with persistence through refreshes."""
     from datetime import datetime
+    from app.models import get_models
 
     # Get models
-    Event = current_app.config['Event']
-    EventTypeOverride = current_app.config['EventTypeOverride']
+    models = get_models()
+    Event = models['Event']
+    EventTypeOverride = models['EventTypeOverride']
 
     # Parse request
     data = request.get_json()
