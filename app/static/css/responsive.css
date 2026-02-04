@@ -793,23 +793,99 @@ body {
     }
 }
 
-/* Print media - ensure proper formatting */
+/* ==========================================================================
+   Print Styles (FLAW-021)
+   ========================================================================== */
+
 @media print {
-    .nav-link,
-    .header-nav,
-    .btn,
-    button {
-        display: none;
-    }
+  /* Hide interactive and navigation elements */
+  .header,
+  .footer,
+  .nav-link,
+  .hamburger-menu,
+  .nav-user-section,
+  .btn:not(.btn-print),
+  button:not(.btn-print),
+  .ai-panel,
+  .floating-widget,
+  .modal {
+    display: none !important;
+  }
 
-    .container {
-        max-width: 100%;
-        padding: 0;
-    }
+  /* Reset container widths */
+  .container,
+  .main-content {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+  }
 
-    table {
-        page-break-inside: avoid;
-    }
+  body {
+    background: white;
+    color: black;
+    font-size: 12pt;
+  }
+
+  /* Links - show URL */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+  }
+
+  a[href^="#"]:after,
+  a[href^="javascript"]:after {
+    content: "";
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    page-break-inside: avoid;
+  }
+
+  th, td {
+    border: 1px solid #000;
+    padding: 8px;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Cards */
+  .stat-card,
+  .event-card,
+  .card {
+    border: 1px solid #000;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  /* Ensure page breaks work */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  /* Remove backgrounds for ink savings */
+  * {
+    background: transparent !important;
+  }
+
+  .stat-card,
+  .event-card {
+    background: white !important;
+  }
 }
 
 /* ==========================================================================
