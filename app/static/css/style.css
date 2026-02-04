@@ -1883,3 +1883,95 @@ button:not(:disabled),
     transform: none;
   }
 }
+
+/* ==========================================================================
+   Focus Styles for Custom Interactive Elements (FLAW-019)
+   ========================================================================== */
+
+/* Cards and clickable items - visible focus ring for keyboard navigation */
+.stat-card:focus-visible,
+.event-card:focus-visible,
+.employee-card:focus-visible,
+.unscheduled-item:focus-visible,
+.day-card:focus-visible,
+.core-event-item:focus-visible,
+.notification-item:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* Dropdown items - inset focus for contained appearance */
+.nav-dropdown-item:focus-visible,
+.dropdown-item:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: -2px;
+  background: var(--bg-secondary);
+}
+
+/* Custom buttons in header - white outline for contrast on dark background */
+.notifications-btn:focus-visible,
+.refresh-database-btn:focus-visible,
+.hamburger-menu:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* Navigation links - ensure focus is visible on dark header */
+.header-nav .nav-link:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* User dropdown toggle - consistent with other header elements */
+.user-dropdown-toggle:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* Standard buttons - use primary color focus ring */
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* Schedule button - consistent focus styling */
+.schedule-btn:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* Lock/unlock buttons - focus consistent with button type */
+.btn-lock:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* High contrast mode - thicker focus outlines */
+@media (prefers-contrast: high) {
+  .stat-card:focus-visible,
+  .event-card:focus-visible,
+  .employee-card:focus-visible,
+  .unscheduled-item:focus-visible,
+  .day-card:focus-visible,
+  .core-event-item:focus-visible,
+  .notification-item:focus-visible,
+  .btn:focus-visible,
+  .schedule-btn:focus-visible,
+  .btn-lock:focus-visible {
+    outline-width: 3px;
+  }
+
+  .notifications-btn:focus-visible,
+  .refresh-database-btn:focus-visible,
+  .hamburger-menu:focus-visible,
+  .header-nav .nav-link:focus-visible,
+  .user-dropdown-toggle:focus-visible {
+    outline-width: 3px;
+  }
+
+  .nav-dropdown-item:focus-visible,
+  .dropdown-item:focus-visible {
+    outline-width: 3px;
+  }
+}
