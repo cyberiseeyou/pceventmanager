@@ -301,6 +301,11 @@ def setup_request_handlers(app):
         """Make get_current_user available in templates"""
         return dict(get_current_user=get_current_user)
 
+    @app.context_processor
+    def inject_now():
+        """Make datetime.now available in templates for dynamic year display"""
+        return {'now': datetime.now}
+
     @app.after_request
     def add_csrf_token_cookie(response):
         """

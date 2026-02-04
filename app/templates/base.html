@@ -289,7 +289,7 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2024 Product Connections. All rights reserved.</p>
+            <p>&copy; {{ now().year if now is defined else 2026 }} Product Connections. All rights reserved.</p>
         </div>
     </footer>
 
