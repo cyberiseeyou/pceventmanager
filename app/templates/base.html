@@ -61,7 +61,7 @@
                     <a href="{{ url_for('main.index') }}"
                         class="nav-link {% if request.endpoint == 'main.daily_schedule_view' or request.endpoint == 'main.index' %}active{% endif %}"
                         aria-label="Go to home page">
-                        <span class="nav-icon">🏠</span>
+                        <span class="nav-icon"><span class="material-symbols-outlined">home</span></span>
                         <span class="nav-text">Home</span>
                     </a>
 
@@ -69,7 +69,7 @@
                     <div class="nav-dropdown">
                         <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
                             aria-label="Scheduling menu">
-                            <span class="nav-icon">📅</span>
+                            <span class="nav-icon"><span class="material-symbols-outlined">calendar_month</span></span>
                             <span class="nav-text">Scheduling</span>
                             <span class="nav-arrow">▼</span>
                         </button>
@@ -114,7 +114,7 @@
                     <div class="nav-dropdown">
                         <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
                             aria-label="Team menu">
-                            <span class="nav-icon">👥</span>
+                            <span class="nav-icon"><span class="material-symbols-outlined">group</span></span>
                             <span class="nav-text">Team</span>
                             <span class="nav-arrow">▼</span>
                         </button>
@@ -142,7 +142,7 @@
                     <a href="{{ url_for('printing.printing_home') }}"
                         class="nav-link {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}"
                         aria-label="Go to printing page">
-                        <span class="nav-icon">🖨️</span>
+                        <span class="nav-icon"><span class="material-symbols-outlined">print</span></span>
                         <span class="nav-text">Printing</span>
                     </a>
                 </div>
@@ -160,7 +160,7 @@
                     </button>
                     <button id="aiPanelToggle" class="notifications-btn" title="AI Assistant (Ctrl+K)"
                         aria-label="AI Assistant" style="margin-right: var(--spacing-sm);">
-                        <span class="nav-icon" style="font-size: 1.2rem;">✨</span>
+                        <span class="nav-icon"><span class="material-symbols-outlined">auto_awesome</span></span>
                     </button>
                     <div class="notifications-dropdown">
                         <button id="notificationsBtn" class="notifications-btn" title="View notifications"
@@ -191,25 +191,25 @@
                         </button>
                         <div class="user-dropdown-menu" id="userDropdownMenu" hidden>
                             <a href="{{ url_for('help.help_home') }}" class="dropdown-item">
-                                <span class="dropdown-icon">❓</span>
+                                <span class="dropdown-icon"><span class="material-symbols-outlined">help</span></span>
                                 Help
                             </a>
                             <a href="{{ url_for('admin.settings_page') }}" class="dropdown-item">
-                                <span class="dropdown-icon">⚙️</span>
+                                <span class="dropdown-icon"><span class="material-symbols-outlined">settings</span></span>
                                 Settings
                             </a>
                             <a href="{{ url_for('admin.event_times_page') }}" class="dropdown-item">
-                                <span class="dropdown-icon">🕐</span>
+                                <span class="dropdown-icon"><span class="material-symbols-outlined">schedule</span></span>
                                 Event Time Settings
                             </a>
                             <a href="{{ url_for('rotations.index') }}"
                                class="dropdown-item {% if request.endpoint and request.endpoint.startswith('rotations.') %}active{% endif %}">
-                                <span class="dropdown-icon">🔄</span>
+                                <span class="dropdown-icon"><span class="material-symbols-outlined">sync</span></span>
                                 Rotation Management
                             </a>
                             <div class="dropdown-divider"></div>
                             <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
-                                <span class="dropdown-icon">🚪</span>
+                                <span class="dropdown-icon"><span class="material-symbols-outlined">logout</span></span>
                                 Logout
                             </a>
                         </div>

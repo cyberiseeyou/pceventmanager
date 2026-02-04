@@ -212,6 +212,17 @@ body {
     display: inline-block;
 }
 
+/* Material Symbols Icon Styling (FLAW-001) */
+.nav-icon .material-symbols-outlined {
+    font-size: 1.25rem;
+    vertical-align: middle;
+}
+
+.dropdown-icon .material-symbols-outlined {
+    font-size: 1.125rem;
+    vertical-align: middle;
+}
+
 .nav-text {
     display: inline-block;
 }
