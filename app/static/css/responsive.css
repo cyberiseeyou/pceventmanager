@@ -115,7 +115,8 @@ button,
 .nav-links,
 .modal-body,
 table {
-    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     scroll-behavior: smooth;
 }
 
@@ -444,7 +445,7 @@ table {
         font-size: 0.875rem;
         display: block;
         overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     }
 
     th, td {
