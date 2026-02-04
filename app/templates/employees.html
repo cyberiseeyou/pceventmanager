@@ -13,10 +13,10 @@
     }
 
     .employee-card {
-        border: 1px solid #ddd;
+        border: 1px solid var(--color-neutral-300);
         border-radius: 8px;
         padding: 20px;
-        background: #fff;
+        background: var(--color-neutral-50);
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         transition: box-shadow 0.2s ease;
     }
@@ -43,7 +43,7 @@
 
     .employee-id {
         font-size: 12px;
-        color: #6c757d;
+        color: var(--color-neutral-500);
         margin-top: 4px;
     }
 
@@ -59,32 +59,32 @@
     }
 
     .badge-lead-event-specialist {
-        background: #FF69B4;
+        background: var(--color-badge-lead);
     }
 
     .badge-club-supervisor {
-        background: #00FFFF;
-        color: #000;
+        background: var(--color-badge-supervisor);
+        color: var(--color-neutral-950);
     }
 
     .badge-juicer-barista {
-        background: #ff9800;
+        background: var(--color-badge-juicer);
     }
 
     .badge-event-specialist {
-        background: #28a745;
+        background: var(--color-badge-specialist);
     }
 
     .badge-ab-trained {
-        background: #007bff;
+        background: var(--color-badge-ab-trained);
     }
 
     .badge-juicer-trained {
-        background: #17a2b8;
+        background: var(--color-badge-juicer-trained);
     }
 
     .badge-inactive {
-        background: #dc3545;
+        background: var(--color-badge-inactive);
     }
 
     .availability-grid {
@@ -103,18 +103,18 @@
     }
 
     .day-available {
-        background: #28a745;
-        color: white;
+        background: var(--color-success);
+        color: var(--color-neutral-50);
     }
 
     .day-unavailable {
-        background: #dc3545;
-        color: white;
+        background: var(--color-danger);
+        color: var(--color-neutral-50);
     }
 
     .day-header {
-        background: #6c757d;
-        color: white;
+        background: var(--color-neutral-500);
+        color: var(--color-neutral-50);
         font-weight: bold;
     }
 
@@ -186,7 +186,7 @@
 
     .modal-content {
         position: relative;
-        background-color: #fefefe;
+        background-color: var(--color-neutral-50);
         padding: 30px;
         border-radius: 12px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2);
@@ -220,7 +220,7 @@
     .close-modal {
         font-size: 28px;
         font-weight: bold;
-        color: #aaa;
+        color: var(--color-neutral-400);
         cursor: pointer;
         background: none;
         border: none;
@@ -230,7 +230,7 @@
 
     .close-modal:hover,
     .close-modal:focus {
-        color: #000;
+        color: var(--color-neutral-950);
     }
 
     .form-row {
@@ -259,7 +259,7 @@
     .form-group select {
         width: 100%;
         padding: 8px 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--color-neutral-300);
         border-radius: 4px;
         font-size: 14px;
     }
@@ -309,7 +309,7 @@
     .availability-form-cell label {
         display: block;
         font-weight: bold;
-        color: #6c757d;
+        color: var(--color-neutral-500);
         margin-bottom: 8px;
         font-size: 12px;
     }
@@ -326,7 +326,7 @@
         gap: 10px;
         margin-top: 25px;
         padding-top: 20px;
-        border-top: 1px solid #dee2e6;
+        border-top: 1px solid var(--color-neutral-200);
     }
 
     /* Import Employees Modal */
@@ -340,14 +340,14 @@
         display: flex;
         align-items: center;
         padding: 12px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--color-neutral-200);
         border-radius: 6px;
         margin-bottom: 8px;
-        background: #f8f9fa;
+        background: var(--color-neutral-100);
     }
 
     .import-employee-item:hover {
-        background: #e9ecef;
+        background: var(--color-neutral-200);
     }
 
     .import-employee-item input[type="checkbox"] {
@@ -368,7 +368,7 @@
 
     .import-employee-id {
         font-size: 12px;
-        color: #6c757d;
+        color: var(--color-neutral-500);
     }
 
     .import-actions {
@@ -384,33 +384,33 @@
     }
 
     .alert-success {
-        background: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
+        background: color-mix(in srgb, var(--color-success) 15%, white);
+        border: 1px solid color-mix(in srgb, var(--color-success) 30%, white);
+        color: var(--color-success-dark);
     }
 
     .alert-error {
-        background: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
+        background: color-mix(in srgb, var(--color-danger) 15%, white);
+        border: 1px solid color-mix(in srgb, var(--color-danger) 30%, white);
+        color: var(--color-danger-dark);
     }
 
     .alert-warning {
-        background: #fff3cd;
-        border: 1px solid #ffeeba;
-        color: #856404;
+        background: color-mix(in srgb, var(--color-warning) 15%, white);
+        border: 1px solid color-mix(in srgb, var(--color-warning) 30%, white);
+        color: var(--color-warning-dark);
     }
 
     .alert-info {
-        background: #d1ecf1;
-        border: 1px solid #bee5eb;
-        color: #0c5460;
+        background: color-mix(in srgb, var(--color-info) 15%, white);
+        border: 1px solid color-mix(in srgb, var(--color-info) 30%, white);
+        color: var(--color-info-dark);
     }
 
     .loading {
         text-align: center;
         padding: 20px;
-        color: #6c757d;
+        color: var(--color-neutral-500);
     }
 
     .loading::after {
@@ -428,7 +428,7 @@
     .employee-stats {
         margin-top: 40px;
         padding: 25px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        background: linear-gradient(135deg, var(--color-neutral-100) 0%, var(--color-neutral-200) 100%);
         border-radius: 12px;
         border: 2px solid var(--pc-light-blue);
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -468,7 +468,7 @@
 
     .stat-label {
         font-size: 0.9rem;
-        color: #6c757d;
+        color: var(--color-neutral-500);
         font-weight: 500;
         margin-bottom: 8px;
         text-transform: uppercase;
@@ -579,7 +579,7 @@
                     <div class="form-group">
                         <label for="employee-id">Employee ID</label>
                         <input type="text" id="employee-id" placeholder="e.g., US814117">
-                        <small style="color: #6c757d;">Used for Crossmark integration</small>
+                        <small style="color: var(--color-neutral-500);">Used for Crossmark integration</small>
                     </div>
                     <div class="form-group">
                         <label for="employee-name">Name *</label>
@@ -668,7 +668,7 @@
     <!-- Import Employees Modal -->
     <div id="import-employees-modal" class="modal">
         <div class="modal-content" style="max-width: 580px; border-radius: 12px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-            <div class="modal-header" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 20px 24px; border-bottom: none;">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info) 100%); color: var(--color-neutral-50); padding: 20px 24px; border-bottom: none;">
                 <div>
                     <h2 style="margin: 0; font-size: 20px; font-weight: 600;">Sync & Import Employees</h2>
                     <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">Synchronize with MVRetail database</p>
@@ -680,15 +680,15 @@
 
             <div id="import-employee-list" style="padding: 20px; max-height: 450px; overflow-y: auto;">
                 <div style="text-align: center; padding: 40px 20px;">
-                    <div style="width: 48px; height: 48px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
-                    <div style="color: #64748b; font-size: 14px;">Loading employees from MVRetail...</div>
+                    <div style="width: 48px; height: 48px; border: 3px solid var(--color-neutral-200); border-top-color: var(--color-info); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                    <div style="color: var(--color-neutral-500); font-size: 14px;">Loading employees from MVRetail...</div>
                 </div>
                 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
             </div>
 
-            <div class="modal-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button type="button" class="btn btn-outline" onclick="closeImportEmployeesModal()" style="padding: 10px 20px; border: 1px solid #cbd5e1; background: white; color: #475569; border-radius: 6px; font-weight: 500; cursor: pointer;">Close</button>
-                <button type="button" class="btn btn-primary" onclick="importSelectedEmployees()" style="padding: 10px 20px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: none;">Import Selected</button>
+            <div class="modal-footer" style="background: var(--color-neutral-100); border-top: 1px solid var(--color-neutral-200); padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-outline" onclick="closeImportEmployeesModal()" style="padding: 10px 20px; border: 1px solid var(--color-neutral-300); background: var(--color-neutral-50); color: var(--color-neutral-600); border-radius: 6px; font-weight: 500; cursor: pointer;">Close</button>
+                <button type="button" class="btn btn-primary" onclick="importSelectedEmployees()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info) 100%); color: var(--color-neutral-50); border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: none;">Import Selected</button>
             </div>
         </div>
     </div>
