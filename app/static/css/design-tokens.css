@@ -68,6 +68,18 @@
   --color-supervisor: #6366f1;     /* Supervisor events */
   --color-freeosk: #FFD93D;        /* Freeosk events */
 
+  /* ===========================
+   * ROLE BADGE COLORS
+   * =========================== */
+
+  --color-badge-lead: #FF69B4;           /* Lead Event Specialist - Hot Pink */
+  --color-badge-supervisor: #00CED1;     /* Club Supervisor - Dark Cyan */
+  --color-badge-juicer: var(--color-secondary); /* Juicer Barista - Orange */
+  --color-badge-specialist: var(--color-success); /* Event Specialist - Green */
+  --color-badge-ab-trained: #007bff;     /* A&B Trained - Blue */
+  --color-badge-juicer-trained: #17a2b8; /* Juicer Trained - Teal */
+  --color-badge-inactive: var(--color-danger); /* Inactive - Red */
+
   /* Status Colors */
   --color-scheduled: #3B82F6;      /* Scheduled status */
   --color-unscheduled: #9CA3AF;    /* Unscheduled status */
