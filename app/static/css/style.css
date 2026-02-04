@@ -1844,3 +1844,25 @@ button:not(:disabled),
 .btn:not(.btn-disabled) {
   cursor: pointer;
 }
+
+/* ==========================================================================
+   Hover Animation Performance (FLAW-007)
+   ========================================================================== */
+
+/* Add will-change hints for smooth hover animations */
+.stat-card,
+.event-card {
+  will-change: box-shadow, border-color;
+}
+
+/* Disable hover transforms on touch devices where hover isn't meaningful */
+@media (hover: none) {
+  .stat-card:hover,
+  .dashboard-section:hover,
+  .event-card:hover,
+  .core-event-item:hover,
+  .unscheduled-item:hover,
+  .time-slot:hover {
+    transform: none;
+  }
+}
