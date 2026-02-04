@@ -147,7 +147,7 @@ body {
     border: none;
     padding: 8px;
     cursor: pointer;
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     transition: background 0.2s ease;
 }
 
@@ -164,7 +164,7 @@ body {
     width: 24px;
     height: 3px;
     background: white;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
     transition: all 0.3s ease;
 }
 
@@ -187,7 +187,7 @@ body {
     text-decoration: none;
     font-weight: 500;
     padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     transition: all 0.2s ease;
     font-size: 1rem;
     text-transform: uppercase;
@@ -248,7 +248,7 @@ body {
     min-width: 200px;
     background: var(--bg-primary);
     border: 1px solid rgba(46, 76, 115, 0.1);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     z-index: var(--z-dropdown);
     overflow: hidden;
@@ -307,7 +307,7 @@ body {
 .logout-link {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
 }
 
@@ -327,7 +327,7 @@ body {
     gap: var(--spacing-xs);
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
     color: rgba(255, 255, 255, 0.9);
     font-size: var(--font-size-small);
@@ -372,7 +372,7 @@ body {
     min-width: 200px;
     background: var(--bg-primary);
     border: 1px solid rgba(46, 76, 115, 0.1);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     z-index: var(--z-dropdown);
     overflow: hidden;
@@ -446,7 +446,7 @@ body {
     width: auto;
     background-color: white;
     padding: 6px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -504,7 +504,7 @@ h3 {
 /* Events Table */
 .events-table {
     background: white;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     overflow: hidden;
 }
@@ -547,7 +547,7 @@ tbody tr:last-child td {
     color: white;
     border: none;
     padding: 0.5rem 1rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-weight: var(--font-weight-heading);
     transition: background-color 0.2s ease;
@@ -572,7 +572,7 @@ tbody tr:last-child td {
     font-style: italic;
     padding: 3rem;
     background: white;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -585,7 +585,7 @@ tbody tr:last-child td {
 .event-details {
     background: white;
     padding: 1.5rem;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 2rem;
 }
@@ -603,7 +603,7 @@ tbody tr:last-child td {
 .schedule-form {
     background: white;
     padding: 2rem;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -622,7 +622,7 @@ tbody tr:last-child td {
     width: 100%;
     padding: 0.75rem;
     border: 2px solid #dee2e6;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-body);
     transition: border-color 0.2s ease;
 }
@@ -640,7 +640,7 @@ tbody tr:last-child td {
     width: 100%;
     padding: 0.75rem;
     border: 2px solid #dee2e6;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-body);
     transition: border-color 0.2s ease;
 }
@@ -676,7 +676,7 @@ tbody tr:last-child td {
 .btn {
     padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid transparent;
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     font-weight: var(--font-weight-heading);
     font-size: var(--font-size-body);
     text-decoration: none;
@@ -770,7 +770,7 @@ tbody tr:last-child td {
     color: var(--text-primary);
     border: 2px solid var(--pc-gray-medium);
     padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--radius-lg);
     cursor: pointer;
     transition: all 0.2s ease;
     font-weight: var(--font-weight-bold);
@@ -818,7 +818,7 @@ input[type="date"],
 input[type="time"] {
     padding: var(--spacing-xs) var(--spacing-sm);
     border: 1px solid rgba(46, 76, 115, 0.2);
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-body);
     background-color: var(--bg-primary);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -837,7 +837,7 @@ input:focus {
 .event-type-badge {
     display: inline-block;
     padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--radius-lg);
     font-size: var(--font-size-small);
     font-weight: var(--font-weight-bold);
     color: var(--text-white);
@@ -892,7 +892,7 @@ input:focus {
 
 .alert {
     padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--border-radius-sm);
+    border-radius: var(--radius-sm);
     margin-bottom: var(--spacing-sm);
     border-left: 4px solid;
 }
@@ -1137,7 +1137,7 @@ input:focus {
 
 .alert {
     padding: 1rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     margin-bottom: 1rem;
     border: 1px solid transparent;
 }
@@ -1161,7 +1161,7 @@ input:focus {
     align-items: center;
     background: white;
     padding: 1.5rem;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 2rem;
     gap: 1rem;
@@ -1226,7 +1226,7 @@ input:focus {
 .event-type-badge {
     display: inline-block;
     padding: 0.25rem 0.5rem;
-    border-radius: 12px;
+    border-radius: var(--radius-xl);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1285,7 +1285,7 @@ input:focus {
   background: var(--color-primary, #3B82F6);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1326,7 +1326,7 @@ input:focus {
   gap: 16px;
   padding: 20px;
   background: rgba(59, 130, 246, 0.05);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-left: 4px solid var(--color-primary, #3B82F6);
 }
 
@@ -1354,7 +1354,7 @@ input:focus {
 
 .refresh-result-message {
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 15px;
   line-height: 1.8;
   white-space: pre-line;
@@ -1454,7 +1454,7 @@ input:focus {
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1487,7 +1487,7 @@ input:focus {
   font-weight: 600;
   min-width: 20px;
   height: 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1515,7 +1515,7 @@ input:focus {
   max-height: 600px;
   background: var(--bg-primary);
   border: 1px solid rgba(46, 76, 115, 0.1);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-popover);
   overflow: hidden;
@@ -1565,7 +1565,7 @@ input:focus {
   font-weight: 600;
   min-width: 24px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1642,7 +1642,7 @@ input:focus {
   background: var(--primary-color);
   color: white;
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   padding: var(--spacing-xs) var(--spacing-md);
   font-weight: 600;
   cursor: pointer;
