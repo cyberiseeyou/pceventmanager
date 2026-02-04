@@ -19,6 +19,12 @@ class NavigationManager {
             this.hamburgerBtn.addEventListener('click', () => this.toggleMobileMenu());
         }
 
+        // Mobile nav close button (FLAW-014)
+        const navCloseBtn = document.getElementById('navCloseBtn');
+        if (navCloseBtn) {
+            navCloseBtn.addEventListener('click', () => this.closeMobileMenu());
+        }
+
         // Desktop dropdown toggles - click only (no hover)
         this.navDropdowns.forEach(dropdown => {
             const toggle = dropdown.querySelector('.nav-dropdown-toggle');

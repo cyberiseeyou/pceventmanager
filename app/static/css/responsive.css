@@ -122,6 +122,11 @@ table {
 
 /* Desktop base styles are in style.css */
 
+/* Mobile Close Button - hidden on desktop (FLAW-014) */
+.nav-close {
+    display: none;
+}
+
 /* Tablet breakpoint (max-width: 1024px) */
 @media (max-width: 1024px) {
     :root {
@@ -235,6 +240,32 @@ table {
 
     .nav-links--open {
         transform: translateX(0);
+    }
+
+    /* Mobile Close Button (FLAW-014) */
+    .nav-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: var(--safe-area-top, 16px);
+        right: 16px;
+        width: 44px;
+        height: 44px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        border-radius: var(--radius-md);
+        color: white;
+        cursor: pointer;
+        z-index: 1;
+    }
+
+    .nav-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .nav-close .material-symbols-outlined {
+        font-size: 24px;
     }
 
     .header-nav .nav-link {

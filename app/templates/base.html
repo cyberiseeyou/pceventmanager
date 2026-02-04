@@ -57,6 +57,11 @@
 
                 <!-- Navigation Links (Desktop & Mobile) -->
                 <div class="nav-links" id="navLinks">
+                    <!-- Mobile Close Button -->
+                    <button class="nav-close" id="navCloseBtn" aria-label="Close navigation menu">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+
                     <!-- Home Link (redirects to root which goes to today's daily view) -->
                     <a href="{{ url_for('main.index') }}"
                         class="nav-link {% if request.endpoint == 'main.daily_schedule_view' or request.endpoint == 'main.index' %}active{% endif %}"
