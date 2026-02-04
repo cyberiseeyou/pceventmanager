@@ -6,8 +6,11 @@
  *
  * Epic 1, Story 1.6: Create Shared Modal Component Foundation
  * Task 6: Create Modal CSS Styles
+ * FLAW-005: Standardized modal structure
  *
  * BEM Structure:
+ * - .modal - Root modal element (hidden by default)
+ * - .modal.modal-open - Visible state
  * - .modal__overlay - Full-screen overlay backdrop
  * - .modal__container - Modal dialog box
  * - .modal__container--small/medium/large - Size modifiers
@@ -19,24 +22,42 @@
  */
 
 /* ============================================================================
+   Base Modal
+   ========================================================================= */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal, 1050);
+}
+
+.modal.modal-open {
+  display: flex;
+}
+
+/* ============================================================================
    Overlay (Backdrop)
    ========================================================================= */
 
 .modal__overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  background: var(--modal-backdrop, rgba(0, 0, 0, 0.5));
+  z-index: var(--z-modal-backdrop, 1040);
   opacity: 0;
-  transition: opacity 0.2s ease-out;
+  transition: opacity var(--transition-base, 0.2s ease-out);
 }
 
+.modal.modal-open .modal__overlay,
 .modal__overlay--open {
   opacity: 1;
 }
@@ -46,19 +67,20 @@
    ========================================================================= */
 
 .modal__container {
-  background-color: white;
-  border-radius: var(--border-radius, 8px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+  background: var(--color-neutral-50, white);
+  border-radius: var(--modal-border-radius, 8px);
+  box-shadow: var(--shadow-xl, 0 20px 25px rgba(0, 0, 0, 0.15));
   max-height: 90vh;
-  max-width: 90vw;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  position: relative;
+  z-index: var(--z-modal, 1050);
   transform: scale(0.95);
-  transition: transform 0.2s ease-out;
-  overflow: hidden;
+  transition: transform var(--transition-base, 0.2s ease-out);
 }
 
+.modal.modal-open .modal__container,
 .modal__overlay--open .modal__container {
   transform: scale(1);
   animation: modalFadeIn 0.2s ease-out;
@@ -77,15 +99,18 @@
 
 /* Size Modifiers */
 .modal__container--small {
-  width: 400px;
+  max-width: 400px;
+  width: 90%;
 }
 
 .modal__container--medium {
-  width: 600px;
+  max-width: 600px;
+  width: 90%;
 }
 
 .modal__container--large {
-  width: 800px;
+  max-width: 800px;
+  width: 95%;
 }
 
 /* ============================================================================
@@ -94,47 +119,50 @@
 
 .modal__header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
-  border-bottom: 1px solid #dee2e6;
+  align-items: center;
+  padding: var(--modal-padding, var(--space-6, 1.5rem));
+  border-bottom: 1px solid var(--color-neutral-200, #dee2e6);
   flex-shrink: 0;
 }
 
 .modal__title {
   margin: 0;
-  font-size: var(--font-size-h2, 1.5rem);
-  font-weight: var(--font-weight-heading, 600);
-  color: var(--pc-navy, #003366);
+  font-size: var(--font-size-xl, 1.5rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary, var(--pc-navy, #003366));
   line-height: 1.2;
 }
 
 .modal__close {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  line-height: 1;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  color: var(--text-muted, var(--color-neutral-500, #6c757d));
+  transition: background var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
   flex-shrink: 0;
   margin-left: var(--spacing-md, 1rem);
+  padding: 0;
 }
 
 .modal__close:hover {
-  background-color: #f8f9fa;
-  color: #212529;
+  background: var(--color-neutral-100, #f8f9fa);
+  color: var(--text-primary, #212529);
 }
 
 .modal__close:focus {
-  outline: 2px solid var(--focus-color, #007bff);
+  outline: 2px solid var(--color-primary, #007bff);
+  outline-offset: 2px;
+}
+
+.modal__close:focus-visible {
+  outline: 2px solid var(--color-primary, #007bff);
   outline-offset: 2px;
 }
 
@@ -143,10 +171,10 @@
    ========================================================================= */
 
 .modal__body {
-  padding: var(--spacing-lg, 1.5rem);
+  padding: var(--modal-padding, var(--space-6, 1.5rem));
   overflow-y: auto;
   flex: 1;
-  color: #212529;
+  color: var(--color-neutral-800, #212529);
   line-height: 1.6;
 }
 
@@ -163,11 +191,11 @@
    ========================================================================= */
 
 .modal__footer {
-  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
-  border-top: 1px solid #dee2e6;
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-sm, 0.75rem);
+  gap: var(--spacing-sm, 0.5rem);
+  padding: var(--modal-padding, var(--space-6, 1.5rem));
+  border-top: 1px solid var(--color-neutral-200, #dee2e6);
   flex-shrink: 0;
 }
 
@@ -322,8 +350,8 @@
   content: '';
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top-color: var(--pc-blue, #007bff);
+  border: 4px solid var(--color-neutral-200, #f3f3f3);
+  border-top-color: var(--color-primary-light, var(--pc-blue, #007bff));
   border-radius: 50%;
   animation: modalSpinner 0.8s linear infinite;
 }
@@ -337,11 +365,11 @@
 /* Error state for modal body */
 .modal__body--error {
   text-align: center;
-  color: #dc3545;
+  color: var(--color-danger, #dc3545);
 }
 
 /* Success state for modal body */
 .modal__body--success {
   text-align: center;
-  color: #28a745;
+  color: var(--color-success, #28a745);
 }

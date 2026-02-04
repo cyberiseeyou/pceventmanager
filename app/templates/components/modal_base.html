@@ -1,0 +1,94 @@
+{# Reusable Modal Component Macro #}
+{#
+ # Modal Component - Standardized modal dialog pattern
+ #
+ # Usage:
+ #   {% from 'components/modal_base.html' import modal %}
+ #
+ #   {% call modal('my-modal', 'Modal Title', size='medium') %}
+ #     <p>Modal body content here</p>
+ #   {% endcall %}
+ #
+ # Parameters:
+ #   id (required): Unique identifier for the modal element
+ #   title (required): The modal header title
+ #   size (optional): 'small' | 'medium' | 'large' (default: 'medium')
+ #   extra_classes (optional): Additional CSS classes for the container
+ #   show_footer (optional): Whether to include footer slot (default: false)
+ #   footer_content (optional): HTML content for the footer
+ #
+ # Accessibility:
+ #   - Uses role="dialog" and aria-modal="true" for screen readers
+ #   - Modal title is linked via aria-labelledby
+ #   - Close button has aria-label for screen readers
+ #   - Supports keyboard navigation (data-modal-close triggers on Escape)
+ #
+ # JavaScript Integration:
+ #   - data-modal-close on overlay and close button for click-to-close
+ #   - Modal starts with display: none, add .modal-open class to show
+ #}
+
+{% macro modal(id, title, size='medium', extra_classes='', show_footer=false, footer_content='') %}
+<div class="modal" id="{{ id }}" role="dialog" aria-modal="true" aria-labelledby="{{ id }}-title" style="display: none;">
+  <div class="modal__overlay" data-modal-close></div>
+  <div class="modal__container modal__container--{{ size }} {{ extra_classes }}">
+    <header class="modal__header">
+      <h2 class="modal__title" id="{{ id }}-title">{{ title }}</h2>
+      <button class="modal__close" type="button" aria-label="Close {{ title }}" data-modal-close>
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+    <div class="modal__body">
+      {{ caller() }}
+    </div>
+    {% if show_footer %}
+    <footer class="modal__footer">
+      {{ footer_content|safe if footer_content else '' }}
+    </footer>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{#
+ # Modal with Custom Footer Macro
+ #
+ # This variant allows passing footer content as a second caller block.
+ #
+ # Usage:
+ #   {% from 'components/modal_base.html' import modal_with_footer %}
+ #
+ #   {% call(footer) modal_with_footer('confirm-modal', 'Confirm Action', size='small') %}
+ #     <p>Are you sure you want to proceed?</p>
+ #     {% call footer() %}
+ #       <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+ #       <button type="button" class="btn btn-primary" id="confirm-btn">Confirm</button>
+ #     {% endcall %}
+ #   {% endcall %}
+ #}
+
+{% macro modal_with_footer(id, title, size='medium', extra_classes='') %}
+{% set footer_slot = [] %}
+{% macro capture_footer() %}
+  {% do footer_slot.append(caller()) %}
+{% endmacro %}
+<div class="modal" id="{{ id }}" role="dialog" aria-modal="true" aria-labelledby="{{ id }}-title" style="display: none;">
+  <div class="modal__overlay" data-modal-close></div>
+  <div class="modal__container modal__container--{{ size }} {{ extra_classes }}">
+    <header class="modal__header">
+      <h2 class="modal__title" id="{{ id }}-title">{{ title }}</h2>
+      <button class="modal__close" type="button" aria-label="Close {{ title }}" data-modal-close>
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+    <div class="modal__body">
+      {{ caller(capture_footer) }}
+    </div>
+    {% if footer_slot %}
+    <footer class="modal__footer">
+      {{ footer_slot[0] }}
+    </footer>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
