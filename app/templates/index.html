@@ -4,458 +4,8 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block extra_head %}
-<style>
-    .page-header {
-        text-align: center;
-        margin-bottom: var(--spacing-lg);
-        padding-bottom: var(--spacing-md);
-        border-bottom: 2px solid var(--pc-light-blue);
-    }
-    
-    .page-title {
-        font-size: var(--font-size-h1);
-        font-weight: var(--font-weight-heading);
-        color: var(--pc-navy);
-        margin: 0;
-        letter-spacing: -0.02em;
-    }
-
-    .welcome-section {
-        background: var(--bg-primary);
-        border: 2px solid var(--pc-light-blue);
-        padding: var(--spacing-xl);
-        border-radius: var(--border-radius-lg);
-        margin-bottom: var(--spacing-lg);
-        box-shadow: var(--shadow-sm);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .welcome-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 6px;
-        background: linear-gradient(90deg, var(--pc-navy) 0%, var(--pc-blue) 100%);
-    }
-
-    .welcome-content {
-        text-align: center;
-        position: relative;
-        z-index: 2;
-    }
-
-    .welcome-title {
-        font-size: 2.5rem;
-        font-weight: var(--font-weight-bold);
-        color: var(--pc-navy);
-        margin-bottom: var(--spacing-sm);
-        text-shadow: none;
-    }
-
-    .welcome-subtitle {
-        font-size: 1.1rem;
-        color: var(--text-muted);
-        font-weight: var(--font-weight-body);
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: var(--spacing-md);
-        margin-bottom: var(--spacing-lg);
-    }
-
-    .stat-card {
-        background: var(--bg-primary);
-        border-radius: var(--border-radius-lg);
-        padding: var(--spacing-xl);
-        box-shadow: var(--shadow-sm);
-        text-align: center;
-        border: 1px solid rgba(46, 76, 115, 0.08);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--pc-blue) 0%, var(--pc-navy) 100%);
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
-    }
-
-    .stat-card:hover {
-        box-shadow: var(--shadow-lg);
-        border-color: var(--pc-light-blue);
-        transform: translateY(-2px);
-    }
-
-    .stat-card:hover::before {
-        transform: scaleX(1);
-    }
-
-    .stat-number {
-        font-size: 3rem;
-        font-weight: 700;
-        color: var(--pc-navy);
-        margin-bottom: var(--spacing-sm);
-        line-height: 1;
-        background: linear-gradient(135deg, var(--pc-navy) 0%, var(--pc-blue) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-
-    .stat-label {
-        color: var(--text-secondary);
-        font-size: var(--font-size-small);
-        font-weight: var(--font-weight-heading);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin: 0;
-    }
-
-    .dashboard-sections {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--spacing-lg);
-        margin-bottom: var(--spacing-lg);
-    }
-
-    .dashboard-section {
-        background: var(--bg-primary);
-        border-radius: var(--border-radius-lg);
-        padding: var(--spacing-xl);
-        box-shadow: var(--shadow-sm);
-        border: 1px solid rgba(46, 76, 115, 0.08);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .dashboard-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(90deg, var(--pc-navy) 0%, var(--pc-blue) 100%);
-    }
-
-    .dashboard-section:hover {
-        box-shadow: var(--shadow-md);
-        /* Transform removed - sections should not move on hover */
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing-lg);
-        padding-bottom: var(--spacing-md);
-        border-bottom: 1px solid rgba(46, 76, 115, 0.1);
-    }
-
-    .section-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: var(--pc-navy);
-        margin: 0;
-        letter-spacing: -0.02em;
-    }
-
-    .time-slot-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-sm);
-        margin-bottom: var(--spacing-md);
-    }
-
-    .time-slot {
-        background: var(--bg-primary);
-        padding: var(--spacing-md);
-        border-radius: var(--border-radius-md);
-        text-align: center;
-        border: 2px solid var(--pc-light-blue);
-        transition: all 0.2s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .time-slot:hover {
-        border-color: var(--pc-blue);
-        box-shadow: 0 4px 12px rgba(27, 155, 216, 0.15);
-        transform: translateY(-2px);
-    }
-
-    .time-slot-time {
-        font-weight: 500;
-        color: var(--text-secondary);
-        font-size: var(--font-size-small);
-        margin-bottom: var(--spacing-xs);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .time-slot-count {
-        font-size: 2rem;
-        color: var(--pc-navy);
-        font-weight: 700;
-        margin: 0;
-        line-height: 1;
-    }
-
-    .core-events-list {
-        max-height: 300px;
-        overflow-y: auto;
-    }
-
-    .core-event-item {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        padding: var(--spacing-sm);
-        border-radius: var(--border-radius-sm);
-        margin-bottom: var(--spacing-xs);
-        background: var(--bg-secondary);
-        border: 1px solid rgba(46, 76, 115, 0.05);
-        transition: all 0.2s ease;
-    }
-
-    .core-event-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .core-event-item:hover {
-        background: var(--bg-primary);
-        box-shadow: var(--shadow-sm);
-        border-color: var(--pc-light-blue);
-        transform: translateX(4px);
-    }
-
-    .core-event-time {
-        font-weight: 600;
-        color: var(--pc-navy);
-        font-size: var(--font-size-small);
-        background: rgba(46, 76, 115, 0.1);
-        padding: 2px 6px;
-        border-radius: 3px;
-        text-align: center;
-        flex-shrink: 0;
-    }
-
-    .core-event-employee {
-        color: var(--text-primary);
-        font-weight: 500;
-        flex-shrink: 0;
-    }
-
-    .core-event-name {
-        color: var(--text-secondary);
-        font-size: var(--font-size-small);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-style: italic;
-        flex: 1;
-    }
-
-    .unscheduled-list {
-        max-height: 400px;
-        overflow-y: auto;
-    }
-
-    .unscheduled-item {
-        background: var(--bg-primary);
-        border-radius: var(--border-radius-md);
-        padding: var(--spacing-md);
-        margin-bottom: var(--spacing-sm);
-        border: 1px solid rgba(46, 76, 115, 0.1);
-        transition: all 0.2s ease;
-        position: relative;
-    }
-
-    .unscheduled-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .unscheduled-item:hover {
-        box-shadow: var(--shadow-sm);
-        border-color: var(--pc-light-blue);
-        transform: translateY(-2px);
-    }
-
-    .unscheduled-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .unscheduled-title {
-        font-weight: 500;
-        color: var(--text-primary);
-        font-size: var(--font-size-small);
-        flex: 1;
-        margin-right: var(--spacing-sm);
-        line-height: 1.4;
-    }
-
-    .unscheduled-dates {
-        font-size: var(--font-size-small);
-        color: var(--text-muted);
-        background: var(--bg-secondary);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 500;
-    }
-
-    .percentage-display {
-        text-align: center;
-        background: linear-gradient(135deg, var(--pc-light-blue) 0%, rgba(232, 244, 249, 0.7) 100%);
-        padding: var(--spacing-xl);
-        border-radius: var(--border-radius-lg);
-        margin-bottom: var(--spacing-lg);
-        border: 1px solid rgba(27, 155, 216, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .percentage-display::before {
-        content: '';
-        position: absolute;
-        top: -2px;
-        left: -2px;
-        right: -2px;
-        bottom: -2px;
-        background: linear-gradient(135deg, var(--pc-blue), var(--pc-navy));
-        z-index: -1;
-        border-radius: var(--border-radius-lg);
-        opacity: 0.1;
-    }
-
-    .percentage-number {
-        font-size: 4rem;
-        font-weight: 800;
-        color: var(--pc-navy);
-        margin-bottom: var(--spacing-sm);
-        line-height: 1;
-        text-shadow: 0 2px 4px rgba(46, 76, 115, 0.1);
-    }
-
-    .percentage-label {
-        color: var(--text-secondary);
-        font-size: var(--font-size-body);
-        font-weight: 500;
-        margin: 0;
-    }
-
-    .no-items {
-        text-align: center;
-        color: var(--text-muted);
-        font-style: italic;
-        padding: var(--spacing-lg);
-    }
-
-    .print-schedule-section {
-        display: flex;
-        justify-content: space-between;
-        gap: var(--spacing-md);
-        margin-top: var(--spacing-lg);
-        padding: var(--spacing-md) 0;
-        border-top: 1px solid rgba(46, 76, 115, 0.1);
-        position: relative;
-    }
-    
-    .print-schedule-section .btn {
-        flex: 1;
-    }
-
-    .print-schedule-section::before {
-        content: '';
-        position: absolute;
-        top: -1px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 60px;
-        height: 2px;
-        background: linear-gradient(90deg, var(--pc-blue), var(--pc-navy));
-    }
-
-    @media (max-width: 768px) {
-        .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-
-        .time-slot-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    /* Verification Widget Styles */
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    .verification-issue-item {
-        background: var(--bg-secondary);
-        border-left: 4px solid;
-        padding: var(--spacing-sm) var(--spacing-md);
-        margin-bottom: var(--spacing-xs);
-        border-radius: var(--border-radius-sm);
-        transition: all 0.2s ease;
-    }
-
-    .verification-issue-item:hover {
-        background: var(--bg-primary);
-        box-shadow: var(--shadow-sm);
-        transform: translateX(4px);
-    }
-
-    .verification-issue-item.critical {
-        border-left-color: #c0392b;
-        background: rgba(192, 57, 43, 0.05);
-    }
-
-    .verification-issue-item.warning {
-        border-left-color: #e67e22;
-        background: rgba(230, 126, 34, 0.05);
-    }
-
-    .verification-issue-item.info {
-        border-left-color: var(--pc-blue);
-        background: rgba(27, 155, 216, 0.05);
-    }
-
-    .verification-issue-message {
-        font-weight: 500;
-        color: var(--text-primary);
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .verification-issue-details {
-        font-size: var(--font-size-small);
-        color: var(--text-secondary);
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .verification-issue-action {
-        font-size: var(--font-size-small);
-        color: var(--pc-navy);
-        font-style: italic;
-    }
-</style>
-
+<!-- FLAW-003: Index page styles (extracted from embedded CSS) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/index.css') }}">
 <!-- Epic 2 Story 2.2: Dashboard page styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/dashboard.css') }}">
 <!-- Epic 2 Story 2.1: Schedule modal styles -->
@@ -479,16 +29,16 @@
             <p class="welcome-subtitle">{{ today.strftime('%A, %B %d, %Y') }}</p>
 
             <!-- Primary Lead and Juicer for Today -->
-            <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1.5rem; flex-wrap: wrap;">
-                <div style="text-align: center; padding: 1rem 2rem; background: rgba(46, 76, 115, 0.1); border-radius: 8px; border-left: 4px solid var(--pc-navy);">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">Primary Lead</div>
-                    <div style="font-size: 1.1rem; font-weight: 600; color: var(--pc-navy);">
+            <div class="role-display-container">
+                <div class="role-card role-card--lead">
+                    <div class="role-label">Primary Lead</div>
+                    <div class="role-value role-value--lead">
                         {% if primary_lead_today %}{{ primary_lead_today }}{% else %}Not Scheduled{% endif %}
                     </div>
                 </div>
-                <div style="text-align: center; padding: 1rem 2rem; background: rgba(27, 155, 216, 0.1); border-radius: 8px; border-left: 4px solid var(--pc-blue);">
-                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">Juicer</div>
-                    <div style="font-size: 1.1rem; font-weight: 600; color: var(--pc-blue);">
+                <div class="role-card role-card--juicer">
+                    <div class="role-label">Juicer</div>
+                    <div class="role-value role-value--juicer">
                         {% if juicer_today %}{{ juicer_today }}{% else %}Not Scheduled{% endif %}
                     </div>
                 </div>
@@ -528,56 +78,56 @@
             </div>
 
             <!-- Date Picker -->
-            <div style="display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-lg); flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 200px;">
-                    <label for="verification-date" style="display: block; margin-bottom: var(--spacing-xs); font-weight: 500; color: var(--text-secondary);">Select Date to Verify:</label>
-                    <input type="date" id="verification-date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}" style="width: 100%;">
+            <div class="verification-date-row">
+                <div class="verification-date-group">
+                    <label for="verification-date" class="verification-date-label">Select Date to Verify:</label>
+                    <input type="date" id="verification-date" class="form-control verification-date-input" value="{{ today.strftime('%Y-%m-%d') }}">
                 </div>
-                <button onclick="runVerification()" class="btn btn-primary" style="margin-top: 1.5rem; align-self: flex-end;">
+                <button onclick="runVerification()" class="btn btn-primary verification-btn">
                     Verify Schedule
                 </button>
             </div>
 
             <!-- Verification Results -->
-            <div id="verification-widget-results" style="display: none;">
+            <div id="verification-widget-results" class="verification-results">
                 <!-- Status Badge -->
-                <div id="verification-status-badge" style="padding: var(--spacing-md); border-radius: var(--border-radius-md); margin-bottom: var(--spacing-md); text-align: center; font-weight: 600; font-size: 1.1rem;">
+                <div id="verification-status-badge" class="verification-status-badge">
                     <!-- Dynamically populated -->
                 </div>
 
                 <!-- Critical Issues -->
-                <div id="verification-critical-section" style="display: none; margin-bottom: var(--spacing-md);">
-                    <h4 style="color: #c0392b; margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-xs);">
-                        <span style="font-size: 1.5rem;">🚨</span> Critical Issues
+                <div id="verification-critical-section" class="verification-results">
+                    <h4 class="verification-section-heading verification-section-heading--critical">
+                        <span class="verification-section-icon">🚨</span> Critical Issues
                     </h4>
                     <div id="verification-critical-list"></div>
                 </div>
 
                 <!-- Warnings -->
-                <div id="verification-warnings-section" style="display: none; margin-bottom: var(--spacing-md);">
-                    <h4 style="color: #e67e22; margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-xs);">
-                        <span style="font-size: 1.5rem;">⚠️</span> Warnings
+                <div id="verification-warnings-section" class="verification-results">
+                    <h4 class="verification-section-heading verification-section-heading--warning">
+                        <span class="verification-section-icon">⚠️</span> Warnings
                     </h4>
                     <div id="verification-warnings-list"></div>
                 </div>
 
                 <!-- Info Messages -->
-                <div id="verification-info-section" style="display: none;">
-                    <h4 style="color: var(--pc-blue); margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-xs);">
-                        <span style="font-size: 1.5rem;">ℹ️</span> Information
+                <div id="verification-info-section" class="verification-results">
+                    <h4 class="verification-section-heading verification-section-heading--info">
+                        <span class="verification-section-icon">ℹ️</span> Information
                     </h4>
                     <div id="verification-info-list"></div>
                 </div>
             </div>
 
             <!-- Loading State -->
-            <div id="verification-widget-loading" style="display: none; text-align: center; padding: var(--spacing-xl);">
-                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--pc-light-blue); border-top-color: var(--pc-navy); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <p style="margin-top: var(--spacing-md); color: var(--text-muted);">Running verification...</p>
+            <div id="verification-widget-loading" class="verification-loading">
+                <div class="verification-spinner"></div>
+                <p class="verification-loading-text">Running verification...</p>
             </div>
 
             <!-- Initial State -->
-            <div id="verification-widget-initial" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">
+            <div id="verification-widget-initial" class="verification-initial">
                 <p>Select a date and click "Verify Schedule" to check for scheduling issues.</p>
             </div>
         </div>
@@ -595,11 +145,11 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '09:45' %}
-                                <div style="font-size: 0.9rem; color: var(--pc-navy); font-weight: 500; margin-bottom: 0.25rem;">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['9:45'] == 0 %}
-                            <div style="font-size: 0.9rem; color: var(--text-muted); font-style: italic;">None</div>
+                            <div class="time-slot-empty">None</div>
                         {% endif %}
                     </div>
                 </div>
@@ -608,11 +158,11 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '10:30' %}
-                                <div style="font-size: 0.9rem; color: var(--pc-navy); font-weight: 500; margin-bottom: 0.25rem;">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['10:30'] == 0 %}
-                            <div style="font-size: 0.9rem; color: var(--text-muted); font-style: italic;">None</div>
+                            <div class="time-slot-empty">None</div>
                         {% endif %}
                     </div>
                 </div>
@@ -621,11 +171,11 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '11:00' %}
-                                <div style="font-size: 0.9rem; color: var(--pc-navy); font-weight: 500; margin-bottom: 0.25rem;">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['11:00'] == 0 %}
-                            <div style="font-size: 0.9rem; color: var(--text-muted); font-style: italic;">None</div>
+                            <div class="time-slot-empty">None</div>
                         {% endif %}
                     </div>
                 </div>
@@ -634,11 +184,11 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '11:30' %}
-                                <div style="font-size: 0.9rem; color: var(--pc-navy); font-weight: 500; margin-bottom: 0.25rem;">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['11:30'] == 0 %}
-                            <div style="font-size: 0.9rem; color: var(--text-muted); font-style: italic;">None</div>
+                            <div class="time-slot-empty">None</div>
                         {% endif %}
                     </div>
                 </div>
@@ -646,9 +196,9 @@
 
             <!-- Core Events List (no scrollbar, clickable) -->
             {% if today_core_events %}
-                <div class="core-events-list" style="max-height: none; overflow-y: visible;">
+                <div class="core-events-list core-events-list--expanded">
                     {% for schedule, event, employee in today_core_events %}
-                    <div class="core-event-item" style="cursor: pointer;" onclick="showEventDetails({{ schedule.id }}, '{{ event.project_ref_num }}', '{{ event.project_name|replace("'", "\\'") }}', '{{ employee.name|replace("'", "\\'") if employee else "Unassigned" }}', '{{ schedule.schedule_datetime.strftime('%m-%d-%Y') }}', '{{ schedule.schedule_datetime.strftime('%I:%M %p') }}', '{{ event.start_datetime.strftime('%m-%d-%Y') }}', '{{ event.due_datetime.strftime('%m-%d-%Y') }}', '{{ event.event_type }}')">
+                    <div class="core-event-item core-event-item--clickable" onclick="showEventDetails({{ schedule.id }}, '{{ event.project_ref_num }}', '{{ event.project_name|replace("'", "\\'") }}', '{{ employee.name|replace("'", "\\'") if employee else "Unassigned" }}', '{{ schedule.schedule_datetime.strftime('%m-%d-%Y') }}', '{{ schedule.schedule_datetime.strftime('%I:%M %p') }}', '{{ event.start_datetime.strftime('%m-%d-%Y') }}', '{{ event.due_datetime.strftime('%m-%d-%Y') }}', '{{ event.event_type }}')">
                         <div class="core-event-time">{{ schedule.schedule_datetime.strftime('%I:%M %p') }}</div>
                         <div class="core-event-employee">{{ employee.name if employee else 'Unassigned' }}</div>
                         <div class="core-event-name" title="{{ event.project_name }}">{{ event.project_name }}</div>
@@ -661,9 +211,9 @@
 
             <!-- Print Schedule Buttons -->
             <div class="print-schedule-section">
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                    <label for="schedule-date" style="font-weight: bold;">Select Date:</label>
-                    <input type="date" id="schedule-date" class="form-control" style="width: auto; min-width: 160px;" value="{{ today.strftime('%Y-%m-%d') }}">
+                <div class="print-controls">
+                    <label for="schedule-date" class="print-controls__label">Select Date:</label>
+                    <input type="date" id="schedule-date" class="form-control print-controls__input" value="{{ today.strftime('%Y-%m-%d') }}">
                     <button onclick="printScheduleByDate()" class="btn btn-primary">
                         Print Schedule
                     </button>
@@ -672,16 +222,16 @@
 
             <!-- Print Paperwork Buttons -->
             <div class="print-schedule-section">
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                    <label for="paperwork-date" style="font-weight: bold;">Select Date:</label>
-                    <input type="date" id="paperwork-date" class="form-control" style="width: auto; min-width: 160px;" value="{{ today_date }}">
+                <div class="print-controls">
+                    <label for="paperwork-date" class="print-controls__label">Select Date:</label>
+                    <input type="date" id="paperwork-date" class="form-control print-controls__input" value="{{ today_date }}">
                     <button onclick="printPaperworkByDate()" class="btn btn-success">
                         Print Paperwork
                     </button>
                     <button onclick="printSalesToolsByDate()" class="btn btn-primary">
                         Print SalesTools
                     </button>
-                    <button onclick="generateEDRReports()" class="btn" style="background: var(--pc-navy); color: white;">
+                    <button onclick="generateEDRReports()" class="btn btn--navy">
                         Generate EDR Reports
                     </button>
                 </div>
@@ -703,7 +253,7 @@
             </div>
 
             <!-- Unscheduled Events (within 2 weeks) -->
-            <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm) 0; color: var(--text-primary);">
+            <h4 class="section-subtitle">
                 Urgent Unscheduled Events ({{ unscheduled_events_2weeks|length }})
             </h4>
             
@@ -722,22 +272,21 @@
                         </div>
 
                         <!-- Schedule Now Button -->
-                        <button class="btn btn-primary schedule-now-btn"
+                        <button class="btn btn-primary schedule-now-btn mt-sm w-full"
                                 data-event-id="{{ event.project_ref_num }}"
                                 data-event-name="{{ event.project_name }}"
                                 data-event-type="{{ event.event_type }}"
                                 data-location="{{ event.store_name or '' }}"
                                 data-duration="{{ event.estimated_time or event.get_default_duration(event.event_type) }}"
-                                data-date-needed="{{ event.start_datetime.strftime('%Y-%m-%d') }}"
-                                style="margin-top: var(--spacing-sm); width: 100%;">
+                                data-date-needed="{{ event.start_datetime.strftime('%Y-%m-%d') }}">
                             <span class="btn-text">Schedule Now</span>
-                            <span class="btn-spinner" style="display:none;">⏳</span>
+                            <span class="btn-spinner">⏳</span>
                         </button>
                     </div>
                     {% endfor %}
                 </div>
                 
-                <div style="text-align: center; margin-top: var(--spacing-md);">
+                <div class="view-all-link">
                     <a href="{{ url_for('main.unscheduled_events') }}" class="btn btn-outline">
                         View All Unscheduled Events
                     </a>
@@ -752,7 +301,7 @@
     <!-- Flash messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="flash-messages" style="margin-bottom: var(--spacing-lg);">
+            <div class="flash-messages">
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }}">{{ message }}</div>
                 {% endfor %}
@@ -761,108 +310,108 @@
     {% endwith %}
 
     <!-- MFA Authentication Modal -->
-    <div id="mfa-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
-            <h3 style="margin: 0 0 1rem 0; color: var(--pc-navy);">EDR Authentication Required</h3>
-            <p style="margin: 0 0 1.5rem 0; color: var(--text-secondary); font-size: 0.95rem;">
+    <div id="mfa-modal" class="modal-overlay">
+        <div class="mfa-modal-content">
+            <h3 class="mfa-modal-title">EDR Authentication Required</h3>
+            <p class="mfa-modal-description">
                 Enter the MFA code sent to your phone to authenticate with Walmart Retail Link for EDR reports.
             </p>
-            <div style="margin-bottom: 1.5rem;">
-                <label for="mfa-code-input" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary);">MFA Code</label>
+            <div class="mfa-form-group">
+                <label for="mfa-code-input" class="mfa-label">MFA Code</label>
                 <input type="text"
                        id="mfa-code-input"
+                       class="mfa-input"
                        placeholder="Enter 6-digit code"
-                       maxlength="6"
-                       style="width: 100%; padding: 0.75rem; border: 2px solid var(--pc-light-blue); border-radius: 4px; font-size: 1.1rem; text-align: center; letter-spacing: 0.2em;">
+                       maxlength="6">
             </div>
-            <div id="mfa-error" style="display: none; padding: 0.75rem; background: #fee; color: #c33; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem;"></div>
-            <div style="display: flex; gap: 0.75rem;">
-                <button onclick="cancelMFAAuth()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="submitMFACode()" id="mfa-submit-btn" class="btn btn-primary" style="flex: 1;">Authenticate</button>
+            <div id="mfa-error" class="mfa-error"></div>
+            <div class="mfa-actions">
+                <button onclick="cancelMFAAuth()" class="btn btn-secondary">Cancel</button>
+                <button onclick="submitMFACode()" id="mfa-submit-btn" class="btn btn-primary">Authenticate</button>
             </div>
         </div>
     </div>
 
     <!-- Event Details Modal -->
-    <div id="event-details-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center; overflow-y: auto;">
-        <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 600px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); margin: 2rem auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--pc-light-blue);">
-                <h3 style="margin: 0; color: var(--pc-navy); font-size: 1.5rem;">Event Details</h3>
-                <button onclick="closeEventDetails()" style="background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+    <div id="event-details-modal" class="modal-overlay modal-overlay--scrollable">
+        <div class="event-details-modal-content">
+            <div class="event-details-header">
+                <h3 class="event-details-title">Event Details</h3>
+                <button onclick="closeEventDetails()" class="event-details-close">&times;</button>
             </div>
 
-            <div id="event-details-content" style="margin-bottom: 1.5rem;">
-                <div style="display: grid; grid-template-columns: 140px 1fr; gap: 0.75rem 1rem; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; color: var(--text-secondary);">Event Number:</div>
-                    <div id="detail-event-number" style="color: var(--text-primary);"></div>
+            <div id="event-details-content" class="event-details-content">
+                <div class="event-details-grid">
+                    <div class="event-details-label">Event Number:</div>
+                    <div id="detail-event-number" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Event Name:</div>
-                    <div id="detail-event-name" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Event Name:</div>
+                    <div id="detail-event-name" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Event Type:</div>
-                    <div id="detail-event-type" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Event Type:</div>
+                    <div id="detail-event-type" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Scheduled Employee:</div>
-                    <div id="detail-employee" style="color: var(--pc-navy); font-weight: 500;"></div>
+                    <div class="event-details-label">Scheduled Employee:</div>
+                    <div id="detail-employee" class="event-details-value event-details-value--highlight"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Scheduled Date:</div>
-                    <div id="detail-scheduled-date" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Scheduled Date:</div>
+                    <div id="detail-scheduled-date" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Scheduled Time:</div>
-                    <div id="detail-scheduled-time" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Scheduled Time:</div>
+                    <div id="detail-scheduled-time" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Event Start Date:</div>
-                    <div id="detail-start-date" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Event Start Date:</div>
+                    <div id="detail-start-date" class="event-details-value"></div>
 
-                    <div style="font-weight: 600; color: var(--text-secondary);">Event Due Date:</div>
-                    <div id="detail-due-date" style="color: var(--text-primary);"></div>
+                    <div class="event-details-label">Event Due Date:</div>
+                    <div id="detail-due-date" class="event-details-value"></div>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
-                <button onclick="rescheduleEvent()" class="btn btn-primary" style="width: 100%;">Reschedule</button>
-                <button onclick="unscheduleEvent()" class="btn btn-secondary" style="width: 100%;">Unschedule</button>
-                <button onclick="changeEmployee()" class="btn btn-primary" style="width: 100%;">Change Employee</button>
-                <button onclick="printEDR()" class="btn" style="width: 100%; background: var(--pc-navy); color: white;">Print EDR</button>
-                <button onclick="printInstructions()" class="btn" style="width: 100%; background: var(--pc-blue); color: white;">Print Instructions</button>
-                <button onclick="printBoth()" class="btn btn-primary" style="width: 100%;">Print Both</button>
+            <div class="event-details-actions">
+                <button onclick="rescheduleEvent()" class="btn btn-primary">Reschedule</button>
+                <button onclick="unscheduleEvent()" class="btn btn-secondary">Unschedule</button>
+                <button onclick="changeEmployee()" class="btn btn-primary">Change Employee</button>
+                <button onclick="printEDR()" class="btn btn--navy">Print EDR</button>
+                <button onclick="printInstructions()" class="btn btn--blue">Print Instructions</button>
+                <button onclick="printBoth()" class="btn btn-primary">Print Both</button>
             </div>
 
-            <div style="text-align: center; margin-top: 1rem;">
-                <button onclick="closeEventDetails()" class="btn btn-outline" style="min-width: 120px;">Close</button>
+            <div class="event-details-footer">
+                <button onclick="closeEventDetails()" class="btn btn-outline">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Reschedule Event Modal -->
-    <div class="modal-backdrop" id="reschedule-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1001; align-items: center; justify-content: center;">
-        <div class="action-modal" style="background: var(--bg-primary); border-radius: var(--border-radius-lg); padding: var(--spacing-xl); max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-lg); position: relative;">
-            <button class="modal-close" onclick="closeModal('reschedule-modal')" style="position: absolute; top: var(--spacing-md); right: var(--spacing-md); background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
-            <h3 style="margin-top: 0; color: var(--text-primary); border-bottom: 2px solid var(--pc-light-blue); padding-bottom: var(--spacing-sm);">Reschedule Event</h3>
+    <div class="modal-backdrop modal-overlay modal-overlay--higher" id="reschedule-modal">
+        <div class="action-modal">
+            <button class="action-modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+            <h3 class="action-modal-title">Reschedule Event</h3>
             <form id="reschedule-form">
                 <input type="hidden" id="reschedule-schedule-id">
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">Event:</label>
+                <div class="form-group">
+                    <label>Event:</label>
                     <div id="reschedule-event-info"></div>
                 </div>
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label for="reschedule-date" style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">New Date:</label>
-                    <input type="date" id="reschedule-date" required style="width: 100%; padding: var(--spacing-sm); border: 1px solid #ddd; border-radius: var(--border-radius-sm); box-sizing: border-box;">
+                <div class="form-group">
+                    <label for="reschedule-date">New Date:</label>
+                    <input type="date" id="reschedule-date" required>
                 </div>
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label for="reschedule-time" style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">New Time:</label>
-                    <input type="time" id="reschedule-time" required style="width: 100%; padding: var(--spacing-sm); border: 1px solid #ddd; border-radius: var(--border-radius-sm); box-sizing: border-box;">
-                    <select id="reschedule-time-dropdown" class="hidden" style="width: 100%; padding: var(--spacing-sm); border: 1px solid #ddd; border-radius: var(--border-radius-sm); box-sizing: border-box; display: none;">
+                <div class="form-group">
+                    <label for="reschedule-time">New Time:</label>
+                    <input type="time" id="reschedule-time" required>
+                    <select id="reschedule-time-dropdown" class="hidden">
                         <option value="">Select a time</option>
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label for="reschedule-employee" style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">Employee:</label>
-                    <select id="reschedule-employee" required style="width: 100%; padding: var(--spacing-sm); border: 1px solid #ddd; border-radius: var(--border-radius-sm); box-sizing: border-box;">
+                <div class="form-group">
+                    <label for="reschedule-employee">Employee:</label>
+                    <select id="reschedule-employee" required>
                         <option value="">Loading...</option>
                     </select>
                 </div>
-                <div class="modal-actions" style="display: flex; gap: var(--spacing-sm); justify-content: flex-end; margin-top: var(--spacing-lg); padding-top: var(--spacing-md); border-top: 1px solid #ddd;">
+                <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
                     <button type="submit" class="btn btn-primary">Reschedule</button>
                 </div>
@@ -871,23 +420,23 @@
     </div>
 
     <!-- Change Employee Modal -->
-    <div class="modal-backdrop" id="change-employee-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1001; align-items: center; justify-content: center;">
-        <div class="action-modal" style="background: var(--bg-primary); border-radius: var(--border-radius-lg); padding: var(--spacing-xl); max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-lg); position: relative;">
-            <button class="modal-close" onclick="closeModal('change-employee-modal')" style="position: absolute; top: var(--spacing-md); right: var(--spacing-md); background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
-            <h3 style="margin-top: 0; color: var(--text-primary); border-bottom: 2px solid var(--pc-light-blue); padding-bottom: var(--spacing-sm);">Change Employee</h3>
+    <div class="modal-backdrop modal-overlay modal-overlay--higher" id="change-employee-modal">
+        <div class="action-modal">
+            <button class="action-modal-close" onclick="closeModal('change-employee-modal')">&times;</button>
+            <h3 class="action-modal-title">Change Employee</h3>
             <form id="change-employee-form">
                 <input type="hidden" id="change-schedule-id">
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">Event Details:</label>
+                <div class="form-group">
+                    <label>Event Details:</label>
                     <div id="change-event-info"></div>
                 </div>
-                <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                    <label for="change-new-employee" style="display: block; margin-bottom: var(--spacing-xs); font-weight: var(--font-weight-bold); color: var(--text-primary);">New Employee:</label>
-                    <select id="change-new-employee" required style="width: 100%; padding: var(--spacing-sm); border: 1px solid #ddd; border-radius: var(--border-radius-sm); box-sizing: border-box;">
+                <div class="form-group">
+                    <label for="change-new-employee">New Employee:</label>
+                    <select id="change-new-employee" required>
                         <option value="">Select new employee...</option>
                     </select>
                 </div>
-                <div class="modal-actions" style="display: flex; gap: var(--spacing-sm); justify-content: flex-end; margin-top: var(--spacing-lg); padding-top: var(--spacing-md); border-top: 1px solid #ddd;">
+                <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('change-employee-modal')">Cancel</button>
                     <button type="submit" class="btn btn-primary">Change Employee</button>
                 </div>
