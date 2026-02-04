@@ -252,8 +252,8 @@
     <form id="reschedule-form">
       <input type="hidden" id="reschedule-schedule-id">
       <div class="form-group">
-        <label>Event:</label>
-        <div id="reschedule-event-info"></div>
+        <label id="reschedule-event-label">Event:</label>
+        <div id="reschedule-event-info" aria-labelledby="reschedule-event-label"></div>
       </div>
       <div class="form-group">
         <label for="reschedule-date">New Date: <span class="required-indicator" aria-label="required">*</span></label>
@@ -262,7 +262,7 @@
       <div class="form-group">
         <label for="reschedule-time">New Time: <span class="required-indicator" aria-label="required">*</span></label>
         <input type="time" id="reschedule-time" required aria-required="true">
-        <select id="reschedule-time-dropdown" class="hidden">
+        <select id="reschedule-time-dropdown" class="hidden" aria-label="Select a time">
           <option value="">Select a time</option>
         </select>
       </div>
@@ -273,14 +273,14 @@
         </select>
       </div>
       <div class="form-group" style="margin-top: 15px;">
-        <label for="override-constraints" aria-describedby="override-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+        <label for="reschedule-override-constraints" aria-describedby="reschedule-override-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
           <input type="checkbox" id="reschedule-override-constraints" name="override_constraints" value="true"
             style="width: auto; margin: 0;">
           <span style="font-weight: 500; color: #e67e22;">
             Override Scheduling Constraints
           </span>
         </label>
-        <small id="override-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
+        <small id="reschedule-override-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
           Enable to bypass role restrictions, time constraints, and one-Core-per-day limits.
         </small>
       </div>
@@ -294,39 +294,41 @@
 </div>
 
 <!-- Reissue Event Modal -->
-<div class="modal-backdrop" id="reissue-modal" style="display: none;">
-  <div class="action-modal">
-    <button class="modal-close" onclick="window.dailyView.closeReissueModal()">&times;</button>
-    <h3>Reissue Event</h3>
+<div class="modal-backdrop" id="reissue-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="reissue-modal-title">
+  <div class="action-modal" role="document">
+    <header>
+      <h3 id="reissue-modal-title">Reissue Event</h3>
+      <button class="modal-close" aria-label="Close reissue modal" onclick="window.dailyView.closeReissueModal()"><span aria-hidden="true">&times;</span></button>
+    </header>
     <form id="reissue-form">
       <input type="hidden" id="reissue-schedule-id">
       <div class="form-group">
-        <label>Event:</label>
-        <div id="reissue-event-info"></div>
+        <label id="reissue-event-label">Event:</label>
+        <div id="reissue-event-info" aria-labelledby="reissue-event-label"></div>
       </div>
       <div class="form-group">
-        <label for="reissue-date">New Date:</label>
-        <input type="date" id="reissue-date" required>
+        <label for="reissue-date">New Date: <span class="required-indicator" aria-label="required">*</span></label>
+        <input type="date" id="reissue-date" required aria-required="true">
       </div>
       <div class="form-group">
-        <label for="reissue-time">New Time:</label>
-        <input type="time" id="reissue-time" required>
+        <label for="reissue-time">New Time: <span class="required-indicator" aria-label="required">*</span></label>
+        <input type="time" id="reissue-time" required aria-required="true">
       </div>
       <div class="form-group">
-        <label for="reissue-employee">Employee:</label>
-        <select id="reissue-employee" required>
+        <label for="reissue-employee">Employee: <span class="required-indicator" aria-label="required">*</span></label>
+        <select id="reissue-employee" required aria-required="true">
           <option value="">Loading...</option>
         </select>
       </div>
       <div class="form-group" style="margin-top: 15px;">
-        <label for="override-constraints" aria-describedby="override-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+        <label for="reissue-include-responses" aria-describedby="reissue-responses-help-text" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
           <input type="checkbox" id="reissue-include-responses" name="include_responses" value="true"
             style="width: auto; margin: 0;">
           <span style="font-weight: 500;">
             Include Previous Responses
           </span>
         </label>
-        <small id="override-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
+        <small id="reissue-responses-help-text" style="margin-left: 24px; color: #666; display: block; margin-top: 4px;">
           Enable to include responses from the original event submission.
         </small>
       </div>
@@ -348,8 +350,8 @@
     </header>
     <form id="bulk-reassign-form">
       <div class="form-group">
-        <label>Date:</label>
-        <div id="bulk-reassign-date-info">{{ selected_date.strftime('%A, %B %d, %Y') }}</div>
+        <label id="bulk-reassign-date-label">Date:</label>
+        <div id="bulk-reassign-date-info" aria-labelledby="bulk-reassign-date-label">{{ selected_date.strftime('%A, %B %d, %Y') }}</div>
       </div>
       <div class="form-group">
         <label for="bulk-reassign-employee">Reassign all Supervisor events to: <span class="required-indicator" aria-label="required">*</span></label>
@@ -376,8 +378,8 @@
         </small>
       </div>
       <div id="bulk-reassign-preview" class="form-group" style="display: none;">
-        <label>Events to reassign:</label>
-        <div id="bulk-reassign-event-list" class="event-preview-list"></div>
+        <label id="bulk-reassign-events-label">Events to reassign:</label>
+        <div id="bulk-reassign-event-list" class="event-preview-list" aria-labelledby="bulk-reassign-events-label"></div>
       </div>
       <div id="bulk-reassign-error" class="error-message" style="display: none;"></div>
       <footer class="modal-actions">
@@ -401,13 +403,13 @@
       <input type="hidden" id="change-type-schedule-id">
 
       <div class="form-group">
-        <label>Event:</label>
-        <div id="change-type-event-info" style="font-weight: 600;"></div>
+        <label id="change-type-event-label">Event:</label>
+        <div id="change-type-event-info" style="font-weight: 600;" aria-labelledby="change-type-event-label"></div>
       </div>
 
       <div class="form-group">
-        <label>Current Type:</label>
-        <div id="change-type-current" style="padding: 8px; background: #f0f0f0; border-radius: 4px;"></div>
+        <label id="change-type-current-label">Current Type:</label>
+        <div id="change-type-current" style="padding: 8px; background: #f0f0f0; border-radius: 4px;" aria-labelledby="change-type-current-label"></div>
       </div>
 
       <div class="form-group">
