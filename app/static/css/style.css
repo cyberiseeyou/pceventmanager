@@ -1,58 +1,52 @@
-/* CSS Variables for Design System - Product Connections Theme */
+/* ==========================================================================
+   style.css - Component Styles
+
+   NOTE: Design tokens (colors, spacing, typography) are defined in
+   design-tokens.css which should be imported first. This file contains
+   only component-specific styles.
+
+   Migration note (FLAW-002): The duplicate :root block was removed.
+   All tokens now come from design-tokens.css as single source of truth.
+   ========================================================================== */
+
+/* Additional semantic color aliases needed by components in this file */
 :root {
-    /* Product Connections Brand Colors */
-    --pc-navy: #2E4C73;           /* Primary navy from logo */
-    --pc-blue: #1B9BD8;           /* Primary blue from logo */
-    --pc-light-blue: #E8F4F9;    /* Light blue for backgrounds */
-    --pc-gray-light: #F5F5F5;    /* Light gray */
-    --pc-gray-medium: #6C757D;   /* Medium gray */
-    --pc-gray-dark: #343A40;     /* Dark gray */
-    
-    /* Functional Colors */
-    --primary-color: var(--pc-navy);
-    --secondary-color: var(--pc-blue);
-    --success-color: #28A745;
-    --error-color: #DC3545;
-    --warning-color: #FFC107;
-    --info-color: var(--pc-blue);
-    
-    /* Background Colors */
-    --bg-primary: #FFFFFF;
+    /* Functional color aliases (reference design-tokens.css values) */
+    --secondary-color: var(--color-primary-light);
+    --success-color: var(--color-success);
+    --error-color: var(--color-danger);
+    --warning-color: var(--color-warning);
+    --info-color: var(--color-info);
+
+    /* Background color aliases */
+    --bg-primary: var(--color-neutral-50);
     --bg-secondary: var(--pc-light-blue);
-    --bg-tertiary: var(--pc-gray-light);
-    
-    /* Text Colors */
-    --text-primary: var(--pc-navy);
-    --text-secondary: var(--pc-gray-dark);
-    --text-muted: var(--pc-gray-medium);
-    --text-white: #FFFFFF;
-    
-    /* Typography - Larger for desktop viewing */
+    --bg-tertiary: var(--color-neutral-100);
+
+    /* Text color aliases */
+    --text-primary: var(--color-primary);
+    --text-secondary: var(--color-neutral-800);
+    --text-muted: var(--color-neutral-500);
+    --text-white: var(--color-neutral-50);
+
+    /* Gray scale aliases for backward compatibility */
+    --pc-gray-light: var(--color-neutral-100);
+    --pc-gray-medium: var(--color-neutral-500);
+    --pc-gray-dark: var(--color-neutral-800);
+
+    /* Typography aliases (larger for desktop viewing) */
     --font-size-h1: 3rem;
     --font-size-h2: 2.25rem;
     --font-size-h3: 1.75rem;
     --font-size-body: 1.125rem;
     --font-size-small: 1rem;
-    --font-weight-heading: 600;
-    --font-weight-body: 400;
-    --font-weight-bold: 700;
-    
-    /* Spacing */
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 1rem;
-    --spacing-md: 1.5rem;
-    --spacing-lg: 2rem;
-    --spacing-xl: 3rem;
-    
-    /* Border Radius */
-    --border-radius-sm: 4px;
-    --border-radius-md: 8px;
-    --border-radius-lg: 12px;
-    
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(46, 76, 115, 0.1);
-    --shadow-md: 0 4px 12px rgba(46, 76, 115, 0.15);
-    --shadow-lg: 0 8px 24px rgba(46, 76, 115, 0.2);
+    --font-weight-heading: var(--font-weight-semibold);
+    --font-weight-body: var(--font-weight-normal);
+
+    /* Border radius aliases */
+    --border-radius-sm: var(--radius-sm);
+    --border-radius-md: var(--radius-md);
+    --border-radius-lg: var(--radius-lg);
 }
 
 /* Base Styles */
@@ -993,13 +987,13 @@ input:focus {
 /* Small mobile breakpoint (480px) */
 @media (max-width: 480px) {
     :root {
+        /* Responsive typography for smaller screens */
         --font-size-h1: 1.75rem;
         --font-size-h2: 1.375rem;
         --font-size-h3: 1.125rem;
         --font-size-body: 0.9375rem;
         --font-size-small: 0.8125rem;
-        --spacing-lg: 1.5rem;
-        --spacing-xl: 2rem;
+        /* Note: Spacing tokens now come from design-tokens.css */
     }
 
     .container {

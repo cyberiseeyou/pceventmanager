@@ -13,10 +13,18 @@
    * COLOR PALETTE
    * =========================== */
 
-  /* Primary Brand Colors */
-  --color-primary: #003366;        /* PC Navy - Primary brand color */
-  --color-primary-light: #0055AA;  /* Lighter primary for hover states */
-  --color-primary-dark: #002244;   /* Darker primary for pressed states */
+  /* PRIMARY BRAND COLORS - Updated to match brand guidelines */
+  --color-primary: #2E4C73;        /* PC Navy - from brand logo */
+  --color-primary-light: #1B9BD8;  /* PC Blue - from brand logo */
+  --color-primary-dark: #1E3A5F;   /* Darker navy for pressed states */
+
+  /* Brand Color Aliases (for backward compatibility) */
+  --pc-navy: var(--color-primary);
+  --pc-blue: var(--color-primary-light);
+  --pc-light-blue: #E8F4F9;        /* Light blue for backgrounds */
+
+  /* Legacy alias */
+  --primary-color: var(--color-primary);
 
   /* Secondary Colors */
   --color-secondary: #FF8C00;      /* Orange - Warning/highlight color */
