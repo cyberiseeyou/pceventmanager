@@ -13,7 +13,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: var(--z-modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,7 +49,7 @@
   overflow: hidden;
   transform: scale(0.95);
   transition: transform 200ms ease;
-  z-index: 1001;
+  z-index: var(--z-modal);
 }
 
 .modal.modal-open .modal-container {
@@ -68,7 +68,7 @@
   overflow-y: auto;
   transform: scale(0.95);
   transition: transform 200ms ease;
-  z-index: 1001;
+  z-index: var(--z-modal);
 }
 
 .modal.modal-open .modal-content {
@@ -698,7 +698,7 @@
   padding: 12px 24px;
   border-radius: 4px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 10000;
+  z-index: var(--z-notification);
   color: white;
   font-size: 14px;
   font-weight: 500;

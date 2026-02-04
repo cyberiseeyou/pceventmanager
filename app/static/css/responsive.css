@@ -228,7 +228,7 @@ table {
         transition: transform 0.3s ease;
         overflow-y: auto;
         overflow-x: hidden;
-        z-index: 999;
+        z-index: var(--z-fixed);
         box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
     }
 
@@ -719,7 +719,7 @@ body {
     .header {
         position: sticky;
         top: 0;
-        z-index: 100;
+        z-index: var(--z-sticky);
     }
 
     .header-nav .nav-link {
@@ -1005,7 +1005,7 @@ body {
     background: var(--pc-navy);
     color: white;
     padding: 8px 16px;
-    z-index: 10000;
+    z-index: var(--z-loading-overlay);
     text-decoration: none;
     font-weight: 600;
 }

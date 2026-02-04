@@ -250,7 +250,7 @@ body {
     border: 1px solid rgba(46, 76, 115, 0.1);
     border-radius: var(--border-radius-md);
     box-shadow: var(--shadow-lg);
-    z-index: 1000;
+    z-index: var(--z-dropdown);
     overflow: hidden;
     animation: dropdown-fade-in 0.2s ease;
     margin-top: 4px;
@@ -374,7 +374,7 @@ body {
     border: 1px solid rgba(46, 76, 115, 0.1);
     border-radius: var(--border-radius-md);
     box-shadow: var(--shadow-lg);
-    z-index: 1000;
+    z-index: var(--z-dropdown);
     overflow: hidden;
     margin-top: 4px;
     padding-top: 4px;
@@ -1381,7 +1381,7 @@ input:focus {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 9999;
+  z-index: var(--z-modal);
   align-items: center;
   justify-content: center;
 }
@@ -1517,7 +1517,7 @@ input:focus {
   border: 1px solid rgba(46, 76, 115, 0.1);
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 1000;
+  z-index: var(--z-popover);
   overflow: hidden;
   display: flex;
   flex-direction: column;
