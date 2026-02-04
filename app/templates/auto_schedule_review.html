@@ -1162,8 +1162,9 @@
         if (data.newly_scheduled.length === 0) {
             scheduledContainer.innerHTML = '<div class="empty-state">No events newly scheduled in this run.</div>';
         } else {
-            let html = '<table class="event-table">';
-            html += '<thead><tr><th>Event</th><th>Type</th><th>Event Period</th><th>Assigned To</th><th>Scheduled For</th><th>Actions</th></tr></thead><tbody>';
+            let html = '<table class="event-table" aria-describedby="newly-scheduled-desc">';
+            html += '<caption id="newly-scheduled-desc" class="sr-only">List of events newly scheduled by the auto-scheduler, showing event details and assigned employees</caption>';
+            html += '<thead><tr><th scope="col">Event</th><th scope="col">Type</th><th scope="col">Event Period</th><th scope="col">Assigned To</th><th scope="col">Scheduled For</th><th scope="col">Actions</th></tr></thead><tbody>';
             data.newly_scheduled.forEach(event => {
                 html += `<tr>
                     <td>${event.event_name}</td>
@@ -1190,8 +1191,9 @@
                 return name.replace(new RegExp(number + '[-–]?\\s*', 'g'), '').trim();
             }
             
-            let html = '<table class="event-table bump-table">';
-            html += '<thead><tr><th>Event Being Bumped</th><th>Replaced By</th><th>New Schedule</th><th>Bumped Event Rescheduled To</th><th>Actions</th></tr></thead><tbody>';
+            let html = '<table class="event-table bump-table" aria-describedby="bumped-events-desc">';
+            html += '<caption id="bumped-events-desc" class="sr-only">List of events being replaced by higher priority events, showing original and replacement details</caption>';
+            html += '<thead><tr><th scope="col">Event Being Bumped</th><th scope="col">Replaced By</th><th scope="col">New Schedule</th><th scope="col">Bumped Event Rescheduled To</th><th scope="col">Actions</th></tr></thead><tbody>';
             data.swaps.forEach(event => {
                 // Format the bumped event info (show number once, then name without number)
                 const bumpedNameClean = stripEventNumber(event.bumped_event_name, event.bumped_event_number);
@@ -1296,8 +1298,9 @@
 
             // Show the section and render failed events
             manualInterventionSection.style.display = 'block';
-            let html = '<table class="event-table">';
-            html += '<thead><tr><th>Event</th><th>Type</th><th>Event Period</th><th>Failure Reason</th><th>Action</th></tr></thead><tbody>';
+            let html = '<table class="event-table" aria-describedby="failed-events-desc">';
+            html += '<caption id="failed-events-desc" class="sr-only">List of events that could not be automatically scheduled and require manual intervention</caption>';
+            html += '<thead><tr><th scope="col">Event</th><th scope="col">Type</th><th scope="col">Event Period</th><th scope="col">Failure Reason</th><th scope="col">Action</th></tr></thead><tbody>';
             data.failed.forEach(event => {
                 html += `<tr>
                     <td><strong>${event.event_name}</strong></td>
