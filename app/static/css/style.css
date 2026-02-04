@@ -745,14 +745,26 @@ tbody tr:last-child td {
     color: var(--text-white);
 }
 
+/* ==========================================================================
+   Button Size Variants (FLAW-011)
+   ========================================================================== */
+
 .btn-sm {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-small);
+  height: 2rem;           /* 32px */
+  padding: 0.25rem 0.75rem;
+  font-size: var(--font-size-sm);
+}
+
+.btn {
+  height: var(--btn-height);  /* 40px */
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-size: var(--btn-font-size);
 }
 
 .btn-lg {
-    padding: var(--spacing-md) var(--spacing-lg);
-    font-size: 1.1rem;
+  height: 3rem;           /* 48px */
+  padding: 0.75rem 1.5rem;
+  font-size: var(--font-size-md);
 }
 
 /* Lock/Unlock Button Styles */
