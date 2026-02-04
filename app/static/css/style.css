@@ -1816,4 +1816,31 @@ input:focus {
   }
 }
 
+/* ==========================================================================
+   Interactive Element Cursor Styles (FLAW-006)
+   ========================================================================== */
 
+/* Elements with click handlers or interactive roles */
+[onclick],
+[role="button"],
+[tabindex]:not([tabindex="-1"]) {
+  cursor: pointer;
+}
+
+/* Interactive cards and list items */
+.stat-card,
+.event-card,
+.unscheduled-item,
+.core-event-item,
+.employee-card,
+.day-card,
+.notification-item,
+.clickable {
+  cursor: pointer;
+}
+
+/* Ensure buttons always have pointer cursor */
+button:not(:disabled),
+.btn:not(.btn-disabled) {
+  cursor: pointer;
+}
