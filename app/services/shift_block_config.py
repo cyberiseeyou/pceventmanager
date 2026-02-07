@@ -50,21 +50,40 @@ def _get_shift_block_from_db(block_num: int) -> Optional[Dict]:
 class ShiftBlockConfig:
     """
     Load and manage shift blocks from environment variables.
-    
-    Active blocks (1-8): Used for scheduling new Core events
+
+    Active blocks (1-8): Used for scheduling new Core events (2 per start time)
+    Overflow blocks (9-12): Used when 3 people share a start time
     Legacy slots (1-4): Display-only for backward compatibility
-    
-    Block Assignment Order:
+
+    Block Triplets (grouped by start time):
+    - Start time 1: Blocks 1, 2, 9   (person 1=lead, person 2, person 3=overflow)
+    - Start time 2: Blocks 3, 4, 10
+    - Start time 3: Blocks 5, 6, 11
+    - Start time 4: Blocks 7, 8, 12
+
+    Block Assignment Order (legacy sequential):
     - First 8 events: Sequential order 1, 2, 3, 4, 5, 6, 7, 8
     - Overflow (9+ events): Priority order 1, 3, 5, 7, 2, 4, 6, 8
     """
-    
+
     # Sequential order for first 8 assignments
     BLOCK_SEQUENTIAL_ORDER = [1, 2, 3, 4, 5, 6, 7, 8]
-    
+
     # Priority order for overflow assignments (9+ events on same day)
     # Odd blocks first (different arrive times), then even blocks
     BLOCK_OVERFLOW_ORDER = [1, 3, 5, 7, 2, 4, 6, 8]
+
+    # Block triplets: each start time group gets up to 3 blocks
+    # [primary lead block, second person block, overflow/third person block]
+    BLOCK_TRIPLETS = [
+        [1, 2, 9],    # First start time group
+        [3, 4, 10],   # Second start time group
+        [5, 6, 11],   # Third start time group
+        [7, 8, 12],   # Fourth start time group
+    ]
+
+    # Total number of blocks (including overflow)
+    MAX_BLOCK_NUM = 12
     
     # Cache for loaded blocks
     _blocks_cache: Optional[List[Dict]] = None
@@ -75,23 +94,28 @@ class ShiftBlockConfig:
     @classmethod
     def get_all_blocks(cls) -> List[Dict]:
         """
-        Get all 8 active shift blocks with their times.
-        
+        Get all shift blocks (1-12) with their times.
+
+        Blocks 1-8 are standard blocks (2 per start time).
+        Blocks 9-12 are overflow blocks (3rd person at each start time).
+
         Returns:
-            List of dicts with keys: block, arrive, on_floor, lunch_begin, 
+            List of dicts with keys: block, arrive, on_floor, lunch_begin,
             lunch_end, off_floor, depart
         """
         if cls._blocks_cache is not None:
             return cls._blocks_cache
-        
+
         blocks = []
-        for block_num in range(1, 9):
+        for block_num in range(1, cls.MAX_BLOCK_NUM + 1):
             block = cls._load_block(block_num)
             if block:
                 blocks.append(block)
             else:
-                logger.warning(f"Shift block {block_num} not fully configured in .env")
-        
+                if block_num <= 8:
+                    logger.warning(f"Shift block {block_num} not fully configured in .env")
+                # Blocks 9-12 are optional, don't warn if missing
+
         cls._blocks_cache = blocks
         return blocks
     
@@ -149,14 +173,14 @@ class ShiftBlockConfig:
     @classmethod
     def get_all_blocks_from_env(cls) -> List[Dict]:
         """
-        Get all 8 shift blocks directly from environment variables.
+        Get all shift blocks (1-12) directly from environment variables.
         Does NOT check database. Used for displaying defaults in UI.
 
         Returns:
             List of dicts with block configuration from .env
         """
         blocks = []
-        for block_num in range(1, 9):
+        for block_num in range(1, cls.MAX_BLOCK_NUM + 1):
             block = cls._load_block_from_env(block_num)
             if block:
                 blocks.append(block)
@@ -210,17 +234,17 @@ class ShiftBlockConfig:
     @classmethod
     def get_block(cls, block_number: int) -> Optional[Dict]:
         """
-        Get a specific shift block (1-8).
-        
+        Get a specific shift block (1-12).
+
         Args:
-            block_number: Block number 1-8
-            
+            block_number: Block number 1-12 (1-8 standard, 9-12 overflow)
+
         Returns:
             Block dict or None if not found
         """
-        if not 1 <= block_number <= 8:
+        if not 1 <= block_number <= cls.MAX_BLOCK_NUM:
             return None
-        
+
         blocks = cls.get_all_blocks()
         for block in blocks:
             if block['block'] == block_number:
@@ -342,7 +366,75 @@ class ShiftBlockConfig:
         
         logger.info(f"Assigned shift block {block_num} to schedule {schedule.id}")
         return block_num
-    
+
+    @classmethod
+    def assign_blocks_for_date(cls, core_schedules, target_date, primary_lead_id=None):
+        """
+        Assign shift blocks to all Core schedules for a date using start-time grouping.
+
+        Groups schedules by their scheduled start time, then assigns blocks using
+        triplets: each start time group gets blocks from BLOCK_TRIPLETS.
+
+        For example, if 3 people are scheduled at 10:15:
+        - Person 1 (primary lead) -> Block 1
+        - Person 2 -> Block 2
+        - Person 3 -> Block 9 (overflow, same times as Block 1)
+
+        Args:
+            core_schedules: List of (schedule, event, employee) tuples for Core events
+            target_date: Date being processed
+            primary_lead_id: Optional employee ID of the Primary Lead (gets first position)
+
+        Returns:
+            Dict mapping schedule.id -> assigned block number
+        """
+        from collections import defaultdict
+        from datetime import datetime as dt
+
+        if not core_schedules:
+            return {}
+
+        # Group by start time (hour:minute)
+        time_groups = defaultdict(list)
+        for schedule, event, employee in core_schedules:
+            time_key = schedule.schedule_datetime.strftime('%H:%M')
+            time_groups[time_key].append((schedule, event, employee))
+
+        # Sort groups by start time
+        sorted_times = sorted(time_groups.keys())
+
+        logger.info(f"Block assignment for {target_date}: {len(sorted_times)} start time groups, "
+                     f"{len(core_schedules)} total Core schedules")
+
+        assignments = {}
+
+        for group_idx, time_key in enumerate(sorted_times):
+            if group_idx >= len(cls.BLOCK_TRIPLETS):
+                logger.warning(f"More than {len(cls.BLOCK_TRIPLETS)} start time groups on {target_date} "
+                               f"- no block triplet available for group {group_idx + 1} ({time_key})")
+                break
+
+            triplet = cls.BLOCK_TRIPLETS[group_idx]
+            group = time_groups[time_key]
+
+            # Sort within group: primary lead first
+            if primary_lead_id:
+                group.sort(key=lambda x: 0 if x[0].employee_id == primary_lead_id else 1)
+
+            for person_idx, (schedule, event, employee) in enumerate(group):
+                if person_idx < len(triplet):
+                    block_num = triplet[person_idx]
+                    schedule.shift_block = block_num
+                    schedule.shift_block_assigned_at = dt.utcnow()
+                    assignments[schedule.id] = block_num
+                    logger.info(f"Assigned block {block_num} to {employee.name} "
+                                f"(start time {time_key}, position {person_idx + 1}/{len(group)})")
+                else:
+                    logger.warning(f"More than 3 people at start time {time_key} on {target_date} "
+                                   f"- no block for {employee.name}")
+
+        return assignments
+
     @classmethod
     def get_schedule_datetime_for_block(cls, target_date, block_number: int):
         """

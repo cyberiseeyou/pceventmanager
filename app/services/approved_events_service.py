@@ -136,13 +136,15 @@ class ApprovedEventsService:
                         logger.info(f"  - {e.project_ref_num}: type={e.event_type}, condition={e.condition}, edr_status={e.edr_status}, is_scheduled={e.is_scheduled}")
                 
                 # Filter: Only Core events, exclude cancelled events (check both condition AND edr_status)
+                # Note: DB uses "Canceled" (American) spelling, handle both variants
+                cancelled_values = ['Cancelled', 'Canceled']
                 matching_events = self.Event.query.filter(
                     self.Event.project_name.contains(event_id_str),
                     self.Event.event_type == 'Core',
-                    self.Event.condition != 'Cancelled',
+                    self.Event.condition.notin_(cancelled_values),
                     or_(
                         self.Event.edr_status.is_(None),
-                        self.Event.edr_status != 'Cancelled'
+                        self.Event.edr_status.notin_(cancelled_values)
                     )
                 ).all()
                 
@@ -181,12 +183,14 @@ class ApprovedEventsService:
                                     logger.info(f"Event {event_id}: Searching for Juicer event on {walmart_date}, type={juicer_type}")
                                     
                                     # Search for Juicer events on this date
+                                    # Note: DB uses "Canceled" (American) spelling, handle both variants
+                                    cancelled_values = ['Cancelled', 'Canceled']
                                     query = self.Event.query.filter(
                                         self.Event.event_type.like('Juicer%'),
-                                        self.Event.condition != 'Cancelled',
+                                        self.Event.condition.notin_(cancelled_values),
                                         or_(
                                             self.Event.edr_status.is_(None),
-                                            self.Event.edr_status != 'Cancelled'
+                                            self.Event.edr_status.notin_(cancelled_values)
                                         )
                                     )
                                     

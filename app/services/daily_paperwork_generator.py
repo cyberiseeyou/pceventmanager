@@ -1108,6 +1108,22 @@ class DailyPaperworkGenerator:
         except Exception as e:
             logger.warning(f" Could not get Primary Lead: {e}")
 
+        # Pre-assign shift blocks for ALL Core schedules using start-time grouping
+        # This must happen before individual event processing to get correct block assignments
+        core_schedules = [(s, e, emp) for s, e, emp in schedules if e.event_type == 'Core']
+        if core_schedules:
+            try:
+                from app.services.shift_block_config import ShiftBlockConfig
+                logger.info(f" Assigning shift blocks for {len(core_schedules)} Core events using start-time grouping...")
+                block_assignments = ShiftBlockConfig.assign_blocks_for_date(
+                    core_schedules, target_date, primary_lead_id=primary_lead_id
+                )
+                if block_assignments:
+                    self.db.commit()
+                    logger.info(f" Assigned {len(block_assignments)} shift blocks: {block_assignments}")
+            except Exception as e:
+                logger.warning(f" Could not assign shift blocks: {e}")
+
         # List to hold all PDF paths in order
         all_pdfs = []
 
@@ -1304,25 +1320,10 @@ class DailyPaperworkGenerator:
 
                 # Get EDR PDF if we have cached data
                 if event_num and event_num in edr_data_cache:
-                    logger.info(f"Generating EDR PDF for event {event_num}...")
-                    
-                    # Auto-assign shift block if not set (for legacy events)
-                    if schedule.shift_block is None:
-                        try:
-                            from app.services.shift_block_config import ShiftBlockConfig
-                            block_num = ShiftBlockConfig.assign_next_available_block(
-                                schedule, 
-                                target_date,
-                                primary_lead_id=primary_lead_id
-                            )
-                            if block_num:
-                                logger.info(f"Auto-assigned shift block {block_num} to schedule {schedule.id}")
-                                # Commit the assignment
-                                self.db.commit()
-                        except Exception as e:
-                            logger.warning(f"Could not auto-assign shift block: {e}")
-                    
+                    logger.info(f"Generating EDR PDF for event {event_num} (shift_block={schedule.shift_block})...")
+
                     # Prepare schedule info for PDF generation (includes shift_block for times)
+                    # Block was already assigned upfront by assign_blocks_for_date()
                     schedule_info = {
                         'scheduled_date': schedule.schedule_datetime,
                         'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,

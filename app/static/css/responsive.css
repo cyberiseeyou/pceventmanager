@@ -112,7 +112,6 @@ button,
 
 /* Smooth scrolling for touch devices */
 .notifications-content,
-.nav-links,
 .modal-body,
 table {
     overflow-y: auto;
@@ -123,8 +122,20 @@ table {
 /* Desktop base styles are in style.css */
 
 /* Mobile Close Button - hidden on desktop (FLAW-014) */
+/* !important ensures it stays hidden even with stale cached CSS */
 .nav-close {
-    display: none;
+    display: none !important;
+}
+
+/* Desktop dropdown positioning - ensures absolute positioning even with stale cache */
+@media (min-width: 769px) {
+    .nav-dropdown-menu {
+        position: absolute !important;
+    }
+    .nav-dropdown--open .nav-dropdown-menu {
+        position: absolute !important;
+        z-index: 1000;
+    }
 }
 
 /* Tablet breakpoint (max-width: 1024px) */
@@ -244,7 +255,7 @@ table {
 
     /* Mobile Close Button (FLAW-014) */
     .nav-close {
-        display: flex;
+        display: flex !important;
         align-items: center;
         justify-content: center;
         position: absolute;
@@ -300,7 +311,7 @@ table {
     }
 
     .nav-dropdown-menu {
-        position: static;
+        position: static !important;
         box-shadow: none;
         border: none;
         border-radius: 0;
@@ -312,6 +323,8 @@ table {
 
     .nav-dropdown--open .nav-dropdown-menu {
         display: block;
+        position: static !important;
+        z-index: auto;
     }
 
     .nav-dropdown-item {

@@ -1039,7 +1039,7 @@
         </div>
         <div class="stat-card total" onclick="filterByAction('all')">
             <div class="count" id="statTotal">0</div>
-            <div class="label">Total Approved</div>
+            <div class="label">Total LIAs</div>
         </div>
     </div>
 
@@ -1467,15 +1467,12 @@
                 console.info('3. Events are in a different date range than the default (2 weeks)');
             }
 
-            // Update stats
-            updateStats(data.summary, currentEvents);
+            // Update stats (returns total LIA count)
+            const totalLIAs = updateStats(data.summary, currentEvents);
 
-            // Update countdown remaining count
-            const remainingCount = currentEvents.filter(e =>
-                e.local_status !== 'api_submitted' || !e.api_submitted_at
-            ).length;
+            // Update countdown remaining count to match category totals
             document.getElementById('countdownRemaining').textContent =
-                `${remainingCount} events remaining`;
+                `${totalLIAs} events remaining`;
 
             // Render view
             if (currentEvents.length > 0) {
@@ -1545,10 +1542,14 @@
             return true;
         }).length;
 
+        const totalLIAs = scanOutCount + rollScheduledCount + rollUnscheduledCount;
+
         document.getElementById('statScanOut').textContent = scanOutCount;
         document.getElementById('statRollScheduled').textContent = rollScheduledCount;
         document.getElementById('statRollUnscheduled').textContent = rollUnscheduledCount;
-        document.getElementById('statTotal').textContent = summary.total || 0;
+        document.getElementById('statTotal').textContent = totalLIAs;
+
+        return totalLIAs;
     }
 
     // Render panel view (action-based grouping)

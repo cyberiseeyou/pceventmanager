@@ -249,23 +249,31 @@ body {
 }
 
 .nav-dropdown-menu {
+    display: none;
     position: absolute;
     top: 100%;
     left: 0;
     min-width: 200px;
-    background: var(--bg-primary);
+    background: var(--bg-primary, #ffffff);
     border: 1px solid rgba(46, 76, 115, 0.1);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    z-index: var(--z-dropdown);
+    border-radius: var(--radius-lg, 8px);
+    box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.15));
+    z-index: var(--z-dropdown, 1000);
     overflow: hidden;
     animation: dropdown-fade-in 0.2s ease;
     margin-top: 4px;
     padding-top: 4px;
 }
 
+/* Show dropdown when parent has --open class (works on all screen sizes) */
+.nav-dropdown--open .nav-dropdown-menu {
+    display: block;
+    position: absolute;
+    z-index: 1000;
+}
+
 .nav-dropdown-menu[hidden] {
-    display: none;
+    display: none !important;
 }
 
 .nav-dropdown-item {

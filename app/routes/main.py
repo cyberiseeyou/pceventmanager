@@ -34,7 +34,9 @@ def dashboard():
 def unscheduled_events():
     """Events list view with filtering by condition and type"""
     from flask import current_app
+    from app.models import get_models
     db = current_app.extensions['sqlalchemy']
+    models = get_models()
     Event = models['Event']
 
     # Get filter parameters
@@ -354,7 +356,9 @@ def unscheduled_events():
 def unreported_events():
     """Display unreported events from the last 2 weeks"""
     from flask import current_app
+    from app.models import get_models
     db = current_app.extensions['sqlalchemy']
+    models = get_models()
 
     Event = models['Event']
     Schedule = models['Schedule']

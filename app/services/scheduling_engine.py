@@ -2845,8 +2845,17 @@ class SchedulingEngine:
         run.events_failed += 1
 
     def _extract_event_number(self, event_name: str) -> str:
-        """Extract first 6 digits from event name"""
+        """Extract unique event ref number from event name
+
+        Looks for the ref number in parentheses (e.g., '(260120542208)') first,
+        then falls back to first 6 digits if no parentheses found.
+        """
         import re
+        # Primary: Extract ref number from parentheses (e.g., '618491-MAP Kraft... (260120542208) - V2-CORE')
+        paren_match = re.search(r'\((\d{9,12})\)', event_name)
+        if paren_match:
+            return paren_match.group(1)
+        # Fallback: first 6 digits (legacy behavior)
         match = re.search(r'\d{6}', event_name)
         return match.group(0) if match else None
 
@@ -2865,6 +2874,9 @@ class SchedulingEngine:
         # Find matching Supervisor event using FK relationship first
         supervisor_event = None
         for event in events:
+            # Skip cancelled/expired events (defensive check)
+            if getattr(event, 'condition', None) in ('Canceled', 'Expired'):
+                continue
             if event.event_type == 'Supervisor' and not event.is_scheduled:
                 # Primary: Check if parent_event_ref_num links to this Core event
                 if hasattr(event, 'parent_event_ref_num') and event.parent_event_ref_num == core_event.project_ref_num:
@@ -2876,6 +2888,9 @@ class SchedulingEngine:
             core_event_number = self._extract_event_number(core_event.project_name)
             if core_event_number:
                 for event in events:
+                    # Skip cancelled/expired events (defensive check)
+                    if getattr(event, 'condition', None) in ('Canceled', 'Expired'):
+                        continue
                     if event.event_type == 'Supervisor' and not event.is_scheduled:
                         supervisor_event_number = self._extract_event_number(event.project_name)
                         if supervisor_event_number == core_event_number:
@@ -2985,7 +3000,12 @@ class SchedulingEngine:
         1. Core was scheduled in a previous run but Supervisor wasn't
         2. Inline Supervisor scheduling failed for some reason
         """
-        orphaned_supervisors = [e for e in events if e.event_type == 'Supervisor' and not e.is_scheduled]
+        orphaned_supervisors = [
+            e for e in events
+            if e.event_type == 'Supervisor'
+            and not e.is_scheduled
+            and getattr(e, 'condition', None) not in ('Canceled', 'Expired')  # Exclude cancelled/expired
+        ]
 
         current_app.logger.info(f"ORPHANED SUPERVISOR: Found {len(orphaned_supervisors)} unscheduled Supervisor events")
 
@@ -3027,6 +3047,7 @@ class SchedulingEngine:
                 self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
             ).filter(
                 self.Event.event_type == 'Core',
+                self.Event.condition.not_in(['Canceled', 'Expired']),  # Exclude cancelled/expired
                 self.PendingSchedule.scheduler_run_id == run.id,
                 self.PendingSchedule.failure_reason == None
             ).all()
@@ -3039,7 +3060,8 @@ class SchedulingEngine:
         permanent_schedules = self.db.query(self.Schedule).join(
             self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
         ).filter(
-            self.Event.event_type == 'Core'
+            self.Event.event_type == 'Core',
+            self.Event.condition.not_in(['Canceled', 'Expired'])  # Exclude cancelled/expired
         ).all()
 
         for s in permanent_schedules:

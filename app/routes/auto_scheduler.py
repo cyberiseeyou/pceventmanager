@@ -1713,3 +1713,198 @@ def export_run_history(run_id):
         }
     )
 
+
+@auto_scheduler_bp.route('/api/review/export')
+@require_authentication()
+def export_review_category():
+    """Export auto-schedule review category to CSV
+
+    Query Parameters:
+        run_id: Scheduler run ID (optional, defaults to latest unapproved run)
+        category: Category to export - 'newly_scheduled', 'swaps', 'failed', or 'all' (default)
+    """
+    import re
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    SchedulerRunHistory = models['SchedulerRunHistory']
+    PendingSchedule = models['PendingSchedule']
+    Event = models['Event']
+    Employee = models['Employee']
+
+    run_id = request.args.get('run_id', type=int)
+    category = request.args.get('category', 'all')
+
+    # Get the run
+    if run_id:
+        run = db.session.query(SchedulerRunHistory).get(run_id)
+    else:
+        # Get latest unapproved run
+        run = db.session.query(SchedulerRunHistory).filter(
+            SchedulerRunHistory.approved_at.is_(None),
+            SchedulerRunHistory.status == 'completed'
+        ).order_by(SchedulerRunHistory.started_at.desc()).first()
+
+    if not run:
+        return jsonify({'success': False, 'error': 'No pending run found'}), 404
+
+    # Get all pending schedules for this run
+    pending = db.session.query(PendingSchedule).filter_by(scheduler_run_id=run.id).all()
+
+    # Categorize schedules
+    newly_scheduled = []
+    swaps = []
+    failed = []
+
+    for ps in pending:
+        event = db.session.query(Event).filter_by(project_ref_num=ps.event_ref_num).first()
+        employee = db.session.query(Employee).get(ps.employee_id) if ps.employee_id else None
+
+        ps_data = {
+            'event_ref_num': ps.event_ref_num,
+            'event_name': event.project_name if event else 'Unknown',
+            'event_type': event.event_type if event else 'Unknown',
+            'start_date': event.start_datetime.strftime('%m/%d/%Y') if event and event.start_datetime else '',
+            'end_date': event.due_datetime.strftime('%m/%d/%Y') if event and event.due_datetime else '',
+            'employee_name': employee.name if employee else 'Unassigned',
+            'schedule_datetime': ps.schedule_datetime.strftime('%m/%d/%Y %I:%M %p') if ps.schedule_datetime else '',
+            'is_swap': ps.is_swap,
+            'swap_reason': ps.swap_reason or '',
+            'failure_reason': ps.failure_reason or '',
+            'bumped_event_name': '',
+            'bumped_rescheduled_to': ''
+        }
+
+        if ps.failure_reason:
+            failed.append(ps_data)
+        elif ps.is_swap:
+            # Get bumped event details
+            if ps.bumped_event_ref_num:
+                bumped_event = db.session.query(Event).filter_by(project_ref_num=ps.bumped_event_ref_num).first()
+                ps_data['bumped_event_name'] = bumped_event.project_name if bumped_event else 'Unknown'
+
+                # Find where the bumped event is being rescheduled to
+                bumped_reschedule = db.session.query(PendingSchedule).filter(
+                    PendingSchedule.scheduler_run_id == run.id,
+                    PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
+                    PendingSchedule.status != 'superseded',
+                    PendingSchedule.failure_reason.is_(None)
+                ).first()
+
+                if bumped_reschedule:
+                    bumped_employee = db.session.query(Employee).get(bumped_reschedule.employee_id) if bumped_reschedule.employee_id else None
+                    ps_data['bumped_rescheduled_to'] = f"{bumped_employee.name if bumped_employee else 'Unassigned'} on {bumped_reschedule.schedule_datetime.strftime('%m/%d/%Y %I:%M %p') if bumped_reschedule.schedule_datetime else 'N/A'}"
+                else:
+                    ps_data['bumped_rescheduled_to'] = 'Failed to reschedule'
+            swaps.append(ps_data)
+        else:
+            newly_scheduled.append(ps_data)
+
+    # Create CSV based on category
+    output = StringIO()
+    writer = csv.writer(output)
+
+    if category == 'newly_scheduled':
+        writer.writerow([
+            'Event Number', 'Event Name', 'Event Type', 'Event Period',
+            'Assigned To', 'Scheduled For'
+        ])
+        for ps in newly_scheduled:
+            writer.writerow([
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                ps['employee_name'],
+                ps['schedule_datetime']
+            ])
+        filename = f'review_newly_scheduled_run_{run.id}.csv'
+
+    elif category == 'swaps':
+        writer.writerow([
+            'Event Number', 'Event Name', 'Event Type', 'Event Period',
+            'Assigned To', 'Scheduled For', 'Bumping Event', 'Bumped Event Rescheduled To'
+        ])
+        for ps in swaps:
+            writer.writerow([
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                ps['employee_name'],
+                ps['schedule_datetime'],
+                ps['bumped_event_name'],
+                ps['bumped_rescheduled_to']
+            ])
+        filename = f'review_swaps_run_{run.id}.csv'
+
+    elif category == 'failed':
+        writer.writerow([
+            'Event Number', 'Event Name', 'Event Type', 'Event Period', 'Failure Reason'
+        ])
+        for ps in failed:
+            writer.writerow([
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                ps['failure_reason']
+            ])
+        filename = f'review_failed_run_{run.id}.csv'
+
+    else:  # all
+        writer.writerow([
+            'Category', 'Event Number', 'Event Name', 'Event Type', 'Event Period',
+            'Assigned To', 'Scheduled For', 'Bumped Event', 'Bumped Rescheduled To', 'Failure Reason'
+        ])
+        for ps in newly_scheduled:
+            writer.writerow([
+                'Newly Scheduled',
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                ps['employee_name'],
+                ps['schedule_datetime'],
+                '',
+                '',
+                ''
+            ])
+        for ps in swaps:
+            writer.writerow([
+                'Swap/Bump',
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                ps['employee_name'],
+                ps['schedule_datetime'],
+                ps['bumped_event_name'],
+                ps['bumped_rescheduled_to'],
+                ''
+            ])
+        for ps in failed:
+            writer.writerow([
+                'Failed',
+                ps['event_ref_num'],
+                ps['event_name'],
+                ps['event_type'],
+                f"{ps['start_date']} - {ps['end_date']}",
+                '',
+                '',
+                '',
+                '',
+                ps['failure_reason']
+            ])
+        filename = f'review_all_run_{run.id}.csv'
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
+

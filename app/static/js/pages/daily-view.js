@@ -1321,7 +1321,7 @@ class DailyView {
         // Trade event buttons
         document.querySelectorAll('.btn-trade-event').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
+                const scheduleId = parseInt(e.currentTarget.getAttribute('data-schedule-id'));
                 this.handleTradeEvent(scheduleId);
             });
         });

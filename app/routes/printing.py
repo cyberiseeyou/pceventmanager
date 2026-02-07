@@ -695,6 +695,7 @@ def get_complete_paperwork():
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
         # Get database session and models
+        models = get_models()
         db = current_app.extensions['sqlalchemy']
         models_dict = {
             'Event': models['Event'],

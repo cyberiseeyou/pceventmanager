@@ -3,6 +3,7 @@ API routes blueprint
 Handles all API endpoints for schedule operations, imports, exports, and AJAX calls
 """
 from flask import Blueprint, request, jsonify, current_app, make_response
+from app.models import get_models
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta, date
 import csv
@@ -667,7 +668,14 @@ def unschedule_event_quick(schedule_id):
 
     try:
         # Call Crossmark API BEFORE deleting local record
-        from app.integrations.external_api.session_api_service import session_api as external_api
+        # Use app config to get initialized service (avoids module-level singleton issues)
+        external_api = current_app.config.get('SESSION_API_SERVICE')
+        if not external_api:
+            logger.error("SESSION_API_SERVICE not initialized")
+            return jsonify({
+                'error': 'API service not available',
+                'details': 'External API service not initialized. Please restart the application.'
+            }), 500
 
         # Ensure session is authenticated
         if schedule.external_id:
@@ -1619,6 +1627,10 @@ def reschedule():
                 schedule.employee_id = new_employee_id
                 schedule.schedule_datetime = new_datetime
 
+                # Clear shift block so it gets reassigned during paperwork generation
+                schedule.shift_block = None
+                schedule.shift_block_assigned_at = None
+
                 # Update event sync status
                 event.sync_status = 'synced'
                 event.last_synced = datetime.utcnow()
@@ -2087,6 +2099,10 @@ def reschedule_event_with_validation(schedule_id):
                 old_datetime = schedule.schedule_datetime
                 old_employee_id = schedule.employee_id
                 schedule.schedule_datetime = new_datetime
+
+                # Clear shift block so it gets reassigned during paperwork generation
+                schedule.shift_block = None
+                schedule.shift_block_assigned_at = None
 
                 # Update external_id with the new schedule_event_id from Crossmark
                 if new_external_id:
@@ -2990,6 +3006,10 @@ def trade_events():
         if not schedule_1_id or not schedule_2_id:
             return jsonify({'error': 'Missing required fields: schedule_1_id and schedule_2_id'}), 400
 
+        # Ensure IDs are integers (getAttribute returns strings in JS)
+        schedule_1_id = int(schedule_1_id)
+        schedule_2_id = int(schedule_2_id)
+
         # Get both schedules
         schedule1 = Schedule.query.get(schedule_1_id)
         schedule2 = Schedule.query.get(schedule_2_id)
@@ -3760,6 +3780,243 @@ def export_schedule():
         return response
 
     except Exception as e:
+        return jsonify({'error': f'Error generating export: {str(e)}'}), 500
+
+
+@api_bp.route('/export/events')
+def export_events():
+    """Export filtered events to CSV based on condition, event_type, search, and date filters"""
+    from sqlalchemy import or_, and_
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+
+    try:
+        # Get filter parameters (same as events page)
+        condition_filter = request.args.get('condition', 'all')
+        event_type_filter = request.args.get('event_type', '')
+        date_filter = request.args.get('date_filter', '')
+        search_query = request.args.get('search', '').strip()
+
+        # Build query based on condition
+        if condition_filter == 'all':
+            query = Event.query
+        elif condition_filter == 'unstaffed':
+            query = Event.query.filter_by(condition='Unstaffed')
+        elif condition_filter == 'scheduled':
+            query = Event.query.filter_by(condition='Scheduled')
+        elif condition_filter == 'submitted':
+            query = Event.query.filter_by(condition='Submitted')
+        elif condition_filter == 'paused':
+            query = Event.query.filter_by(condition='Paused')
+        elif condition_filter == 'reissued':
+            query = Event.query.filter_by(condition='Reissued')
+        else:
+            query = Event.query
+
+        # Apply event type filter
+        if event_type_filter:
+            query = query.filter_by(event_type=event_type_filter)
+
+        # Apply date filter
+        today = date.today()
+        if date_filter == 'today':
+            query = query.filter(
+                Event.start_datetime >= datetime.combine(today, datetime.min.time()),
+                Event.start_datetime <= datetime.combine(today, datetime.max.time())
+            )
+        elif date_filter == 'tomorrow':
+            tomorrow = today + timedelta(days=1)
+            query = query.filter(
+                Event.start_datetime >= datetime.combine(tomorrow, datetime.min.time()),
+                Event.start_datetime <= datetime.combine(tomorrow, datetime.max.time())
+            )
+        elif date_filter == 'week':
+            week_from_now = today + timedelta(days=7)
+            query = query.filter(
+                Event.start_datetime >= datetime.combine(today, datetime.min.time()),
+                Event.start_datetime <= datetime.combine(week_from_now, datetime.max.time())
+            )
+
+        # Apply search filter (simplified version of the events page search)
+        if search_query:
+            search_terms = [term.strip() for term in search_query.split(',') if term.strip()]
+            search_conditions = []
+
+            def parse_search_date(date_str, year_hint=today.year):
+                """Parse date string in various formats"""
+                date_str = date_str.strip()
+                for sep in ['/', '-']:
+                    if sep in date_str:
+                        parts = date_str.split(sep)
+                        if len(parts) == 2:
+                            month, day = int(parts[0]), int(parts[1])
+                            return date(year_hint, month, day)
+                        elif len(parts) == 3:
+                            month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
+                            if year < 100:
+                                year = 2000 + year if year < 50 else 1900 + year
+                            return date(year, month, day)
+                return None
+
+            for term in search_terms:
+                term_conditions = []
+                original_term = term
+                date_type = 'start'
+
+                # Check for date prefix
+                if term.startswith('s:') and not term.startswith('sc:'):
+                    date_type = 'start'
+                    term = term[2:].strip()
+                elif term.startswith('sc:'):
+                    date_type = 'scheduled'
+                    term = term[3:].strip()
+                elif term.startswith('e:') or term.startswith('d:'):
+                    date_type = 'due'
+                    term = term[2:].strip()
+
+                # Check for date range
+                if ' to ' in term.lower():
+                    try:
+                        parts = re.split(r'\s+to\s+', term, flags=re.IGNORECASE)
+                        if len(parts) == 2:
+                            start_date = parse_search_date(parts[0])
+                            end_date = parse_search_date(parts[1])
+                            if start_date and end_date:
+                                if date_type == 'scheduled':
+                                    scheduled_refs = db.session.query(Schedule.event_ref_num).filter(
+                                        db.func.date(Schedule.schedule_datetime) >= start_date,
+                                        db.func.date(Schedule.schedule_datetime) <= end_date
+                                    ).distinct()
+                                    term_conditions.append(Event.project_ref_num.in_(scheduled_refs))
+                                elif date_type == 'start':
+                                    term_conditions.append(and_(
+                                        db.func.date(Event.start_datetime) >= start_date,
+                                        db.func.date(Event.start_datetime) <= end_date
+                                    ))
+                                elif date_type == 'due':
+                                    term_conditions.append(and_(
+                                        db.func.date(Event.due_datetime) >= start_date,
+                                        db.func.date(Event.due_datetime) <= end_date
+                                    ))
+                    except (ValueError, IndexError, AttributeError):
+                        pass
+                elif '/' in term or '-' in term:
+                    try:
+                        search_date = parse_search_date(term)
+                        if search_date:
+                            if date_type == 'scheduled':
+                                scheduled_refs = db.session.query(Schedule.event_ref_num).filter(
+                                    db.func.date(Schedule.schedule_datetime) == search_date
+                                ).distinct()
+                                term_conditions.append(Event.project_ref_num.in_(scheduled_refs))
+                            elif date_type == 'start':
+                                term_conditions.append(db.func.date(Event.start_datetime) == search_date)
+                            elif date_type == 'due':
+                                term_conditions.append(db.func.date(Event.due_datetime) == search_date)
+                    except (ValueError, IndexError, AttributeError):
+                        pass
+                elif original_term.isupper() and len(original_term) > 1:
+                    # Employee name or location search
+                    employee_ids = db.session.query(Employee.id).filter(
+                        Employee.name.ilike(f'%{original_term}%')
+                    )
+                    scheduled_by_employee = db.session.query(Schedule.event_ref_num).filter(
+                        Schedule.employee_id.in_(employee_ids)
+                    ).distinct()
+                    location_condition = or_(
+                        Event.store_name.ilike(f'%{original_term}%'),
+                        Event.location_mvid.ilike(f'%{original_term}%')
+                    )
+                    term_conditions.append(or_(
+                        Event.project_ref_num.in_(scheduled_by_employee),
+                        location_condition
+                    ))
+                elif original_term.isdigit():
+                    term_conditions.append(Event.project_name.contains(original_term))
+                else:
+                    term_conditions.append(Event.project_name.ilike(f'%{original_term}%'))
+
+                if term_conditions:
+                    search_conditions.append(or_(*term_conditions))
+
+            if search_conditions:
+                query = query.filter(and_(*search_conditions))
+
+        # Order and fetch events
+        events = query.order_by(Event.start_datetime.asc()).all()
+
+        # Build CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Headers
+        writer.writerow([
+            'Event Number', 'Project Name', 'Event Type', 'Condition',
+            'Location MVID', 'Store Number', 'Store Name',
+            'Start Date', 'Due Date', 'Estimated Time (min)',
+            'Assigned Employee', 'Schedule Date/Time'
+        ])
+
+        # Data rows
+        for event in events:
+            # Get schedule info if exists
+            schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
+            if schedules:
+                for schedule in schedules:
+                    employee = Employee.query.get(schedule.employee_id)
+                    writer.writerow([
+                        event.project_ref_num,
+                        event.project_name,
+                        event.event_type,
+                        event.condition,
+                        event.location_mvid or '',
+                        event.store_number or '',
+                        event.store_name or '',
+                        event.start_datetime.strftime('%m/%d/%Y'),
+                        event.due_datetime.strftime('%m/%d/%Y'),
+                        event.estimated_time or '',
+                        employee.name if employee else '',
+                        schedule.schedule_datetime.strftime('%m/%d/%Y %I:%M %p') if schedule.schedule_datetime else ''
+                    ])
+            else:
+                writer.writerow([
+                    event.project_ref_num,
+                    event.project_name,
+                    event.event_type,
+                    event.condition,
+                    event.location_mvid or '',
+                    event.store_number or '',
+                    event.store_name or '',
+                    event.start_datetime.strftime('%m/%d/%Y'),
+                    event.due_datetime.strftime('%m/%d/%Y'),
+                    event.estimated_time or '',
+                    '',
+                    ''
+                ])
+
+        # Build filename based on filters
+        filename_parts = ['Events']
+        if condition_filter != 'all':
+            filename_parts.append(condition_filter.capitalize())
+        if event_type_filter:
+            filename_parts.append(event_type_filter.replace(' ', '_'))
+        filename = '_'.join(filename_parts) + '.csv'
+
+        output.seek(0)
+        csv_data = output.getvalue()
+        output.close()
+
+        response = make_response(csv_data)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+
+        return response
+
+    except Exception as e:
+        logger.error(f'Error exporting events: {e}')
         return jsonify({'error': f'Error generating export: {str(e)}'}), 500
 
 
