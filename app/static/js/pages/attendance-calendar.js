@@ -98,22 +98,29 @@ class AttendanceCalendar {
     }
 
     /**
+     * Parse the selected date string into {year, month} without timezone issues
+     */
+    parseSelectedDate() {
+        const parts = this.selectedDate.split('-');
+        return {
+            year: parseInt(parts[0], 10),
+            month: parseInt(parts[1], 10) - 1 // 0-indexed for JS Date compatibility
+        };
+    }
+
+    /**
      * Load attendance data from API
      */
     async loadAttendanceData() {
         console.log('[AttendanceCalendar] Loading attendance data...');
 
         try {
-            // Parse selected date to get month boundaries
-            const date = new Date(this.selectedDate);
-            const year = date.getFullYear();
-            const month = date.getMonth(); // 0-indexed
-
-            const startOfMonth = new Date(year, month, 1);
-            const endOfMonth = new Date(year, month + 1, 0);
+            // Parse selected date without timezone conversion
+            const { year, month } = this.parseSelectedDate();
+            const monthStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
             // Build API URL
-            let apiUrl = `/api/attendance/month/${startOfMonth.toISOString().split('T')[0]}`;
+            let apiUrl = `/api/attendance/month/${monthStr}`;
             if (this.selectedEmployeeId) {
                 apiUrl += `?employee_id=${this.selectedEmployeeId}`;
             }
@@ -153,10 +160,8 @@ class AttendanceCalendar {
         const calendarGrid = document.getElementById('calendar-grid');
         if (!calendarGrid) return;
 
-        // Parse selected date
-        const date = new Date(this.selectedDate);
-        const year = date.getFullYear();
-        const month = date.getMonth();
+        // Parse selected date without timezone issues
+        const { year, month } = this.parseSelectedDate();
 
         // Get first day of month and total days
         const firstDay = new Date(year, month, 1);
@@ -313,7 +318,8 @@ class AttendanceCalendar {
      * Get ARIA label for date
      */
     getDateAriaLabel(day, dateStr, dayData) {
-        const date = new Date(dateStr);
+        const parts = dateStr.split('-');
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
         const monthName = date.toLocaleDateString('en-US', { month: 'long' });
 

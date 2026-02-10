@@ -129,6 +129,10 @@ class SessionAPIService:
                     self.authenticated = True
                     self.last_login = datetime.utcnow()
                     self.logger.info("Successfully authenticated user: %s (HTML response with Scheduling page)", self.username)
+                elif 'text/html' in content_type:
+                    # HTML response without "Scheduling" = login page returned (auth failed)
+                    self.logger.warning("Authentication failed: HTML response without Scheduling page (likely invalid credentials)")
+                    return False
                 else:
                     # Try to parse as JSON for other response types
                     try:
@@ -152,12 +156,11 @@ class SessionAPIService:
                             self.logger.warning("Authentication failed: %s", auth_response)
                             return False
                     except ValueError:
-                        # Non-JSON response - treat as successful if we got here
-                        self.authenticated = True
-                        self.last_login = datetime.utcnow()
-                        self.logger.info("Authentication successful (non-JSON response)")
+                        # Non-JSON, non-HTML response - cannot confirm authentication
+                        self.logger.warning("Authentication failed: unexpected response format (non-JSON, non-HTML)")
+                        return False
 
-                # Extract PHPSESSID from cookies
+                # Extract PHPSESSID from cookies (only reached on success paths)
                 self.phpsessid = response.cookies.get('PHPSESSID')
                 if not self.phpsessid:
                     # Try to get from session cookies
@@ -842,34 +845,24 @@ class SessionAPIService:
 
         self.logger.info(f"Starting PARALLEL fetch from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
-        # Step 1: Fetch planning events in parallel (0-70%)
+        # Step 1: Fetch planning events in parallel chunks
         planning_events = self._fetch_planning_events_parallel(
             start_date, end_date,
-            progress_callback=lambda pct, status: progress_callback(int(pct * 0.7), status) if progress_callback else None
+            progress_callback=lambda pct, status: progress_callback(pct, "Pulling events") if progress_callback else None
         )
 
-        if progress_callback:
-            progress_callback(70, "Fetching scheduling endpoints...")
-
-        # Step 2: Fetch scheduling endpoints in parallel (70-80%)
+        # Step 2: Fetch scheduling endpoints in parallel (fast, ~2-3s)
         scheduling_events = self._fetch_scheduling_endpoints_parallel()
 
-        if progress_callback:
-            progress_callback(80, "Combining results...")
-
-        # Step 3: Combine and deduplicate (80-95%)
+        # Step 3: Combine and deduplicate
         all_events = planning_events + scheduling_events
-
-        if progress_callback:
-            progress_callback(95, "Deduplicating events...")
-
         unique_events = self._deduplicate_by_id(all_events)
 
         elapsed = time.time() - start_time
         self.logger.info(f"PARALLEL fetch complete: {len(unique_events)} unique events in {elapsed:.1f}s")
 
         if progress_callback:
-            progress_callback(100, f"Complete: {len(unique_events)} events")
+            progress_callback(100, "Pulling events")
 
         return {
             'mplans': unique_events,
@@ -921,8 +914,8 @@ class SessionAPIService:
                     completed += 1
 
                     if progress_callback:
-                        pct = int((completed / len(chunks)) * 100)
-                        progress_callback(pct, f"Fetched {completed}/{len(chunks)} chunks ({len(all_events)} events so far)")
+                        pct = round((completed / len(chunks)) * 100)
+                        progress_callback(pct, f"{completed}/{len(chunks)} chunks")
 
                     self.logger.debug(f"Chunk {chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}: {len(events)} events")
 

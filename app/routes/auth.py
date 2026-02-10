@@ -220,19 +220,7 @@ def login():
             # Attempt authentication with Crossmark API
             current_app.logger.info(f"Attempting authentication for user: {username}")
 
-            # Development mode bypass - allow login with any credentials
-            is_dev_mode = (
-                current_app.config.get('DEBUG', False) or
-                current_app.config.get('ENV') == 'development' or
-                current_app.config.get('FLASK_ENV') == 'development' or
-                current_app.config.get('TESTING', False)
-            )
-
-            if is_dev_mode:
-                current_app.logger.info("Development mode: bypassing external API authentication")
-                auth_success = True
-            else:
-                auth_success = external_api.login()
+            auth_success = external_api.login()
 
             if auth_success:
                 # Get user information
@@ -332,7 +320,7 @@ def login():
                     return jsonify({
                         'success': False,
                         'error': error_message
-                    }), 401
+                    })
                 else:
                     flash(error_message, 'error')
                     return redirect(url_for('auth.login_page'))
@@ -352,7 +340,7 @@ def login():
             return jsonify({
                 'success': False,
                 'error': error_message
-            }), 500
+            })
         else:
             flash(error_message, 'error')
             return redirect(url_for('auth.login_page'))

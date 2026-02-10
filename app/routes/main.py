@@ -734,8 +734,8 @@ def attendance_calendar(employee_id=None):
     Query params:
         date: Date string in 'YYYY-MM-DD' format for month selection
     """
-    from flask import current_app
-    db = current_app.extensions['sqlalchemy']
+    from app.models import get_models
+    models = get_models()
 
     # Get models
     Employee = models['Employee']
@@ -793,7 +793,9 @@ def attendance_calendar(employee_id=None):
 def print_schedule_by_date(date):
     """Get schedule data for printing for a specific date"""
     from flask import current_app
+    from app.models import get_models
     db = current_app.extensions['sqlalchemy']
+    models = get_models()
     Schedule = models['Schedule']
     Event = models['Event']
     Employee = models['Employee']

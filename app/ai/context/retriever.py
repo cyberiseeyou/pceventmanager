@@ -330,14 +330,14 @@ class ContextRetriever:
 
         holidays = self.db.query(CompanyHoliday).filter(
             and_(
-                CompanyHoliday.date >= start_date,
-                CompanyHoliday.date <= end_date
+                CompanyHoliday.holiday_date >= start_date,
+                CompanyHoliday.holiday_date <= end_date
             )
         ).all()
 
         return [
             {
-                "date": hol.date.isoformat(),
+                "date": hol.holiday_date.isoformat(),
                 "name": hol.name,
             }
             for hol in holidays

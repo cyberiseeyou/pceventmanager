@@ -4,6 +4,7 @@ Handles all API endpoints for schedule operations, imports, exports, and AJAX ca
 """
 from flask import Blueprint, request, jsonify, current_app, make_response
 from app.models import get_models
+from app.constants import INACTIVE_CONDITIONS
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta, date
 import csv
@@ -410,7 +411,13 @@ def get_daily_events(date):
         if schedule.event.event_type == 'Supervisor':
             match = re.match(r'^(\d{6})-', schedule.event.project_name or '')
             if match:
-                supervisor_index[match.group(1)] = schedule
+                event_number = match.group(1)
+                existing = supervisor_index.get(event_number)
+                # Prefer non-cancelled supervisor when duplicates exist (reissued events)
+                existing_cancelled = existing and existing.event.condition in INACTIVE_CONDITIONS
+                current_active = schedule.event.condition not in INACTIVE_CONDITIONS if schedule.event.condition else True
+                if not existing or (existing_cancelled and current_active):
+                    supervisor_index[event_number] = schedule
 
     # Process all schedules with O(1) Supervisor lookups
     for schedule in schedules:
@@ -1207,6 +1214,7 @@ def get_event_allowed_times(event_type):
             try:
                 target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 db = current_app.extensions['sqlalchemy']
+                models = get_models()
                 Schedule = models['Schedule']
                 
                 for t_str in unique_times:

@@ -7,6 +7,7 @@ class LoadingProgressManager {
         this.taskId = config.taskId;
         this.redirectUrl = config.redirectUrl;
         this.eventSource = null;
+        this.maxPercentage = 0;
 
         // DOM elements
         this.progressBar = document.getElementById('progressBar');
@@ -129,22 +130,28 @@ class LoadingProgressManager {
             percentage = 100;
         }
 
-        this.progressBar.style.width = `${Math.round(percentage)}%`;
-        this.progressPercentage.textContent = `${Math.round(percentage)}%`;
+        // Never let the progress bar regress
+        percentage = Math.round(percentage);
+        if (percentage < this.maxPercentage && data.status !== 'error') {
+            percentage = this.maxPercentage;
+        }
+        this.maxPercentage = percentage;
+
+        this.progressBar.style.width = `${percentage}%`;
+        this.progressPercentage.textContent = `${percentage}%`;
 
         // Update current step text
         this.currentStepText.textContent = data.step_label || 'Processing...';
 
-        // Show processing count for steps with progress data
-        // Step 1: Fetching chunks, Step 4: Processing events
-        if ((data.current_step === 1 || data.current_step === 4) && data.total > 0) {
+        // Show processing detail for steps with progress data
+        if (data.current_step === 1 && data.total > 0) {
+            const pct = Math.round((data.processed || 0) / data.total * 100);
+            this.currentStepDetail.textContent = `${pct}%`;
+            this.currentStepDetail.style.display = 'block';
+        } else if (data.current_step === 4 && data.total > 0) {
             const processed = data.processed || 0;
-            if (data.current_step === 1) {
-                this.currentStepDetail.textContent = `${processed}% complete`;
-            } else {
-                this.currentStepDetail.textContent =
-                    `${processed.toLocaleString()} of ${data.total.toLocaleString()} events`;
-            }
+            this.currentStepDetail.textContent =
+                `${processed.toLocaleString()} of ${data.total.toLocaleString()} events`;
             this.currentStepDetail.style.display = 'block';
         } else {
             this.currentStepDetail.style.display = 'none';

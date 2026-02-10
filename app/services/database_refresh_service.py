@@ -65,7 +65,9 @@ class DatabaseRefreshService:
             # Step 1: Fetching events from API
             self._update_progress(
                 self.STEP_FETCHING,
-                'Fetching events from Crossmark API'
+                'Pulling events',
+                processed=0,
+                total=100
             )
 
             current_app.logger.info("Starting database refresh from Crossmark API")
@@ -75,7 +77,7 @@ class DatabaseRefreshService:
                 """Report API fetch progress as part of STEP_FETCHING"""
                 self._update_progress(
                     self.STEP_FETCHING,
-                    f'Fetching events: {status}',
+                    'Pulling events',
                     processed=percent,
                     total=100
                 )
