@@ -1,3 +1,11 @@
+{#
+  Template: settings.html
+  Route: admin.settings (GET /admin/settings)
+
+  Context variables:
+    settings     (dict) - System settings keyed by setting name
+    event_times  (dict) - Event start/end times keyed by "{type}_start_time"/"{type}_end_time"
+#}
 {% extends "base.html" %}
 
 {% block title %}System Settings - Product Connections Scheduler{% endblock %}
@@ -115,7 +123,7 @@
                     style="max-width: 500px; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
                     <div class="modal-header">
                         <h4 id="holiday-modal-title">Add Store Closure</h4>
-                        <button type="button" class="modal-close" onclick="closeHolidayModal()">&times;</button>
+                        <button type="button" class="modal-close" data-action="close-holiday-modal">&times;</button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" id="holiday-id">
@@ -145,8 +153,8 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" onclick="closeHolidayModal()">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="saveHoliday()">Save</button>
+                        <button type="button" class="btn btn-secondary" data-action="close-holiday-modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" data-action="save-holiday">Save</button>
                     </div>
                 </div>
             </div>
@@ -211,75 +219,79 @@
             <p class="section-description">Configure which event types the auto-scheduler should process automatically</p>
 
             <div class="event-type-group">
-                <h4>Enabled Event Types</h4>
-                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
-                    Select which event types should be automatically scheduled. Unchecked types will require manual assignment.
-                </p>
+                <fieldset style="border: none; padding: 0; margin: 0;">
+                    <legend style="font-size: 1.1em; font-weight: bold; color: #2E4C73; margin-bottom: 15px; border-bottom: 2px solid #2E4C73; padding-bottom: 8px; display: block; width: 100%;">Enabled Event Types</legend>
+                    <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                        Select which event types should be automatically scheduled. Unchecked types will require manual assignment.
+                    </p>
 
-                <div class="event-type-toggles" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_core" name="enabled_event_types" value="Core" checked>
-                            <span class="toggle-label">Core Events</span>
-                        </label>
+                    <div class="event-type-toggles" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_core" name="enabled_event_types" value="Core" checked>
+                                <span class="toggle-label">Core Events</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_juicer" name="enabled_event_types" value="Juicer" checked>
+                                <span class="toggle-label">Juicer Events</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_freeosk" name="enabled_event_types" value="Freeosk" checked>
+                                <span class="toggle-label">Freeosk Events</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_digital_setup" name="enabled_event_types" value="Digital Setup" checked>
+                                <span class="toggle-label">Digital Setup</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_digital_refresh" name="enabled_event_types" value="Digital Refresh" checked>
+                                <span class="toggle-label">Digital Refresh</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_digital_teardown" name="enabled_event_types" value="Digital Teardown" checked>
+                                <span class="toggle-label">Digital Teardown</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_supervisor" name="enabled_event_types" value="Supervisor" checked>
+                                <span class="toggle-label">Supervisor Events</span>
+                            </label>
+                        </div>
+                        <div class="event-type-toggle-item">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="auto_schedule_other" name="enabled_event_types" value="Other" checked>
+                                <span class="toggle-label">Other Events</span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_juicer" name="enabled_event_types" value="Juicer" checked>
-                            <span class="toggle-label">Juicer Events</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_freeosk" name="enabled_event_types" value="Freeosk" checked>
-                            <span class="toggle-label">Freeosk Events</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_digital_setup" name="enabled_event_types" value="Digital Setup" checked>
-                            <span class="toggle-label">Digital Setup</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_digital_refresh" name="enabled_event_types" value="Digital Refresh" checked>
-                            <span class="toggle-label">Digital Refresh</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_digital_teardown" name="enabled_event_types" value="Digital Teardown" checked>
-                            <span class="toggle-label">Digital Teardown</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_supervisor" name="enabled_event_types" value="Supervisor" checked>
-                            <span class="toggle-label">Supervisor Events</span>
-                        </label>
-                    </div>
-                    <div class="event-type-toggle-item">
-                        <label class="toggle-container">
-                            <input type="checkbox" id="auto_schedule_other" name="enabled_event_types" value="Other" checked>
-                            <span class="toggle-label">Other Events</span>
-                        </label>
-                    </div>
-                </div>
+                </fieldset>
             </div>
 
             <div class="event-type-group" style="margin-top: 20px;">
-                <h4>Scheduling Options</h4>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <label class="toggle-container">
-                        <input type="checkbox" id="auto_schedule_on_import" name="auto_schedule_on_import">
-                        <span class="toggle-label">Auto-schedule events when imported from Walmart</span>
-                    </label>
-                    <label class="toggle-container">
-                        <input type="checkbox" id="require_approval" name="require_approval" checked>
-                        <span class="toggle-label">Require approval before finalizing auto-scheduled assignments</span>
-                    </label>
-                </div>
+                <fieldset style="border: none; padding: 0; margin: 0;">
+                    <legend style="font-size: 1.1em; font-weight: bold; color: #2E4C73; margin-bottom: 15px; border-bottom: 2px solid #2E4C73; padding-bottom: 8px; display: block; width: 100%;">Scheduling Options</legend>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="auto_schedule_on_import" name="auto_schedule_on_import">
+                            <span class="toggle-label">Auto-schedule events when imported from Walmart</span>
+                        </label>
+                        <label class="toggle-container">
+                            <input type="checkbox" id="require_approval" name="require_approval" checked>
+                            <span class="toggle-label">Require approval before finalizing auto-scheduled assignments</span>
+                        </label>
+                    </div>
+                </fieldset>
             </div>
 
             <div class="form-actions" style="margin-top: 20px;">
@@ -678,6 +690,42 @@
 </style>
 
 <script>
+    // Delegated click listener for all data-action buttons
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+
+        const action = target.dataset.action;
+
+        switch (action) {
+            case 'close-holiday-modal':
+                if (window.closeHolidayModal) closeHolidayModal();
+                break;
+            case 'save-holiday':
+                if (window.saveHoliday) saveHoliday();
+                break;
+            case 'edit-holiday':
+                if (window.editHoliday) editHoliday(parseInt(target.dataset.holidayId));
+                break;
+            case 'delete-holiday':
+                if (window.deleteHoliday) deleteHoliday(parseInt(target.dataset.holidayId), target.dataset.holidayName);
+                break;
+            case 'delete-template':
+                if (window.deleteTemplate) deleteTemplate(parseInt(target.dataset.templateId));
+                break;
+        }
+    });
+
+    // Delegated change listener for data-action="toggle-template"
+    document.addEventListener('change', function(e) {
+        const target = e.target.closest('[data-action="toggle-template"]');
+        if (!target) return;
+
+        if (window.toggleTemplate) {
+            toggleTemplate(parseInt(target.dataset.templateId), target.checked);
+        }
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('settings-form');
         const saveStatus = document.getElementById('save-status');
@@ -890,10 +938,10 @@
                         ${holiday.notes ? `<span class="template-filename" style="color: #888; font-size: 11px; font-style: italic;">${holiday.notes}</span>` : ''}
                     </div>
                     <div class="template-actions-inline">
-                        <button type="button" class="btn btn-small btn-outline" onclick="editHoliday(${holiday.id})" title="Edit">
+                        <button type="button" class="btn btn-small btn-outline" data-action="edit-holiday" data-holiday-id="${holiday.id}" title="Edit">
                             ✏️
                         </button>
-                        <button type="button" class="btn btn-small btn-danger" onclick="deleteHoliday(${holiday.id}, '${holiday.name.replace(/'/g, "\\'")}')" title="Delete">
+                        <button type="button" class="btn btn-small btn-danger" data-action="delete-holiday" data-holiday-id="${holiday.id}" data-holiday-name="${holiday.name.replace(/"/g, '&quot;')}" title="Delete">
                             🗑️
                         </button>
                     </div>
@@ -1093,10 +1141,10 @@
                 <div class="template-actions-group">
                     <label class="template-toggle">
                         <input type="checkbox" ${template.is_active ? 'checked' : ''}
-                               onchange="toggleTemplate(${template.id}, this.checked)">
+                               data-action="toggle-template" data-template-id="${template.id}">
                         <span class="template-toggle-slider"></span>
                     </label>
-                    <button type="button" class="btn-delete-template" onclick="deleteTemplate(${template.id})">
+                    <button type="button" class="btn-delete-template" data-action="delete-template" data-template-id="${template.id}">
                         Delete
                     </button>
                 </div>

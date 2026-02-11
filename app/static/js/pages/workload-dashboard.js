@@ -10,6 +10,16 @@
 let workloadChart = null;
 
 /**
+ * Escape HTML special characters to prevent XSS
+ * @param {*} text - Value to escape
+ * @returns {string} Escaped string
+ */
+function escapeHtml(text) {
+    if (text == null) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+/**
  * Initialize dashboard functionality when DOM is ready
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -257,12 +267,12 @@ function populateTable(data) {
   data.employees.forEach(emp => {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>${emp.name}</td>
+      <td>${escapeHtml(emp.name)}</td>
       <td>${emp.event_count}</td>
       <td>${emp.total_hours}</td>
       <td>
-        <span class="status-badge status-${emp.status}">
-          ${emp.status.toUpperCase()}
+        <span class="status-badge status-${escapeHtml(emp.status)}">
+          ${escapeHtml(emp.status).toUpperCase()}
         </span>
       </td>
     `;

@@ -171,7 +171,7 @@
         <div id="request-history">
             <p>Successful requests will appear here with generated code...</p>
         </div>
-        <button onclick="clearHistory()" class="btn btn-outline">Clear History</button>
+        <button data-action="clear-history" class="btn btn-outline">Clear History</button>
     </div>
 {% endblock %}
 
@@ -306,5 +306,16 @@ function addToHistory(method, url, result) {
 function clearHistory() {
     document.getElementById('request-history').innerHTML = '<p>Request history cleared...</p>';
 }
+
+document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.dataset.action;
+    switch (action) {
+        case 'clear-history':
+            clearHistory();
+            break;
+    }
+});
 </script>
 {% endblock %}

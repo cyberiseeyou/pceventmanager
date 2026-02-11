@@ -386,7 +386,7 @@
                     </button>
                     <button class="btn-unschedule" data-schedule-id="{{ item.schedule.id }}"
                         data-event-name="{{ item.event.project_name|escape }}"
-                        data-employee-name="{{ item.employee.name|escape }}" onclick="unscheduleEvent(this)">
+                        data-employee-name="{{ item.employee.name|escape }}" data-action="unschedule-event">
                         Unschedule
                     </button>
                 </div>
@@ -450,8 +450,8 @@
             </form>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn-secondary" onclick="closeReissueModal()">Cancel</button>
-            <button type="button" class="btn-primary" onclick="submitReissue(event)">Reissue Event</button>
+            <button type="button" class="btn-secondary" data-action="close-reissue-modal">Cancel</button>
+            <button type="button" class="btn-primary" data-action="submit-reissue">Reissue Event</button>
         </div>
     </div>
 </div>
@@ -460,6 +460,11 @@
 
 {% block scripts %}
 <script>
+    function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     let currentScheduleId = null;
     let currentEmployeeId = null;
     let currentEventType = null;
@@ -597,9 +602,9 @@
 
         // Set event info
         document.getElementById('eventInfo').innerHTML = `
-        <strong>Event:</strong> ${eventName}<br>
-        <strong>Type:</strong> ${eventType}<br>
-        <strong>Currently Scheduled To:</strong> ${employeeName}
+        <strong>Event:</strong> ${escapeHtml(eventName)}<br>
+        <strong>Type:</strong> ${escapeHtml(eventType)}<br>
+        <strong>Currently Scheduled To:</strong> ${escapeHtml(employeeName)}
     `;
 
         // Set form values
@@ -743,6 +748,24 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             closeReissueModal();
+        }
+    });
+
+    // Delegated click handler for data-action buttons
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.dataset.action;
+        switch (action) {
+            case 'unschedule-event':
+                unscheduleEvent(target);
+                break;
+            case 'close-reissue-modal':
+                closeReissueModal();
+                break;
+            case 'submit-reissue':
+                submitReissue(e);
+                break;
         }
     });
 

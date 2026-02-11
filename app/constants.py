@@ -4,7 +4,7 @@ Constants and Mapping Data for Walmart Scheduler App
 
 This module consolidates all mapping data previously stored in separate files:
 - DEMO_CLASS_CODES: Event/demo classification codes and descriptions
-- DEPARTMENT_CODES: Walmart department numbers and descriptions  
+- DEPARTMENT_CODES: Walmart department numbers and descriptions
 - EVENT_STATUS_CODES: Event status codes and descriptions
 - WALMART_WEEKS: Walmart fiscal week mappings to calendar dates
 - CLUB_DETAILS: Store/club details including location and market information
@@ -12,6 +12,33 @@ This module consolidates all mapping data previously stored in separate files:
 These constants are used throughout the application for EDR reporting,
 PDF generation, and data validation.
 """
+
+# --- Event Condition Constants ---
+# Canonical condition values used across the application.
+# Always use these constants instead of hardcoding strings.
+CONDITION_UNSTAFFED = 'Unstaffed'
+CONDITION_SCHEDULED = 'Scheduled'
+CONDITION_STAFFED = 'Staffed'
+CONDITION_CANCELED = 'Canceled'
+CONDITION_CANCELLED = 'Cancelled'  # British spelling variant (used in some EDR systems)
+CONDITION_EXPIRED = 'Expired'
+CONDITION_IN_PROGRESS = 'In Progress'
+CONDITION_PAUSED = 'Paused'
+CONDITION_REISSUED = 'Reissued'
+CONDITION_SUBMITTED = 'Submitted'
+
+# Conditions that indicate an event is no longer active
+INACTIVE_CONDITIONS = (CONDITION_CANCELED, CONDITION_EXPIRED)
+
+# Both spelling variants of "Canceled" for defensive matching
+CANCELLED_VARIANTS = (CONDITION_CANCELED, CONDITION_CANCELLED)
+
+# All valid condition values
+ALL_CONDITIONS = (
+    CONDITION_UNSTAFFED, CONDITION_SCHEDULED, CONDITION_STAFFED,
+    CONDITION_CANCELED, CONDITION_EXPIRED, CONDITION_IN_PROGRESS,
+    CONDITION_PAUSED, CONDITION_REISSUED, CONDITION_SUBMITTED,
+)
 
 DEMO_CLASS_CODES = (
     [

@@ -22,7 +22,7 @@
  * modal.close();
  */
 
-import { FocusTrap } from '../modules/focus-trap.js';
+import { FocusTrap } from '../utils/focus-trap.js';
 
 /**
  * Modal Dialog Component
@@ -165,8 +165,7 @@ export class Modal {
       e.stopPropagation();
     });
 
-    // Listen for escape key from focus trap
-    this.container.addEventListener('escape', this._handleEscape);
+    // Escape key handling is now done via FocusTrap onEscape callback
 
     // Create header (if title or close button)
     if (opts.title || opts.closeButton) {
@@ -226,7 +225,9 @@ export class Modal {
     this.isOpen = true;
 
     // Activate focus trap
-    this.focusTrap = new FocusTrap(this.container);
+    this.focusTrap = new FocusTrap(this.container, {
+      onEscape: () => this.close()
+    });
     this.focusTrap.activate();
 
     // Add animation class

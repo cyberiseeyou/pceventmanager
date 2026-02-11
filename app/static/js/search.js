@@ -3,6 +3,11 @@
  * Provides fuzzy search across events, employees, and schedules
  */
 
+function escapeHtml(text) {
+    if (text == null) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 let searchTimeout = null;
 let currentContext = 'scheduling'; // Default context
 let searchResultsVisible = false;
@@ -176,7 +181,7 @@ function displaySearchResults(data, priorityFilter) {
         resultsContainer.innerHTML = `
             <div class="search-result-section">
                 <p style="text-align: center; padding: var(--spacing-md); color: var(--text-muted);">
-                    No results found for "${data.query}"
+                    No results found for "${escapeHtml(data.query)}"
                 </p>
             </div>
         `;
@@ -248,15 +253,15 @@ function createEventResultItem(event) {
 
     item.innerHTML = `
         <div class="search-result-title">
-            <span class="priority-indicator priority-${event.priority}"></span>
-            ${event.project_name}
+            <span class="priority-indicator priority-${escapeHtml(event.priority)}"></span>
+            ${escapeHtml(event.project_name)}
         </div>
         <div class="search-result-details">
-            <span>${event.event_type}</span>
+            <span>${escapeHtml(event.event_type)}</span>
             <span>•</span>
-            <span>${event.store_name || 'No store'}</span>
+            <span>${escapeHtml(event.store_name) || 'No store'}</span>
             <span>•</span>
-            <span>${priorityIcon} ${event.days_remaining} days</span>
+            <span>${priorityIcon} ${escapeHtml(event.days_remaining)} days</span>
             <span>•</span>
             ${statusBadge}
         </div>
@@ -279,12 +284,12 @@ function createEmployeeResultItem(employee) {
 
     item.innerHTML = `
         <div class="search-result-title">
-            👤 ${employee.name}
+            👤 ${escapeHtml(employee.name)}
         </div>
         <div class="search-result-details">
-            <span>${employee.job_title}</span>
+            <span>${escapeHtml(employee.job_title)}</span>
             <span>•</span>
-            <span>${employee.email || 'No email'}</span>
+            <span>${escapeHtml(employee.email) || 'No email'}</span>
             ${supervisorBadge ? '<span>•</span>' + supervisorBadge : ''}
         </div>
     `;
@@ -306,14 +311,14 @@ function createScheduleResultItem(schedule) {
 
     item.innerHTML = `
         <div class="search-result-title">
-            📅 ${schedule.event_name}
+            📅 ${escapeHtml(schedule.event_name)}
         </div>
         <div class="search-result-details">
-            <span>👤 ${schedule.employee_name}</span>
+            <span>👤 ${escapeHtml(schedule.employee_name)}</span>
             <span>•</span>
-            <span>${dateStr} ${timeStr}</span>
+            <span>${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</span>
             <span>•</span>
-            <span>${schedule.event_type}</span>
+            <span>${escapeHtml(schedule.event_type)}</span>
         </div>
     `;
 
@@ -351,7 +356,7 @@ function showSearchError(message) {
         resultsContainer.innerHTML = `
             <div class="search-result-section">
                 <p style="text-align: center; padding: var(--spacing-md); color: var(--error-color);">
-                    ${message}
+                    ${escapeHtml(message)}
                 </p>
             </div>
         `;

@@ -7,6 +7,7 @@ from io import StringIO
 
 from flask import Blueprint, render_template, request, jsonify, current_app, Response
 from app.models import get_models
+from app.constants import INACTIVE_CONDITIONS, CONDITION_SCHEDULED, CONDITION_SUBMITTED
 from datetime import datetime, timedelta, date
 from sqlalchemy import func
 
@@ -35,14 +36,14 @@ def index():
         Event.start_datetime >= today,
         Event.start_datetime <= display_horizon,
         # Exclude canceled and expired
-        ~Event.condition.in_(['Canceled', 'Expired'])
+        ~Event.condition.in_(list(INACTIVE_CONDITIONS))
     ).count()
 
     # Scheduled events: Scheduled + Submitted conditions within date range
     scheduled_events_display = Event.query.filter(
         Event.start_datetime >= today,
         Event.start_datetime <= display_horizon,
-        Event.condition.in_(['Scheduled', 'Submitted'])
+        Event.condition.in_([CONDITION_SCHEDULED, CONDITION_SUBMITTED])
     ).count()
 
     # Get unscheduled events within 4 months - ONLY Unstaffed are truly unscheduled

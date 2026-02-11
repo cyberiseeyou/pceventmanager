@@ -12,6 +12,7 @@ Walmart RetailLink.
 import re
 from typing import Optional
 from datetime import datetime, date
+from app.constants import INACTIVE_CONDITIONS
 
 
 def extract_event_number(project_name):
@@ -327,7 +328,7 @@ def get_supervisor_event(core_event):
     # - "617606-ProductName-Supervisor" (Supervisor at end)
     # - Any event starting with event_number that has event_type='Supervisor'
     from sqlalchemy import or_
-    
+
     supervisor_query = Event.query.filter(
         or_(
             # Pattern 1: 617606-Supervisor-...
@@ -339,7 +340,11 @@ def get_supervisor_event(core_event):
                 Event.project_name.ilike(f'{event_number}%'),
                 Event.event_type == 'Supervisor'
             )
-        )
+        ),
+        # Exclude cancelled/expired events - when events are reissued (same name/number,
+        # different project_ref_num), the old cancelled one must not be returned.
+        # notin_() excludes NULLs in SQL, so we explicitly include NULL conditions.
+        or_(Event.condition.notin_(list(INACTIVE_CONDITIONS)), Event.condition.is_(None))
     )
 
     # Add date window filter if core_event has date constraints

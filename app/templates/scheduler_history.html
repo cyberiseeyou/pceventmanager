@@ -309,7 +309,7 @@
         {% set run = item.run %}
         {% set type_counts = item.type_counts %}
         <div class="run-row" data-run-id="{{ run.id }}">
-            <div class="run-row-header" onclick="toggleRun({{ run.id }})">
+            <div class="run-row-header" data-action="toggle-run" data-run-id="{{ run.id }}">
                 <div class="run-datetime">
                     <span class="run-date">{{ run.started_at.strftime('%B %d, %Y') }}</span>
                     <span class="run-time">{{ run.started_at.strftime('%I:%M %p') }}
@@ -401,15 +401,15 @@
                     <div class="filter-controls">
                         <div class="filter-buttons">
                             <button class="filter-btn ${currentFilter === 'all' ? 'active' : ''}"
-                                    onclick="setFilter(${runId}, 'all')">
+                                    data-action="set-filter" data-run-id="${runId}" data-status="all">
                                 All (${counts.all})
                             </button>
                             <button class="filter-btn ${currentFilter === 'scheduled' ? 'active' : ''}"
-                                    onclick="setFilter(${runId}, 'scheduled')">
+                                    data-action="set-filter" data-run-id="${runId}" data-status="scheduled">
                                 Scheduled (${counts.scheduled})
                             </button>
                             <button class="filter-btn ${currentFilter === 'failed' ? 'active' : ''}"
-                                    onclick="setFilter(${runId}, 'failed')">
+                                    data-action="set-filter" data-run-id="${runId}" data-status="failed">
                                 Failed (${counts.failed})
                             </button>
                         </div>
@@ -462,5 +462,20 @@
             details.innerHTML = `<div class="no-events">Error: ${escapeHtml(error.message)}</div>`;
         }
     }
+
+    // Delegated click handler for data-action buttons
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.dataset.action;
+        switch (action) {
+            case 'toggle-run':
+                toggleRun(parseInt(target.dataset.runId));
+                break;
+            case 'set-filter':
+                setFilter(parseInt(target.dataset.runId), target.dataset.status);
+                break;
+        }
+    });
 </script>
 {% endblock %}

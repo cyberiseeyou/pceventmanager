@@ -1,3 +1,13 @@
+{#
+  Template: calendar.html
+  Route: main.calendar_view (GET /calendar)
+
+  Context variables:
+    selected_date          (date)       - Currently selected date
+    events_by_date         (dict)       - {date_str: [event_dicts]} events grouped by date
+    event_counts_by_date   (dict)       - {date_str: int} event count per date
+    unscheduled_by_date    (dict)       - {date_str: int} unscheduled event count per date
+#}
 {% extends "base.html" %}
 
 {% block title %}Calendar - Product Connections Scheduler{% endblock %}
@@ -558,12 +568,12 @@
         <!-- Calendar Header -->
         <div class="calendar-header">
             <div class="calendar-nav">
-                <button class="btn btn-secondary" onclick="goToToday()">Today</button>
+                <button class="btn btn-secondary" data-action="go-today">Today</button>
             </div>
             <div class="month-nav">
-                <button class="btn btn-outline" onclick="changeMonth(-1)">‹ Previous</button>
+                <button class="btn btn-outline" data-action="change-month" data-delta="-1">‹ Previous</button>
                 <h2 class="month-title" id="month-title">{{ selected_date.strftime('%B %Y') }}</h2>
-                <button class="btn btn-outline" onclick="changeMonth(1)">Next ›</button>
+                <button class="btn btn-outline" data-action="change-month" data-delta="1">Next ›</button>
             </div>
         </div>
 
@@ -585,7 +595,7 @@
     <!-- Day Detail Modal -->
     <div class="day-detail-modal" id="day-detail-modal">
         <div class="day-detail-content">
-            <button class="modal-close" onclick="closeDayDetail()">&times;</button>
+            <button class="modal-close" data-action="close-day-detail">&times;</button>
             <div class="day-detail-header">
                 <h2 class="day-detail-title" id="day-detail-title">Loading...</h2>
                 
@@ -625,7 +635,7 @@
                 <div class="day-detail-actions" style="margin-top: var(--spacing-md); display: flex; justify-content: space-between; align-items: center;">
                     <div class="event-filters">
                         <label for="event-type-filter" style="margin-right: var(--spacing-sm);">Filter by Event Type:</label>
-                        <select id="event-type-filter" onchange="filterEventsByType()" style="padding: var(--spacing-xs); border-radius: var(--border-radius-sm);">
+                        <select id="event-type-filter" data-action="filter-events" style="padding: var(--spacing-xs); border-radius: var(--border-radius-sm);">
                             <option value="all">All Events</option>
                             <option value="Core">Core</option>
                             <option value="Supervisor">Supervisor</option>
@@ -636,11 +646,11 @@
                         </select>
                     </div>
                     <div class="action-buttons" style="display: flex; gap: var(--spacing-sm);">
-                        <button id="lock-day-btn" class="btn btn-lock" onclick="toggleDayLock()" style="display: flex; align-items: center; gap: var(--spacing-xs);">
+                        <button id="lock-day-btn" class="btn btn-lock" data-action="toggle-day-lock" style="display: flex; align-items: center; gap: var(--spacing-xs);">
                             <span id="modal-lock-icon">🔓</span>
                             <span id="modal-lock-text">Lock Day</span>
                         </button>
-                        <button id="print-schedule-btn" class="btn btn-secondary" onclick="printDaySchedule()">
+                        <button id="print-schedule-btn" class="btn btn-secondary" data-action="print-day-schedule">
                             Print Schedule
                         </button>
                     </div>
@@ -655,7 +665,7 @@
     <!-- Reschedule Event Modal -->
     <div class="modal-backdrop" id="reschedule-modal">
         <div class="action-modal">
-            <button class="modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="reschedule-modal">&times;</button>
             <h3>Reschedule Event</h3>
             <form id="reschedule-form">
                 <input type="hidden" id="reschedule-schedule-id">
@@ -681,7 +691,7 @@
                     </select>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="reschedule-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Reschedule</button>
                 </div>
             </form>
@@ -691,7 +701,7 @@
     <!-- Trade Events Modal -->
     <div class="modal-backdrop" id="trade-modal">
         <div class="action-modal">
-            <button class="modal-close" onclick="closeModal('trade-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="trade-modal">&times;</button>
             <h3>Trade Events</h3>
             <form id="trade-form">
                 <input type="hidden" id="trade-schedule-id">
@@ -710,7 +720,7 @@
                     <div id="trade-preview-info"></div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('trade-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="trade-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Trade Events</button>
                 </div>
             </form>
@@ -720,7 +730,7 @@
     <!-- Change Employee Modal -->
     <div class="modal-backdrop" id="change-employee-modal">
         <div class="action-modal">
-            <button class="modal-close" onclick="closeModal('change-employee-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="change-employee-modal">&times;</button>
             <h3>Change Employee</h3>
             <form id="change-employee-form">
                 <input type="hidden" id="change-schedule-id">
@@ -735,7 +745,7 @@
                     </select>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('change-employee-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="change-employee-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Change Employee</button>
                 </div>
             </form>
@@ -745,6 +755,12 @@
 
 {% block scripts %}
 <script>
+    // XSS protection: escape dynamic values before inserting into innerHTML
+    function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     let currentDate = new Date('{{ selected_date.strftime('%Y-%m-%d') }}');
     let eventsData = {{ events_by_date | tojson }};
     let eventCountsData = {{ event_counts_by_date | tojson }};
@@ -869,7 +885,7 @@
             }
 
             dayElement.innerHTML = `
-                ${isLocked ? `<div class="lock-indicator" data-date="${dayStr}" title="Day is locked: ${lockedDaysData[dayStr]?.reason || 'No reason provided'}">🔒</div>` : ''}
+                ${isLocked ? `<div class="lock-indicator" data-date="${dayStr}" title="Day is locked: ${escapeHtml(lockedDaysData[dayStr]?.reason || 'No reason provided')}">🔒</div>` : ''}
                 ${unscheduledCount > 0 ? `<div class="unscheduled-warning" data-date="${dayStr}" title="${unscheduledCount} unscheduled event(s)">⚠️</div>` : ''}
                 <div class="day-number">${dayDate.getDate()}</div>
                 <div class="day-events">
@@ -931,14 +947,14 @@
                 currentDayData = data;
 
                 // Build title with Primary Lead and Juicer info
-                let titleHtml = `<div>${data.formatted_date}</div>`;
+                let titleHtml = `<div>${escapeHtml(data.formatted_date)}</div>`;
                 if (data.primary_lead || data.juicer) {
                     titleHtml += '<div style="font-size: 0.9rem; color: var(--text-muted); margin-top: var(--spacing-xs);">';
                     if (data.primary_lead) {
-                        titleHtml += `<span style="margin-right: var(--spacing-md);">👔 Primary Lead: <strong>${data.primary_lead}</strong></span>`;
+                        titleHtml += `<span style="margin-right: var(--spacing-md);">👔 Primary Lead: <strong>${escapeHtml(data.primary_lead)}</strong></span>`;
                     }
                     if (data.juicer) {
-                        titleHtml += `<span>🧃 Juicer: <strong>${data.juicer}</strong></span>`;
+                        titleHtml += `<span>🧃 Juicer: <strong>${escapeHtml(data.juicer)}</strong></span>`;
                     }
                     titleHtml += '</div>';
                 }
@@ -951,54 +967,54 @@
                     eventsList.innerHTML = '<div class="no-events">No events scheduled for this day</div>';
                 } else {
                     eventsList.innerHTML = data.events.map(event => `
-                        <div class="day-event-card" data-event-type="${event.event_type}">
-                            <div class="event-time">${event.time}</div>
-                            <div class="event-name">${event.event_name}</div>
+                        <div class="day-event-card" data-event-type="${escapeHtml(event.event_type)}">
+                            <div class="event-time">${escapeHtml(event.time)}</div>
+                            <div class="event-name">${escapeHtml(event.event_name)}</div>
                             <div class="event-details">
-                                <span class="event-type-badge event-type-${event.event_type.toLowerCase().replace(/ /g, '-')}">${event.event_type}</span>
-                                <span>👤 ${event.employee_name}</span>
-                                ${event.store_name ? `<span>🏪 ${event.store_name}</span>` : ''}
-                                ${event.estimated_time ? `<span>⏱️ ${event.estimated_time} min</span>` : ''}
-                                ${event.supervisor_name ? `<span style="color: #6610f2; font-weight: bold;">👨‍💼 Supervisor: ${event.supervisor_name} (${event.supervisor_time})</span>` : ''}
+                                <span class="event-type-badge event-type-${escapeHtml(event.event_type.toLowerCase().replace(/ /g, '-'))}">${escapeHtml(event.event_type)}</span>
+                                <span>👤 ${escapeHtml(event.employee_name)}</span>
+                                ${event.store_name ? `<span>🏪 ${escapeHtml(event.store_name)}</span>` : ''}
+                                ${event.estimated_time ? `<span>⏱️ ${escapeHtml(event.estimated_time)} min</span>` : ''}
+                                ${event.supervisor_name ? `<span style="color: #6610f2; font-weight: bold;">👨‍💼 Supervisor: ${escapeHtml(event.supervisor_name)} (${escapeHtml(event.supervisor_time)})</span>` : ''}
                             </div>
                             <div class="event-dates" style="font-size: var(--font-size-small); color: var(--text-muted); margin-top: var(--spacing-xs); display: flex; gap: var(--spacing-md);">
-                                <span>📅 Start: ${event.start_date}</span>
-                                <span>📅 Due: ${event.due_date}</span>
+                                <span>📅 Start: ${escapeHtml(event.start_date)}</span>
+                                <span>📅 Due: ${escapeHtml(event.due_date)}</span>
                             </div>
                             <div class="event-actions">
                                 <button class="event-action-btn btn-reschedule"
-                                        data-schedule-id="${event.id}"
-                                        data-event-name="${event.event_name}"
-                                        data-event-type="${event.event_type}"
-                                        data-time="${event.time}"
-                                        data-employee-name="${event.employee_name}"
-                                        data-employee-id="${event.employee_id}"
-                                        data-date="${data.date}">
+                                        data-schedule-id="${escapeHtml(event.id)}"
+                                        data-event-name="${escapeHtml(event.event_name)}"
+                                        data-event-type="${escapeHtml(event.event_type)}"
+                                        data-time="${escapeHtml(event.time)}"
+                                        data-employee-name="${escapeHtml(event.employee_name)}"
+                                        data-employee-id="${escapeHtml(event.employee_id)}"
+                                        data-date="${escapeHtml(data.date)}">
                                     Reschedule
                                 </button>
                                 ${event.event_type === 'Core' ? `
                                     <button class="event-action-btn btn-trade"
-                                            data-schedule-id="${event.id}"
-                                            data-event-name="${event.event_name}"
-                                            data-employee-name="${event.employee_name}"
-                                            data-time="${event.time}"
-                                            data-date="${data.date}">
+                                            data-schedule-id="${escapeHtml(event.id)}"
+                                            data-event-name="${escapeHtml(event.event_name)}"
+                                            data-employee-name="${escapeHtml(event.employee_name)}"
+                                            data-time="${escapeHtml(event.time)}"
+                                            data-date="${escapeHtml(data.date)}">
                                         Trade
                                     </button>
                                 ` : ''}
                                 <button class="event-action-btn btn-change-employee"
-                                        data-schedule-id="${event.id}"
-                                        data-event-name="${event.event_name}"
-                                        data-event-type="${event.event_type}"
-                                        data-time="${event.time}"
-                                        data-employee-name="${event.employee_name}"
-                                        data-date="${data.date}">
+                                        data-schedule-id="${escapeHtml(event.id)}"
+                                        data-event-name="${escapeHtml(event.event_name)}"
+                                        data-event-type="${escapeHtml(event.event_type)}"
+                                        data-time="${escapeHtml(event.time)}"
+                                        data-employee-name="${escapeHtml(event.employee_name)}"
+                                        data-date="${escapeHtml(data.date)}">
                                     Change Employee
                                 </button>
                                 <button class="event-action-btn btn-unschedule"
-                                        data-schedule-id="${event.id}"
-                                        data-event-name="${event.event_name}"
-                                        data-employee-name="${event.employee_name}">
+                                        data-schedule-id="${escapeHtml(event.id)}"
+                                        data-event-name="${escapeHtml(event.event_name)}"
+                                        data-employee-name="${escapeHtml(event.employee_name)}">
                                     Unschedule
                                 </button>
                             </div>
@@ -1179,7 +1195,7 @@
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Core Events Schedule - ${dateStr}</title>
+            <title>Core Events Schedule - ${escapeHtml(dateStr)}</title>
             <style>
                 body {
                     font-family: Arial, sans-serif;
@@ -1255,7 +1271,7 @@
         </head>
         <body>
             <div class="header">
-                <h1 class="date-title">${dateStr}</h1>
+                <h1 class="date-title">${escapeHtml(dateStr)}</h1>
                 <p class="subtitle">Daily Schedule</p>
             </div>
             
@@ -1270,9 +1286,9 @@
                 <tbody>
                     ${printableEvents.map(event => `
                         <tr>
-                            <td class="employee-name">${event.employee_name}</td>
-                            <td class="event-time">${event.time}</td>
-                            <td class="event-name">${event.event_name}</td>
+                            <td class="employee-name">${escapeHtml(event.employee_name)}</td>
+                            <td class="event-time">${escapeHtml(event.time)}</td>
+                            <td class="event-name">${escapeHtml(event.event_name)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -1330,8 +1346,8 @@
         try {
             document.getElementById('reschedule-schedule-id').value = scheduleId;
             document.getElementById('reschedule-event-info').innerHTML = `
-                <strong>${eventName}</strong> (${eventType})<br>
-                Current: ${currentDate} at ${currentTime} with ${employeeName}
+                <strong>${escapeHtml(eventName)}</strong> (${escapeHtml(eventType)})<br>
+                Current: ${escapeHtml(currentDate)} at ${escapeHtml(currentTime)} with ${escapeHtml(employeeName)}
             `;
 
             // Convert displayed time to 24-hour format for comparison
@@ -1354,8 +1370,8 @@
     function openTradeModal(scheduleId, eventName, employeeName, time, date) {
         document.getElementById('trade-schedule-id').value = scheduleId;
         document.getElementById('trade-current-info').innerHTML = `
-            <strong>${eventName}</strong><br>
-            ${employeeName} at ${time}
+            <strong>${escapeHtml(eventName)}</strong><br>
+            ${escapeHtml(employeeName)} at ${escapeHtml(time)}
         `;
         
         // Load employees with Core events on the same date
@@ -1369,9 +1385,9 @@
         try {
             document.getElementById('change-schedule-id').value = scheduleId;
             document.getElementById('change-event-info').innerHTML = `
-                <strong>${eventName}</strong> (${eventType})<br>
-                Date: ${date} at ${time}<br>
-                Current Employee: ${employeeName}
+                <strong>${escapeHtml(eventName)}</strong> (${escapeHtml(eventType)})<br>
+                Date: ${escapeHtml(date)} at ${escapeHtml(time)}<br>
+                Current Employee: ${escapeHtml(employeeName)}
             `;
             
             // Load available employees for this date (excluding Core-scheduled employees if this is a Core event)
@@ -1855,5 +1871,27 @@
             alert('Failed to unlock day. Please try again.');
         }
     }
+
+    // Delegated click handler - replaces inline onclick attributes
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const action = target.dataset.action;
+
+        switch (action) {
+            case 'go-today': goToToday(); break;
+            case 'change-month': changeMonth(parseInt(target.dataset.delta)); break;
+            case 'close-day-detail': closeDayDetail(); break;
+            case 'toggle-day-lock': toggleDayLock(); break;
+            case 'print-day-schedule': printDaySchedule(); break;
+            case 'close-modal': closeModal(target.dataset.modal); break;
+        }
+    });
+
+    // Delegated change handler for select filters
+    document.addEventListener('change', function(e) {
+        const target = e.target.closest('[data-action="filter-events"]');
+        if (target) filterEventsByType();
+    });
 </script>
 {% endblock %}

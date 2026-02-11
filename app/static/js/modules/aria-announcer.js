@@ -129,6 +129,33 @@ export class AriaAnnouncer {
   }
 
   /**
+   * Announce an info message (polite priority)
+   *
+   * @param {string} message - Info message
+   */
+  announceInfo(message) {
+    this.announce(message, 'polite');
+  }
+
+  /**
+   * Announce a loading state
+   *
+   * @param {string} description - Description of what's loading
+   */
+  announceLoading(description = 'Loading') {
+    this.announce(`${description}, please wait...`, 'polite');
+  }
+
+  /**
+   * Announce that loading is complete
+   *
+   * @param {string} description - Description of what finished loading
+   */
+  announceLoadingComplete(description = 'Content') {
+    this.announce(`${description} loaded successfully`, 'polite');
+  }
+
+  /**
    * Clear all pending announcements
    */
   clear() {

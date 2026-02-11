@@ -10,7 +10,7 @@
     <div class="week-selector" style="margin: 20px 0;">
         <label for="week-start" style="font-weight: bold;">Week Starting:</label>
         <input type="date" id="week-start" value="{{ week_start }}" style="padding: 8px; margin: 0 10px;">
-        <button onclick="loadWeekStats()" class="btn btn-primary">Refresh</button>
+        <button data-action="load-week-stats" class="btn btn-primary">Refresh</button>
     </div>
 
     <!-- Employee Statistics Table -->
@@ -30,7 +30,7 @@
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.days_scheduled }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.total_events }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
-                    <button onclick="window.open('/api/print_employee_schedule/{{ stat.employee_id }}/{{ week_start }}', '_blank')"
+                    <button data-action="print-employee-schedule" data-employee-id="{{ stat.employee_id }}" data-week-start="{{ week_start }}"
                             class="btn btn-sm btn-success">
                         Print Schedule
                     </button>
@@ -48,7 +48,7 @@
 
     <!-- Print Actions -->
     <div class="print-actions" style="margin-top: 30px;">
-        <button class="btn btn-primary" onclick="window.open('/api/print_weekly_summary/{{ week_start }}', '_blank')">
+        <button class="btn btn-primary" data-action="print-weekly-summary" data-week-start="{{ week_start }}">
             Print Weekly Summary (All Employees)
         </button>
     </div>
@@ -59,6 +59,23 @@ function loadWeekStats() {
     const weekStart = document.getElementById('week-start').value;
     window.location.href = `/employees/analytics?week_start=${weekStart}`;
 }
+
+document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.dataset.action;
+    switch (action) {
+        case 'load-week-stats':
+            loadWeekStats();
+            break;
+        case 'print-employee-schedule':
+            window.open('/api/print_employee_schedule/' + target.dataset.employeeId + '/' + target.dataset.weekStart, '_blank');
+            break;
+        case 'print-weekly-summary':
+            window.open('/api/print_weekly_summary/' + target.dataset.weekStart, '_blank');
+            break;
+    }
+});
 </script>
 
 <style>

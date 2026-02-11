@@ -157,19 +157,19 @@
     <div class="admin-section">
         <h3>Sync Actions</h3>
         <div class="action-buttons">
-            <button onclick="triggerFullSync()" class="btn btn-primary" id="full-sync-btn">
+            <button data-action="trigger-full-sync" class="btn btn-primary" id="full-sync-btn">
                 Full Synchronization
             </button>
-            <button onclick="syncEmployees()" class="btn btn-outline" id="sync-employees-btn">
+            <button data-action="sync-employees" class="btn btn-outline" id="sync-employees-btn">
                 Sync Employees Only
             </button>
-            <button onclick="syncEvents()" class="btn btn-outline" id="sync-events-btn">
+            <button data-action="sync-events" class="btn btn-outline" id="sync-events-btn">
                 Sync Events Only
             </button>
-            <button onclick="syncSchedules()" class="btn btn-outline" id="sync-schedules-btn">
+            <button data-action="sync-schedules" class="btn btn-outline" id="sync-schedules-btn">
                 Sync Schedules Only
             </button>
-            <button onclick="resetSyncStatus()" class="btn btn-danger" id="reset-sync-btn">
+            <button data-action="reset-sync-status" class="btn btn-danger" id="reset-sync-btn">
                 Reset All Sync Status
             </button>
         </div>
@@ -184,8 +184,8 @@
             </div>
         </div>
         <div class="action-buttons">
-            <button onclick="refreshLog()" class="btn btn-outline">Refresh Log</button>
-            <button onclick="clearLog()" class="btn btn-outline">Clear Log</button>
+            <button data-action="refresh-log" class="btn btn-outline">Refresh Log</button>
+            <button data-action="clear-log" class="btn btn-outline">Clear Log</button>
             <a href="{{ url_for('api_tester') }}" class="btn btn-primary">🛠️ API Testing Tool</a>
         </div>
     </div>
@@ -193,6 +193,38 @@
 
 {% block scripts %}
 <script>
+// Delegated event listener for all data-action buttons
+document.addEventListener('click', function(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+
+    const action = target.dataset.action;
+
+    switch (action) {
+        case 'trigger-full-sync':
+            triggerFullSync();
+            break;
+        case 'sync-employees':
+            syncEmployees();
+            break;
+        case 'sync-events':
+            syncEvents();
+            break;
+        case 'sync-schedules':
+            syncSchedules();
+            break;
+        case 'reset-sync-status':
+            resetSyncStatus();
+            break;
+        case 'refresh-log':
+            refreshLog();
+            break;
+        case 'clear-log':
+            clearLog();
+            break;
+    }
+});
+
 // Load admin data on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadConfigurationStatus();

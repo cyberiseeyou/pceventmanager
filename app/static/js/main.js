@@ -1,3 +1,26 @@
+/**
+ * Main Application Entry Point
+ *
+ * Handles dashboard import/export, event scheduling form validation,
+ * employee availability fetching, conflict detection, time restrictions,
+ * and the reschedule workflow for fixing validation errors.
+ *
+ * Used on: Dashboard (index.html), Scheduling page (event detail views)
+ *
+ * @module main
+ */
+
+/**
+ * Escape HTML special characters to prevent XSS when inserting user content into the DOM
+ *
+ * @param {string|null|undefined} text - Raw text to escape
+ * @returns {string} HTML-safe string, or empty string if input is null/undefined
+ */
+function escapeHtml(text) {
+    if (text == null) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // Initialize import/export functionality if on dashboard
     initializeImportExport();
@@ -10,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+/**
+ * Set up import/export button handlers on the dashboard page.
+ * Binds click and change events for both regular event import and scheduled event import.
+ * No-ops silently if the required DOM elements are not present (i.e., not on dashboard).
+ */
 function initializeImportExport() {
     const importBtn = document.getElementById('import-btn');
     const importFile = document.getElementById('import-file');
@@ -44,6 +72,16 @@ function initializeImportExport() {
     });
 }
 
+/**
+ * Upload a CSV file to the given API endpoint and display the result.
+ * Validates that the file is a CSV, shows a loading state on the button,
+ * and reloads the page on success after a short delay.
+ *
+ * @param {File} file - The selected file from the file input
+ * @param {string} apiUrl - Backend endpoint to POST the file to (e.g., '/api/import/events')
+ * @param {HTMLButtonElement} button - The import button element (disabled during upload)
+ * @param {string} buttonText - Original button label to restore after upload completes
+ */
 function handleFileImport(file, apiUrl, button, buttonText) {
     if (!file) {
         return;
@@ -98,6 +136,13 @@ function handleFileImport(file, apiUrl, button, buttonText) {
         });
 }
 
+/**
+ * Display a status message in the import status area.
+ * Success and error messages auto-hide after 5 seconds.
+ *
+ * @param {string} message - Text to display
+ * @param {('loading'|'success'|'error')} type - Status type, applied as a CSS class
+ */
 function showImportStatus(message, type) {
     const importStatus = document.getElementById('import-status');
     if (!importStatus) {
@@ -116,6 +161,10 @@ function showImportStatus(message, type) {
     }
 }
 
+/**
+ * Configure the scheduling date input with min/max constraints from window.eventData.
+ * Attaches change and input listeners that validate the date and fetch available employees.
+ */
 function initializeDateConstraints() {
     const dateInput = document.getElementById('scheduled_date');
     const submitButton = document.querySelector('.btn-primary');
@@ -144,6 +193,11 @@ function initializeDateConstraints() {
     });
 }
 
+/**
+ * Bind change listeners on the scheduling form fields (employee, start time, override checkbox)
+ * to trigger real-time validation. Also handles copying the dropdown time value to the hidden
+ * time input on form submit.
+ */
 function initializeFormValidation() {
     const employeeSelect = document.getElementById('employee_id');
     const startTimeInput = document.getElementById('start_time');
@@ -187,6 +241,14 @@ function initializeFormValidation() {
     }
 }
 
+/**
+ * Validate the selected scheduling date against the event's valid date range.
+ * Applies visual border color feedback and triggers full form validation.
+ * When the override checkbox is checked, any date is accepted.
+ *
+ * @param {string} selectedDate - ISO date string (YYYY-MM-DD) from the date input
+ * @param {HTMLButtonElement} submitButton - Submit button to enable/disable
+ */
 function validateDateSelection(selectedDate, submitButton) {
     if (!selectedDate || !window.eventData) {
         submitButton.disabled = true;
@@ -216,6 +278,13 @@ function validateDateSelection(selectedDate, submitButton) {
     validateForm();
 }
 
+/**
+ * Fetch employees available for scheduling on the given date and populate the employee dropdown.
+ * Uses role-based filtering when an event ID is available via window.eventData.
+ * Respects the override checkbox to bypass availability constraints.
+ *
+ * @param {string} date - ISO date string (YYYY-MM-DD) to check availability for
+ */
 function fetchAvailableEmployees(date) {
     const employeeSelect = document.getElementById('employee_id');
     const loadingSpinner = document.getElementById('employee-loading');
@@ -283,6 +352,10 @@ function fetchAvailableEmployees(date) {
         });
 }
 
+/**
+ * Validate all scheduling form fields (date, employee, time) and enable/disable the submit button.
+ * When all fields are valid, also triggers conflict detection via the API.
+ */
 function validateForm() {
     const dateInput = document.getElementById('scheduled_date');
     const employeeSelect = document.getElementById('employee_id');
@@ -315,6 +388,10 @@ function validateForm() {
     }
 }
 
+/**
+ * Call the /api/check_conflicts endpoint with the current form values to detect
+ * scheduling conflicts or warnings, then display the results via displayConflictWarnings().
+ */
 function checkSchedulingConflicts() {
     const dateInput = document.getElementById('scheduled_date');
     const employeeSelect = document.getElementById('employee_id');
@@ -366,6 +443,18 @@ function checkSchedulingConflicts() {
         });
 }
 
+/**
+ * Render conflict and warning messages from the conflict detection API into the DOM.
+ * Inserts a styled container before the submit button showing conflicts (red) and
+ * warnings (yellow). Disables the submit button when hard conflicts exist.
+ *
+ * @param {Object} conflictData - Response from /api/check_conflicts
+ * @param {boolean} conflictData.has_conflicts - Whether hard conflicts exist
+ * @param {boolean} conflictData.has_warnings - Whether soft warnings exist
+ * @param {boolean} conflictData.can_proceed - Whether scheduling can proceed despite warnings
+ * @param {Array<{message: string, detail: string}>} [conflictData.conflicts] - Hard conflict items
+ * @param {Array<{message: string, detail: string}>} [conflictData.warnings] - Warning items
+ */
 function displayConflictWarnings(conflictData) {
     // Remove any existing conflict warnings
     const existingWarnings = document.getElementById('conflict-warnings');
@@ -414,10 +503,10 @@ function displayConflictWarnings(conflictData) {
             `;
             conflictDiv.innerHTML = `
                 <div style="font-weight: bold; color: #dc3545; margin-bottom: 4px;">
-                    🚫 ${conflict.message}
+                    🚫 ${escapeHtml(conflict.message)}
                 </div>
                 <div style="font-size: 13px; color: #666;">
-                    ${conflict.detail}
+                    ${escapeHtml(conflict.detail)}
                 </div>
             `;
             warningsContainer.appendChild(conflictDiv);
@@ -437,10 +526,10 @@ function displayConflictWarnings(conflictData) {
             `;
             warningDiv.innerHTML = `
                 <div style="font-weight: bold; color: #cc8800; margin-bottom: 4px;">
-                    ⚠️ ${warning.message}
+                    ⚠️ ${escapeHtml(warning.message)}
                 </div>
                 <div style="font-size: 13px; color: #666;">
-                    ${warning.detail}
+                    ${escapeHtml(warning.detail)}
                 </div>
             `;
             warningsContainer.appendChild(warningDiv);
@@ -481,6 +570,13 @@ function displayConflictWarnings(conflictData) {
     }
 }
 
+/**
+ * Check whether a date falls within the event's valid scheduling range.
+ * Returns true for any date when the override checkbox is checked.
+ *
+ * @param {string} selectedDate - ISO date string (YYYY-MM-DD)
+ * @returns {boolean} True if the date is within range or override is enabled
+ */
 function isValidDate(selectedDate) {
     if (!selectedDate || !window.eventData) {
         return false;
@@ -502,6 +598,15 @@ function isValidDate(selectedDate) {
     return selected >= startDate && selected <= endDate;
 }
 
+/**
+ * Configure the start time input for restricted event types.
+ * For event types like Core, Supervisor, Freeosk, and Digital events, fetches
+ * allowed times from /api/event-allowed-times and replaces the free-text time input
+ * with a dropdown of valid options. Falls back to free-text input on error or
+ * for unrestricted event types.
+ *
+ * @returns {Promise<void>}
+ */
 async function initializeTimeRestrictions() {
     const timeInput = document.getElementById('start_time');
     const timeDropdown = document.getElementById('start_time_dropdown');
@@ -597,16 +702,13 @@ async function initializeTimeRestrictions() {
     }
 }
 
-function formatTime(time24) {
-    // Convert 24-hour time to 12-hour format for display
-    const [hours, minutes] = time24.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${displayHour}:${minutes} ${ampm}`;
-}
+// formatTime is loaded globally from utils/format-time.js via base.html
 
-// Export validation functions
+/**
+ * Validate the current schedule before exporting. If validation passes,
+ * triggers a direct CSV download. If there are errors, opens a validation
+ * modal showing each issue with a "Fix Error" action.
+ */
 function validateAndExport() {
     const exportBtn = document.getElementById('export-btn');
     if (!exportBtn) return;
@@ -638,6 +740,19 @@ function validateAndExport() {
         });
 }
 
+/**
+ * Populate and display the validation error modal with a list of schedule errors.
+ * Each error shows the project name, event type, dates, and a "Fix Error" button.
+ *
+ * @param {Array<Object>} errors - Validation errors from /api/validate_schedule_for_export
+ * @param {string} errors[].project_name - Name of the project with the error
+ * @param {string} errors[].event_type - Event type (e.g., 'Core', 'Digital Setup')
+ * @param {string} errors[].scheduled_date - Currently scheduled date
+ * @param {string} errors[].valid_start - Start of valid date range
+ * @param {string} errors[].valid_end - End of valid date range
+ * @param {number} errors[].schedule_id - Schedule record ID for fixing
+ * @param {string} errors[].error - Human-readable error description
+ */
 function showValidationModal(errors) {
     const modal = document.getElementById('validation-modal');
     const errorsList = document.getElementById('validation-errors-list');
@@ -652,13 +767,13 @@ function showValidationModal(errors) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'validation-error-item';
         errorDiv.innerHTML = `
-            <div class="validation-error-title">${error.project_name} (${error.event_type})</div>
+            <div class="validation-error-title">${escapeHtml(error.project_name)} (${escapeHtml(error.event_type)})</div>
             <div class="validation-error-details">
-                Scheduled: ${error.scheduled_date}<br>
-                Valid Range: ${error.valid_start} to ${error.valid_end}
+                Scheduled: ${escapeHtml(error.scheduled_date)}<br>
+                Valid Range: ${escapeHtml(error.valid_start)} to ${escapeHtml(error.valid_end)}
             </div>
             <div class="validation-error-actions">
-                <button class="btn-fix" onclick="fixScheduleError(${error.schedule_id}, '${error.project_name}', '${error.error}')">
+                <button class="btn-fix" onclick="fixScheduleError(${parseInt(error.schedule_id) || 0}, '${escapeHtml(error.project_name).replace(/'/g, "\\'")}', '${escapeHtml(error.error).replace(/'/g, "\\'")}')">
                     Fix Error
                 </button>
             </div>
@@ -670,6 +785,7 @@ function showValidationModal(errors) {
     modal.style.display = 'flex';
 }
 
+/** Hide the validation error modal */
 function closeValidationModal() {
     const modal = document.getElementById('validation-modal');
     if (modal) {
@@ -677,6 +793,10 @@ function closeValidationModal() {
     }
 }
 
+/**
+ * Close the validation modal and trigger a CSV export of only the valid schedule entries,
+ * skipping any entries that failed validation.
+ */
 function proceedWithValidExport() {
     // Close validation modal
     closeValidationModal();
@@ -685,6 +805,15 @@ function proceedWithValidExport() {
     window.location.href = '/api/export/schedule?valid_only=true';
 }
 
+/**
+ * Open the reschedule modal pre-populated with the given schedule's details.
+ * Fetches the full schedule record, configures date/time constraints, loads
+ * available employees, and presents the reschedule form.
+ *
+ * @param {number} scheduleId - ID of the schedule record to fix
+ * @param {string} projectName - Display name of the project/event
+ * @param {string} errorMessage - Validation error description to show in the modal
+ */
 function fixScheduleError(scheduleId, projectName, errorMessage) {
     // Fetch schedule details to populate the reschedule modal
     fetch(`/api/schedule/${scheduleId}`)
@@ -729,6 +858,16 @@ function fixScheduleError(scheduleId, projectName, errorMessage) {
         });
 }
 
+/**
+ * Fetch available employees for the reschedule modal and populate the dropdown.
+ * Uses role-based filtering by event type. Passes the current employee and date
+ * so the API can include the currently-assigned employee in results.
+ *
+ * @param {string} date - ISO date string (YYYY-MM-DD) to check availability for
+ * @param {string} eventType - Event type for role-based employee filtering
+ * @param {string} currentEmployeeId - Currently assigned employee ID (included in results)
+ * @param {string} currentDate - Original schedule date for context
+ */
 function fetchEmployeesForReschedule(date, eventType, currentEmployeeId, currentDate) {
     const employeeSelect = document.getElementById('reschedule-employee');
     if (!employeeSelect) return;
@@ -782,6 +921,13 @@ function fetchEmployeesForReschedule(date, eventType, currentEmployeeId, current
         });
 }
 
+/**
+ * Set min/max date constraints on the reschedule modal's date input and
+ * attach a change listener to refresh the employee list when the date changes.
+ *
+ * @param {string} startDate - Earliest valid date (YYYY-MM-DD)
+ * @param {string} dueDate - Latest valid date (YYYY-MM-DD)
+ */
 function initializeRescheduleDateConstraints(startDate, dueDate) {
     const dateInput = document.getElementById('reschedule-date');
 
@@ -801,6 +947,16 @@ function initializeRescheduleDateConstraints(startDate, dueDate) {
     });
 }
 
+/**
+ * Configure time input for the reschedule modal based on event type restrictions.
+ * For restricted types (Core, Supervisor, Freeosk, Digital *), replaces the free-text
+ * time input with a dropdown of allowed times. Handles the special case where
+ * Digital Refresh uses teardown times when a Digital Setup exists on the same date.
+ *
+ * @param {string} eventType - Event type to determine time restrictions
+ * @param {string} currentTime - Currently scheduled time in HH:MM format (pre-selected in dropdown)
+ * @param {string} [eventName=''] - Event name for special-case detection
+ */
 function initializeRescheduleTimeRestrictions(eventType, currentTime, eventName = '') {
     const timeInput = document.getElementById('reschedule-time');
     const timeDropdown = document.getElementById('reschedule-time-dropdown');
@@ -877,6 +1033,11 @@ function initializeRescheduleTimeRestrictions(eventType, currentTime, eventName 
     }
 }
 
+/**
+ * Hide a modal by its DOM element ID
+ *
+ * @param {string} modalId - The ID attribute of the modal element to close
+ */
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {

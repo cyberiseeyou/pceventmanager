@@ -48,7 +48,7 @@ export class ApiClient {
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': this.getCsrfToken(),
+          'X-CSRF-Token': this.getCsrfToken(),
           ...options.headers
         }
       });

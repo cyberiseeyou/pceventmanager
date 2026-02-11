@@ -18,6 +18,7 @@ from sqlalchemy import func, and_, or_
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from collections import Counter
+from app.constants import CONDITION_CANCELED
 from app.utils.db_compat import extract_time
 import logging
 import re
@@ -1126,7 +1127,7 @@ class ScheduleVerificationService:
         unscheduled_due_tomorrow = self.db.query(self.Event).filter(
             self.Event.is_scheduled == False,
             func.date(self.Event.due_datetime) == tomorrow,
-            self.Event.condition != 'Canceled'
+            self.Event.condition != CONDITION_CANCELED
         ).all()
 
         for event in unscheduled_due_tomorrow:
@@ -1776,7 +1777,7 @@ class ScheduleVerificationService:
             self.Event.start_datetime >= start_datetime,
             self.Event.start_datetime <= end_datetime,
             self.Event.event_type.in_(['Freeosk', 'Digitals']),
-            self.Event.condition != 'Canceled'
+            self.Event.condition != CONDITION_CANCELED
         ).all()
 
         if not required_events:

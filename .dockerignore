@@ -1,0 +1,36 @@
+# Version control
+.git/
+.gitignore
+
+# Testing
+tests/
+instance/scheduler_test.db
+
+# Documentation
+docs/
+*.md
+!requirements.txt
+
+# Review artifacts
+.full-review/
+
+# CI/CD
+.github/
+
+# Development files
+backups/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.env.test
+.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore

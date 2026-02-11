@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 import logging
 from difflib import SequenceMatcher
 from sqlalchemy import func
+from app.constants import CONDITION_CANCELED
 
 logger = logging.getLogger(__name__)
 
@@ -2716,7 +2717,7 @@ class AITools:
             Event.is_scheduled == False,
             Event.due_datetime >= datetime.combine(today, datetime.min.time()),
             Event.due_datetime <= datetime.combine(end_date, datetime.max.time()),
-            Event.condition != 'Canceled'
+            Event.condition != CONDITION_CANCELED
         ).order_by(Event.due_datetime).all()
 
         if not urgent:
@@ -3286,7 +3287,7 @@ class AITools:
             Event.is_scheduled == False,
             Event.start_datetime <= datetime.combine(parsed_date, datetime.max.time()),
             Event.due_datetime >= datetime.combine(parsed_date, datetime.min.time()),
-            Event.condition != 'Canceled'
+            Event.condition != CONDITION_CANCELED
         )
 
         if event_type_filter:

@@ -383,6 +383,11 @@
 
 <script>
 (function() {
+    function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     // Elements
     const floatBtn = document.getElementById('verificationFloatBtn');
     const floatPanel = document.getElementById('verificationFloatPanel');
@@ -530,9 +535,9 @@
     function formatFloatVerificationIssue(issue, severity) {
         return `
             <div class="verification-issue ${severity}">
-                <div class="verification-issue-message">${issue.message}</div>
-                ${issue.details ? `<div class="verification-issue-details">${issue.details}</div>` : ''}
-                ${issue.action ? `<div class="verification-issue-action">💡 ${issue.action}</div>` : ''}
+                <div class="verification-issue-message">${escapeHtml(issue.message)}</div>
+                ${issue.details ? `<div class="verification-issue-details">${escapeHtml(issue.details)}</div>` : ''}
+                ${issue.action ? `<div class="verification-issue-action">💡 ${escapeHtml(issue.action)}</div>` : ''}
             </div>
         `;
     }

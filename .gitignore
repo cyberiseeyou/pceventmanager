@@ -16,6 +16,7 @@ build/
 # Environment and secrets
 .env
 .env.local
+.env.test
 .env.*.local
 
 # Sensitive files

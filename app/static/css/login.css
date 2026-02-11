@@ -270,13 +270,14 @@
 /* Login Button */
 .login-button {
     width: 100%;
-    padding: var(--spacing-md) var(--spacing-lg);
-    background: linear-gradient(135deg, var(--pc-blue) 0%, var(--pc-navy) 100%);
-    color: var(--text-white);
+    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+    background-color: #2E4C73;
+    background-image: linear-gradient(135deg, var(--pc-blue, #1B9BD8) 0%, var(--pc-navy, #2E4C73) 100%);
+    color: var(--text-white, #FFFFFF);
     border: none;
-    border-radius: var(--border-radius-md);
-    font-size: var(--font-size-body);
-    font-weight: var(--font-weight-bold);
+    border-radius: var(--border-radius-md, 6px);
+    font-size: var(--font-size-body, 1.125rem);
+    font-weight: var(--font-weight-bold, 700);
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;

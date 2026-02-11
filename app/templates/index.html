@@ -10,8 +10,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/dashboard.css') }}">
 <!-- Epic 2 Story 2.1: Schedule modal styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/schedule-modal.css') }}">
-<!-- Epic 2 Story 1.6: Base modal styles -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
+<!-- modal.css now loaded globally via base.html -->
 {% endblock %}
 
 {% block content %}
@@ -47,32 +46,35 @@
     </div>
 
     <!-- Statistics Grid -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-number">{{ total_core_today }}</div>
-            <div class="stat-label">Core Events Today</div>
+    <section aria-labelledby="stats-heading">
+        <h2 id="stats-heading" class="visually-hidden">Today's Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_core_today }}</div>
+                <div class="stat-label">Core Events Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ total_digitals_today }}</div>
+                <div class="stat-label">Digital Events Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ active_employees_count }}</div>
+                <div class="stat-label">Active Employees</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ events_this_week }}</div>
+                <div class="stat-label">Events This Week</div>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ total_digitals_today }}</div>
-            <div class="stat-label">Digital Events Today</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ active_employees_count }}</div>
-            <div class="stat-label">Active Employees</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ events_this_week }}</div>
-            <div class="stat-label">Events This Week</div>
-        </div>
-    </div>
+    </section>
 
 
     <!-- Main Dashboard Sections -->
     <div class="dashboard-sections">
         <!-- Schedule Verification Widget -->
-        <div class="dashboard-section" id="verification-widget">
+        <section class="dashboard-section" id="verification-widget" aria-labelledby="verification-heading">
             <div class="section-header">
-                <h3 class="section-title">
+                <h3 class="section-title" id="verification-heading">
                     <span id="verification-widget-icon">🔍</span> Schedule Verification
                 </h3>
             </div>
@@ -83,7 +85,7 @@
                     <label for="verification-date" class="verification-date-label">Select Date to Verify:</label>
                     <input type="date" id="verification-date" class="form-control verification-date-input" value="{{ today.strftime('%Y-%m-%d') }}">
                 </div>
-                <button onclick="runVerification()" class="btn btn-primary verification-btn">
+                <button data-action="run-verification" class="btn btn-primary verification-btn">
                     Verify Schedule
                 </button>
             </div>
@@ -130,12 +132,12 @@
             <div id="verification-widget-initial" class="verification-initial">
                 <p>Select a date and click "Verify Schedule" to check for scheduling issues.</p>
             </div>
-        </div>
+        </section>
 
         <!-- Today's Core Events -->
-        <div class="dashboard-section">
+        <section class="dashboard-section" aria-labelledby="core-events-heading">
             <div class="section-header">
-                <h3 class="section-title">Today's Core Events</h3>
+                <h3 class="section-title" id="core-events-heading">Today's Core Events</h3>
             </div>
 
             <!-- Core Time Slots with Employee Names -->
@@ -198,7 +200,7 @@
             {% if today_core_events %}
                 <div class="core-events-list core-events-list--expanded">
                     {% for schedule, event, employee in today_core_events %}
-                    <div class="core-event-item core-event-item--clickable" onclick="showEventDetails({{ schedule.id }}, '{{ event.project_ref_num }}', '{{ event.project_name|replace("'", "\\'") }}', '{{ employee.name|replace("'", "\\'") if employee else "Unassigned" }}', '{{ schedule.schedule_datetime.strftime('%m-%d-%Y') }}', '{{ schedule.schedule_datetime.strftime('%I:%M %p') }}', '{{ event.start_datetime.strftime('%m-%d-%Y') }}', '{{ event.due_datetime.strftime('%m-%d-%Y') }}', '{{ event.event_type }}')">
+                    <div class="core-event-item core-event-item--clickable" data-action="show-event-details" data-schedule-id="{{ schedule.id }}" data-ref-num="{{ event.project_ref_num }}" data-event-name="{{ event.project_name }}" data-employee-name="{{ employee.name if employee else 'Unassigned' }}" data-scheduled-date="{{ schedule.schedule_datetime.strftime('%m-%d-%Y') }}" data-scheduled-time="{{ schedule.schedule_datetime.strftime('%I:%M %p') }}" data-start-date="{{ event.start_datetime.strftime('%m-%d-%Y') }}" data-due-date="{{ event.due_datetime.strftime('%m-%d-%Y') }}" data-event-type="{{ event.event_type }}">
                         <div class="core-event-time">{{ schedule.schedule_datetime.strftime('%I:%M %p') }}</div>
                         <div class="core-event-employee">{{ employee.name if employee else 'Unassigned' }}</div>
                         <div class="core-event-name" title="{{ event.project_name }}">{{ event.project_name }}</div>
@@ -214,7 +216,7 @@
                 <div class="print-controls">
                     <label for="schedule-date" class="print-controls__label">Select Date:</label>
                     <input type="date" id="schedule-date" class="form-control print-controls__input" value="{{ today.strftime('%Y-%m-%d') }}">
-                    <button onclick="printScheduleByDate()" class="btn btn-primary">
+                    <button data-action="print-schedule" class="btn btn-primary">
                         Print Schedule
                     </button>
                 </div>
@@ -225,23 +227,23 @@
                 <div class="print-controls">
                     <label for="paperwork-date" class="print-controls__label">Select Date:</label>
                     <input type="date" id="paperwork-date" class="form-control print-controls__input" value="{{ today_date }}">
-                    <button onclick="printPaperworkByDate()" class="btn btn-success">
+                    <button data-action="print-paperwork" class="btn btn-success">
                         Print Paperwork
                     </button>
-                    <button onclick="printSalesToolsByDate()" class="btn btn-primary">
+                    <button data-action="print-sales-tools" class="btn btn-primary">
                         Print SalesTools
                     </button>
-                    <button onclick="generateEDRReports()" class="btn btn--navy">
+                    <button data-action="generate-edr" class="btn btn--navy">
                         Generate EDR Reports
                     </button>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- Unscheduled Events & Scheduling Progress -->
-        <div class="dashboard-section">
+        <section class="dashboard-section" aria-labelledby="scheduling-progress-heading">
             <div class="section-header">
-                <h3 class="section-title">Scheduling Progress (Next 2 Weeks)</h3>
+                <h3 class="section-title" id="scheduling-progress-heading">Scheduling Progress (Next 2 Weeks)</h3>
             </div>
 
             <!-- Scheduling Percentage -->
@@ -260,7 +262,7 @@
             {% if unscheduled_events_2weeks %}
                 <div class="unscheduled-list">
                     {% for event in unscheduled_events_2weeks %}
-                    <div class="unscheduled-item">
+                    <article class="unscheduled-item">
                         <div class="unscheduled-header">
                             <div class="unscheduled-title">{{ event.project_name }}</div>
                             <span class="event-type-badge event-type-{{ event.event_type.lower().replace(' ', '-') }}">
@@ -282,7 +284,7 @@
                             <span class="btn-text">Schedule Now</span>
                             <span class="btn-spinner">⏳</span>
                         </button>
-                    </div>
+                    </article>
                     {% endfor %}
                 </div>
                 
@@ -294,7 +296,7 @@
             {% else %}
                 <div class="no-items">All events within 2 weeks are scheduled!</div>
             {% endif %}
-        </div>
+        </section>
 
     </div>
 
@@ -326,8 +328,8 @@
             </div>
             <div id="mfa-error" class="mfa-error"></div>
             <div class="mfa-actions">
-                <button onclick="cancelMFAAuth()" class="btn btn-secondary">Cancel</button>
-                <button onclick="submitMFACode()" id="mfa-submit-btn" class="btn btn-primary">Authenticate</button>
+                <button data-action="cancel-mfa" class="btn btn-secondary">Cancel</button>
+                <button data-action="submit-mfa" id="mfa-submit-btn" class="btn btn-primary">Authenticate</button>
             </div>
         </div>
     </div>
@@ -337,7 +339,7 @@
         <div class="event-details-modal-content">
             <div class="event-details-header">
                 <h3 class="event-details-title">Event Details</h3>
-                <button onclick="closeEventDetails()" class="event-details-close">&times;</button>
+                <button data-action="close-event-details" class="event-details-close">&times;</button>
             </div>
 
             <div id="event-details-content" class="event-details-content">
@@ -369,16 +371,16 @@
             </div>
 
             <div class="event-details-actions">
-                <button onclick="rescheduleEvent()" class="btn btn-primary">Reschedule</button>
-                <button onclick="unscheduleEvent()" class="btn btn-secondary">Unschedule</button>
-                <button onclick="changeEmployee()" class="btn btn-primary">Change Employee</button>
-                <button onclick="printEDR()" class="btn btn--navy">Print EDR</button>
-                <button onclick="printInstructions()" class="btn btn--blue">Print Instructions</button>
-                <button onclick="printBoth()" class="btn btn-primary">Print Both</button>
+                <button data-action="reschedule-event" class="btn btn-primary">Reschedule</button>
+                <button data-action="unschedule-event" class="btn btn-secondary">Unschedule</button>
+                <button data-action="change-employee" class="btn btn-primary">Change Employee</button>
+                <button data-action="print-edr" class="btn btn--navy">Print EDR</button>
+                <button data-action="print-instructions" class="btn btn--blue">Print Instructions</button>
+                <button data-action="print-both" class="btn btn-primary">Print Both</button>
             </div>
 
             <div class="event-details-footer">
-                <button onclick="closeEventDetails()" class="btn btn-outline">Close</button>
+                <button data-action="close-event-details" class="btn btn-outline">Close</button>
             </div>
         </div>
     </div>
@@ -386,7 +388,7 @@
     <!-- Reschedule Event Modal -->
     <div class="modal-backdrop modal-overlay modal-overlay--higher" id="reschedule-modal">
         <div class="action-modal">
-            <button class="action-modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+            <button class="action-modal-close" data-action="close-modal" data-modal="reschedule-modal">&times;</button>
             <h3 class="action-modal-title">Reschedule Event</h3>
             <form id="reschedule-form">
                 <input type="hidden" id="reschedule-schedule-id">
@@ -412,7 +414,7 @@
                     </select>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="reschedule-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Reschedule</button>
                 </div>
             </form>
@@ -422,7 +424,7 @@
     <!-- Change Employee Modal -->
     <div class="modal-backdrop modal-overlay modal-overlay--higher" id="change-employee-modal">
         <div class="action-modal">
-            <button class="action-modal-close" onclick="closeModal('change-employee-modal')">&times;</button>
+            <button class="action-modal-close" data-action="close-modal" data-modal="change-employee-modal">&times;</button>
             <h3 class="action-modal-title">Change Employee</h3>
             <form id="change-employee-form">
                 <input type="hidden" id="change-schedule-id">
@@ -437,7 +439,7 @@
                     </select>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('change-employee-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="change-employee-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Change Employee</button>
                 </div>
             </form>
@@ -446,1425 +448,36 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-// Global variables for event details modal
-let currentEventScheduleId = null;
-let currentEventRefNum = null;
-let currentEventType = null;
-
-// Show Event Details Modal
-function showEventDetails(scheduleId, eventRefNum, eventName, employeeName, scheduledDate, scheduledTime, startDate, dueDate, eventType) {
-    currentEventScheduleId = scheduleId;
-    currentEventRefNum = eventRefNum;
-    currentEventType = eventType;
-
-    // Populate modal fields
-    document.getElementById('detail-event-number').textContent = eventRefNum;
-    document.getElementById('detail-event-name').textContent = eventName;
-    document.getElementById('detail-event-type').textContent = eventType;
-    document.getElementById('detail-employee').textContent = employeeName;
-    document.getElementById('detail-scheduled-date').textContent = scheduledDate;
-    document.getElementById('detail-scheduled-time').textContent = scheduledTime;
-    document.getElementById('detail-start-date').textContent = startDate;
-    document.getElementById('detail-due-date').textContent = dueDate;
-
-    // Show modal
-    const modal = document.getElementById('event-details-modal');
-    modal.style.display = 'flex';
-}
-
-// Close Event Details Modal
-function closeEventDetails() {
-    const modal = document.getElementById('event-details-modal');
-    modal.style.display = 'none';
-    currentEventScheduleId = null;
-    currentEventRefNum = null;
-    currentEventType = null;
-}
-
-// Reschedule Event
-function rescheduleEvent() {
-    if (!currentEventScheduleId) return;
-
-    const eventName = document.getElementById('detail-event-name').textContent;
-    const eventType = document.getElementById('detail-event-type').textContent;
-    const currentTime = document.getElementById('detail-scheduled-time').textContent;
-    const employeeName = document.getElementById('detail-employee').textContent;
-    const currentDate = document.getElementById('detail-scheduled-date').textContent;
-
-    openRescheduleModal(currentEventScheduleId, eventName, eventType, currentTime, employeeName, convertDateToISO(currentDate));
-}
-
-// Unschedule Event
-function unscheduleEvent() {
-    if (!currentEventScheduleId) return;
-
-    if (confirm('Are you sure you want to unschedule this event? This will remove the schedule assignment.')) {
-        // Get CSRF token
-        const csrfToken = window.getCsrfToken ? window.getCsrfToken() : null;
-
-        fetch(`/api/unschedule/${currentEventScheduleId}`, {
-            method: 'DELETE',
-            headers: csrfToken ? {
-                'X-CSRF-Token': csrfToken
-            } : {}
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`Server returned ${response.status}: ${text}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                alert('Event unscheduled successfully');
-                closeEventDetails();
-                location.reload();
-            } else {
-                alert('Error unscheduling event: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Unschedule error:', error);
-            alert('Error unscheduling event: ' + error.message);
-        });
-    }
-}
-
-// Change Employee
-function changeEmployee() {
-    if (!currentEventScheduleId) return;
-
-    const eventName = document.getElementById('detail-event-name').textContent;
-    const eventType = document.getElementById('detail-event-type').textContent;
-    const time = document.getElementById('detail-scheduled-time').textContent;
-    const employeeName = document.getElementById('detail-employee').textContent;
-    const date = document.getElementById('detail-scheduled-date').textContent;
-
-    openChangeEmployeeModal(currentEventScheduleId, eventName, eventType, time, employeeName, convertDateToISO(date));
-}
-
-// Helper function to convert MM-DD-YYYY to YYYY-MM-DD
-function convertDateToISO(dateStr) {
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-        return `${parts[2]}-${parts[0]}-${parts[1]}`; // Convert MM-DD-YYYY to YYYY-MM-DD
-    }
-    return dateStr;
-}
-
-// Modal management
-function closeModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
-
-// Reschedule Modal Functions
-function openRescheduleModal(scheduleId, eventName, eventType, currentTime, employeeName, currentDate) {
-    try {
-        document.getElementById('reschedule-schedule-id').value = scheduleId;
-        document.getElementById('reschedule-event-info').innerHTML = `
-            <strong>${eventName}</strong> (${eventType})<br>
-            Current: ${currentDate} at ${currentTime} with ${employeeName}
-        `;
-
-        // Convert displayed time to 24-hour format for comparison
-        const time24 = convertTo24Hour(currentTime);
-
-        // Set up time restrictions for event type
-        setupTimeRestrictions('reschedule', eventType, time24);
-
-        // Load available employees with role-based filtering
-        loadAvailableEmployeesForReschedule('reschedule-employee', currentDate, eventType);
-
-        document.getElementById('reschedule-modal').style.display = 'flex';
-    } catch (error) {
-        console.error('Error opening reschedule modal:', error);
-        alert('Error opening reschedule modal. Please try again.');
-    }
-}
-
-// Change Employee Modal Functions
-function openChangeEmployeeModal(scheduleId, eventName, eventType, time, employeeName, date) {
-    try {
-        document.getElementById('change-schedule-id').value = scheduleId;
-        document.getElementById('change-event-info').innerHTML = `
-            <strong>${eventName}</strong> (${eventType})<br>
-            Date: ${date} at ${time}<br>
-            Current Employee: ${employeeName}
-        `;
-
-        // Load available employees for this date
-        loadAvailableEmployeesForChange(date, eventType);
-
-        document.getElementById('change-employee-modal').style.display = 'flex';
-    } catch (error) {
-        console.error('Error opening change employee modal:', error);
-        alert('Error opening change employee modal. Please try again.');
-    }
-}
-
-// Helper function to setup time restrictions
-function setupTimeRestrictions(prefix, eventType, currentTime) {
-    const timeInput = document.getElementById(prefix + '-time');
-    const timeDropdown = document.getElementById(prefix + '-time-dropdown');
-
-    const timeRestrictions = {
-        'Core': ['09:45', '10:30', '11:00', '11:30'],
-        'Supervisor': ['12:00'],
-        'Freeosk': ['09:00', '12:00'],
-        'Digitals': ['09:15', '09:30', '09:45', '10:00']
-    };
-
-    if (timeRestrictions[eventType]) {
-        timeInput.style.display = 'none';
-        timeInput.required = false;
-        timeDropdown.style.display = 'block';
-        timeDropdown.required = true;
-
-        timeDropdown.innerHTML = '<option value="">Select a time</option>';
-        timeRestrictions[eventType].forEach(time => {
-            const option = document.createElement('option');
-            option.value = time;
-            option.textContent = formatTime(time);
-            if (currentTime && time === currentTime) {
-                option.selected = true;
-            }
-            timeDropdown.appendChild(option);
-        });
-    } else {
-        timeInput.style.display = 'block';
-        timeInput.required = true;
-        timeDropdown.style.display = 'none';
-        timeDropdown.required = false;
-    }
-}
-
-// Helper function to format time
-function formatTime(time24) {
-    const [hours, minutes] = time24.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${displayHour}:${minutes} ${ampm}`;
-}
-
-// Helper function to convert 12-hour time to 24-hour time
-function convertTo24Hour(time12) {
-    if (!time12 || !time12.includes(':')) {
-        return time12;
-    }
-
-    const [time, modifier] = time12.split(' ');
-    if (!modifier) {
-        return time12;
-    }
-
-    const [hours, minutes] = time.split(':');
-    let hour = parseInt(hours);
-
-    if (modifier.toUpperCase() === 'PM' && hour !== 12) {
-        hour += 12;
-    } else if (modifier.toUpperCase() === 'AM' && hour === 12) {
-        hour = 0;
-    }
-
-    return `${hour.toString().padStart(2, '0')}:${minutes}`;
-}
-
-// Load available employees functions
-function loadAvailableEmployeesForReschedule(selectId, date, eventType) {
-    const select = document.getElementById(selectId);
-    select.innerHTML = '<option value="">Loading...</option>';
-
-    fetch(`/api/available_employees_for_change/${date}/${eventType}`)
-        .then(response => response.json())
-        .then(employees => {
-            select.innerHTML = '<option value="">Select an employee</option>';
-            employees.forEach(employee => {
-                const option = document.createElement('option');
-                option.value = employee.id;
-                option.textContent = `${employee.name} (${employee.job_title})`;
-                select.appendChild(option);
-            });
-        })
-        .catch(error => {
-            console.error('Error loading employees:', error);
-            select.innerHTML = '<option value="">Error loading employees</option>';
-        });
-}
-
-function loadAvailableEmployeesForChange(date, eventType) {
-    const select = document.getElementById('change-new-employee');
-    select.innerHTML = '<option value="">Loading...</option>';
-
-    fetch(`/api/available_employees_for_change/${date}/${eventType}`)
-        .then(response => response.json())
-        .then(employees => {
-            select.innerHTML = '<option value="">Select new employee...</option>';
-            employees.forEach(employee => {
-                const option = document.createElement('option');
-                option.value = employee.id;
-                option.textContent = `${employee.name} (${employee.job_title})`;
-                select.appendChild(option);
-            });
-        })
-        .catch(error => {
-            console.error('Error loading employees:', error);
-            select.innerHTML = '<option value="">Error loading employees</option>';
-        });
-}
-
-// Form submission handlers
-document.addEventListener('DOMContentLoaded', function() {
-    // Reschedule form submission
-    document.getElementById('reschedule-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const scheduleId = document.getElementById('reschedule-schedule-id').value;
-        const date = document.getElementById('reschedule-date').value;
-        const timeInput = document.getElementById('reschedule-time');
-        const timeDropdown = document.getElementById('reschedule-time-dropdown');
-        const time = timeDropdown.style.display !== 'none' ? timeDropdown.value : timeInput.value;
-        const employeeId = document.getElementById('reschedule-employee').value;
-
-        if (!date || !time || !employeeId) {
-            alert('Please fill in all fields');
-            return;
-        }
-
-        fetch('/api/reschedule', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                schedule_id: parseInt(scheduleId),
-                new_date: date,
-                new_time: time,
-                employee_id: employeeId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                closeModal('reschedule-modal');
-                closeEventDetails();
-                location.reload();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error rescheduling event');
-        });
-    });
-
-    // Change employee form submission
-    document.getElementById('change-employee-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const scheduleId = document.getElementById('change-schedule-id').value;
-        const newEmployeeId = document.getElementById('change-new-employee').value;
-
-        if (!newEmployeeId) {
-            alert('Please select a new employee');
-            return;
-        }
-
-        fetch('/api/change_employee', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                schedule_id: parseInt(scheduleId),
-                employee_id: newEmployeeId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                closeModal('change-employee-modal');
-                closeEventDetails();
-                location.reload();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error changing employee');
-        });
-    });
-
-    // Close modals when clicking outside
-    document.querySelectorAll('.modal-backdrop').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal(this.id);
-            }
-        });
-    });
-});
-
-// Print EDR
-function printEDR() {
-    if (!currentEventRefNum) return;
-
-    // Show loading message
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999;';
-    statusDiv.textContent = 'Generating EDR report...';
-    document.body.appendChild(statusDiv);
-
-    // Request EDR for this specific event
-    fetch(`/api/edr_reports/generate_single/${currentEventRefNum}`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.blob();
-        } else {
-            return response.json().then(err => {
-                throw new Error(err.error || 'Failed to generate EDR');
-            });
-        }
-    })
-    .then(blob => {
-        // Download the PDF
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `EDR_${currentEventRefNum}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        statusDiv.style.background = '#27ae60';
-        statusDiv.textContent = 'EDR generated successfully!';
-        setTimeout(() => document.body.removeChild(statusDiv), 3000);
-    })
-    .catch(error => {
-        statusDiv.style.background = '#e74c3c';
-        statusDiv.textContent = 'Error: ' + error.message;
-        setTimeout(() => document.body.removeChild(statusDiv), 5000);
-    });
-}
-
-// Print Instructions
-function printInstructions() {
-    if (!currentEventRefNum) return;
-
-    // Show loading message
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999;';
-    statusDiv.textContent = 'Generating instructions...';
-    document.body.appendChild(statusDiv);
-
-    // Request instructions for this specific event
-    fetch(`/api/instructions/generate/${currentEventRefNum}`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.blob();
-        } else {
-            return response.json().then(err => {
-                throw new Error(err.error || 'Failed to generate instructions');
-            });
-        }
-    })
-    .then(blob => {
-        // Download the PDF
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Instructions_${currentEventRefNum}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        statusDiv.style.background = '#27ae60';
-        statusDiv.textContent = 'Instructions generated successfully!';
-        setTimeout(() => document.body.removeChild(statusDiv), 3000);
-    })
-    .catch(error => {
-        statusDiv.style.background = '#e74c3c';
-        statusDiv.textContent = 'Error: ' + error.message;
-        setTimeout(() => document.body.removeChild(statusDiv), 5000);
-    });
-}
-
-// Print Both (EDR and Instructions)
-function printBoth() {
-    if (!currentEventRefNum) return;
-
-    // Show loading message
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999;';
-    statusDiv.textContent = 'Generating EDR and Instructions...';
-    document.body.appendChild(statusDiv);
-
-    // Request both EDR and instructions
-    fetch(`/api/paperwork/generate_both/${currentEventRefNum}`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.blob();
-        } else {
-            return response.json().then(err => {
-                throw new Error(err.error || 'Failed to generate paperwork');
-            });
-        }
-    })
-    .then(blob => {
-        // Download the PDF
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Paperwork_${currentEventRefNum}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        statusDiv.style.background = '#27ae60';
-        statusDiv.textContent = 'Paperwork generated successfully!';
-        setTimeout(() => document.body.removeChild(statusDiv), 3000);
-    })
-    .catch(error => {
-        statusDiv.style.background = '#e74c3c';
-        statusDiv.textContent = 'Error: ' + error.message;
-        setTimeout(() => document.body.removeChild(statusDiv), 5000);
-    });
-}
-
-// Print today's schedule functionality - matching calendar format exactly
-function printTodaySchedule() {
-    // Use explicit date formatting to avoid timezone issues
-    const todayStr = '{{ today.strftime('%A, %B %d, %Y') }}';
-
-    // Prepare events data for printing (Core and Juicer Production only)
-    const printableEvents = [
+<!-- Server-side data for index-page.js -->
+<script type="application/json" id="page-data">
+{
+    "todayFormatted": {{ today.strftime('%A, %B %d, %Y') | tojson }},
+    "tomorrowFormatted": {{ tomorrow.strftime('%A, %B %d, %Y') | tojson }},
+    "todayCoreEvents": [
         {% for schedule, event, employee in today_core_events %}
         {
-            employee_name: "{{ employee.name }}",
-            time: "{{ schedule.schedule_datetime.strftime('%I:%M %p') }}",
-            event_name: "{{ event.project_name }}",
-            event_type: "{{ event.event_type }}",
-            minutes: convertTimeToMinutes("{{ schedule.schedule_datetime.strftime('%I:%M %p') }}")
-        },
+            "employee_name": {{ employee.name | tojson }},
+            "time": {{ schedule.schedule_datetime.strftime('%I:%M %p') | tojson }},
+            "event_name": {{ event.project_name | tojson }},
+            "event_type": {{ event.event_type | tojson }}
+        }{{ "," if not loop.last }}
         {% endfor %}
-    ];
-
-    // Filter and sort events (same logic as calendar)
-    const filteredEvents = printableEvents.filter(event => {
-        return event.event_type === 'Core' || 
-               (event.event_type === 'Juicer' && 
-                event.event_name.includes('Production') && 
-                !event.event_name.toLowerCase().includes('survey'));
-    });
-
-    // Sort by time
-    filteredEvents.sort((a, b) => a.minutes - b.minutes);
-
-    if (filteredEvents.length === 0) {
-        alert('No Core or Juicer Production events found for this day.');
-        return;
-    }
-
-    // Generate printable HTML with exact same format as calendar
-    const printContent = generatePrintableSchedule(todayStr, filteredEvents);
-    
-    // Create and open print window
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-}
-
-function printTomorrowSchedule() {
-    // Use explicit date formatting to avoid timezone issues
-    const tomorrowStr = '{{ tomorrow.strftime('%A, %B %d, %Y') }}';
-
-    // Prepare tomorrow's events data (we'll need to get this from the backend)
-    const printableEvents = [
+    ],
+    "tomorrowCoreEvents": [
         {% for schedule, event, employee in tomorrow_core_events %}
         {
-            employee_name: "{{ employee.name }}",
-            time: "{{ schedule.schedule_datetime.strftime('%I:%M %p') }}",
-            event_name: "{{ event.project_name }}",
-            event_type: "{{ event.event_type }}"
-        },
+            "employee_name": {{ employee.name | tojson }},
+            "time": {{ schedule.schedule_datetime.strftime('%I:%M %p') | tojson }},
+            "event_name": {{ event.project_name | tojson }},
+            "event_type": {{ event.event_type | tojson }}
+        }{{ "," if not loop.last }}
         {% endfor %}
-    ];
-
-    // Filter for Core and Juicer Production events only
-    const filteredEvents = printableEvents.filter(event =>
-        event.event_type === 'Core' || event.event_type === 'Juicer'
-    );
-
-    const printContent = generatePrintableSchedule(tomorrowStr, filteredEvents);
-
-    // Create and open print window
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    ]
 }
-
-// New function for date-based schedule printing
-function printScheduleByDate() {
-    const dateInput = document.getElementById('schedule-date');
-    const selectedDate = dateInput.value;
-
-    if (!selectedDate) {
-        alert('Please select a date');
-        return;
-    }
-
-    // Show loading indicator
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'schedule-loading-status';
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Loading schedule...';
-    document.body.appendChild(statusDiv);
-
-    // Fetch schedule data for the selected date
-    fetch(`/api/schedule/print/${selectedDate}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to fetch schedule data');
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Remove loading indicator
-            document.body.removeChild(statusDiv);
-
-            if (!data.events || data.events.length === 0) {
-                alert('No Core or Juicer Production events found for this date.');
-                return;
-            }
-
-            // Sort events by time
-            data.events.sort((a, b) => a.minutes - b.minutes);
-
-            // Generate printable HTML
-            const printContent = generatePrintableSchedule(data.formatted_date, data.events);
-
-            // Create and open print window
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            printWindow.focus();
-            printWindow.print();
-        })
-        .catch(error => {
-            // Remove loading indicator if it exists
-            const loadingDiv = document.getElementById('schedule-loading-status');
-            if (loadingDiv) {
-                document.body.removeChild(loadingDiv);
-            }
-            alert('Error loading schedule: ' + error.message);
-            console.error('Error:', error);
-        });
-}
-
-function convertTimeToMinutes(timeStr) {
-    // Convert time like "9:15 AM" to minutes for sorting
-    const [time, modifier] = timeStr.split(' ');
-    const [hours, minutes] = time.split(':');
-    let hour = parseInt(hours);
-    
-    if (modifier === 'PM' && hour !== 12) {
-        hour += 12;
-    } else if (modifier === 'AM' && hour === 12) {
-        hour = 0;
-    }
-    
-    return hour * 60 + parseInt(minutes);
-}
-
-function generatePrintableSchedule(dateStr, printableEvents) {
-    return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Core Events Schedule - ${dateStr}</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 40px;
-                background: white;
-            }
-            .header {
-                text-align: center;
-                margin-bottom: 30px;
-                border-bottom: 3px solid #2E4C73;
-                padding-bottom: 20px;
-            }
-            .date-title {
-                font-size: 24px;
-                font-weight: bold;
-                color: #2E4C73;
-                margin: 0;
-            }
-            .subtitle {
-                font-size: 16px;
-                color: #666;
-                margin: 5px 0 0 0;
-            }
-            .schedule-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
-            .schedule-table th {
-                background: #2E4C73;
-                color: white;
-                padding: 12px;
-                text-align: left;
-                font-weight: bold;
-                font-size: 14px;
-                border: 1px solid #ddd;
-            }
-            .schedule-table td {
-                padding: 10px 12px;
-                border: 1px solid #ddd;
-                font-size: 13px;
-            }
-            .schedule-table tr:nth-child(even) {
-                background-color: #f9f9f9;
-            }
-            .schedule-table tr:hover {
-                background-color: #f0f0f0;
-            }
-            .employee-name {
-                font-weight: bold;
-                color: #2E4C73;
-            }
-            .event-time {
-                font-weight: bold;
-                color: #1B9BD8;
-            }
-            .event-name {
-                color: #333;
-            }
-            .footer {
-                margin-top: 40px;
-                text-align: center;
-                font-size: 12px;
-                color: #888;
-                border-top: 1px solid #ddd;
-                padding-top: 20px;
-            }
-            @media print {
-                body { margin: 20px; }
-                .header { page-break-after: avoid; }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1 class="date-title">${dateStr}</h1>
-            <p class="subtitle">Daily Schedule</p>
-        </div>
-        
-        <table class="schedule-table">
-            <thead>
-                <tr>
-                    <th style="width: 30%;">Employee Name</th>
-                    <th style="width: 20%;">Scheduled Time</th>
-                    <th style="width: 50%;">Event Name</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${printableEvents.map(event => `
-                    <tr>
-                        <td class="employee-name">${event.employee_name}</td>
-                        <td class="event-time">${event.time}</td>
-                        <td class="event-name">${event.event_name}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-        
-        <div class="footer">
-            <p>Generated on ${new Date().toLocaleString()} | Product Connections Scheduler</p>
-        </div>
-    </body>
-    </html>
-    `;
-}
-
-// Sync status functions removed - moved to dedicated Sync Settings page
-
-// Global variable to track pending paperwork type
-let pendingPaperworkType = null;
-let pendingEDRDate = null;
-
-// MFA Modal functions
-function showMFAModal(paperworkType) {
-    pendingPaperworkType = paperworkType;
-    const modal = document.getElementById('mfa-modal');
-    const input = document.getElementById('mfa-code-input');
-    const error = document.getElementById('mfa-error');
-
-    modal.style.display = 'flex';
-    input.value = '';
-    error.style.display = 'none';
-    input.focus();
-}
-
-function cancelMFAAuth() {
-    const modal = document.getElementById('mfa-modal');
-    modal.style.display = 'none';
-    pendingPaperworkType = null;
-    pendingEDRDate = null;
-}
-
-function submitMFACode() {
-    const input = document.getElementById('mfa-code-input');
-    const error = document.getElementById('mfa-error');
-    const submitBtn = document.getElementById('mfa-submit-btn');
-    const mfaCode = input.value.trim();
-
-    if (!mfaCode || mfaCode.length !== 6) {
-        error.textContent = 'Please enter a 6-digit MFA code';
-        error.style.display = 'block';
-        return;
-    }
-
-    // Determine which workflow to use (paperwork or EDR)
-    if (pendingEDRDate) {
-        submitMFACodeForEDR(mfaCode, submitBtn, error);
-    } else if (selectedPaperworkDate) {
-        submitMFACodeForPaperwork(mfaCode, submitBtn, error);
-    } else {
-        error.textContent = 'No operation pending';
-        error.style.display = 'block';
-    }
-}
-
-function submitMFACodeForPaperwork(mfaCode, submitBtn, error) {
-    // Disable button and show loading
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Generating Paperwork...';
-    error.style.display = 'none';
-
-    // Generate daily paperwork with MFA code
-    fetch('/api/daily_paperwork/generate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            mfa_code: mfaCode,
-            date: selectedPaperworkDate
-        })
-    })
-    .then(response => {
-        if (response.ok) {
-            // Close modal
-            cancelMFAAuth();
-
-            // Download the PDF
-            return response.blob().then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Paperwork_${selectedPaperworkDate}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                // Show success message
-                const successDiv = document.createElement('div');
-                successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-                successDiv.textContent = 'Daily paperwork generated successfully!';
-                document.body.appendChild(successDiv);
-                setTimeout(() => document.body.removeChild(successDiv), 3000);
-
-                selectedPaperworkDate = null;  // Reset after use
-            });
-        } else {
-            return response.json().then(data => {
-                throw new Error(data.error || 'Failed to generate paperwork');
-            });
-        }
-    })
-    .catch(err => {
-        error.textContent = err.message || 'Unknown error occurred';
-        error.style.display = 'block';
-    })
-    .finally(() => {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Authenticate';
-    });
-}
-
-function submitMFACodeForEDR(mfaCode, submitBtn, error) {
-    // Disable button and show loading
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Generating EDR Reports...';
-    error.style.display = 'none';
-
-    // Generate EDR reports with MFA code
-    fetch('/api/edr_reports/generate_by_date', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            mfa_code: mfaCode,
-            date: pendingEDRDate
-        })
-    })
-    .then(response => {
-        if (response.ok) {
-            // Close modal
-            cancelMFAAuth();
-
-            // Download the PDF
-            return response.blob().then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `EDR_Reports_${pendingEDRDate}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                // Show success message
-                const successDiv = document.createElement('div');
-                successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-                successDiv.textContent = 'EDR reports generated successfully!';
-                document.body.appendChild(successDiv);
-                setTimeout(() => document.body.removeChild(successDiv), 3000);
-
-                pendingEDRDate = null;  // Reset after use
-            });
-        } else {
-            return response.json().then(data => {
-                throw new Error(data.error || 'Failed to generate EDR reports');
-            });
-        }
-    })
-    .catch(err => {
-        error.textContent = err.message || 'Unknown error occurred';
-        error.style.display = 'block';
-    })
-    .finally(() => {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Authenticate';
-    });
-}
-
-function generatePaperworkByDate(dateStr) {
-    console.log('Generating paperwork for date:', dateStr);
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Generating comprehensive paperwork PDF...';
-    document.body.appendChild(statusDiv);
-
-    fetch(`/api/print_paperwork_by_date/${dateStr}`)
-        .then(response => {
-            console.log('Response received:', response.status, response.statusText);
-            if (response.ok) {
-                return response.blob();
-            } else {
-                return response.json().then(err => Promise.reject(err));
-            }
-        })
-        .then(blob => {
-            console.log('Blob received, size:', blob.size);
-            // Create download link
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Sales_Tools_${dateStr}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            statusDiv.style.background = '#27ae60';
-            statusDiv.textContent = 'PDF downloaded successfully!';
-            setTimeout(() => document.body.removeChild(statusDiv), 3000);
-        })
-        .catch(error => {
-            console.error('Error generating paperwork:', error);
-            statusDiv.style.background = '#e74c3c';
-            statusDiv.textContent = `Error: ${error.error || error.message || 'Unknown error'}`;
-            setTimeout(() => document.body.removeChild(statusDiv), 5000);
-        });
-}
-
-// Allow Enter key to submit MFA code
-document.addEventListener('DOMContentLoaded', function() {
-    const mfaInput = document.getElementById('mfa-code-input');
-    if (mfaInput) {
-        mfaInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                submitMFACode();
-            }
-        });
-    }
-});
-
-// Global variable to store the selected date for paperwork
-let selectedPaperworkDate = null;
-
-// Paperwork printing functions
-function printPaperworkByDate() {
-    const dateInput = document.getElementById('paperwork-date');
-    selectedPaperworkDate = dateInput.value;
-
-    if (!selectedPaperworkDate) {
-        alert('Please select a date');
-        return;
-    }
-
-    // Request MFA code and show modal
-    requestMFACodeAndShowModalForPaperwork();
-}
-
-// Print SalesTools for selected date
-function printSalesToolsByDate() {
-    const dateInput = document.getElementById('paperwork-date');
-    const selectedDate = dateInput.value;
-
-    if (!selectedDate) {
-        alert('Please select a date');
-        return;
-    }
-
-    // Show loading indicator
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Downloading and merging SalesTools PDFs...';
-    document.body.appendChild(statusDiv);
-
-    fetch(`/api/print_salestools_by_date/${selectedDate}`)
-        .then(response => {
-            if (response.ok) {
-                return response.blob();
-            } else {
-                return response.json().then(err => {
-                    throw new Error(err.error || 'Failed to generate SalesTools PDF');
-                });
-            }
-        })
-        .then(blob => {
-            // Create download link
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `SalesTools_${selectedDate}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            // Update status
-            statusDiv.style.background = '#27ae60';
-            statusDiv.textContent = 'SalesTools PDF downloaded successfully!';
-            setTimeout(() => document.body.removeChild(statusDiv), 3000);
-
-            // Open print dialog
-            const printWindow = window.open(url, '_blank');
-            if (printWindow) {
-                printWindow.onload = function() {
-                    printWindow.print();
-                };
-            }
-        })
-        .catch(error => {
-            console.error('Error generating SalesTools PDF:', error);
-            statusDiv.style.background = '#e74c3c';
-            statusDiv.textContent = `Error: ${error.message}`;
-            setTimeout(() => document.body.removeChild(statusDiv), 5000);
-        });
-}
-
-function requestMFACodeAndShowModalForPaperwork() {
-    // Show loading indicator
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'mfa-request-status';
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Requesting MFA code...';
-    document.body.appendChild(statusDiv);
-
-    // Request MFA code to be sent
-    fetch('/api/daily_paperwork/request_mfa', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Remove loading indicator
-        document.body.removeChild(statusDiv);
-
-        if (data.success) {
-            // Show success message briefly
-            const successDiv = document.createElement('div');
-            successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-            successDiv.textContent = 'MFA code sent to your phone!';
-            document.body.appendChild(successDiv);
-
-            setTimeout(() => {
-                document.body.removeChild(successDiv);
-                // Now show the MFA modal
-                showMFAModalForPaperwork();
-            }, 1500);
-        } else {
-            alert('Failed to request MFA code: ' + (data.error || data.message || 'Unknown error'));
-        }
-    })
-    .catch(err => {
-        // Remove loading indicator
-        const loadingDiv = document.getElementById('mfa-request-status');
-        if (loadingDiv) {
-            document.body.removeChild(loadingDiv);
-        }
-        alert('Error requesting MFA code: ' + (err.message || 'Unknown error'));
-    });
-}
-
-function showMFAModalForPaperwork() {
-    const modal = document.getElementById('mfa-modal');
-    const input = document.getElementById('mfa-code-input');
-    const error = document.getElementById('mfa-error');
-
-    modal.style.display = 'flex';
-    input.value = '';
-    error.style.display = 'none';
-    input.focus();
-}
-
-// Legacy functions (kept for backward compatibility)
-function printTodayPaperwork() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('paperwork-date').value = today;
-    printPaperworkByDate();
-}
-
-function printTomorrowPaperwork() {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    document.getElementById('paperwork-date').value = tomorrow.toISOString().split('T')[0];
-    printPaperworkByDate();
-}
-
-function requestMFACodeAndShowModal(paperworkType) {
-    // Show loading indicator
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'mfa-request-status';
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Requesting MFA code...';
-    document.body.appendChild(statusDiv);
-
-    // Request MFA code to be sent
-    fetch('/api/edr/request_code', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Remove loading indicator
-        document.body.removeChild(statusDiv);
-
-        if (data.success) {
-            // Show success message briefly
-            const successDiv = document.createElement('div');
-            successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-            successDiv.textContent = 'MFA code sent to your phone!';
-            document.body.appendChild(successDiv);
-
-            setTimeout(() => {
-                document.body.removeChild(successDiv);
-                // Now show the MFA modal
-                showMFAModal(paperworkType);
-            }, 1500);
-        } else {
-            alert('Failed to request MFA code: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(err => {
-        // Remove loading indicator
-        const loadingDiv = document.getElementById('mfa-request-status');
-        if (loadingDiv) {
-            document.body.removeChild(loadingDiv);
-        }
-        alert('Error requesting MFA code: ' + (err.message || 'Unknown error'));
-    });
-}
-
-function generatePaperwork(type) {
-    console.log('generatePaperwork called with type:', type);
-    const statusDiv = document.createElement('div');
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Generating PDF...';
-    document.body.appendChild(statusDiv);
-    console.log('Status div added to body');
-
-    console.log('Fetching:', `/api/print_paperwork/${type}`);
-    fetch(`/api/print_paperwork/${type}`)
-        .then(response => {
-            console.log('Response received:', response.status, response.statusText);
-            if (response.ok) {
-                return response.blob();
-            } else {
-                return response.json().then(err => Promise.reject(err));
-            }
-        })
-        .then(blob => {
-            console.log('Blob received, size:', blob.size);
-            // Create download link
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            const dateStr = type === 'today'
-                ? new Date().toISOString().split('T')[0]
-                : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
-            a.download = `Sales_Tools_${type}_${dateStr}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            statusDiv.style.background = '#27ae60';
-            statusDiv.textContent = 'PDF downloaded successfully!';
-            setTimeout(() => document.body.removeChild(statusDiv), 3000);
-        })
-        .catch(error => {
-            console.error('Error generating paperwork:', error);
-            statusDiv.style.background = '#e74c3c';
-            statusDiv.textContent = `Error: ${error.error || error.message || 'Unknown error'}`;
-            setTimeout(() => document.body.removeChild(statusDiv), 5000);
-        });
-}
-
-// Removed auto-scheduler functions - moved to dedicated Auto-Scheduler page
-
-// EDR Reports generation function
-function generateEDRReports() {
-    const dateInput = document.getElementById('paperwork-date');
-    const selectedDate = dateInput.value;
-
-    if (!selectedDate) {
-        alert('Please select a date');
-        return;
-    }
-
-    // Store the date globally
-    pendingEDRDate = selectedDate;
-
-    // Request MFA code and show modal
-    requestMFACodeForEDR();
-}
-
-function requestMFACodeForEDR() {
-    // Show loading indicator
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'mfa-request-status-edr';
-    statusDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--pc-navy); color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-    statusDiv.textContent = 'Requesting MFA code for EDR reports...';
-    document.body.appendChild(statusDiv);
-
-    // Request MFA code to be sent
-    fetch('/api/edr_reports/request_mfa', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Remove loading indicator
-        document.body.removeChild(statusDiv);
-
-        if (data.success) {
-            // Show success message briefly
-            const successDiv = document.createElement('div');
-            successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999;';
-            successDiv.textContent = 'MFA code sent to your phone!';
-            document.body.appendChild(successDiv);
-
-            setTimeout(() => {
-                document.body.removeChild(successDiv);
-                // Now show the MFA modal
-                showMFAModalForEDR();
-            }, 1500);
-        } else {
-            alert('Failed to request MFA code: ' + (data.error || data.message || 'Unknown error'));
-            pendingEDRDate = null;
-        }
-    })
-    .catch(err => {
-        // Remove loading indicator
-        const loadingDiv = document.getElementById('mfa-request-status-edr');
-        if (loadingDiv) {
-            document.body.removeChild(loadingDiv);
-        }
-        alert('Error requesting MFA code: ' + (err.message || 'Unknown error'));
-        pendingEDRDate = null;
-    });
-}
-
-function showMFAModalForEDR() {
-    const modal = document.getElementById('mfa-modal');
-    const input = document.getElementById('mfa-code-input');
-    const error = document.getElementById('mfa-error');
-
-    modal.style.display = 'flex';
-    input.value = '';
-    error.style.display = 'none';
-    input.focus();
-}
-
-// Schedule Verification Widget Functions
-async function runVerification() {
-    const dateInput = document.getElementById('verification-date');
-    const selectedDate = dateInput.value;
-
-    if (!selectedDate) {
-        alert('Please select a date');
-        return;
-    }
-
-    // Show loading state
-    document.getElementById('verification-widget-initial').style.display = 'none';
-    document.getElementById('verification-widget-results').style.display = 'none';
-    document.getElementById('verification-widget-loading').style.display = 'block';
-
-    try {
-        const response = await fetch(`/auto-schedule/api/verify-date?date=${selectedDate}`);
-
-        if (!response.ok) {
-            throw new Error(`Verification failed: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Hide loading, show results
-        document.getElementById('verification-widget-loading').style.display = 'none';
-        document.getElementById('verification-widget-results').style.display = 'block';
-
-        // Display results
-        displayWidgetVerificationResults(data, selectedDate);
-    } catch (error) {
-        console.error('Verification error:', error);
-        document.getElementById('verification-widget-loading').style.display = 'none';
-        document.getElementById('verification-widget-initial').style.display = 'block';
-        alert('Error running verification: ' + error.message);
-    }
-}
-
-function displayWidgetVerificationResults(data, selectedDate) {
-    const criticalCount = data.critical_issues ? data.critical_issues.length : 0;
-    const warningCount = data.warnings ? data.warnings.length : 0;
-    const infoCount = data.info ? data.info.length : 0;
-
-    // Format the date for display
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    const formattedDate = dateObj.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-
-    // Update status badge
-    const statusBadge = document.getElementById('verification-status-badge');
-    const icon = document.getElementById('verification-widget-icon');
-
-    if (criticalCount > 0) {
-        statusBadge.style.background = 'rgba(192, 57, 43, 0.1)';
-        statusBadge.style.border = '2px solid #c0392b';
-        statusBadge.style.color = '#c0392b';
-        statusBadge.innerHTML = `🚨 ${criticalCount} Critical Issue${criticalCount !== 1 ? 's' : ''} Found`;
-        icon.textContent = '🚨';
-    } else if (warningCount > 0) {
-        statusBadge.style.background = 'rgba(230, 126, 34, 0.1)';
-        statusBadge.style.border = '2px solid #e67e22';
-        statusBadge.style.color = '#e67e22';
-        statusBadge.innerHTML = `⚠️ ${warningCount} Warning${warningCount !== 1 ? 's' : ''} - Review Recommended`;
-        icon.textContent = '⚠️';
-    } else {
-        statusBadge.style.background = 'rgba(39, 174, 96, 0.1)';
-        statusBadge.style.border = '2px solid #27ae60';
-        statusBadge.style.color = '#27ae60';
-        statusBadge.innerHTML = `✅ All schedules verified for ${formattedDate}`;
-        icon.textContent = '✅';
-    }
-
-    // Display critical issues
-    const criticalSection = document.getElementById('verification-critical-section');
-    const criticalList = document.getElementById('verification-critical-list');
-    if (criticalCount > 0) {
-        criticalSection.style.display = 'block';
-        criticalList.innerHTML = data.critical_issues.map(issue =>
-            formatVerificationIssue(issue, 'critical')
-        ).join('');
-    } else {
-        criticalSection.style.display = 'none';
-    }
-
-    // Display warnings
-    const warningsSection = document.getElementById('verification-warnings-section');
-    const warningsList = document.getElementById('verification-warnings-list');
-    if (warningCount > 0) {
-        warningsSection.style.display = 'block';
-        warningsList.innerHTML = data.warnings.map(issue =>
-            formatVerificationIssue(issue, 'warning')
-        ).join('');
-    } else {
-        warningsSection.style.display = 'none';
-    }
-
-    // Display info messages
-    const infoSection = document.getElementById('verification-info-section');
-    const infoList = document.getElementById('verification-info-list');
-    if (infoCount > 0) {
-        infoSection.style.display = 'block';
-        infoList.innerHTML = data.info.map(issue =>
-            formatVerificationIssue(issue, 'info')
-        ).join('');
-    } else {
-        infoSection.style.display = 'none';
-    }
-}
-
-function formatVerificationIssue(issue, severity) {
-    return `
-        <div class="verification-issue-item ${severity}">
-            <div class="verification-issue-message">${issue.message}</div>
-            ${issue.details ? `<div class="verification-issue-details">${issue.details}</div>` : ''}
-            ${issue.action ? `<div class="verification-issue-action">💡 ${issue.action}</div>` : ''}
-        </div>
-    `;
-}
-
-// No page load initialization needed for dashboard anymore
 </script>
+
+<!-- FLAW-003: Index page JavaScript (extracted from inline script) -->
+<script src="{{ url_for('static', filename='js/pages/index-page.js') }}"></script>
 
 <!-- Epic 2 Story 2.2: Dashboard page functionality -->
 <script type="module" src="{{ url_for('static', filename='js/pages/dashboard.js') }}"></script>

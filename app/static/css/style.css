@@ -452,10 +452,6 @@ body {
     margin: 0;
 }
 
-.header-logo-container {
-    flex-shrink: 0;
-}
-
 .header-logo {
     height: 50px;
     width: auto;
@@ -871,6 +867,7 @@ input:focus {
     color: var(--text-white);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 .event-type-core {
@@ -1158,30 +1155,6 @@ input:focus {
     }
 }
 
-/* Flash Messages */
-.flash-messages {
-    margin-bottom: 2rem;
-}
-
-.alert {
-    padding: 1rem;
-    border-radius: var(--radius-sm);
-    margin-bottom: 1rem;
-    border: 1px solid transparent;
-}
-
-.alert-success {
-    background-color: #d4edda;
-    border-color: #c3e6cb;
-    color: #155724;
-}
-
-.alert-error {
-    background-color: #f8d7da;
-    border-color: #f5c6cb;
-    color: #721c24;
-}
-
 /* Import/Export Actions */
 .actions {
     display: flex;
@@ -1250,55 +1223,6 @@ input:focus {
     }
 }
 
-/* Event Type Badges */
-.event-type-badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius-xl);
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-    color: white;
-}
-
-.event-type-core {
-    background-color: #dc3545;
-}
-
-.event-type-digitals {
-    background-color: #007bff;
-}
-
-.event-type-juicer {
-    background-color: #28a745;
-}
-
-.event-type-juicer-production {
-    background-color: #28a745;
-}
-
-.event-type-juicer-survey {
-    background-color: #fdd835;
-    color: var(--text-primary);
-}
-
-.event-type-juicer-deep-clean {
-    background-color: #f57c00;
-}
-
-.event-type-supervisor {
-    background-color: #6610f2;
-}
-
-.event-type-freeosk {
-    background-color: #fd7e14;
-}
-
-.event-type-other {
-    background-color: #6c757d;
-}
 /* ==========================================================================
    Database Refresh Button and Modal Styles
    ========================================================================== */

@@ -1,3 +1,16 @@
+{#
+  Template: unscheduled.html
+  Route: main.unscheduled_events (GET /events, GET /unscheduled)
+
+  Context variables:
+    events              (list[dict]) - Events with priority info (event + scheduling_priority)
+    event_types         (list[str])  - Distinct event type names for filter dropdown
+    selected_event_type (str)        - Currently selected event type filter
+    condition           (str)        - Current condition filter ('all', 'unstaffed', etc.)
+    condition_display   (str)        - Human-readable condition name
+    date_filter         (str)        - Date filter ('today', 'tomorrow', 'week', '')
+    date_filter_display (str)        - Human-readable date filter name
+#}
 {% extends "base.html" %}
 
 {% block title %}Events - Product Connections Scheduler{% endblock %}
@@ -63,7 +76,7 @@
                     UPPERCASE = Employee • Numbers = Event #
                 </div>
             </div>
-            <select name="event_type" class="mini-filter" onchange="this.form.submit()">
+            <select name="event_type" class="mini-filter" data-action="auto-submit-form">
                 <option value="">All Types</option>
                 {% for event_type in event_types %}
                 <option value="{{ event_type }}" {% if event_type==selected_event_type %}selected{% endif %}>
@@ -191,7 +204,7 @@
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Reschedule Event
                 </a>
-                <button onclick="confirmUnscheduleEvent({{ event.id }}, '{{ event.project_name|replace("'", "\\'") }}')"
+                <button data-action="confirm-unschedule" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
                     class="btn btn-danger btn-sm">
                     Unschedule
                 </button>
@@ -204,7 +217,7 @@
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Schedule Manually
                 </a>
-                <button onclick="autoScheduleEvent({{ event.id }}, '{{ event.project_name|replace("'", "\\'") }}')"
+                <button data-action="auto-schedule" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
                     class="btn btn-info btn-sm">
                     Auto Schedule
                 </button>
@@ -230,7 +243,7 @@
 <!-- Export Validation Modal -->
 <div class="modal-backdrop" id="validation-modal" style="display: none;">
     <div class="action-modal" style="max-width: 700px;">
-        <button class="modal-close" onclick="closeValidationModal()">&times;</button>
+        <button class="modal-close" data-action="close-validation-modal">&times;</button>
         <h3>Schedule Validation Errors</h3>
         <p>The following events have scheduling errors that must be fixed before exporting:</p>
 
@@ -239,8 +252,8 @@
         </div>
 
         <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeValidationModal()">Cancel Export</button>
-            <button type="button" class="btn btn-primary" onclick="proceedWithValidExport()"
+            <button type="button" class="btn btn-secondary" data-action="close-validation-modal">Cancel Export</button>
+            <button type="button" class="btn btn-primary" data-action="proceed-with-valid-export"
                 id="export-valid-btn">Export Valid Events Only</button>
         </div>
     </div>
@@ -249,7 +262,7 @@
 <!-- Reschedule Modal (reused from calendar) -->
 <div class="modal-backdrop" id="reschedule-modal" style="display: none;">
     <div class="action-modal">
-        <button class="modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+        <button class="modal-close" data-action="close-reschedule-modal">&times;</button>
         <h3>Reschedule Event</h3>
         <form id="reschedule-form">
             <input type="hidden" id="reschedule-schedule-id">
@@ -279,7 +292,7 @@
                 </select>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-action="close-reschedule-modal">Cancel</button>
                 <button type="submit" class="btn btn-primary">Reschedule</button>
             </div>
         </form>
@@ -352,6 +365,37 @@
                 alert('An error occurred while unscheduling the event.');
             });
     }
+
+    // Delegated click handler for data-action buttons
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.dataset.action;
+        switch (action) {
+            case 'confirm-unschedule':
+                confirmUnscheduleEvent(parseInt(target.dataset.eventId), target.dataset.eventName);
+                break;
+            case 'auto-schedule':
+                autoScheduleEvent(parseInt(target.dataset.eventId), target.dataset.eventName);
+                break;
+            case 'close-validation-modal':
+                closeValidationModal();
+                break;
+            case 'proceed-with-valid-export':
+                proceedWithValidExport();
+                break;
+            case 'close-reschedule-modal':
+                closeModal('reschedule-modal');
+                break;
+        }
+    });
+
+    document.addEventListener('change', function(e) {
+        var target = e.target.closest('[data-action="auto-submit-form"]');
+        if (target && target.form) {
+            target.form.submit();
+        }
+    });
 
     // Add return URL to all schedule event links
     document.addEventListener('DOMContentLoaded', function () {

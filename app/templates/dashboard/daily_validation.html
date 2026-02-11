@@ -8,9 +8,9 @@
 <!-- Bootstrap CSS for tabs and grid -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
 <style>
-    /* Global Transitions and Smooth Animations */
-    * {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Smooth transitions for interactive elements only */
+    button, a, .card, input, select, .btn, .badge, .nav-link {
+        transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s, color 0.2s;
     }
 
     /* Modern Card Shadow System */
@@ -1074,13 +1074,13 @@
                     <input type="date"
                            id="validation-date-picker"
                            value="{{ today.strftime('%Y-%m-%d') }}"
-                           onchange="navigateToDate(this.value)"
+                           data-action="navigate-to-date"
                            aria-label="Select validation date">
-                    <button onclick="navigateToToday()" class="btn btn-outline-secondary" aria-label="Go to today" title="Go to today's validation">
+                    <button data-action="navigate-to-today" class="btn btn-outline-secondary" aria-label="Go to today" title="Go to today's validation">
                         <i class="fas fa-calendar-day"></i> Today
                     </button>
                 </div>
-                <button onclick="location.reload()" class="btn btn-outline-primary" aria-label="Refresh dashboard">
+                <button data-action="reload-page" class="btn btn-outline-primary" aria-label="Refresh dashboard">
                     <i class="fas fa-sync-alt"></i> Refresh
                 </button>
             </div>
@@ -1088,7 +1088,8 @@
     </div>
 
     <!-- Health Score and Key Metrics -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="health-metrics-heading">
+        <h3 id="health-metrics-heading" class="sr-only">Health Score and Key Metrics</h3>
         <!-- Health Score -->
         <div class="col-md-4 mb-4 mb-md-0">
             <div class="health-score-card" role="region" aria-label="System Health Score">
@@ -1159,13 +1160,13 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
     <!-- Quick Actions -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="quick-actions-heading">
         <div class="col-12">
             <div class="section-header">
-                <h4><i class="fas fa-bolt"></i> Quick Actions</h4>
+                <h4 id="quick-actions-heading"><i class="fas fa-bolt"></i> Quick Actions</h4>
             </div>
             <div class="quick-actions">
                 <a href="/calendar?date={{ today.strftime('%Y-%m-%d') }}" class="quick-action-btn btn-primary-action" aria-label="View selected date's calendar">
@@ -1186,13 +1187,13 @@
                 </a>
             </div>
         </div>
-    </div>
+    </section>
 
     <!-- Validation Issues -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="validation-issues-heading">
         <div class="col-12">
             <div class="section-header">
-                <h4>
+                <h4 id="validation-issues-heading">
                     <i class="fas fa-exclamation-triangle"></i>
                     Validation Issues
                     {% if validation_issues|length > 0 %}
@@ -1258,13 +1259,13 @@
                 </div>
             {% endif %}
         </div>
-    </div>
+    </section>
 
     <!-- Rotation Assignments -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="rotations-heading">
         <div class="col-md-6 mb-4 mb-md-0">
             <div class="section-header">
-                <h4><i class="fas fa-sync-alt"></i> Today's Rotations</h4>
+                <h4 id="rotations-heading"><i class="fas fa-sync-alt"></i> Today's Rotations</h4>
             </div>
 
             <div class="rotation-card {% if juicer_rotation and juicer_rotation.is_exception %}rotation-exception{% endif %}">
@@ -1354,13 +1355,13 @@
             </div>
             {% endfor %}
         </div>
-    </div>
+    </section>
 
     <!-- Employee Report Times -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="employee-report-heading">
         <div class="col-12">
             <div class="section-header">
-                <h4><i class="fas fa-user-clock"></i> Employee Report Times</h4>
+                <h4 id="employee-report-heading"><i class="fas fa-user-clock"></i> Employee Report Times</h4>
             </div>
             <div id="employee-report-times" class="employee-report-times-container">
                 <div class="loading-spinner" role="status" aria-live="polite">
@@ -1369,13 +1370,13 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
     <!-- Lookahead Views (Tabs) -->
-    <div class="row mb-5">
+    <section class="row mb-5" aria-labelledby="lookahead-heading">
         <div class="col-12">
             <div class="section-header">
-                <h4><i class="fas fa-calendar-alt"></i> Lookahead Schedule</h4>
+                <h4 id="lookahead-heading"><i class="fas fa-calendar-alt"></i> Lookahead Schedule</h4>
             </div>
 
             <ul class="nav nav-tabs" role="tablist">
@@ -1455,7 +1456,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 </div>
 {% endblock %}
 
@@ -1464,268 +1465,14 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
 <!-- Bootstrap JS for tabs -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
-<script>
-/**
- * Navigate to a different date on the validation dashboard
- */
-function navigateToDate(dateValue) {
-    if (dateValue) {
-        window.location.href = `/dashboard/daily-validation?date=${dateValue}`;
-    }
-}
-
-/**
- * Navigate to today's validation dashboard
- */
-function navigateToToday() {
-    const today = new Date().toISOString().split('T')[0];
-    window.location.href = `/dashboard/daily-validation?date=${today}`;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Load employee report times
-    loadEmployeeReportTimes();
-
-    // Enhanced health score color coding with animations
-    const healthScore = {{ health_score }};
-    const scoreCard = document.querySelector('.health-score-card');
-
-    if (healthScore >= 90) {
-        scoreCard.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        scoreCard.style.boxShadow = '0 20px 25px rgba(16, 185, 129, 0.4)';
-    } else if (healthScore >= 75) {
-        scoreCard.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)';
-        scoreCard.style.boxShadow = '0 20px 25px rgba(139, 92, 246, 0.4)';
-    } else if (healthScore >= 60) {
-        scoreCard.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-        scoreCard.style.boxShadow = '0 20px 25px rgba(245, 158, 11, 0.4)';
-    } else {
-        scoreCard.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-        scoreCard.style.boxShadow = '0 20px 25px rgba(239, 68, 68, 0.4)';
-    }
-
-    // Smooth scroll to validation issues if any critical ones exist
-    const criticalIssues = document.querySelectorAll('.issue-critical');
-    if (criticalIssues.length > 0 && window.location.hash !== '#issues-viewed') {
-        // Add a subtle notification
-        setTimeout(() => {
-            const issuesSection = document.querySelector('.issue-card');
-            if (issuesSection) {
-                issuesSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Mark as viewed to prevent repeated scrolling
-                window.location.hash = '#issues-viewed';
-            }
-        }, 1000);
-    }
-
-    // Add hover effects to metric cards with number animation
-    const metricCards = document.querySelectorAll('.metric-card');
-    metricCards.forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            const value = this.querySelector('.metric-value');
-            if (value) {
-                value.style.transform = 'scale(1.1)';
-            }
-        });
-        card.addEventListener('mouseleave', function() {
-            const value = this.querySelector('.metric-value');
-            if (value) {
-                value.style.transform = 'scale(1)';
-            }
-        });
-    });
-
-    // Enhanced tab switching with fade effects
-    const tabLinks = document.querySelectorAll('.nav-tabs .nav-link');
-    tabLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
-            // Add subtle haptic feedback (visual)
-            this.style.transform = 'scale(0.95)';
-            setTimeout(() => {
-                this.style.transform = 'scale(1)';
-            }, 100);
-        });
-    });
-
-    // Auto-refresh dashboard every 5 minutes with notification
-    let refreshCountdown = 5 * 60; // 5 minutes in seconds
-
-    const refreshTimer = setInterval(() => {
-        refreshCountdown--;
-
-        // Show notification 30 seconds before refresh
-        if (refreshCountdown === 30) {
-            const refreshBtn = document.querySelector('.btn-outline-primary');
-            if (refreshBtn) {
-                refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refreshing in 30s...';
-                refreshBtn.style.borderColor = '#f59e0b';
-                refreshBtn.style.color = '#f59e0b';
-            }
-        }
-
-        if (refreshCountdown <= 0) {
-            clearInterval(refreshTimer);
-            location.reload();
-        }
-    }, 1000);
-
-    // Manual refresh button enhancement
-    const refreshBtn = document.querySelector('.btn-outline-primary');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-            this.style.pointerEvents = 'none';
-        });
-    }
-
-    // Add keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        // Press 'R' to refresh
-        if (e.key === 'r' || e.key === 'R') {
-            if (!e.ctrlKey && !e.metaKey) {
-                location.reload();
-            }
-        }
-        // Press '1' to view selected date's calendar
-        if (e.key === '1') {
-            window.location.href = '/calendar?date={{ today.strftime('%Y-%m-%d') }}';
-        }
-        // Press '2' to view selected date's daily schedule
-        if (e.key === '2') {
-            window.location.href = '/schedule/daily/{{ today.strftime('%Y-%m-%d') }}';
-        }
-        // Press '3' to run auto-scheduler
-        if (e.key === '3') {
-            window.location.href = '/auto-schedule';
-        }
-    });
-
-    // Add tooltip for keyboard shortcuts
-    console.log('%c🎯 Keyboard Shortcuts Available:', 'font-weight: bold; color: #8b5cf6; font-size: 14px;');
-    console.log('%cPress "R" to refresh dashboard', 'color: #6b7280;');
-    console.log('%cPress "1" to view calendar for selected date', 'color: #6b7280;');
-    console.log('%cPress "2" to view daily schedule for selected date', 'color: #6b7280;');
-    console.log('%cPress "3" to run auto-scheduler', 'color: #6b7280;');
-});
-
-/**
- * Load and display employee report times for selected date
- */
-async function loadEmployeeReportTimes() {
-    const container = document.getElementById('employee-report-times');
-    if (!container) return;
-
-    const selectedDate = '{{ today.strftime('%Y-%m-%d') }}';
-
-    try {
-        const response = await fetch(`/api/daily-employees/${selectedDate}`);
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Employee report times loaded:', data);
-
-        renderEmployeeReportTimes(data.employees);
-    } catch (error) {
-        console.error('Failed to load employee report times:', error);
-        container.innerHTML = `
-            <div class="no-employees-message">
-                <div class="no-employees-icon">⚠️</div>
-                <div>Failed to load employee report times</div>
-            </div>
-        `;
-    }
-}
-
-/**
- * Render employee report times cards
- */
-function renderEmployeeReportTimes(employees) {
-    const container = document.getElementById('employee-report-times');
-    if (!container) return;
-
-    // Check if no employees
-    if (!employees || employees.length === 0) {
-        container.innerHTML = `
-            <div class="no-employees-message">
-                <div class="no-employees-icon">📅</div>
-                <div>No employees scheduled for this date</div>
-            </div>
-        `;
-        return;
-    }
-
-    // Build HTML for employee cards
-    let html = '';
-    employees.forEach(employee => {
-        const firstLetter = employee.employee_name ? employee.employee_name[0].toUpperCase() : '?';
-
-        // Determine attendance badge
-        let attendanceBadge = '';
-        if (employee.attendance_status) {
-            const statusLabels = {
-                'on_time': '🟢 On-Time',
-                'late': '🟡 Late',
-                'called_in': '📞 Called-In',
-                'no_call_no_show': '🔴 No-Call-No-Show'
-            };
-            const statusLabel = statusLabels[employee.attendance_status] || employee.attendance_status;
-            attendanceBadge = `
-                <div class="employee-attendance-badge attendance-badge--${employee.attendance_status}">
-                    ${statusLabel}
-                </div>
-            `;
-        } else {
-            attendanceBadge = `
-                <div class="employee-attendance-badge attendance-badge--not_recorded">
-                    ⚪ Not Recorded
-                </div>
-            `;
-        }
-
-        html += `
-            <div class="employee-report-card">
-                <div class="employee-report-header">
-                    <div class="employee-report-avatar">${firstLetter}</div>
-                    <div class="employee-report-name">${escapeHtml(employee.employee_name)}</div>
-                </div>
-                <div class="employee-report-time">
-                    <i class="fas fa-clock"></i>
-                    ${employee.earliest_time}
-                </div>
-                <div class="employee-report-details">
-                    <div class="employee-report-detail">
-                        <i class="fas fa-calendar-check"></i>
-                        <span>${employee.event_count} event${employee.event_count !== 1 ? 's' : ''} today</span>
-                    </div>
-                    <div class="employee-report-detail">
-                        <i class="fas fa-user"></i>
-                        <span>${escapeHtml(employee.employee_id)}</span>
-                    </div>
-                </div>
-                ${attendanceBadge}
-                ${employee.attendance_notes ? `
-                    <div class="employee-report-detail" style="margin-top: 8px; font-style: italic;">
-                        <i class="fas fa-sticky-note"></i>
-                        <span>${escapeHtml(employee.attendance_notes)}</span>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    });
-
-    container.innerHTML = html;
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+<script type="application/json" id="page-data">
+{
+    "healthScore": {{ health_score | tojson }},
+    "selectedDate": {{ today.strftime('%Y-%m-%d') | tojson }},
+    "calendarUrl": {{ url_for('main.calendar_view', date=today.strftime('%Y-%m-%d')) | tojson }},
+    "scheduleUrl": {{ url_for('main.daily_schedule_view', date=today.strftime('%Y-%m-%d')) | tojson }},
+    "autoScheduleUrl": {{ url_for('auto_scheduler.index') | tojson }}
 }
 </script>
+<script src="{{ url_for('static', filename='js/pages/daily-validation.js') }}"></script>
 {% endblock %}

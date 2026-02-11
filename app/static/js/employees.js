@@ -1,4 +1,14 @@
-// Employee Management - Redesigned with MVRetail Integration
+/**
+ * Employee Management
+ *
+ * Handles CRUD operations for employees with MVRetail integration.
+ * Provides the employee grid view, add/edit modals, import from MVRetail,
+ * employee status toggling, and deletion.
+ *
+ * Used on: /employees page (employees/index.html)
+ *
+ * @module employees
+ */
 
 document.addEventListener('DOMContentLoaded', function () {
     loadEmployees();
@@ -9,6 +19,10 @@ document.addEventListener('DOMContentLoaded', function () {
 // Load and Display Employees
 // ========================================
 
+/**
+ * Fetch all employees from /api/employees and render the employee card grid.
+ * Shows an error alert if the fetch fails.
+ */
 function loadEmployees() {
     const grid = document.getElementById('employees-grid');
     grid.innerHTML = '<div class="loading">Loading employees</div>';
@@ -24,6 +38,11 @@ function loadEmployees() {
         });
 }
 
+/**
+ * Render employee cards into the grid and update the statistics panel.
+ *
+ * @param {Array<Object>} employees - Employee objects from the API
+ */
 function renderEmployees(employees) {
     const grid = document.getElementById('employees-grid');
 
@@ -37,6 +56,12 @@ function renderEmployees(employees) {
     updateStatistics(employees);
 }
 
+/**
+ * Calculate and display workforce statistics (totals by role and training status)
+ * in the statistics panel DOM elements.
+ *
+ * @param {Array<Object>} employees - Employee objects from the API
+ */
 function updateStatistics(employees) {
     // Calculate statistics
     const totalEmployees = employees.length;
@@ -54,6 +79,12 @@ function updateStatistics(employees) {
     document.getElementById('stat-ab').textContent = abTrained;
 }
 
+/**
+ * Map a job title string to its corresponding CSS badge class name.
+ *
+ * @param {string} jobTitle - Employee job title (e.g., 'Lead Event Specialist')
+ * @returns {string} CSS class name for the badge
+ */
 function getJobTitleBadgeClass(jobTitle) {
     const jobTitleMap = {
         'Lead Event Specialist': 'badge-lead-event-specialist',
@@ -64,6 +95,20 @@ function getJobTitleBadgeClass(jobTitle) {
     return jobTitleMap[jobTitle] || 'badge-event-specialist';
 }
 
+/**
+ * Generate the HTML string for a single employee card, including badges,
+ * contact info, weekly availability grid, and action buttons.
+ *
+ * @param {Object} employee - Employee object from the API
+ * @param {string} employee.id - Employee ID
+ * @param {string} employee.name - Display name
+ * @param {string} employee.job_title - Job title for badge styling
+ * @param {boolean} employee.is_active - Whether the employee is active
+ * @param {boolean} employee.adult_beverage_trained - AB training flag
+ * @param {boolean} employee.juicer_trained - Juicer training flag
+ * @param {Object} employee.weekly_availability - Day-of-week availability map
+ * @returns {string} HTML string for the employee card
+ */
 function createEmployeeCard(employee) {
     const badges = [];
 
@@ -136,6 +181,10 @@ function createEmployeeCard(employee) {
 // Modal Handlers
 // ========================================
 
+/**
+ * Bind event listeners for the Add Employee and Import Employees modals,
+ * including form submission and click-outside-to-close behavior.
+ */
 function setupModalHandlers() {
     // Add Employee button
     document.getElementById('add-employee-btn').addEventListener('click', openAddEmployeeModal);
@@ -161,6 +210,10 @@ function setupModalHandlers() {
 // Add Employee Modal
 // ========================================
 
+/**
+ * Open the Add/Edit Employee modal. When not in editing mode, resets the form
+ * with default values (all availability days checked, active status on).
+ */
 function openAddEmployeeModal() {
     document.getElementById('add-employee-modal').classList.add('modal-open');
     document.getElementById('modal-alerts').innerHTML = '';
@@ -181,6 +234,7 @@ function openAddEmployeeModal() {
     }
 }
 
+/** Close the Add/Edit Employee modal and reset form state, clearing editing mode. */
 function closeAddEmployeeModal() {
     document.getElementById('add-employee-modal').classList.remove('modal-open');
     const form = document.getElementById('add-employee-form');
@@ -188,6 +242,14 @@ function closeAddEmployeeModal() {
     form.reset();
 }
 
+/**
+ * Handle the Add/Edit Employee form submission.
+ * Collects form data, POSTs to /api/employees, triggers an MVRetail ID lookup
+ * on success, then reloads the employee list.
+ *
+ * @param {SubmitEvent} e - Form submit event
+ * @returns {Promise<void>}
+ */
 async function handleAddEmployeeSubmit(e) {
     e.preventDefault();
 
@@ -266,6 +328,15 @@ async function handleAddEmployeeSubmit(e) {
     }
 }
 
+/**
+ * Look up an employee's scheduling ID in the MVRetail system after save.
+ * Posts to /api/lookup_employee_id and shows a flash message with the result.
+ *
+ * @param {string} employeeId - Internal employee ID
+ * @param {string} employeeName - Employee name for the lookup
+ * @param {string} employeeIdInput - Crossmark employee ID (may differ from internal ID)
+ * @returns {Promise<void>}
+ */
 async function lookupEmployeeExternalId(employeeId, employeeName, employeeIdInput) {
     try {
         const response = await fetch('/api/lookup_employee_id', {
@@ -299,6 +370,12 @@ async function lookupEmployeeExternalId(employeeId, employeeName, employeeIdInpu
 // Import Employees Modal
 // ========================================
 
+/**
+ * Open the Import Employees modal, fetching the employee list from MVRetail
+ * via /api/get_available_reps and rendering the sync results.
+ *
+ * @returns {Promise<void>}
+ */
 async function openImportEmployeesModal() {
     const modal = document.getElementById('import-employees-modal');
     const list = document.getElementById('import-employee-list');
@@ -326,10 +403,22 @@ async function openImportEmployeesModal() {
     }
 }
 
+/** Close the Import Employees modal */
 function closeImportEmployeesModal() {
     document.getElementById('import-employees-modal').classList.remove('modal-open');
 }
 
+/**
+ * Render the MVRetail sync results into the import modal, showing:
+ * - Summary statistics (total from API, already synced, new to import)
+ * - Collapsible list of existing employees with update badges
+ * - Checkable list of new employees available to import
+ *
+ * @param {Object} data - Response from /api/get_available_reps
+ * @param {number} data.total_from_api - Total employees found in MVRetail
+ * @param {Array<Object>} [data.existing_employees] - Employees already in the local database
+ * @param {Array<Object>} [data.new_employees] - Employees available to import
+ */
 function renderImportEmployeeResults(data) {
     const list = document.getElementById('import-employee-list');
     const alerts = document.getElementById('import-modal-alerts');
@@ -481,6 +570,7 @@ function renderImportEmployeeResults(data) {
     }
 }
 
+/** Check all employee checkboxes in the import list and apply selected styling */
 function selectAllImportEmployees() {
     document.querySelectorAll('#new-employees-list input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
@@ -492,6 +582,7 @@ function selectAllImportEmployees() {
     });
 }
 
+/** Uncheck all employee checkboxes in the import list and remove selected styling */
 function deselectAllImportEmployees() {
     document.querySelectorAll('#new-employees-list input[type="checkbox"]').forEach(cb => {
         cb.checked = false;
@@ -503,6 +594,13 @@ function deselectAllImportEmployees() {
     });
 }
 
+/**
+ * Import the checked employees from the MVRetail import list.
+ * Collects selected rep data from checkbox data attributes, POSTs to /api/import_employees,
+ * and reloads the employee grid on success.
+ *
+ * @returns {Promise<void>}
+ */
 async function importSelectedEmployees() {
     const checkboxes = document.querySelectorAll('#new-employees-list input[type="checkbox"]:checked');
 
@@ -555,6 +653,14 @@ async function importSelectedEmployees() {
 // Edit Employee
 // ========================================
 
+/**
+ * Load an employee's data into the Add Employee form in editing mode.
+ * Fetches the full employee list, finds the target employee, populates
+ * all form fields, and opens the modal with the title "Editing {name}".
+ *
+ * @param {string} employeeId - ID of the employee to edit
+ * @returns {Promise<void>}
+ */
 async function editEmployee(employeeId) {
     try {
         const response = await fetch('/api/employees');
@@ -601,6 +707,14 @@ async function editEmployee(employeeId) {
 // Toggle Employee Status
 // ========================================
 
+/**
+ * Activate or deactivate an employee after user confirmation.
+ * Fetches the employee's name for the API payload, then POSTs the status change.
+ *
+ * @param {string} employeeId - ID of the employee to toggle
+ * @param {boolean} newActiveStatus - Desired active status (true = activate, false = deactivate)
+ * @returns {Promise<void>}
+ */
 async function toggleEmployeeStatus(employeeId, newActiveStatus) {
     const action = newActiveStatus ? 'activate' : 'deactivate';
 
@@ -651,6 +765,13 @@ async function toggleEmployeeStatus(employeeId, newActiveStatus) {
 // Delete Employee
 // ========================================
 
+/**
+ * Permanently delete an employee after user confirmation.
+ * Fetches the employee name for the confirmation dialog, then sends a DELETE request.
+ *
+ * @param {string} employeeId - ID of the employee to delete
+ * @returns {Promise<void>}
+ */
 async function deleteEmployee(employeeId) {
     try {
         const response = await fetch('/api/employees');
@@ -688,16 +809,34 @@ async function deleteEmployee(employeeId) {
 // Alert/Message Functions
 // ========================================
 
+/**
+ * Display an alert inside the Add/Edit Employee modal.
+ *
+ * @param {string} message - Alert text
+ * @param {('error'|'success'|'warning'|'info')} type - Alert type, applied as a CSS class
+ */
 function showModalAlert(message, type) {
     const alerts = document.getElementById('modal-alerts');
     alerts.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
 }
 
+/**
+ * Display an alert inside the Import Employees modal.
+ *
+ * @param {string} message - Alert text
+ * @param {('error'|'success'|'warning'|'info')} type - Alert type, applied as a CSS class
+ */
 function showImportAlert(message, type) {
     const alerts = document.getElementById('import-modal-alerts');
     alerts.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
 }
 
+/**
+ * Show a temporary flash message at the top of the page. Auto-removes after 5 seconds.
+ *
+ * @param {string} message - Message text
+ * @param {('error'|'success'|'warning'|'info')} type - Message type, applied as a CSS class
+ */
 function showFlashMessage(message, type) {
     const flashContainer = document.getElementById('flash-messages');
     const alertDiv = document.createElement('div');
@@ -715,6 +854,12 @@ function showFlashMessage(message, type) {
 // Utility Functions
 // ========================================
 
+/**
+ * Retrieve the CSRF token for authenticated API requests.
+ * Checks (in order): global window.getCsrfToken function, csrf_token cookie, hidden form input.
+ *
+ * @returns {string} CSRF token value, or empty string if not found
+ */
 function getCsrfToken() {
     // Try to get from global function (csrf_helper.js) first, then from cookie, then from input
     if (typeof window.getCsrfToken === 'function' && window.getCsrfToken !== getCsrfToken) {

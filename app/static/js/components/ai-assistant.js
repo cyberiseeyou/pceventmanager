@@ -65,6 +65,8 @@ class AIAssistantPanel {
 
         // Keyboard Shortcut (Ctrl+K)
         document.addEventListener('keydown', (e) => {
+            // Skip shortcuts when user is typing in form fields
+            if (e.target.matches('input, textarea, select, [contenteditable]')) return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
                 this.togglePanel();
@@ -208,7 +210,7 @@ class AIAssistantPanel {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCsrfToken()
+                    'X-CSRF-Token': this.getCsrfToken()
                 },
                 body: JSON.stringify({
                     query: text,
@@ -275,14 +277,25 @@ class AIAssistantPanel {
     }
 
     formatText(text) {
-        // Basic markdown formatting
-        return text
+        // Escape HTML first to prevent XSS
+        let escaped = String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        // Then apply markdown formatting
+        return escaped
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\n/g, '<br>');
     }
 
     getCsrfToken() {
-        return document.querySelector('script[src*="csrf_helper.js"]')?.getAttribute('data-csrf') || '';
+        if (typeof window.getCsrfToken === 'function') {
+            return window.getCsrfToken();
+        }
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        return metaTag?.content || '';
     }
 }
 

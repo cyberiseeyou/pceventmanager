@@ -22,7 +22,7 @@
     <!-- Design Tokens - Must be loaded first to establish design system variables -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-states.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard-shortcuts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/form-validation.css') }}">
@@ -286,9 +286,9 @@
 
     <!-- Main Content -->
     <div class="container">
-        <div class="main-content" id="main-content">
+        <main id="main-content" class="main-content">
             {% block content %}{% endblock %}
-        </div>
+        </main>
     </div>
 
     <!-- Footer -->
@@ -312,6 +312,7 @@
         import { loadingState } from '{{ url_for('static', filename='js/utils/loading-state.js') }}';
         import ValidationEngine from '{{ url_for('static', filename='js/modules/validation-engine.js') }}';
         import { FocusTrap } from '{{ url_for('static', filename='js/utils/focus-trap.js') }}';
+        import { formatTime } from '{{ url_for('static', filename='js/utils/format-time.js') }}';
 
         // Make available globally for non-module scripts
         window.apiClient = apiClient;
@@ -322,6 +323,7 @@
         window.ValidationEngine = ValidationEngine;
         window.FocusTrap = FocusTrap;
         window.createFocusTrap = (element, options) => new FocusTrap(element, options);
+        window.formatTime = formatTime;
 
         console.log('[Base] Core infrastructure modules loaded');
     </script>

@@ -191,7 +191,7 @@
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn-cancel" onclick="closeEditPendingModal()">Cancel</button>
+                    <button type="button" class="btn-cancel" data-action="close-edit-pending-modal">Cancel</button>
                     <button type="submit" class="btn-save">Save Changes</button>
                 </div>
             </form>
@@ -256,7 +256,7 @@
                 <div id="manual-validation-message" class="validation-message" style="display: none;"></div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn-cancel" onclick="closeManualScheduleModal()">Cancel</button>
+                    <button type="button" class="btn-cancel" data-action="close-manual-schedule-modal">Cancel</button>
                     <button type="submit" class="btn-save" id="manual-submit-btn" disabled>Schedule Event</button>
                 </div>
             </form>
@@ -265,6 +265,11 @@
 </div>
 
 <script>
+    function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     document.addEventListener('DOMContentLoaded', async function () {
         {% if run %}
         const runId = {{ run.id }};
@@ -303,8 +308,8 @@
     }
 
     function getEventTypeBadge(eventType) {
-        const typeClass = eventType.toLowerCase().replace(/\s+/g, '-');
-        return `<span class="event-type-badge event-type-${typeClass}">${eventType}</span>`;
+        const typeClass = escapeHtml(eventType).toLowerCase().replace(/\s+/g, '-');
+        return `<span class="event-type-badge event-type-${typeClass}">${escapeHtml(eventType)}</span>`;
     }
 
     function formatDateTime(dateString, timeString) {
@@ -381,10 +386,10 @@
             html += '<thead><tr><th scope="col">Event</th><th scope="col">Type</th><th scope="col">Event Period</th><th scope="col">Assigned To</th><th scope="col">Scheduled For</th><th scope="col">Actions</th></tr></thead><tbody>';
             data.newly_scheduled.forEach(event => {
                 html += `<tr>
-                    <td>${event.event_name}</td>
+                    <td>${escapeHtml(event.event_name)}</td>
                     <td>${getEventTypeBadge(event.event_type)}</td>
                     <td>${formatEventPeriod(event.start_date, event.end_date)}</td>
-                    <td>${event.employee_name}</td>
+                    <td>${escapeHtml(event.employee_name)}</td>
                     <td>${formatDateTime(event.schedule_date, event.schedule_time)}</td>
                     <td><button class="btn-edit" data-pending-id="${event.id}">Edit</button></td>
                 </tr>`;
@@ -411,28 +416,28 @@
             data.swaps.forEach(event => {
                 // Format the bumped event info (show number once, then name without number)
                 const bumpedNameClean = stripEventNumber(event.bumped_event_name, event.bumped_event_number);
-                const bumpedEventDisplay = event.bumped_event_number 
-                    ? `<strong>${event.bumped_event_number}</strong> - ${bumpedNameClean || 'Unknown'}`
-                    : event.bumped_event_name || 'Unknown';
-                
+                const bumpedEventDisplay = event.bumped_event_number
+                    ? `<strong>${escapeHtml(event.bumped_event_number)}</strong> - ${escapeHtml(bumpedNameClean) || 'Unknown'}`
+                    : escapeHtml(event.bumped_event_name) || 'Unknown';
+
                 // Format the replacing event info (show number once, then name without number)
                 const replacingNameClean = stripEventNumber(event.event_name, event.replacing_event_number);
                 const replacingEventDisplay = event.replacing_event_number
-                    ? `<strong>${event.replacing_event_number}</strong> - ${replacingNameClean}`
-                    : event.event_name;
-                
+                    ? `<strong>${escapeHtml(event.replacing_event_number)}</strong> - ${escapeHtml(replacingNameClean)}`
+                    : escapeHtml(event.event_name);
+
                 // Format the new schedule for the replacing event
-                const newScheduleDisplay = `${event.employee_name}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
+                const newScheduleDisplay = `${escapeHtml(event.employee_name)}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
                 
                 // Format where the bumped event is being rescheduled to
                 let rescheduledToDisplay;
                 if (event.bumped_rescheduled_to) {
                     if (event.bumped_rescheduled_to.failed) {
                         // Show failure reason in red
-                        rescheduledToDisplay = `<span class="text-danger">Failed: ${event.bumped_rescheduled_to.failure_reason}</span>`;
+                        rescheduledToDisplay = `<span class="text-danger">Failed: ${escapeHtml(event.bumped_rescheduled_to.failure_reason)}</span>`;
                     } else {
                         // Show successful reschedule
-                        rescheduledToDisplay = `${event.bumped_rescheduled_to.employee_name}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
+                        rescheduledToDisplay = `${escapeHtml(event.bumped_rescheduled_to.employee_name)}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
                     }
                 } else {
                     // This should never happen - scheduler always reschedules or fails
@@ -490,8 +495,8 @@
 
                     html += `<div class="event-item ${statusClass}">
                         <div class="time">${event.schedule_time || '-'}${statusLabel ? `<span class="status-badge ${statusBadgeClass}">${statusLabel}</span>` : ''}</div>
-                        <div>${event.event_name}</div>
-                        <div class="employee">${event.employee_name}</div>
+                        <div>${escapeHtml(event.event_name)}</div>
+                        <div class="employee">${escapeHtml(event.employee_name)}</div>
                     </div>`;
                 });
                 html += '</div>';
@@ -517,11 +522,11 @@
             html += '<thead><tr><th scope="col">Event</th><th scope="col">Type</th><th scope="col">Event Period</th><th scope="col">Failure Reason</th><th scope="col">Action</th></tr></thead><tbody>';
             data.failed.forEach(event => {
                 html += `<tr>
-                    <td><strong>${event.event_name}</strong></td>
+                    <td><strong>${escapeHtml(event.event_name)}</strong></td>
                     <td>${getEventTypeBadge(event.event_type)}</td>
                     <td>${formatEventPeriod(event.start_date, event.end_date)}</td>
-                    <td class="failure-reason">${event.failure_reason || 'Unknown error'}</td>
-                    <td><button class="btn-edit btn-manual-schedule" data-event-ref="${event.event_ref_num}">Schedule</button></td>
+                    <td class="failure-reason">${escapeHtml(event.failure_reason) || 'Unknown error'}</td>
+                    <td><button class="btn-edit btn-manual-schedule" data-event-ref="${escapeHtml(event.event_ref_num)}">Schedule</button></td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -597,7 +602,7 @@
 
                 // Update progress display
                 progressCount.textContent = `${currentNum} / ${totalCount}`;
-                currentEventDisplay.textContent = `Scheduling: ${schedule.event_name} → ${schedule.employee_name}`;
+                currentEventDisplay.textContent = 'Scheduling: ' + schedule.event_name + ' \u2192 ' + schedule.employee_name;
 
                 try {
                     // Call the approve-single endpoint
@@ -654,12 +659,12 @@
                 statusHtml += `<div class="progress-details">`;
                 failures.forEach(f => {
                     statusHtml += `<div class="progress-detail-item error">`;
-                    statusHtml += `${f.event_name} → ${f.employee_name}: ${f.error}`;
+                    statusHtml += `${escapeHtml(f.event_name)} \u2192 ${escapeHtml(f.employee_name)}: ${escapeHtml(f.error)}`;
                     statusHtml += `</div>`;
                 });
                 statusHtml += `</div>`;
             }
-            statusHtml += `<br><button onclick="window.location.href='{{ url_for("main.dashboard") }}'" class="btn-approve">Return to Dashboard</button>`;
+            statusHtml += `<br><button data-action="return-to-dashboard" class="btn-approve">Return to Dashboard</button>`;
             statusHtml += `</div>`;
 
             progressStatus.innerHTML = statusHtml;
@@ -722,8 +727,8 @@
 
         // Populate event info
         document.getElementById('edit-event-info').innerHTML = `
-            <strong>${data.event_name}</strong><br>
-            <small>Type: ${data.event_type} | Ref: ${data.event_ref_num}</small>
+            <strong>${escapeHtml(data.event_name)}</strong><br>
+            <small>Type: ${escapeHtml(data.event_type)} | Ref: ${escapeHtml(data.event_ref_num)}</small>
         `;
 
         // Set current date and time
@@ -893,9 +898,9 @@
             html += '<strong>⛔ Critical Issues (Must Fix Before Approval):</strong>';
             html += '<ul style="margin: 10px 0 0 20px;">';
             data.critical_issues.forEach(issue => {
-                html += `<li><strong>${issue.category}:</strong> ${issue.message}`;
+                html += `<li><strong>${escapeHtml(issue.category)}:</strong> ${escapeHtml(issue.message)}`;
                 if (issue.action) {
-                    html += `<br><em>Action: ${issue.action}</em>`;
+                    html += `<br><em>Action: ${escapeHtml(issue.action)}</em>`;
                 }
                 html += '</li>';
             });
@@ -908,9 +913,9 @@
             html += '<strong>⚠️ Warnings (Review Before Approval):</strong>';
             html += '<ul style="margin: 10px 0 0 20px;">';
             data.warnings.forEach(warning => {
-                html += `<li><strong>${warning.category}:</strong> ${warning.message}`;
+                html += `<li><strong>${escapeHtml(warning.category)}:</strong> ${escapeHtml(warning.message)}`;
                 if (warning.action) {
-                    html += `<br><em>Suggestion: ${warning.action}</em>`;
+                    html += `<br><em>Suggestion: ${escapeHtml(warning.action)}</em>`;
                 }
                 html += '</li>';
             });
@@ -923,7 +928,7 @@
             html += '<strong>ℹ️ Information:</strong>';
             html += '<ul style="margin: 10px 0 0 20px;">';
             data.info.forEach(info => {
-                html += `<li>${info.message}</li>`;
+                html += `<li>${escapeHtml(info.message)}</li>`;
             });
             html += '</ul></div>';
         }
@@ -955,9 +960,9 @@
 
         // Populate event info
         document.getElementById('manual-event-info').innerHTML = `
-            <strong>${event.event_name}</strong><br>
-            <small>Type: ${event.event_type} | Ref: ${event.event_ref_num}</small><br>
-            <small style="color: var(--color-danger);">Failed: ${event.failure_reason || 'Unknown'}</small>
+            <strong>${escapeHtml(event.event_name)}</strong><br>
+            <small>Type: ${escapeHtml(event.event_type)} | Ref: ${escapeHtml(event.event_ref_num)}</small><br>
+            <small style="color: var(--color-danger);">Failed: ${escapeHtml(event.failure_reason) || 'Unknown'}</small>
         `;
 
         // Set date constraints
@@ -1204,6 +1209,24 @@
     document.addEventListener('click', function (e) {
         if (e.target.classList.contains('btn-manual-schedule') && e.target.dataset.eventRef) {
             openManualScheduleModal(e.target.dataset.eventRef);
+        }
+    });
+
+    // Delegated click handler for data-action buttons
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.dataset.action;
+        switch (action) {
+            case 'close-edit-pending-modal':
+                closeEditPendingModal();
+                break;
+            case 'close-manual-schedule-modal':
+                closeManualScheduleModal();
+                break;
+            case 'return-to-dashboard':
+                window.location.href = '{{ url_for("main.dashboard") }}';
+                break;
         }
     });
 

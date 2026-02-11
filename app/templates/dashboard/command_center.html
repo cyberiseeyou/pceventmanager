@@ -3,7 +3,7 @@
 {% block title %}Command Center - Start Your Day{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" />
 <style>
     .command-center {
         max-width: 1400px;
@@ -428,7 +428,7 @@
                 {{ data.day_of_week }}, {{ data.today }}
             </div>
         </div>
-        <button class="refresh-btn" onclick="refreshCommandCenter()">
+        <button class="refresh-btn" data-action="refresh-command-center">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
     </div>
@@ -551,7 +551,7 @@
                     {% if data.pending_tasks %}
                         {% for task in data.pending_tasks %}
                         <div class="cc-item priority-{{ task.priority }}" data-task-id="{{ task.id }}">
-                            <div class="task-checkbox" onclick="completeTask({{ task.id }})"></div>
+                            <div class="task-checkbox" data-action="complete-task" data-task-id="{{ task.id }}"></div>
                             <div class="content">
                                 <div class="title">{{ task.title }}</div>
                                 <div class="meta">
@@ -788,6 +788,21 @@
 function refreshCommandCenter() {
     location.reload();
 }
+
+// Delegated click handler for data-action buttons
+document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.dataset.action;
+    switch (action) {
+        case 'refresh-command-center':
+            refreshCommandCenter();
+            break;
+        case 'complete-task':
+            completeTask(parseInt(target.dataset.taskId));
+            break;
+    }
+});
 
 // Complete task
 async function completeTask(taskId) {

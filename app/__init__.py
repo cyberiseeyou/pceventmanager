@@ -317,13 +317,21 @@ def setup_request_handlers(app):
         if request.endpoint and not request.endpoint.startswith('static'):
             # Generate and set CSRF token in cookie
             csrf_token = generate_csrf()
+            is_production = app.config.get('ENV') != 'development' and not app.config.get('DEBUG', False)
             response.set_cookie(
                 'csrf_token',
                 csrf_token,
-                secure=app.config.get('SESSION_COOKIE_SECURE', False),
+                secure=is_production,
                 httponly=False,
                 samesite='Lax'
             )
+        return response
+
+    @app.after_request
+    def apply_security_headers(response):
+        """Apply security headers from config to all responses."""
+        for header, value in app.config.get('SECURITY_HEADERS', {}).items():
+            response.headers[header] = value
         return response
 
 

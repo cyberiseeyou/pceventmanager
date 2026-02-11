@@ -322,7 +322,7 @@
 </style>
 
 <!-- Floating Button -->
-<button id="quickNoteBtn" onclick="toggleQuickNote()" title="Add Note / View Tasks">
+<button id="quickNoteBtn" data-action="toggle-quick-note" title="Add Note / View Tasks">
     <i class="fas fa-sticky-note"></i>
     <span class="badge" id="pendingNotesBadge" style="display: none;">0</span>
 </button>
@@ -331,17 +331,17 @@
 <div id="quickNoteModal">
     <div class="quick-note-header">
         <h3><i class="fas fa-sticky-note"></i> Quick Notes</h3>
-        <button class="close-btn" onclick="toggleQuickNote()"><i class="fas fa-times"></i></button>
+        <button class="close-btn" data-action="toggle-quick-note"><i class="fas fa-times"></i></button>
     </div>
 
     <div class="quick-note-tabs">
-        <button class="active" onclick="switchQuickNoteTab('add')">
+        <button class="active" data-action="switch-tab" data-tab="add">
             <i class="fas fa-plus"></i> Add
         </button>
-        <button onclick="switchQuickNoteTab('pending')">
+        <button data-action="switch-tab" data-tab="pending">
             <i class="fas fa-list"></i> Pending
         </button>
-        <button onclick="switchQuickNoteTab('completed')">
+        <button data-action="switch-tab" data-tab="completed">
             <i class="fas fa-check"></i> Done
         </button>
     </div>
@@ -385,7 +385,7 @@
             </div>
         </div>
 
-        <button class="btn-submit" onclick="submitQuickNote()">
+        <button class="btn-submit" data-action="submit-quick-note">
             <i class="fas fa-save"></i> Save Note
         </button>
     </div>
@@ -422,14 +422,14 @@ function toggleQuickNote() {
 }
 
 // Switch tabs
-function switchQuickNoteTab(tab) {
+function switchQuickNoteTab(tab, clickedBtn) {
     quickNoteCurrentTab = tab;
 
     // Update tab buttons
     document.querySelectorAll('.quick-note-tabs button').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    if (clickedBtn) clickedBtn.classList.add('active');
 
     // Show correct content
     document.getElementById('quickNoteFormTab').classList.remove('active');
@@ -502,7 +502,7 @@ function renderQuickNotesList(listType) {
 
     container.innerHTML = notes.map(note => `
         <div class="note-item priority-${note.priority} ${note.is_completed ? 'completed' : ''}" data-id="${note.id}">
-            <div class="checkbox" onclick="toggleNoteComplete(${note.id}, ${!note.is_completed})"></div>
+            <div class="checkbox" data-action="toggle-note" data-note-id="${note.id}" data-complete="${!note.is_completed}"></div>
             <div class="content">
                 <div class="title">${escapeHtml(note.title)}</div>
                 <div class="meta">
@@ -510,7 +510,7 @@ function renderQuickNotesList(listType) {
                     ${note.due_date ? `<span class="due-date ${note.is_due_today ? 'today' : ''}">${formatNoteDate(note.due_date)}</span>` : ''}
                 </div>
             </div>
-            <button class="delete-btn" onclick="deleteQuickNote(${note.id})">
+            <button class="delete-btn" data-action="delete-note" data-note-id="${note.id}">
                 <i class="fas fa-trash"></i>
             </button>
         </div>
@@ -668,6 +668,21 @@ function showQuickNoteToast(message) {
         setTimeout(() => toast.remove(), 300);
     }, 2000);
 }
+
+// Delegated click handler - replaces inline onclick attributes
+document.addEventListener('click', function(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const action = target.dataset.action;
+
+    switch (action) {
+        case 'toggle-quick-note': toggleQuickNote(); break;
+        case 'switch-tab': switchQuickNoteTab(target.dataset.tab, target); break;
+        case 'submit-quick-note': submitQuickNote(); break;
+        case 'toggle-note': toggleNoteComplete(parseInt(target.dataset.noteId), target.dataset.complete === 'true'); break;
+        case 'delete-note': deleteQuickNote(parseInt(target.dataset.noteId)); break;
+    }
+});
 
 // Load pending count on page load
 document.addEventListener('DOMContentLoaded', function() {

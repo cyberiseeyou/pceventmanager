@@ -1,12 +1,12 @@
 ---
-last_mapped: 2026-02-06T12:00:00Z
-total_files: 377
-total_tokens: 1271000
+last_mapped: 2026-02-09T06:30:00Z
+total_files: 376
+total_tokens: 1277614
 ---
 
 # Codebase Map: Flask Schedule Webapp
 
-> Updated 2026-02-06
+> Updated 2026-02-09
 
 ## System Overview
 
@@ -79,180 +79,180 @@ graph TB
 ```
 flask-schedule-webapp/
 ├── app/                          # Main application package
-│   ├── __init__.py              # Application factory (3,062 tokens)
-│   ├── config.py                # Environment configs with ML settings (2,587 tokens)
-│   ├── constants.py             # Event types, dept codes, club details (41,637 tokens)
-│   ├── extensions.py            # Flask extensions init
+│   ├── __init__.py              # Application factory (2,520 tokens)
+│   ├── config.py                # Environment configs with ML settings (2,209 tokens)
+│   ├── constants.py             # Event types, dept codes, club details (46,015 tokens)
+│   ├── extensions.py            # Flask extensions init (167 tokens)
 │   │
 │   ├── models/                  # SQLAlchemy models (Factory Pattern) — 17 files
 │   │   ├── __init__.py          # Model factory orchestrator (30 models)
 │   │   ├── registry.py          # Centralized model access (get_models/get_db)
-│   │   ├── employee.py          # Employee model
-│   │   ├── event.py             # Work event/task model
-│   │   ├── schedule.py          # Event-employee assignment
-│   │   ├── availability.py      # Availability, time-off, overrides
-│   │   ├── auto_scheduler.py    # Rotations, pending schedules, locked days
-│   │   ├── system_setting.py    # System settings
-│   │   ├── audit.py             # Audit logs & notification settings
-│   │   ├── employee_attendance.py # Attendance tracking
-│   │   ├── paperwork_template.py  # Paperwork templates
-│   │   ├── user_session.py      # Session management
-│   │   ├── company_holiday.py   # Company holidays
-│   │   ├── ignored_validation_issue.py # Validation issue suppressions
-│   │   ├── shift_block_setting.py     # Shift block configuration
-│   │   ├── notes.py             # Notes & recurring reminders
-│   │   └── inventory.py         # Supply tracking (6 models)
+│   │   ├── employee.py          # Employee model (925 tokens)
+│   │   ├── event.py             # Work event/task model (1,812 tokens)
+│   │   ├── schedule.py          # Event-employee assignment (478 tokens)
+│   │   ├── availability.py      # Availability, time-off, overrides (1,286 tokens)
+│   │   ├── auto_scheduler.py    # Rotations, pending schedules, locked days (3,272 tokens)
+│   │   ├── system_setting.py    # System settings with encryption (690 tokens)
+│   │   ├── audit.py             # Audit logs & notification settings (645 tokens)
+│   │   ├── employee_attendance.py # Attendance tracking (904 tokens)
+│   │   ├── paperwork_template.py  # Paperwork templates (467 tokens)
+│   │   ├── user_session.py      # Database-backed session management (1,451 tokens)
+│   │   ├── company_holiday.py   # Company holidays with recurrence (1,069 tokens)
+│   │   ├── ignored_validation_issue.py # Validation issue suppressions (740 tokens)
+│   │   ├── shift_block_setting.py     # 8 shift block configuration (1,574 tokens)
+│   │   ├── notes.py             # Notes & recurring reminders (2,011 tokens)
+│   │   └── inventory.py         # Supply tracking (6 models, 3,118 tokens)
 │   │
 │   ├── routes/                  # Flask blueprints — 28 files
 │   │   ├── __init__.py          # Auth helpers (is_authenticated, require_authentication)
-│   │   ├── api.py               # Main REST API (61,347 tokens)
-│   │   ├── admin.py             # Admin functions (28,674 tokens)
-│   │   ├── auto_scheduler.py    # Auto-scheduler interface (19,810 tokens)
-│   │   ├── printing.py          # PDF generation (17,486 tokens)
-│   │   ├── employees.py         # Employee CRUD (9,545 tokens)
-│   │   ├── dashboard.py         # Validation dashboards (10,052 tokens)
-│   │   ├── main.py              # Dashboard, calendar views (8,155 tokens)
-│   │   ├── scheduling.py        # Scheduling operations (8,172 tokens)
-│   │   ├── auth.py              # Authentication, session mgmt (6,078 tokens)
-│   │   ├── api_notes.py         # Notes API (5,980 tokens)
-│   │   ├── api_attendance.py    # Attendance API (5,026 tokens)
-│   │   ├── inventory.py         # Inventory management (4,522 tokens)
-│   │   ├── api_paperwork_templates.py # Paperwork templates API (3,500 tokens)
-│   │   ├── api_shift_blocks.py  # Shift block settings API (3,232 tokens)
-│   │   ├── api_auto_scheduler_settings.py # Scheduler settings API (2,856 tokens)
-│   │   ├── ai_routes.py         # AI assistant API (2,731 tokens)
-│   │   ├── api_notifications.py # Notifications API (2,660 tokens)
-│   │   ├── api_company_holidays.py # Company holidays API (2,594 tokens)
-│   │   ├── api_employee_termination.py # Employee termination (2,579 tokens)
-│   │   ├── api_locked_days.py   # Locked days API (2,512 tokens)
-│   │   ├── api_availability_overrides.py # Availability overrides (2,354 tokens)
-│   │   ├── api_suggest_employees.py # Employee suggestion (2,249 tokens)
-│   │   ├── edr_sync.py          # EDR sync (1,913 tokens)
-│   │   ├── rotations.py         # Rotation assignments (1,807 tokens)
-│   │   ├── api_validate_schedule.py # Schedule validation (1,653 tokens)
-│   │   ├── health.py            # Health check endpoint (1,584 tokens)
-│   │   └── help.py              # Help documentation (629 tokens)
+│   │   ├── api.py               # Main REST API (46,716 tokens)
+│   │   ├── admin.py             # Admin functions (24,490 tokens)
+│   │   ├── auto_scheduler.py    # Auto-scheduler interface (15,233 tokens)
+│   │   ├── printing.py          # PDF generation (14,488 tokens)
+│   │   ├── dashboard.py         # Validation dashboards (8,120 tokens)
+│   │   ├── employees.py         # Employee CRUD (7,287 tokens)
+│   │   ├── main.py              # Dashboard, calendar views (6,508 tokens)
+│   │   ├── scheduling.py        # Scheduling operations (6,595 tokens)
+│   │   ├── auth.py              # Authentication, session mgmt (4,640 tokens)
+│   │   ├── api_notes.py         # Notes API (5,127 tokens)
+│   │   ├── api_attendance.py    # Attendance API (3,651 tokens)
+│   │   ├── inventory.py         # Inventory management (3,839 tokens)
+│   │   ├── api_paperwork_templates.py # Paperwork templates API (2,823 tokens)
+│   │   ├── api_shift_blocks.py  # Shift block settings API (2,624 tokens)
+│   │   ├── api_auto_scheduler_settings.py # Scheduler settings API (2,288 tokens)
+│   │   ├── ai_routes.py         # AI assistant API (2,215 tokens)
+│   │   ├── api_notifications.py # Notifications API (1,939 tokens)
+│   │   ├── api_company_holidays.py # Company holidays API (2,255 tokens)
+│   │   ├── api_employee_termination.py # Employee termination (1,987 tokens)
+│   │   ├── api_locked_days.py   # Locked days API (2,175 tokens)
+│   │   ├── api_availability_overrides.py # Availability overrides (1,957 tokens)
+│   │   ├── api_suggest_employees.py # Employee suggestion (1,816 tokens)
+│   │   ├── api_validate_schedule.py # Schedule validation (1,293 tokens)
+│   │   ├── edr_sync.py          # EDR sync (1,508 tokens)
+│   │   ├── rotations.py         # Rotation assignments (1,546 tokens)
+│   │   ├── health.py            # Health check + Prometheus metrics (1,317 tokens)
+│   │   └── help.py              # Help documentation (457 tokens)
 │   │
 │   ├── services/                # Business logic layer — 24 files
-│   │   ├── scheduling_engine.py      # Auto-scheduler orchestrator (45,251 tokens)
-│   │   ├── ai_tools.py               # LLM function calling (37,659 tokens)
-│   │   ├── schedule_verification.py  # Daily validation (23,364 tokens)
-│   │   ├── daily_paperwork_generator.py # PDF packaging (15,892 tokens)
-│   │   ├── weekly_validation.py      # Cross-day validation (9,103 tokens)
-│   │   ├── daily_audit_checker.py    # Proactive issue detection (7,170 tokens)
-│   │   ├── approved_events_service.py # Approved events (7,188 tokens)
-│   │   ├── database_refresh_service.py # Database refresh (6,478 tokens)
-│   │   ├── constraint_validator.py   # Business rules (6,244 tokens)
-│   │   ├── ai_assistant.py           # AI chat orchestration (5,466 tokens)
-│   │   ├── inventory_service.py      # Inventory operations (5,465 tokens)
-│   │   ├── shift_block_config.py     # Shift block configuration (5,339 tokens)
-│   │   ├── edr_service.py            # EDR service (4,963 tokens)
-│   │   ├── edr_generator.py          # EDR report generation (4,752 tokens)
-│   │   ├── conflict_validation.py    # Conflict validation (4,654 tokens)
-│   │   ├── employee_import_service.py # Employee import (4,339 tokens)
-│   │   ├── command_center_service.py # Command center dashboard (4,082 tokens)
-│   │   ├── sync_service.py           # MVRetail sync (3,702 tokens)
-│   │   ├── event_time_settings.py    # Event time config (3,292 tokens)
-│   │   ├── rotation_manager.py       # Rotation assignments (3,264 tokens)
-│   │   ├── conflict_resolver.py      # Event bumping logic (2,182 tokens)
-│   │   ├── workload_analytics.py     # Workload analytics (1,112 tokens)
-│   │   └── validation_types.py       # Validation type defs (747 tokens)
+│   │   ├── scheduling_engine.py      # Auto-scheduler orchestrator (36,079 tokens)
+│   │   ├── ai_tools.py               # LLM function calling (29,595 tokens)
+│   │   ├── schedule_verification.py  # Daily validation (17,755 tokens)
+│   │   ├── daily_paperwork_generator.py # PDF packaging (12,744 tokens)
+│   │   ├── weekly_validation.py      # Cross-day validation (7,160 tokens)
+│   │   ├── daily_audit_checker.py    # Proactive issue detection (5,290 tokens)
+│   │   ├── approved_events_service.py # Approved events (5,407 tokens)
+│   │   ├── shift_block_config.py     # Shift block configuration (5,556 tokens)
+│   │   ├── database_refresh_service.py # Database refresh (4,837 tokens)
+│   │   ├── constraint_validator.py   # Business rules (4,608 tokens)
+│   │   ├── inventory_service.py      # Inventory operations (4,393 tokens)
+│   │   ├── ai_assistant.py           # AI chat orchestration (4,203 tokens)
+│   │   ├── edr_service.py            # EDR service (3,701 tokens)
+│   │   ├── edr_generator.py          # EDR report generation (4,405 tokens)
+│   │   ├── conflict_validation.py    # Conflict validation (3,426 tokens)
+│   │   ├── employee_import_service.py # Employee import (3,372 tokens)
+│   │   ├── command_center_service.py # Command center dashboard (3,324 tokens)
+│   │   ├── sync_service.py           # MVRetail sync (3,074 tokens)
+│   │   ├── event_time_settings.py    # Event time config (2,979 tokens)
+│   │   ├── rotation_manager.py       # Rotation assignments (2,338 tokens)
+│   │   ├── conflict_resolver.py      # Event bumping logic (1,654 tokens)
+│   │   ├── workload_analytics.py     # Workload analytics (851 tokens)
+│   │   └── validation_types.py       # Validation type defs (663 tokens)
 │   │
-│   ├── ai/                      # RAG-based AI assistant — 13 files
-│   │   ├── config.py            # AI configuration
-│   │   ├── routes.py            # AI RAG endpoints (/api/ai/rag)
+│   ├── ai/                      # RAG-based AI assistant — 9 files
+│   │   ├── config.py            # AI configuration (478 tokens)
+│   │   ├── routes.py            # AI RAG endpoints /api/ai/rag (998 tokens)
 │   │   ├── context/
-│   │   │   ├── classifier.py    # Query type detection
-│   │   │   └── retriever.py     # Database context retrieval
+│   │   │   ├── classifier.py    # Query type detection (1,565 tokens)
+│   │   │   └── retriever.py     # Database context retrieval (2,420 tokens)
 │   │   ├── providers/
-│   │   │   ├── base.py          # Abstract provider interface
-│   │   │   └── ollama.py        # Local LLM integration
+│   │   │   ├── base.py          # Abstract provider interface (331 tokens)
+│   │   │   └── ollama.py        # Local LLM integration (1,064 tokens)
 │   │   ├── prompts/
-│   │   │   └── templates.py     # LLM prompt templates
+│   │   │   └── templates.py     # LLM prompt templates (710 tokens)
 │   │   └── services/
-│   │       └── chat.py          # Chat service
+│   │       └── chat.py          # Chat service (1,269 tokens)
 │   │
-│   ├── ml/                      # Machine Learning module — 15 files
-│   │   ├── __init__.py          # Module metadata (v0.1.0)
+│   ├── ml/                      # Machine Learning module — 11 files
+│   │   ├── __init__.py          # Module metadata v0.1.0 (80 tokens)
 │   │   ├── features/
-│   │   │   ├── employee_features.py      # Employee feature extraction (3,019 tokens)
-│   │   │   ├── event_features.py         # Event feature extraction (2,897 tokens)
-│   │   │   ├── historical_features.py    # Historical data features (2,574 tokens)
-│   │   │   └── simple_employee_features.py # Simplified features (1,579 tokens)
+│   │   │   ├── employee_features.py      # Employee feature extraction (2,648 tokens)
+│   │   │   ├── event_features.py         # Event feature extraction (2,463 tokens)
+│   │   │   ├── historical_features.py    # Historical data features (2,073 tokens)
+│   │   │   └── simple_employee_features.py # Simplified features (1,318 tokens)
 │   │   ├── models/
-│   │   │   ├── employee_ranker.py    # XGBoost/LightGBM model (2,339 tokens)
+│   │   │   ├── employee_ranker.py    # XGBoost/LightGBM model (1,941 tokens)
 │   │   │   └── artifacts/            # Trained model storage (.pkl)
 │   │   ├── training/
-│   │   │   ├── train_employee_ranker.py  # Training script (2,202 tokens)
-│   │   │   └── data_preparation.py       # Training data prep (3,121 tokens)
+│   │   │   ├── train_employee_ranker.py  # Training script (2,018 tokens)
+│   │   │   └── data_preparation.py       # Training data prep (2,379 tokens)
 │   │   ├── inference/
-│   │   │   └── ml_scheduler_adapter.py   # SchedulingEngine integration (2,474 tokens)
+│   │   │   └── ml_scheduler_adapter.py   # SchedulingEngine integration (1,972 tokens)
 │   │   └── evaluation/
-│   │       └── metrics.py            # Evaluation metrics (2,763 tokens)
+│   │       └── metrics.py            # Evaluation metrics (2,227 tokens)
 │   │
 │   ├── integrations/            # External system clients
 │   │   ├── walmart_api/         # Walmart Retail Link
-│   │   │   ├── routes.py        # Walmart endpoints (12,332 tokens)
-│   │   │   ├── authenticator.py # MFA auth flow (3,586 tokens)
-│   │   │   └── session_manager.py # Per-user sessions (1,774 tokens)
+│   │   │   ├── routes.py        # Walmart endpoints (10,341 tokens)
+│   │   │   ├── authenticator.py # MFA auth flow (3,249 tokens)
+│   │   │   └── session_manager.py # Per-user sessions (1,327 tokens)
 │   │   ├── external_api/        # MVRetail Crossmark
-│   │   │   ├── session_api_service.py  # API client (18,242 tokens)
-│   │   │   ├── sync_engine.py          # Bidirectional sync (8,547 tokens)
-│   │   │   └── parallel_session_api.py # Parallel session handling (2,645 tokens)
+│   │   │   ├── session_api_service.py  # API client (14,362 tokens)
+│   │   │   ├── sync_engine.py          # Bidirectional sync (6,348 tokens)
+│   │   │   └── parallel_session_api.py # Parallel session handling (2,064 tokens)
 │   │   └── edr/                 # EDR report generation
-│   │       ├── report_generator.py     # EDR data fetching (18,006 tokens)
-│   │       ├── pdf_generator_base.py   # Base PDF layout (12,302 tokens)
-│   │       ├── pdf_generator.py        # EDR PDF creation (11,698 tokens)
-│   │       └── db_manager.py           # SQLite cache (4,222 tokens)
+│   │       ├── report_generator.py     # EDR data fetching (15,661 tokens)
+│   │       ├── pdf_generator_base.py   # Base PDF layout (10,502 tokens)
+│   │       ├── pdf_generator.py        # EDR PDF creation (9,953 tokens)
+│   │       └── db_manager.py           # SQLite cache (3,331 tokens)
 │   │
 │   ├── error_handlers/          # Centralized error handling
-│   │   ├── __init__.py          # Error handler registration
-│   │   ├── exceptions.py        # Custom exception hierarchy
-│   │   ├── decorators.py        # Error handling decorators
-│   │   └── logging.py           # Structured logging
+│   │   ├── __init__.py          # Error handler registration (546 tokens)
+│   │   ├── exceptions.py        # Custom exception hierarchy (980 tokens)
+│   │   ├── decorators.py        # @handle_errors, @with_db_transaction (814 tokens)
+│   │   └── logging.py           # Structured logging (2,028 tokens)
 │   │
 │   ├── utils/                   # Utility functions
-│   │   ├── db_helpers.py        # Query optimizations
-│   │   ├── db_compat.py         # Database compatibility layer
-│   │   ├── event_helpers.py     # Event processing
-│   │   ├── validators.py        # Validation functions
-│   │   └── encryption.py        # Fernet encryption
+│   │   ├── db_helpers.py        # Query optimizations, @with_models (1,502 tokens)
+│   │   ├── db_compat.py         # SQLite/PostgreSQL compatibility (643 tokens)
+│   │   ├── event_helpers.py     # Event processing, Core-Supervisor pairing (3,734 tokens)
+│   │   ├── validators.py        # Validation functions (915 tokens)
+│   │   └── encryption.py        # Fernet encryption (706 tokens)
 │   │
 │   ├── static/                  # Frontend assets
 │   │   ├── js/                  # JavaScript — 37 files
-│   │   │   ├── main.js          # Main application (10,000 tokens)
-│   │   │   ├── employees.js     # Employee management (8,000 tokens)
-│   │   │   ├── login.js         # Login page
-│   │   │   ├── navigation.js    # Navigation
-│   │   │   ├── search.js        # Search functionality
-│   │   │   ├── database-refresh.js  # Database refresh
-│   │   │   ├── notifications.js # Notifications
-│   │   │   ├── user_dropdown.js # User dropdown
-│   │   │   ├── loading-progress.js  # Loading progress
-│   │   │   ├── csrf_helper.js   # CSRF token helper
-│   │   │   ├── utils/           # API client, cache manager — 7 files
-│   │   │   ├── modules/         # State, validation, toast, ARIA — 5 files
-│   │   │   ├── components/      # Modals, AI chat, conflict validator — 10 files
+│   │   │   ├── main.js          # Dashboard, import/export, conflict detection (7,362 tokens)
+│   │   │   ├── employees.js     # Employee management + MVRetail import (6,972 tokens)
+│   │   │   ├── login.js         # Login page with retry logic (3,650 tokens)
+│   │   │   ├── navigation.js    # Dropdown + mobile nav (897 tokens)
+│   │   │   ├── search.js        # Search functionality (2,360 tokens)
+│   │   │   ├── database-refresh.js  # Database refresh (1,329 tokens)
+│   │   │   ├── notifications.js # Notifications panel (1,355 tokens)
+│   │   │   ├── user_dropdown.js # User dropdown (640 tokens)
+│   │   │   ├── loading-progress.js  # Loading progress (1,595 tokens)
+│   │   │   ├── csrf_helper.js   # Auto CSRF for jQuery/Fetch/XHR (1,212 tokens)
+│   │   │   ├── utils/           # API client, cache, debounce, a11y — 6 files
+│   │   │   ├── modules/         # State mgr, validation, toast, ARIA — 5 files
+│   │   │   ├── components/      # Modals, AI chat, conflict validator — 9 files
 │   │   │   └── pages/           # Page-specific controllers — 7 files
-│   │   │       └── daily-view.js    # Daily view (40,048 tokens)
+│   │   │       └── daily-view.js    # Daily view (30,244 tokens)
 │   │   └── css/                 # Stylesheets — 23 files
-│   │       ├── design-tokens.css    # Design system tokens (292 lines)
-│   │       ├── style.css        # Main styles
-│   │       ├── responsive.css   # Responsive breakpoints
+│   │       ├── design-tokens.css    # Design system tokens (2,818 tokens)
+│   │       ├── style.css        # Main styles (11,437 tokens)
+│   │       ├── responsive.css   # Responsive breakpoints (6,117 tokens)
 │   │       ├── components/      # Component styles — 4 files
 │   │       └── pages/           # Page-specific styles — 8 files
 │   │
 │   └── templates/               # Jinja2 templates — 50 files
-│       ├── base.html            # Master template
-│       ├── index.html           # Dashboard
-│       ├── daily_view.html      # Daily schedule view
-│       ├── settings.html        # Settings page
-│       ├── components/          # Template components — 6 files
+│       ├── base.html            # Master template (5,973 tokens)
+│       ├── index.html           # Dashboard (15,755 tokens)
+│       ├── daily_view.html      # Daily schedule view (4,946 tokens)
+│       ├── settings.html        # Settings page (11,075 tokens)
+│       ├── components/          # Template components — 5 files
 │       ├── dashboard/           # Validation dashboards — 4 files
 │       ├── employees/           # Employee management — 2 files
 │       ├── inventory/           # Inventory pages — 3 files
 │       ├── help/                # User guides — 11 files
-│       └── auth/                # Auth templates
+│       └── auth/                # Auth templates — 1 file
 │
 ├── tests/                       # Pytest test suite — 13 files
 │   ├── conftest.py              # Fixtures (app, client, db_session, models)
@@ -289,12 +289,15 @@ flask-schedule-webapp/
 │   └── plans/                   # Implementation plans — 6 files
 │
 ├── deployment/                  # Deployment configurations
-│   └── remote_setup.sh
+│   ├── docker/                  # Docker Compose, Dockerfiles
+│   ├── nginx/                   # Nginx reverse proxy configs
+│   ├── systemd/                 # systemd service files
+│   └── CLOUDFLARE_*.md          # Cloudflare tunnel setup guides
 │
 ├── wsgi.py                      # Application entry point
-├── gunicorn_config.py           # WSGI server config
+├── gunicorn_config.py           # WSGI server config (1 gevent worker)
 ├── celery_worker.py             # Background task worker
-├── requirements.txt             # Python dependencies
+├── requirements.txt             # Python dependencies (~30 core packages)
 ├── pytest.ini                   # Test configuration
 ├── CLAUDE.md                    # AI assistant instructions
 ├── AGENTS.md                    # Agent-specific guidance
@@ -308,166 +311,146 @@ flask-schedule-webapp/
 
 ### Application Foundation
 
-**Purpose**: Flask application initialization with factory pattern
-
 **Entry Point**: `app/__init__.py:create_app()`
 
-**Key Files**:
 | File | Purpose | Tokens |
 |------|---------|--------|
-| `app/__init__.py` | App factory, blueprint registration, extensions | 3,062 |
-| `app/config.py` | Environment-based configuration with ML settings | 2,587 |
-| `app/extensions.py` | Flask extension initialization | 167 |
-| `app/constants.py` | Event types, department codes, club details | 41,637 |
+| `app/__init__.py` | App factory, blueprint registration, extensions | 2,520 |
+| `app/config.py` | Environment-based configuration with feature flags | 2,209 |
+| `app/extensions.py` | Flask extension initialization (db, migrate, csrf, limiter) | 167 |
+| `app/constants.py` | Event types, department codes, Walmart fiscal weeks, club details | 46,015 |
 
 **Key Features**:
 - Application factory pattern for different environments (dev/test/prod)
-- Model registry pattern for dependency injection
+- Model registry pattern via `model_registry` (replaces deprecated `app.config` storage)
 - Blueprint-based modular architecture (24 blueprints)
 - APScheduler for background tasks
 - ProxyFix middleware for Cloudflare Tunnel
-- ML feature flags in configuration
+- Feature flags: `SYNC_ENABLED`, `ML_ENABLED`, `ENABLE_EDR_FEATURES`
+- SQLite foreign key constraints enabled via SQLAlchemy event listener
 
-**Configuration Structure**:
-```python
+**Configuration Classes**:
+```
 DevelopmentConfig:  SQLite, random SECRET_KEY, debug=True
 TestingConfig:      In-memory SQLite, SYNC_ENABLED=False
-ProductionConfig:   PostgreSQL, strong SECRET_KEY (required), validation enabled
+ProductionConfig:   PostgreSQL, strong SECRET_KEY (≥32 chars required), validation enabled
 ```
+
+**Gotchas**:
+- Dev mode generates random SECRET_KEY on each restart (sessions don't persist)
+- Rate limiter uses in-memory storage (not suitable for multi-worker)
+- Auto-scheduler blueprint exempt from rate limiting (makes many API calls)
 
 ---
 
 ### Models (Database Layer)
 
-**Purpose**: SQLAlchemy models with factory pattern for dependency injection
-
-**Architecture**: Factory functions returning model classes
+**Architecture**: Factory functions returning model classes — accessed via `get_models()`
 
 **Entry Point**: `app/models/__init__.py:init_models(db)`
 
 **Core Models (30 total)**:
+
 | Model | File | Purpose | Key Fields |
 |-------|------|---------|------------|
-| Employee | employee.py | Staff/representatives | id, name, job_title, is_active, termination_date |
-| Event | event.py | Work tasks/visits | project_ref_num, start/due_datetime, event_type, location |
+| Employee | employee.py | Staff/representatives | name, job_title, is_active, external_id, juicer_trained |
+| Event | event.py | Work tasks/visits | project_ref_num, start/due_datetime, event_type, edr_status |
 | Schedule | schedule.py | Event-employee assignments | event_ref_num, employee_id, schedule_datetime, shift_block |
-| EmployeeAvailability | availability.py | Date-specific availability | employee_id, date, is_available |
 | EmployeeWeeklyAvailability | availability.py | Recurring weekly pattern | monday-sunday booleans |
+| EmployeeAvailability | availability.py | Date-specific override | employee_id, date, is_available |
 | EmployeeTimeOff | availability.py | Time-off requests | start_date, end_date |
-| EmployeeAvailabilityOverride | availability.py | Temporary availability changes | employee_id, date |
+| EmployeeAvailabilityOverride | availability.py | Temporary weekly change | employee_id, per-day overrides (NULL = no change) |
 | RotationAssignment | auto_scheduler.py | Weekly rotations with backup | day_of_week, rotation_type, employee_id, backup_employee_id |
-| PendingSchedule | auto_scheduler.py | Auto-scheduler proposals | scheduler_run_id, status, swap tracking |
-| SchedulerRunHistory | auto_scheduler.py | Auto-scheduler run logs | run_id, results |
-| ScheduleException | auto_scheduler.py | Schedule exceptions | event, employee, reason |
-| EventSchedulingOverride | auto_scheduler.py | Event-specific overrides | event, settings |
+| PendingSchedule | auto_scheduler.py | Auto-scheduler proposals | scheduler_run_id, status, bumped_event_ref_num |
+| SchedulerRunHistory | auto_scheduler.py | Run audit trail | run_id, status, metrics |
+| ScheduleException | auto_scheduler.py | One-time rotation override | exception_date, rotation_type, employee_id |
+| EventSchedulingOverride | auto_scheduler.py | Per-event auto-scheduler control | event, settings |
 | LockedDay | auto_scheduler.py | Prevent schedule modifications | date, reason |
-| EventTypeOverride | auto_scheduler.py | Event type overrides | event, override_type |
-| SystemSetting | system_setting.py | System-wide settings | key, value |
-| AuditLog | audit.py | Audit log entries | action, user, timestamp |
-| AuditNotificationSettings | audit.py | Notification configuration | setting, value |
-| EmployeeAttendance | employee_attendance.py | Attendance tracking | employee_id, date, status |
-| PaperworkTemplate | paperwork_template.py | Paperwork templates | name, template_data |
-| UserSession | user_session.py | User session management | user_id, session_data |
-| CompanyHoliday | company_holiday.py | Company holidays | date, name |
-| IgnoredValidationIssue | ignored_validation_issue.py | Suppressed validation issues | rule_id, reason |
-| ShiftBlockSetting | shift_block_setting.py | Shift block configuration | block_number, start_time, end_time |
-| Note | notes.py | Notes | title, content, date |
-| RecurringReminder | notes.py | Recurring reminders | note_id, frequency |
-| SupplyCategory | inventory.py | Inventory supply categories | name |
-| Supply | inventory.py | Inventory supplies | name, category_id, quantity |
-| SupplyAdjustment | inventory.py | Inventory adjustments | supply_id, quantity_change |
-| PurchaseOrder | inventory.py | Purchase orders | order_date, status |
-| OrderItem | inventory.py | Purchase order items | order_id, supply_id, quantity |
-| InventoryReminder | inventory.py | Inventory reminders | supply_id, threshold |
+| EventTypeOverride | auto_scheduler.py | Manual event type override (persists through DB refresh) | event, override_type |
+| SystemSetting | system_setting.py | DB-backed config with encryption | key, value, setting_type (string/boolean/encrypted) |
+| CompanyHoliday | company_holiday.py | Holidays with recurrence | holiday_date, is_recurring, recurring_rule |
+| ShiftBlockSetting | shift_block_setting.py | 8 shift blocks | block_number, arrive_time, on_floor_time, lunch_time, depart_time |
+| Note / RecurringReminder | notes.py | Task/note tracking | title, content, priority, due_date, frequency |
+| SupplyCategory / Supply / SupplyAdjustment / PurchaseOrder / OrderItem / InventoryReminder | inventory.py | Inventory management (6 models) | Various |
 
-**Model Registry Pattern**:
-```python
-from app.models import get_models, get_db
-models = get_models()
-Employee = models['Employee']
-```
+**Availability Hierarchy** (checked in order):
+1. `EmployeeAvailabilityOverride` (temporary weekly change — highest priority)
+2. `EmployeeAvailability` (date-specific)
+3. `EmployeeWeeklyAvailability` (recurring pattern)
+4. `EmployeeTimeOff` (date range unavailability)
 
-**Business Logic Examples**:
-- `Employee.can_work_event_type()` - Role-based event restrictions
-- `Event.detect_event_type()` - Auto-classify from project_name
-- `CompanyHoliday.is_holiday()` - Check if date is holiday
+**Business Logic on Models**:
+- `Employee.can_work_event_type(event_type)` — Role-based event restrictions
+- `Event.detect_event_type()` — Auto-classify from project_name (keywords → duration fallback)
+- `CompanyHoliday.is_holiday(check_date)` — Check if date is holiday (handles recurrence)
+- `SystemSetting.get_setting(key, default)` — Retrieve with type conversion + encryption
 
 ---
 
 ### Services (Business Logic)
 
-**Purpose**: Core scheduling algorithms and business rules
-
-**Key Services**:
-
-#### SchedulingEngine (45,251 tokens)
+#### SchedulingEngine (36,079 tokens)
 **File**: `app/services/scheduling_engine.py`
 
-**Purpose**: Auto-scheduler orchestrator with 6-wave priority algorithm, optional ML-enhanced employee ranking
+**Purpose**: Auto-scheduler orchestrator with multi-phase priority algorithm
 
 **Algorithm**:
 ```
-Wave 1: Rotation Events (Juicer, Digital) → Rotation employees
-Wave 2: Core Events (Primary Lead priority) → Block 1 assignment
-Wave 3: Core Events (Remaining) → Cascading bump logic
-Wave 4: Supervisor Events → Auto-pair with Core events
-Wave 5: Freeosk/Digital Events → Available time slots
-Wave 6: Other Event Types → Catch-all
-Rescue: Urgent Events (due within 3 days)
+Phase 1: Rotation Events (Juicer, Digital) → Rotation employees
+Phase 2: Core Events (Lead priority) → 8 shift blocks
+Phase 3: Supervisor Events → Auto-pair with Core (parent_event_ref_num)
+Rescue:  Urgent events due within 3 days
 ```
 
-**Key Methods**:
-- `run_auto_scheduler()` - Main entry point
-- `_schedule_rotation_events()` - Wave 1: Juicer/Digital
-- `_schedule_core_events()` - Wave 2-3: Core assignments
-- `_pair_supervisor_events()` - Wave 4: Auto-pairing
-- `_try_bump_for_day()` - Conflict resolution via event bumping
+**Key Configuration**:
+- `SCHEDULING_WINDOW_DAYS = 3` (only schedules 3 days ahead)
+- `MAX_BUMPS_PER_EVENT = 3` (prevents infinite bump loops)
+- Shift block times loaded from database (`ShiftBlockConfig`)
+- ML integration via `MLSchedulerAdapter` (optional, graceful fallback)
 
-**Dependencies**: RotationManager, ConstraintValidator, ShiftBlockConfig, MLSchedulerAdapter (optional)
+**Dependencies**: RotationManager, ConstraintValidator, ConflictResolver, ShiftBlockConfig, MLSchedulerAdapter
 
 ---
 
-#### ConstraintValidator (6,244 tokens)
+#### ConstraintValidator (4,608 tokens)
 **File**: `app/services/constraint_validator.py`
 
-**Purpose**: Validates scheduling assignments against business rules
-
-**Constraints Checked**:
-1. Company holidays - No work on holidays
-2. Time-off requests - Employee unavailability
-3. Weekly availability - Recurring patterns
-4. Role requirements - Lead-only event types
-5. Daily limit - Max 1 Core event per day
-6. Weekly limit - Max 6 Core events per week
-7. Already scheduled - Overlap detection
-8. Due date - Must schedule before due
+**Constraints Checked** (in order):
+1. Company holidays
+2. Time-off requests
+3. Weekly availability patterns
+4. Role requirements (Lead-only event types)
+5. Daily limit (max 1 Core event per day)
+6. Weekly limit (max 6 Core events per week, Sun-Sat)
+7. Already scheduled (overlap detection)
+8. Due date (must schedule before event due)
 
 **Business Rules**:
-```python
-LEAD_ONLY_EVENT_TYPES = ['Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh', 'Digital Teardown']
-MAX_CORE_EVENTS_PER_DAY = 1
-MAX_CORE_EVENTS_PER_WEEK = 6  # Sunday-Saturday
-```
+- **Lead-Only**: Freeosk, Digitals, Digital Setup/Refresh/Teardown require Lead Event Specialist or Club Supervisor
+- **Juicer**: Requires Juicer Barista job title OR `juicer_trained=True`
+- Must call `set_current_run(run_id)` to include pending schedules in validation
+
+---
+
+#### ConflictResolver (1,654 tokens)
+**File**: `app/services/conflict_resolver.py`
+
+- Priority score = days until due date (lower = more urgent)
+- Never bump events within 2 days of due date
+- Never bump Supervisor events (paired with Core)
+- Returns `SwapProposal` objects
 
 ---
 
 #### Schedule Verification Services
 
-**Daily Validation** (`schedule_verification.py` - 23,364 tokens):
-- Validates single day against ~20 business rules
-- Returns structured issue reports with severity levels
-- Critical/Warning/Info categorization
+| Service | File | Tokens | Purpose |
+|---------|------|--------|---------|
+| ScheduleVerificationService | schedule_verification.py | 17,755 | Daily validation (~8 rules), range verification |
+| WeeklyValidationService | weekly_validation.py | 7,160 | Cross-day validation, health score (0-100) |
+| DailyAuditChecker | daily_audit_checker.py | 5,290 | Proactive issue detection, rotation gaps, deadline warnings |
 
-**Weekly Validation** (`weekly_validation.py` - 9,103 tokens):
-- Validates 7-day schedules
-- Cross-day rules (max events per week, randomization)
-- Health score calculation (0-100)
-
-**Daily Audit** (`daily_audit_checker.py` - 7,170 tokens):
-- Proactive issue detection
-- Rotation gap checking
-- Urgent unscheduled events
-- Scan-out deadline warnings
+**Health Score**: `100 - (critical × 10) - (warning × 3)` — Range 0-100
 
 ---
 
@@ -475,65 +458,71 @@ MAX_CORE_EVENTS_PER_WEEK = 6  # Sunday-Saturday
 
 | Service | File | Tokens | Purpose |
 |---------|------|--------|---------|
-| AI Tools | ai_tools.py | 37,659 | LLM function calling tools |
-| Daily Paperwork | daily_paperwork_generator.py | 15,892 | PDF packaging for daily reports |
-| Approved Events | approved_events_service.py | 7,188 | Approved events from MVRetail |
-| Database Refresh | database_refresh_service.py | 6,478 | Full database refresh from external API |
-| AI Assistant | ai_assistant.py | 5,466 | AI chat orchestration |
-| Inventory | inventory_service.py | 5,465 | Inventory CRUD operations |
-| Shift Block Config | shift_block_config.py | 5,339 | Shift block time configuration |
-| EDR Service | edr_service.py | 4,963 | EDR report orchestration |
-| EDR Generator | edr_generator.py | 4,752 | EDR report generation |
-| Conflict Validation | conflict_validation.py | 4,654 | Schedule conflict checking |
-| Employee Import | employee_import_service.py | 4,339 | Employee import from MVRetail |
-| Command Center | command_center_service.py | 4,082 | Morning briefing dashboard data |
-| Sync Service | sync_service.py | 3,702 | MVRetail sync orchestration |
-| Event Time Settings | event_time_settings.py | 3,292 | Allowed time slots per event type |
-| Rotation Manager | rotation_manager.py | 3,264 | Rotation assignments |
-| Conflict Resolver | conflict_resolver.py | 2,182 | Event bumping logic |
-| Workload Analytics | workload_analytics.py | 1,112 | Workload distribution analysis |
+| AI Tools | ai_tools.py | 29,595 | LLM function calling tools |
+| Daily Paperwork | daily_paperwork_generator.py | 12,744 | PDF packaging for daily reports |
+| Shift Block Config | shift_block_config.py | 5,556 | Shift block time configuration |
+| Approved Events | approved_events_service.py | 5,407 | Walmart-approved event tracking |
+| Database Refresh | database_refresh_service.py | 4,837 | Full refresh from MVRetail API |
+| EDR Generator | edr_generator.py | 4,405 | EDR report generation |
+| Inventory | inventory_service.py | 4,393 | Inventory CRUD + order workflow |
+| AI Assistant | ai_assistant.py | 4,203 | AI chat orchestration |
+| EDR Service | edr_service.py | 3,701 | EDR orchestration |
+| Conflict Validation | conflict_validation.py | 3,426 | Schedule conflict checking |
+| Employee Import | employee_import_service.py | 3,372 | Employee import from MVRetail |
+| Command Center | command_center_service.py | 3,324 | Morning briefing dashboard data |
+| Sync Service | sync_service.py | 3,074 | MVRetail sync orchestration (Celery tasks) |
+| Event Time Settings | event_time_settings.py | 2,979 | Allowed time slots per event type |
+| Rotation Manager | rotation_manager.py | 2,338 | Rotation assignments + exceptions |
 
 ---
 
 ### Routes (Flask Blueprints)
 
-**Purpose**: HTTP endpoint handlers organized by feature
-
-**Blueprint Architecture (24 blueprints)**:
+**24 blueprints** organized by feature:
 
 | Blueprint | Prefix | File | Tokens | Purpose |
 |-----------|--------|------|--------|---------|
-| `api_bp` | `/api` | api.py | 61,347 | Main REST API |
-| `admin_bp` | `/` | admin.py | 28,674 | Admin functions |
-| `auto_scheduler_bp` | `/auto-schedule` | auto_scheduler.py | 19,810 | Auto-scheduler UI |
-| `printing_bp` | `/printing` | printing.py | 17,486 | PDF generation |
-| `dashboard_bp` | `/dashboard` | dashboard.py | 10,052 | Validation dashboards |
-| `employees_bp` | `/` | employees.py | 9,545 | Employee management |
-| `main_bp` | `/` | main.py | 8,155 | Dashboard, calendar |
-| `scheduling_bp` | `/` | scheduling.py | 8,172 | Schedule CRUD |
-| `auth_bp` | `/` | auth.py | 6,078 | Login, session, MFA |
-| `api_notes_bp` | `/api/notes` | api_notes.py | 5,980 | Notes API |
-| `attendance_api_bp` | `/api/attendance` | api_attendance.py | 5,026 | Attendance API |
-| `inventory_bp` | `/inventory` | inventory.py | 4,522 | Inventory management |
-| `api_paperwork_templates_bp` | `/api/paperwork-templates` | api_paperwork_templates.py | 3,500 | Paperwork templates |
-| `api_shift_blocks_bp` | `/api/shift-blocks` | api_shift_blocks.py | 3,232 | Shift block settings |
-| `api_auto_scheduler_settings_bp` | `/api` | api_auto_scheduler_settings.py | 2,856 | Scheduler settings |
-| `ai_bp` | `/api/ai` | ai_routes.py | 2,731 | AI assistant API |
-| `notifications_api_bp` | `/api/notifications` | api_notifications.py | 2,660 | Notifications |
-| `api_company_holidays_bp` | `/api/company-holidays` | api_company_holidays.py | 2,594 | Company holidays |
-| `api_locked_days_bp` | `/api/locked-days` | api_locked_days.py | 2,512 | Locked days |
-| `rotations_bp` | `/rotations` | rotations.py | 1,807 | Rotation assignments |
-| `edr_sync_bp` | `/api/sync` | edr_sync.py | 1,913 | EDR sync |
-| `health_bp` | `/health` | health.py | 1,584 | Health check |
-| `help_bp` | `/help` | help.py | 629 | Help documentation |
-| `walmart_bp` | `/api/walmart` | walmart_api/routes.py | 12,332 | Walmart integration |
+| `api_bp` | `/api` | api.py | 46,716 | Main REST API |
+| `admin_bp` | `/` | admin.py | 24,490 | Admin, DB refresh, sync, webhooks |
+| `auto_scheduler_bp` | `/auto-schedule` | auto_scheduler.py | 15,233 | Auto-scheduler approval workflow |
+| `printing_bp` | `/printing` | printing.py | 14,488 | PDF generation |
+| `walmart_bp` | `/api/walmart` | walmart_api/routes.py | 10,341 | Walmart EDR integration |
+| `dashboard_bp` | `/dashboard` | dashboard.py | 8,120 | Command center, daily/weekly validation |
+| `employees_bp` | `/` | employees.py | 7,287 | Employee CRUD + MVRetail import |
+| `scheduling_bp` | `/` | scheduling.py | 6,595 | Schedule form, available employees |
+| `main_bp` | `/` | main.py | 6,508 | Dashboard, calendar, unscheduled |
+| `api_notes_bp` | `/api/notes` | api_notes.py | 5,127 | Notes API |
+| `auth_bp` | `/` | auth.py | 4,640 | Login, session, timeout |
+| `inventory_bp` | `/inventory` | inventory.py | 3,839 | Inventory management |
+| `attendance_api_bp` | `/api/attendance` | api_attendance.py | 3,651 | Attendance API |
+| `api_paperwork_templates_bp` | `/api/paperwork-templates` | api_paperwork_templates.py | 2,823 | Paperwork templates |
+| `api_shift_blocks_bp` | `/api/shift-blocks` | api_shift_blocks.py | 2,624 | Shift block settings |
+| `api_auto_scheduler_settings_bp` | `/api` | api_auto_scheduler_settings.py | 2,288 | Scheduler settings |
+| `api_company_holidays_bp` | `/api/company-holidays` | api_company_holidays.py | 2,255 | Company holidays |
+| `ai_bp` | `/api/ai` | ai_routes.py | 2,215 | AI assistant (legacy + RAG) |
+| `api_locked_days_bp` | `/api/locked-days` | api_locked_days.py | 2,175 | Locked days |
+| `api_employee_termination_bp` | `/api` | api_employee_termination.py | 1,987 | Employee termination |
+| `api_availability_overrides_bp` | `/api` | api_availability_overrides.py | 1,957 | Availability overrides |
+| `notifications_api_bp` | `/api/notifications` | api_notifications.py | 1,939 | Notifications |
+| `api_suggest_employees_bp` | `/api` | api_suggest_employees.py | 1,816 | Employee suggestion |
+| `rotations_bp` | `/rotations` | rotations.py | 1,546 | Rotation assignments |
+| `edr_sync_bp` | `/api/sync` | edr_sync.py | 1,508 | EDR sync |
+| `health_bp` | `/health` | health.py | 1,317 | Health check + Prometheus metrics |
+| `api_validate_schedule_bp` | `/api` | api_validate_schedule.py | 1,293 | Schedule validation |
+| `help_bp` | `/help` | help.py | 457 | Help documentation (11 pages) |
 
 **Common Patterns**:
 - `@require_authentication()` decorator for protected routes
-- CSRF protection on all POST/PUT/DELETE
-- JSON responses for API endpoints
-- HTML templates for user-facing pages
-- Rate limiting on sensitive endpoints (login: 5/min)
+- CSRF protection on all POST/PUT/DELETE (except webhooks — needs HMAC)
+- JSON responses: `{'success': True, 'data': {...}}` / `{'success': False, 'error': '...'}`
+- Rate limiting on login (5/min)
+- Row-level locking (`with_for_update()`) for concurrent approval safety
+
+**Key Route Gotchas**:
+- **Superseded PendingSchedules**: Bumped events create `superseded` status — MUST skip during approval
+- **Locked days**: Check BOTH target date AND bump source date
+- **External IDs**: Use `employee.external_id` (numeric repId) for MVRetail API, not `employee.id`
+- **Commit isolation**: Commit Core event BEFORE attempting Supervisor scheduling
 
 ---
 
@@ -541,9 +530,7 @@ MAX_CORE_EVENTS_PER_WEEK = 6  # Sunday-Saturday
 
 **Location**: `app/ai/`
 
-**Purpose**: RAG-based scheduling assistant with local LLM
-
-**Architecture**:
+**Architecture**: RAG pipeline — Query → Classify → Retrieve Context → Generate Answer
 
 ```mermaid
 graph LR
@@ -556,32 +543,16 @@ graph LR
     PROVIDER --> RESPONSE[AI Response]
 ```
 
-**Components**:
-| Component | File | Purpose |
-|-----------|------|---------|
-| QueryClassifier | context/classifier.py | Determine query intent |
-| ContextRetriever | context/retriever.py | Fetch relevant DB records |
-| PromptTemplates | prompts/templates.py | LLM prompt engineering |
-| OllamaProvider | providers/ollama.py | Local LLM integration |
-| ChatService | services/chat.py | Orchestration layer |
+| Component | File | Tokens | Purpose |
+|-----------|------|--------|---------|
+| QueryClassifier | context/classifier.py | 1,565 | Determine query intent |
+| ContextRetriever | context/retriever.py | 2,420 | Fetch relevant DB records |
+| PromptTemplates | prompts/templates.py | 710 | LLM prompt engineering |
+| OllamaProvider | providers/ollama.py | 1,064 | Local LLM integration |
+| ChatService | services/chat.py | 1,269 | Orchestration layer |
 
-**Supported Queries**:
-- "Who's available tomorrow?"
-- "Show me this week's schedule"
-- "Any conflicts on Friday?"
-- "Who should I assign to this Core event?"
-- "What's the workload distribution?"
-
-**AI Providers**:
-- **Ollama** (default): Local LLM, zero cost, privacy-first
-- **Google Gemini**: $0.075/1M tokens (cheapest cloud)
-- **OpenAI**: $0.15/1M tokens
-- **Anthropic**: $0.25/1M tokens
-
-**Models**:
-- `llama3.2:3b` - Balanced (default)
-- `ministral-3:3b` - Fast, efficient
-- `deepseek-r1:8b` - Reasoning-focused
+**AI Providers**: Ollama (default, free), Google Gemini, OpenAI, Anthropic Claude
+**Endpoints**: `/api/ai/rag/chat` (JSON), `/api/ai/rag/chat/stream` (SSE), `/api/ai/query` (legacy)
 
 ---
 
@@ -589,177 +560,66 @@ graph LR
 
 **Location**: `app/ml/`
 
-**Purpose**: Machine learning-enhanced scheduling decisions with predictive employee ranking
+**Purpose**: ML-enhanced employee ranking for auto-scheduler
 
-**Architecture**:
-
-```mermaid
-graph TB
-    subgraph "Feature Extraction"
-        EF[Employee Features]
-        EVF[Event Features]
-        HF[Historical Features]
-    end
-
-    subgraph "Models"
-        ER[Employee Ranker<br>XGBoost/LightGBM]
-    end
-
-    subgraph "Integration"
-        ADAPTER[MLSchedulerAdapter]
-        ENGINE[SchedulingEngine]
-    end
-
-    subgraph "Evaluation"
-        METRICS[ROC-AUC, Precision, Recall]
-        SHADOW[Shadow Mode Logging]
-    end
-
-    EF --> ER
-    EVF --> ER
-    HF --> ER
-    ER --> ADAPTER
-    ADAPTER --> ENGINE
-    ER --> METRICS
-    ADAPTER --> SHADOW
-```
-
-**Components**:
 | Component | File | Tokens | Purpose |
 |-----------|------|--------|---------|
-| EmployeeFeatureExtractor | features/employee_features.py | 3,019 | Role, performance, workload features |
-| EventFeatureExtractor | features/event_features.py | 2,897 | Event type, date, duration features |
-| HistoricalFeatureExtractor | features/historical_features.py | 2,574 | Past assignment success rates |
-| SimpleEmployeeFeatureExtractor | features/simple_employee_features.py | 1,579 | Simplified inference features |
-| EmployeeRanker | models/employee_ranker.py | 2,339 | XGBoost/LightGBM ranking model |
-| DataPreparation | training/data_preparation.py | 3,121 | Training data preparation |
-| TrainEmployeeRanker | training/train_employee_ranker.py | 2,202 | Training script |
-| MLSchedulerAdapter | inference/ml_scheduler_adapter.py | 2,474 | SchedulingEngine integration |
-| Metrics | evaluation/metrics.py | 2,763 | Evaluation metrics (ROC-AUC, etc.) |
+| EmployeeFeatureExtractor | features/employee_features.py | 2,648 | Role, performance, workload |
+| EventFeatureExtractor | features/event_features.py | 2,463 | Event type, date, duration |
+| HistoricalFeatureExtractor | features/historical_features.py | 2,073 | Past assignment success rates |
+| EmployeeRanker | models/employee_ranker.py | 1,941 | XGBoost/LightGBM model |
+| MLSchedulerAdapter | inference/ml_scheduler_adapter.py | 1,972 | SchedulingEngine integration |
 
-**Feature Flags** (in `app/config.py`):
-```python
-ML_ENABLED = False                     # Master toggle for all ML features
-ML_EMPLOYEE_RANKING_ENABLED = True     # Employee ranking (when ML_ENABLED)
-ML_BUMP_PREDICTION_ENABLED = False     # Bumping cost prediction (future)
-ML_FEASIBILITY_ENABLED = False         # Schedule feasibility (future)
-ML_CONFIDENCE_THRESHOLD = 0.6          # Minimum confidence for ML decisions
-ML_SHADOW_MODE = False                 # Log predictions without using them
-ML_EMPLOYEE_RANKER_PATH = 'app/ml/models/artifacts/employee_ranker_latest.pkl'
-```
-
-**Safety Design**:
-- All ML methods have graceful fallback to rule-based logic
-- Shadow mode allows safe testing (log predictions without acting on them)
-- Confidence threshold prevents low-quality predictions from being used
-- 5 dedicated test files covering safety, effectiveness, performance, shadow mode
-
-**ML Scripts** (`scripts/`):
-- `analyze_shadow_mode.py` - Analyze shadow mode prediction logs
-- `collect_ml_metrics.py` - Collect and aggregate ML metrics
-- `generate_ml_report.py` - Generate ML performance reports
+**Feature Flags**: `ML_ENABLED`, `ML_SHADOW_MODE`, `ML_CONFIDENCE_THRESHOLD=0.6`
+**Safety**: All ML methods fallback to rule-based logic on failure. Shadow mode logs without acting.
 
 ---
 
 ### Integrations
 
-#### Walmart Retail Link API
-**Location**: `app/integrations/walmart_api/`
+#### Walmart Retail Link API (`app/integrations/walmart_api/`)
+- **Auth**: 6-step MFA flow with SMS OTP
+- **Sessions**: Per-user with 10-minute timeout
+- **Operations**: EDR reports, approved events, event rolling, batch PDF generation
+- **Cache**: 24-hour file-based cache for EDR data
 
-**Purpose**: Fetch Event Detail Reports (EDR), roll events, get approved events
+#### MVRetail Crossmark API (`app/integrations/external_api/`)
+- **Auth**: PHPSESSID cookie-based session (auto-refresh every 3600s)
+- **Retry**: 3 retries with backoff for 429/500/502/503/504
+- **Sync**: Bidirectional — events/employees from API, schedules to API
+- **Key**: `session_api_service.py` (14,362 tokens) handles all API calls
 
-**Authentication**: 6-step MFA flow with SMS OTP
-```
-1. Submit password → 2. Request MFA code (SMS) → 3. Validate code
-→ 4. Register page access → 5. Navigate to Event Mgmt → 6. Get auth token
-```
-
-**Session Management**: Per-user sessions with 10-minute timeout
-
-**Key Operations**:
-- `get_edr_report(event_id)` - Fetch EDR data (items, instructions)
-- `get_approved_events()` - APPROVED status events (LIA)
-- `roll_event()` - Reschedule event to new date
-- `batch_download_edrs()` - Multi-event PDF generation
-
-**Gotcha**: MFA credential ID must be extracted from browser DevTools
-
----
-
-#### MVRetail (Crossmark) API
-**Location**: `app/integrations/external_api/`
-
-**Purpose**: Bidirectional sync with Crossmark scheduling system
-
-**Authentication**: PHPSESSID cookie-based session
-
-**Sync Operations**:
-- **External → Local**: Fetch events, merge into database
-- **Local → External**: Submit schedules, handle updates/deletes
-
-**Key Services**:
-- `SessionAPIService` (18,242 tokens) - API client with auto-refresh
-- `SyncEngine` (8,547 tokens) - Bidirectional synchronization
-- `ParallelSessionAPI` (2,645 tokens) - Parallel session handling
-- Celery tasks for async operations
-
-**Conflict Resolution**: Delete-then-create strategy (no direct updates)
-
----
-
-#### EDR Report Generation
-**Location**: `app/integrations/edr/`
-
-**Purpose**: Generate formatted PDFs for printing with offline caching
-
-**Components**:
-- `EDRReportGenerator` (18,006 tokens) - Fetch EDR data with bulk API
-- `EDRPDFGeneratorBase` (12,302 tokens) - Base PDF layout
-- `EDRPDFGenerator` (11,698 tokens) - Create formatted PDF reports
-- `EDRDBManager` (4,222 tokens) - SQLite cache for offline access
-
-**EDR Services** (in `app/services/`):
-- `edr_service.py` (4,963 tokens) - EDR orchestration
-- `edr_generator.py` (4,752 tokens) - EDR report generation
-
-**Cache Strategy**:
-- 24-hour freshness window
-- Bulk API call for multiple events
-- Single auth → 50+ reports without re-auth
+#### EDR Report Generation (`app/integrations/edr/`)
+- **Cache**: SQLite-based offline cache (`db_manager.py`)
+- **PDF**: ReportLab-based PDF generation with event details + barcodes
+- **Bulk**: Single auth → 50+ reports without re-auth
 
 ---
 
 ### Frontend Architecture
 
-**Location**: `app/static/` and `app/templates/`
+**Pattern**: Hybrid server-rendered Jinja2 + ES6 modules with design token system
 
-**Architecture**: Hybrid server-rendered + ES6 modules with design token system
-
-#### Design Token System
-
-**File**: `app/static/css/design-tokens.css` (292 lines)
-
-The design token system is the single source of truth for all visual styling:
+#### Design Token System (`app/static/css/design-tokens.css`)
 
 | Token Category | Description |
 |----------------|-------------|
-| Color Palette | Brand (PC Navy #2E4C73, PC Blue #1B9BD8), semantic, neutrals |
+| Color Palette | Brand (PC Navy #2E4C73, PC Blue #1B9BD8), semantic, neutrals (11-step) |
 | Event Type Colors | Juicer (#FF6B6B), Digital (#4ECDC4), Core (#95E1D3), etc. |
 | Role Badge Colors | Lead (Hot Pink), Supervisor (Dark Cyan), Juicer (Orange), Specialist (Green) |
-| Typography | Outfit font, 14px minimum body text, 8 size steps |
+| Typography | Outfit font, 14px minimum body, 8 size steps (xs-3xl) |
 | Spacing | 4px grid system (--space-1 through --space-20) |
-| Component Tokens | Buttons (40px height), inputs, modals, navigation |
-| Shadows | 5 levels (xs through xl) |
-| Z-Index Layers | base(1) → dropdown(1000) → modal(1050) → notification(1080) |
-| Accessibility | .sr-only, .skip-to-content, prefers-reduced-motion |
+| Component Tokens | Buttons (40px height), inputs (40px), modals, navigation (60px) |
+| Shadows | 5 levels (xs through xl, rgba-based) |
+| Z-Index Layers | base(1) → dropdown(1000) → modal(1050) → notification(1080) → loading-overlay(10000) |
+| Accessibility | .sr-only, .skip-to-content, prefers-reduced-motion support |
 
-#### CSS Architecture Layers
-
+#### CSS Layer Order
 ```
-design-tokens.css     → Design system tokens (variables)
+design-tokens.css     → Design system variables
 style.css             → Global styles using tokens
-components/*.css      → Component styles (modal, schedule-modal, ai-chat)
-pages/*.css           → Page-specific styles (index, daily-view, employees)
+components/*.css      → Component styles (modal, schedule-modal, ai-chat, notification-modal)
+pages/*.css           → Page styles (index, daily-view, employees, auto-schedule-review, etc.)
 responsive.css        → Responsive breakpoints (640/768/1024/1280px)
 ```
 
@@ -767,27 +627,16 @@ responsive.css        → Responsive breakpoints (640/768/1024/1280px)
 
 | Category | Files | Purpose |
 |----------|-------|---------|
-| **Utils** (7) | api-client.js, cache-manager.js, debounce.js, loading-state.js, focus-trap.js, sr-announcer.js | HTTP client, caching, performance, a11y |
+| **Utils** (6) | api-client.js, cache-manager.js, debounce.js, loading-state.js, focus-trap.js, sr-announcer.js | HTTP client, caching, performance, a11y |
 | **Modules** (5) | state-manager.js, validation-engine.js, toast-notifications.js, aria-announcer.js, focus-trap.js | Core infrastructure |
-| **Components** (10) | modal.js, schedule-modal.js, reschedule-modal.js, trade-modal.js, change-employee-modal.js, notification-modal.js, conflict-validator.js, ai-chat.js, ai-assistant.js | Reusable UI components |
-| **Pages** (7) | daily-view.js (40k tokens), daily-view-attendance-methods.js, attendance-calendar.js, schedule-form.js, schedule-verification.js, dashboard.js, workload-dashboard.js | Page controllers |
+| **Components** (9) | modal.js, schedule-modal.js, reschedule-modal.js, trade-modal.js, change-employee-modal.js, notification-modal.js, conflict-validator.js, ai-chat.js, ai-assistant.js | Reusable UI components |
+| **Pages** (7) | daily-view.js (30k tokens), daily-view-attendance-methods.js, attendance-calendar.js, schedule-form.js, schedule-verification.js, dashboard.js, workload-dashboard.js | Page controllers |
 
-**Key Features**:
-- **State Management**: localStorage/sessionStorage with namespace isolation
-- **API Client**: CSRF protection, timeout handling, automatic retry
-- **Validation**: Async validation engine with real-time conflict detection
-- **Accessibility**: ARIA live regions, focus trap, keyboard navigation, screen reader announcements
-- **Notifications**: Toast system with auto-dismiss and queue management
-
-#### Templates
-
-50 Jinja2 templates organized by feature:
-- Base template with master layout
-- Page templates (index, daily_view, schedule, settings, attendance, etc.)
-- Component templates (modals, AI panel, verification widget)
-- Dashboard templates (command center, daily/weekly validation, approved events)
-- Inventory templates (index, orders, order detail)
-- Help documentation (11 guides)
+**Key Patterns**:
+- **Global singletons**: `apiClient`, `stateManager`, `toaster` exposed on `window` for hybrid ES6/legacy compat
+- **State management**: localStorage (persistent prefs), sessionStorage (filters), History API (shareable URLs)
+- **CSRF protection**: `csrf_helper.js` auto-injects tokens into jQuery, Fetch, and XMLHttpRequest
+- **Accessibility**: Focus traps, ARIA live regions, keyboard navigation, screen reader announcements
 
 ---
 
@@ -810,10 +659,9 @@ sequenceDiagram
     Engine->>DB: Get active employees
     Engine->>Engine: Sort events by priority
 
-    loop Wave 1-6
+    loop Phase 1-3 + Rescue
         alt ML Enabled
             Engine->>ML: rank_employees(event, candidates)
-            ML->>ML: Extract features, predict
             ML-->>Engine: Ranked employee list
         end
         Engine->>Validator: validate_assignment(event, employee, datetime)
@@ -821,14 +669,14 @@ sequenceDiagram
         alt Valid
             Engine->>DB: Create PendingSchedule
         else Invalid
-            Engine->>Engine: Try next employee or bump logic
+            Engine->>Engine: Try next employee or bump
         end
     end
 
     Engine-->>UI: Return run summary
     UI->>User: Display pending schedules for review
     User->>UI: Approve schedules
-    UI->>DB: Update Schedule records
+    UI->>DB: Convert PendingSchedule → Schedule
     UI->>User: Show confirmation
 ```
 
@@ -837,23 +685,18 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as Admin UI
     participant Service as DatabaseRefreshService
     participant API as MVRetail API
     participant DB as Database
 
-    User->>UI: Click "Refresh Database"
-    UI->>Service: refresh_database()
+    User->>Service: refresh_database()
     Service->>API: Authenticate (PHPSESSID)
     API-->>Service: Session cookie
-    Service->>API: Fetch all events
+    Service->>API: Fetch all events (-1 to +1 month)
     API-->>Service: Event data
-    Service->>DB: Upsert events (merge strategy)
-    Service->>API: Fetch employee data
-    API-->>Service: Employee data
-    Service->>DB: Upsert employees
-    Service-->>UI: Refresh summary (added/updated/unchanged)
-    UI->>User: Show results
+    Service->>DB: Clear + recreate events
+    Service->>DB: Apply EventTypeOverrides
+    Service-->>User: Stats (fetched/cleared/created)
 ```
 
 ### Daily Paperwork Generation
@@ -861,459 +704,197 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as Printing UI
     participant Generator as DailyPaperworkGenerator
     participant EDR as EDR Integration
     participant Walmart as Walmart API
 
-    User->>UI: Generate daily paperwork
-    UI->>Generator: generate_complete_daily_paperwork(date)
+    User->>Generator: generate_complete_daily_paperwork(date)
     Generator->>DB: Get Core events for date
     Generator->>Generator: Check for cancelled events
-
-    alt Has Cancelled Events
-        Generator-->>UI: CancelledEventError
-    else No Cancelled Events
-        Generator->>EDR: Batch fetch EDR data
-        EDR->>Walmart: Bulk API call
-        Walmart-->>EDR: Event details + items
-
-        Generator->>Generator: Generate daily schedule PDF
-        Generator->>Generator: Generate item numbers PDF (with barcodes)
-
-        loop For each Core event
-            Generator->>Generator: Generate EDR PDF
-            Generator->>Generator: Download SalesTool PDF
-            Generator->>Generator: Add event templates
-        end
-
-        Generator->>Generator: Merge all PDFs
-        Generator-->>UI: PDF file path
-        UI->>User: Download PDF
-    end
+    Generator->>EDR: Batch fetch EDR data
+    EDR->>Walmart: Bulk API call
+    Walmart-->>EDR: Event details + items
+    Generator->>Generator: Generate daily schedule PDF
+    Generator->>Generator: Generate item numbers PDF (with barcodes)
+    Generator->>Generator: Generate EDR PDFs per event
+    Generator->>Generator: Merge all PDFs
+    Generator-->>User: Download combined PDF
 ```
 
 ---
 
 ## Event Types & Scheduling Priority
 
-### Event Types
-
-| Event Type | Default Duration | Scheduling Priority | Special Rules |
-|------------|------------------|---------------------|---------------|
-| Juicer Production | 540 min (9h) | 1 (Highest) | Rotation employee only |
-| Digital Setup | 30 min | 2 | Rotation employee priority |
-| Digital Refresh | 15 min | 3 | Rotation employee priority |
+| Event Type | Default Duration | Priority | Special Rules |
+|------------|------------------|----------|---------------|
+| Juicer Production | 540 min (9h) | 1 (Highest) | Rotation employee only, Juicer Barista or juicer_trained |
+| Digital Setup | 30 min | 2 | Rotation employee priority, Lead/Supervisor |
+| Digital Refresh | 15 min | 3 | Rotation employee priority, Lead/Supervisor |
 | Freeosk | 15 min | 4 | Lead Event Specialist or Club Supervisor |
 | Digital Teardown | 15 min | 5 | Lead or Club Supervisor |
 | Core | 390 min (6.5h) | 6 | Max 1/day, max 6/week per employee |
-| Supervisor | 5 min | 7 | Auto-paired with Core events |
+| Supervisor | 5 min | 7 | Auto-paired with Core (30 min after Core start) |
 | Digitals | 15 min | 8 | Lead or Club Supervisor |
 | Other | 15 min | 9 (Lowest) | Any active employee |
-
-### Wave System
-
-1. **Wave 1**: Rotation-based events (Juicer, Digital) assigned to rotation employees
-2. **Wave 2**: Core events - Primary Lead gets Block 1
-3. **Wave 3**: Remaining Core events with cascading bump logic
-4. **Wave 4**: Supervisor events auto-paired with Core (same event number)
-5. **Wave 5**: Freeosk & Digital events to available slots
-6. **Wave 6**: Other event types
-7. **Rescue**: Events due within 3 days (final attempt)
 
 ---
 
 ## Validation Rules
 
-### Daily Validation (20+ Rules)
+### Daily Validation (~8 Core Rules)
 
-**File**: `app/services/schedule_verification.py`
-
-| Rule | Type | Description |
-|------|------|-------------|
-| RULE-001 | Critical | Time off conflicts |
-| RULE-002 | Critical | Double booking detection |
-| RULE-003 | Warning | Primary Lead must have Block 1 |
-| RULE-004 | Critical | Max 1 Core event per day per employee |
-| RULE-005 | Critical | Employee must be active |
-| RULE-006 | Warning | Club Supervisor on Core event |
-| RULE-007 | Critical | Same time slot conflicts |
-| ... | ... | ... (13 more rules) |
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Time off conflicts | Critical | Employee scheduled during time-off |
+| Double booking | Critical | Overlapping event assignments |
+| Primary Lead Block 1 | Warning | Primary Lead should have shift Block 1 |
+| Max 1 Core/day | Critical | No more than 1 Core event per employee per day |
+| Employee active | Critical | Employee must be active |
+| Same time slot | Critical | Multiple events in same time slot |
+| Juicer qualification | Critical | Juicer events to qualified employees |
+| Digital qualification | Warning | Digital events to Lead/Supervisor |
 
 ### Weekly Validation (Additional Rules)
 
-**File**: `app/services/weekly_validation.py`
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Max 6 Core/week | Critical | Max 6 Core events per employee per week |
+| Max 5 Juicer/week | Critical | Max 5 Juicer events per week |
+| Schedule randomization | Warning | Not same time 4+ consecutive days |
+| No duplicate products | Warning | Same product shouldn't repeat same day |
+| Time slot distribution | Warning | 2-2-2-2 pattern across blocks |
 
-| Rule | Type | Description |
-|------|------|-------------|
-| RULE-017 | Warning | Schedule randomization (not same time 4+ days) |
-| RULE-018 | Critical | Max 6 Core events per week per employee |
-| RULE-019 | Critical | Max 5 Juicer Production events per week |
-| RULE-020 | Warning | No duplicate products same day |
-| RULE-021 | Warning | Time slot distribution (2-2-2-2 pattern) |
-| RULE-022 | Warning | Club Supervisors on Core events |
-| RULE-023 | Warning | Club Supervisors on Digital when Leads available |
-
-### Health Score Calculation
-
+### Health Score
 ```
-Health Score = 100 - (critical_count × 10) - (warning_count × 3)
-Range: 0-100
-90-100: Excellent
-70-89: Good
-50-69: Fair
-Below 50: Needs attention
+Score = 100 - (critical × 10) - (warning × 3)
+90-100: Excellent | 70-89: Good | 50-69: Fair | <50: Needs attention
 ```
 
 ---
 
 ## Deployment Architecture
 
-### Docker Compose Stack
-
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Internet (HTTPS)                      │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│              Cloudflare Tunnel                           │
-│  • Zero-trust access                                    │
-│  • DDoS protection                                      │
-│  • SSL/TLS termination                                  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│         Nginx Reverse Proxy (Container)                 │
-│  • Static file serving (1 year cache)                   │
-│  • Proxy to Gunicorn                                    │
-│  • Security headers                                     │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│      Gunicorn WSGI Server (Container)                   │
-│  • 1 worker (gevent async)                              │
-│  • Timeout: 120s (long requests)                        │
-│  • Max requests: 10000 (worker recycling)               │
-└────────────────────┬────────────────────────────────────┘
-                     │
-      ┌──────────────┴──────────────┐
-      │                             │
-      ▼                             ▼
-┌────────────┐              ┌────────────┐
-│ PostgreSQL │              │   Redis    │
-│ Container  │              │ Container  │
-│ • 15-alpine│              │ • 7-alpine │
-│ • Volumes  │              │ • AOF      │
-└────────────┘              └────────────┘
-      │
-      │ Used by
-      ▼
-┌────────────┐
-│   Celery   │
-│   Worker   │
-│ Container  │
-└────────────┘
+Internet (HTTPS)
+    ↓
+Cloudflare Tunnel (zero-trust, DDoS protection, SSL)
+    ↓
+Nginx Reverse Proxy (static files, security headers)
+    ↓
+Gunicorn WSGI (1 gevent worker, 120s timeout, 10k max requests)
+    ↓
+  ┌──────────┐    ┌────────┐
+  │PostgreSQL│    │ Redis  │
+  │(15-alpine)│   │(7-alpine)│
+  └──────────┘    └────────┘
+       │
+   Celery Worker (background sync tasks)
 ```
 
-**Critical Configuration**:
-- Single Gunicorn worker (EDR MFA session state)
-- Gevent async I/O for concurrency
-- Cloudflare Tunnel for residential network bypass
+**Critical**: Single Gunicorn worker required — Walmart EDR MFA uses global session state.
 
 ---
 
 ## Testing Strategy
 
-### Test Organization
+**13 test files** with function-level DB isolation:
 
-```
-tests/                                    # 13 test files
-├── conftest.py                          # Fixtures (app, client, db_session, models)
-├── test_models.py                       # Model logic tests
-├── test_routes.py                       # Endpoint tests
-├── test_scheduling_engine.py            # Auto-scheduler tests
-├── test_validator.py                    # Validation tests
-├── test_rotation_manager_backup.py      # Rotation backup tests
-├── test_scheduling_backup_rotation.py   # Backup rotation tests
-├── test_scheduling_past_dates.py        # Past date handling tests
-├── test_ml_functional.py               # ML functional tests
-├── test_ml_effectiveness.py            # ML effectiveness tests
-├── test_ml_performance.py              # ML performance tests
-├── test_ml_safety.py                   # ML safety (fallback, graceful degradation)
-└── test_ml_shadow_mode.py              # ML shadow mode tests
-```
-
-**Key Fixtures** (from `conftest.py`):
-- `app` - Flask app instance
-- `client` - Test client for HTTP requests
-- `db_session` - Database session with automatic cleanup
-- `models` - Model registry from `get_models()`
-
-**ML Test Coverage**:
-- **Safety**: Graceful fallback to rule-based logic on any failure
-- **Effectiveness**: Model accuracy and ranking quality
-- **Performance**: Inference latency, memory usage
-- **Shadow Mode**: Logging without affecting scheduling
-- **Functional**: End-to-end ML pipeline tests
-
-**Running Tests**:
 ```bash
 pytest                              # All tests
 pytest -v                           # Verbose
 pytest --cov=app                    # With coverage
-pytest tests/test_ml_safety.py     # ML safety tests
 pytest -k "schedule"                # Pattern match
 ```
 
-**Test Environment**:
-- Isolated SQLite database: `instance/scheduler_test.db`
-- Disabled external integrations
-- Port 8001 for test instance
+**Key Fixtures**: `app`, `client`, `db_session`, `models` (from `get_models()`)
+
+**Coverage Areas**: Models, routes, scheduling engine, constraint validation, rotation management, ML (5 dedicated test files)
+
+**Gaps**: No frontend JS tests (Jest), no E2E tests (Playwright), no integration tests for external APIs
 
 ---
 
 ## Navigation Guide
 
-### To Add a New Auto-Scheduler Rule
-
-1. **Define validation logic**: `app/services/constraint_validator.py`
-2. **Update SchedulingEngine**: `app/services/scheduling_engine.py`
-3. **Add tests**: `tests/test_validator.py`
-
-### To Add a New Event Type
-
-1. **Update constants**: `app/constants.py` (EVENT_TYPES, EVENT_DURATIONS, EVENT_PRIORITY)
-2. **Update Event model**: `app/models/event.py` (detect_event_type)
-3. **Update time settings**: `app/services/event_time_settings.py`
-4. **Update scheduling engine**: `app/services/scheduling_engine.py`
-
-### To Add a New API Endpoint
-
-1. **Choose blueprint**: `app/routes/` (api.py for general, api_*.py for specialized)
-2. **Create endpoint** with authentication, CSRF, error handling
-3. **Update frontend**: `app/static/js/utils/api-client.js`
-
-### To Add a New Validation Rule
-
-1. **Daily validation**: `app/services/schedule_verification.py`
-2. **Weekly validation**: `app/services/weekly_validation.py`
-3. **Documentation**: `docs/scheduling_validation_rules.md`
-
-### To Modify PDF Reports
-
-1. **Daily paperwork**: `app/services/daily_paperwork_generator.py`
-2. **EDR PDFs**: `app/integrations/edr/pdf_generator.py`
-3. **Templates**: Add via admin UI → `PaperworkTemplate` model
-
-### To Configure ML
-
-1. **Enable ML**: Set `ML_ENABLED=true` in environment
-2. **Train model**: `python app/ml/training/train_employee_ranker.py`
-3. **Shadow mode first**: Set `ML_SHADOW_MODE=true` to test without affecting scheduling
-4. **Analyze results**: `python scripts/analyze_shadow_mode.py`
-5. **Go live**: Set `ML_SHADOW_MODE=false`
-
-### To Add Inventory Items
-
-1. **Models**: `app/models/inventory.py` (SupplyCategory, Supply, etc.)
-2. **Service**: `app/services/inventory_service.py`
-3. **Routes**: `app/routes/inventory.py` (/inventory)
-4. **Templates**: `app/templates/inventory/` (index, orders, order_detail)
+| Task | Files to Touch |
+|------|----------------|
+| **Add auto-scheduler rule** | `services/constraint_validator.py` → `services/scheduling_engine.py` → `tests/test_validator.py` |
+| **Add event type** | `constants.py` → `models/event.py` (detect_event_type) → `services/event_time_settings.py` → `services/scheduling_engine.py` |
+| **Add API endpoint** | `routes/api.py` or `routes/api_*.py` → `static/js/utils/api-client.js` → tests |
+| **Add validation rule** | `services/schedule_verification.py` or `services/weekly_validation.py` → `docs/scheduling_validation_rules.md` |
+| **Modify PDF reports** | `services/daily_paperwork_generator.py` → `integrations/edr/pdf_generator.py` |
+| **Configure ML** | Set `ML_ENABLED=true` → Train: `python app/ml/training/train_employee_ranker.py` → Shadow mode first |
+| **Add model** | `models/your_model.py` → `models/__init__.py` (register) → migration → service → route |
+| **Add inventory items** | `models/inventory.py` → `services/inventory_service.py` → `routes/inventory.py` → `templates/inventory/` |
 
 ---
 
 ## Conventions
 
-### Naming Conventions
-
-**Models**: PascalCase singular (`Employee`, `Event`, `Schedule`)
+**Models**: PascalCase singular (`Employee`, `Event`)
 **Files**: snake_case (`scheduling_engine.py`, `api_notes.py`)
 **Functions**: snake_case (`run_auto_scheduler()`, `validate_assignment()`)
 **Constants**: UPPER_SNAKE_CASE (`MAX_CORE_EVENTS_PER_DAY`)
 **Blueprints**: snake_case with `_bp` suffix (`auto_scheduler_bp`)
-
-### Design Token Naming
-
-CSS custom properties follow a hierarchical naming scheme:
-```css
---color-{category}           /* --color-primary, --color-success */
---color-{category}-{variant} /* --color-primary-light, --color-danger-dark */
---color-badge-{role}         /* --color-badge-lead, --color-badge-supervisor */
---font-size-{scale}          /* --font-size-sm, --font-size-xl */
---space-{number}             /* --space-1 (4px), --space-4 (16px) */
---z-{layer}                  /* --z-modal, --z-notification */
-```
-
-### Code Organization
-
-**Model Factory Pattern**:
-```python
-# app/models/example.py
-def create_example_model(db):
-    class Example(db.Model):
-        # ...
-    return Example
-```
-
-**Service Pattern**:
-```python
-# app/services/example_service.py
-from app.models import get_models, get_db
-
-class ExampleService:
-    def __init__(self):
-        self.models = get_models()
-        self.db = get_db()
-```
+**CSS tokens**: `--color-{category}`, `--font-size-{scale}`, `--space-{number}`, `--z-{layer}`
 
 **API Response Format**:
-```python
-# Success
-{'success': True, 'data': {...}, 'message': 'Optional'}
-# Error
-{'success': False, 'error': 'Error message', 'details': {...}}
+```json
+{"success": true, "data": {...}, "message": "Optional"}
+{"success": false, "error": "Error message", "details": {...}}
 ```
-
-### JavaScript ES6 Patterns
-
-- ES6 modules with `import`/`export`
-- Class-based components (e.g., `Modal`, `ScheduleModal extends Modal`)
-- Centralized API calls via `api-client.js`
-- State management via `state-manager.js`
-- ARIA announcements via `aria-announcer.js`
-
-### Database Patterns
-
-- Use `joinedload()` for eager loading (prevent N+1)
-- Date ranges: datetime comparisons (not `func.date()`)
-- Bulk operations: `bulk_insert_mappings()`
-- Descriptive migration names: `add_shift_block_columns_to_schedules`
 
 ---
 
 ## Gotchas
 
-### Critical Issues
+### Critical
+1. **Model Access**: ALWAYS use `get_models()` — never direct imports (causes circular imports)
+2. **Single Gunicorn Worker**: Required for EDR MFA global session state
+3. **Supervisor Pairing**: Matches 6-digit event number prefix, requires date window overlap
+4. **Shift Block Order**: First 8 sequential [1-8], overflow priority [1,3,5,7,2,4,6,8], Primary Lead always Block 1
+5. **Scheduler Window**: Only schedules 3 days ahead
+6. **Locked Days**: Check BOTH target date AND bump source date before approval
+7. **Superseded PendingSchedules**: MUST skip during approval (bumped events)
+8. **Trade events**: Use integer comparison for event IDs (recent fix for string/int mismatch)
 
-1. **Single Gunicorn Worker Required**
-   - Walmart EDR MFA uses global session state
-   - Multiple workers lose session between MFA steps
-   - Solution: `workers = 1` in gunicorn_config.py
+### Configuration
+1. **SECRET_KEY**: Must be ≥32 characters in production
+2. **Timezone**: MVRetail requires `America/Indiana/Indianapolis`
+3. **CSRF Sources**: Cookie → Meta tag → `window.getCsrfToken()`
+4. **Encryption**: Auto-generates Fernet key on first use, persists to `.env`
 
-2. **Supervisor Event Pairing**
-   - Supervisor events must match Core event 6-digit number
-   - Auto-pairing uses regex `\d{6}` extraction
-   - Date windows must overlap for pairing
-
-3. **Shift Block Assignment**
-   - First 8 events: Sequential [1,2,3,4,5,6,7,8]
-   - Overflow (9+): Priority [1,3,5,7,2,4,6,8]
-   - Primary Lead always gets Block 1
-
-4. **EDR Cache Limitations**
-   - Bulk API doesn't return `demoInstructions`
-   - Cached reports show "N/A" for instructions
-   - Use direct API for full data
-
-5. **MVRetail external_id Format**
-   - Correct: "44212583" (scheduleEventID)
-   - Wrong: "31785775_157384" (old format)
-   - Cleanup logic strips incorrect format
-
-6. **ML Safety - Always Fallback**
-   - ML module must never block scheduling if model fails
-   - All ML methods must have graceful fallback
-   - Test with `test_ml_safety.py` after any ML changes
-   - Shadow mode (`ML_SHADOW_MODE=true`) logs without affecting output
-
-7. **Design Tokens - Single Source of Truth**
-   - All colors, spacing, and typography must come from `design-tokens.css`
-   - Never hardcode colors in component CSS
-   - Use semantic token names (e.g., `--color-success` not `#28a745`)
-
-### Configuration Gotchas
-
-1. **SECRET_KEY in Production** - Must be 32+ characters
-2. **Timezone Handling** - MVRetail requires ISO8601 with colon: `2026-01-04T10:30:00-05:00`
-3. **CSRF Token Sources** - Priority: Cookie → Meta tag → Global function
-4. **Database Path** - SQLite paths must be absolute in production
-
-### Performance Gotchas
-
-1. **Daily View Size** - daily-view.js is ~160KB (~40k tokens), consider code splitting
-2. **api.py Size** - 245KB (~61k tokens), largest single file
-3. **N+1 Queries** - Use `get_schedules_with_relations()` helper
-4. **SSE Streaming** - AI responses use Server-Sent Events; ensure connection management
+### Performance
+1. **daily-view.js**: ~160KB (30k tokens) — largest frontend file
+2. **api.py**: ~246KB (47k tokens) — largest backend file
+3. **N+1 queries**: Use `get_schedules_with_relations()` helper
+4. **Design tokens**: Single source of truth — never hardcode colors
 
 ---
 
 ## External Dependencies
 
-### Python Packages (requirements.txt)
-
-**Core Framework**:
-- Flask 3.0.3, Flask-SQLAlchemy 3.1.1, Flask-Migrate 4.0.5
-- Flask-WTF 1.2.1, Flask-Limiter 4.0.0
-- Alembic 1.16.5
-
-**AI & ML**:
-- ollama 0.4.0+ (local LLM)
-- google-generativeai 0.3.0+ (cloud option)
-- xgboost 2.0.0+ (gradient boosting)
-- scikit-learn 1.3.0+ (ML utilities)
-- pandas 2.0.0+, numpy 1.24.0+ (data processing)
-- joblib 1.3.0+ (model serialization)
-
-**HTTP & Async**:
-- requests 2.32+
-- gevent 24.2+ (async workers)
-- celery 5.3+ (background tasks)
-- APScheduler 3.11+
-
-**PDF Generation**:
-- reportlab 4.2+
-- xhtml2pdf 0.2.16+
-- PyPDF2 3.0+
-- python-barcode 0.14+ (optional)
-
-**Database**:
-- psycopg2-binary 2.9+ (PostgreSQL)
-- redis 5.0+
-
-**Utilities**:
-- python-decouple 3.8+ (config)
-- cryptography 41.0+ (encryption)
-- python-dateutil 2.8+
-- psutil (system monitoring)
+### Python (~30 core packages)
+- **Framework**: Flask 3.0.3, Flask-SQLAlchemy 3.1.1, Flask-Migrate 4.0.5, Flask-WTF 1.2.1, Flask-Limiter 4.0.0
+- **AI/ML**: ollama, google-generativeai, xgboost, scikit-learn, pandas, numpy
+- **HTTP**: requests 2.32, gevent 24.2, celery 5.3, APScheduler 3.11
+- **PDF**: reportlab 4.2, xhtml2pdf 0.2.16, PyPDF2 3.0, python-barcode
+- **Database**: psycopg2-binary 2.9, redis 5.0
+- **Security**: cryptography 42.0, python-decouple 3.8
 
 ### External Systems
-
-| System | Purpose | Required |
-|--------|---------|----------|
-| Walmart Retail Link | EDR reports, event rolling | Optional (ENABLE_EDR_FEATURES) |
-| MVRetail API | Event/employee sync | Optional (SYNC_ENABLED) |
-| Ollama | Local AI assistant | Optional (AI_ENABLED) |
+| System | Purpose | Feature Flag |
+|--------|---------|-------------|
+| Walmart Retail Link | EDR reports, event rolling | `ENABLE_EDR_FEATURES` |
+| MVRetail Crossmark | Event/employee sync | `SYNC_ENABLED` |
+| Ollama | Local AI assistant | `AI_ENABLED` |
 | PostgreSQL | Production database | Production only |
-| Redis | Task queue, caching | Production only |
+| Redis | Task queue, sessions | Production only |
 | Cloudflare Tunnel | Remote access | Deployment only |
 
 ---
 
-## Support
-
-For questions or issues:
-- **Documentation**: See `/help` routes in application
-- **Code Review**: GitHub Actions with Claude Code Review
-- **Project Instructions**: `CLAUDE.md` (AI assistant guidance)
-- **Agent Instructions**: `AGENTS.md` (agent-specific guidance)
-
----
-
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-09
 **Generated By**: Cartographer (Claude Code)
-**Codebase Size**: 377 files, ~1,271,000 tokens
+**Codebase Size**: 376 files, ~1,277,614 tokens
 **Architecture**: Production-grade Flask application with AI + ML integration

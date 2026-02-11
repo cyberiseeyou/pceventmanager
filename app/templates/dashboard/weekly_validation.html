@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    crossorigin="anonymous" />
+    integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" />
 <style>
     .validation-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -590,7 +590,7 @@
                         <a href="/schedule/daily/{{ date_str }}" class="action-btn primary">
                             <i class="fas fa-calendar-day"></i> View Schedule
                         </a>
-                        <button class="action-btn warning" onclick="showEmployeeSchedules('{{ issue.details.employee_id }}', '{{ date_str }}', 'Core')">
+                        <button class="action-btn warning" data-action="show-employee-schedules" data-employee-id="{{ issue.details.employee_id }}" data-date="{{ date_str }}" data-event-type="Core">
                             <i class="fas fa-exchange-alt"></i> Reassign One
                         </button>
 
@@ -648,7 +648,7 @@
 
                     {# Core-Supervisor Pairing - Assign supervisor event #}
                     {% elif issue.rule_name == 'Core-Supervisor Pairing' %}
-                        <button class="action-btn success" onclick="assignSupervisorEvent('{{ issue.details.core_event_ref }}', '{{ date_str }}')">
+                        <button class="action-btn success" data-action="assign-supervisor" data-event-ref="{{ issue.details.core_event_ref }}" data-date="{{ date_str }}">
                             <i class="fas fa-user-tie"></i> Assign Supervisor
                         </button>
                         <a href="/events?search={{ issue.details.core_event_name | urlencode }}" class="action-btn secondary">
@@ -736,7 +736,7 @@
 
                     {# Juicer-Core Conflict - Unschedule one #}
                     {% elif issue.rule_name == 'Juicer-Core Conflict' %}
-                        <button class="action-btn warning" onclick="showEmployeeSchedules('{{ issue.details.employee_id }}', '{{ date_str }}', null)">
+                        <button class="action-btn warning" data-action="show-employee-schedules" data-employee-id="{{ issue.details.employee_id }}" data-date="{{ date_str }}">
                             <i class="fas fa-exchange-alt"></i> Choose Event
                         </button>
                         <a href="/schedule/daily/{{ date_str }}" class="action-btn secondary">
@@ -860,7 +860,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h4>Reschedule Event</h4>
-            <button class="modal-close" onclick="closeModal('reschedule-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="reschedule-modal">&times;</button>
         </div>
         <form id="reschedule-form">
             <input type="hidden" id="reschedule-schedule-id">
@@ -882,7 +882,7 @@
                 </select>
             </div>
             <div class="d-flex gap-2 justify-content-end">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('reschedule-modal')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="reschedule-modal">Cancel</button>
                 <button type="submit" class="btn btn-primary">Reschedule</button>
             </div>
         </form>
@@ -894,7 +894,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h4>Change Employee Assignment</h4>
-            <button class="modal-close" onclick="closeModal('change-employee-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="change-employee-modal">&times;</button>
         </div>
         <div class="mb-3">
             <label class="form-label">Current Employee</label>
@@ -909,8 +909,8 @@
         <input type="hidden" id="change-schedule-id">
         <input type="hidden" id="change-selected-employee">
         <div class="d-flex gap-2 justify-content-end">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('change-employee-modal')">Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirm-change-btn" onclick="confirmChangeEmployee()" disabled>Change Employee</button>
+            <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="change-employee-modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-change-btn" data-action="confirm-change-employee" disabled>Change Employee</button>
         </div>
     </div>
 </div>
@@ -920,7 +920,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h4>Quick Schedule Event</h4>
-            <button class="modal-close" onclick="closeModal('quick-schedule-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="quick-schedule-modal">&times;</button>
         </div>
         <div class="mb-3">
             <label class="form-label">Event</label>
@@ -949,8 +949,8 @@
         </div>
         <input type="hidden" id="quick-schedule-selected-employee">
         <div class="d-flex gap-2 justify-content-end">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('quick-schedule-modal')">Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirm-schedule-btn" onclick="confirmQuickSchedule()" disabled>Schedule</button>
+            <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="quick-schedule-modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-schedule-btn" data-action="confirm-quick-schedule" disabled>Schedule</button>
         </div>
     </div>
 </div>
@@ -960,13 +960,13 @@
     <div class="modal-content">
         <div class="modal-header">
             <h4>Employee's Schedules - Choose One to Modify</h4>
-            <button class="modal-close" onclick="closeModal('employee-schedules-modal')">&times;</button>
+            <button class="modal-close" data-action="close-modal" data-modal="employee-schedules-modal">&times;</button>
         </div>
         <div id="employee-schedules-list" class="mt-2">
             <!-- Populated dynamically -->
         </div>
         <div class="d-flex gap-2 justify-content-end mt-3">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('employee-schedules-modal')">Cancel</button>
+            <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="employee-schedules-modal">Cancel</button>
         </div>
     </div>
 </div>
@@ -980,754 +980,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Day filter
-        document.querySelectorAll('.day-pill').forEach(pill => {
-            pill.addEventListener('click', function () {
-                document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
-                this.classList.add('active');
-                filterIssues();
-            });
-        });
-
-        // Severity filter
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                filterIssues();
-            });
-        });
-    });
-
-    function filterIssues() {
-        const dayFilter = document.querySelector('.day-pill.active').dataset.filter;
-        const severityFilter = document.querySelector('.filter-btn.active').dataset.severity;
-
-        document.querySelectorAll('.issue-item').forEach(item => {
-            const matchesDay = dayFilter === 'all' || item.dataset.date === dayFilter || item.dataset.date === 'weekly';
-            const matchesSeverity = severityFilter === 'all' || item.dataset.severity === severityFilter;
-            item.style.display = (matchesDay && matchesSeverity) ? '' : 'none';
-        });
-    }
-
-    function closeModal(modalId) {
-        document.getElementById(modalId).classList.remove('show');
-    }
-
-    function showLoading() {
-        document.getElementById('loading').classList.add('show');
-    }
-
-    function hideLoading() {
-        document.getElementById('loading').classList.remove('show');
-    }
-
-    // ===== CSRF TOKEN HELPER =====
-    function getCsrfToken() {
-        // Try to get from cookie first
-        const name = 'csrf_token=';
-        const cookies = document.cookie.split(';');
-        for (let cookie of cookies) {
-            cookie = cookie.trim();
-            if (cookie.startsWith(name)) {
-                return cookie.substring(name.length);
-            }
-        }
-        // Fallback to meta tag
-        const metaTag = document.querySelector('meta[name="csrf-token"]');
-        if (metaTag) return metaTag.content;
-        // Fallback to global function
-        if (window.getCsrfToken) return window.getCsrfToken();
-        return '';
-    }
-
-    // ===== EVENT DELEGATION FOR ACTION BUTTONS =====
-
-    // Reschedule buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.reschedule-btn');
-        if (!btn) return;
-        openRescheduleModal(
-            btn.dataset.scheduleId,
-            btn.dataset.employeeName,
-            btn.dataset.date,
-            btn.dataset.eventType
-        );
-    });
-
-    // Change employee buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.change-employee-btn');
-        if (!btn) return;
-        openChangeEmployeeModal(
-            btn.dataset.scheduleId,
-            btn.dataset.employeeName,
-            btn.dataset.date,
-            btn.dataset.eventType
-        );
-    });
-
-    // Unschedule buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.unschedule-btn');
-        if (!btn) return;
-        unscheduleEvent(btn.dataset.scheduleId);
-    });
-
-    // Rotation buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.rotation-btn');
-        if (!btn) return;
-        reassignToRotation(
-            btn.dataset.scheduleId,
-            btn.dataset.rotationEmployee,
-            btn.dataset.date
-        );
-    });
-
-    // ===== RESCHEDULE MODAL =====
-    let currentRescheduleEventType = null;  // Store event type for date change handler
-
-    function openRescheduleModal(scheduleId, employeeName, dateStr, eventType) {
-        document.getElementById('reschedule-schedule-id').value = scheduleId;
-        document.getElementById('reschedule-employee').value = employeeName || 'Unknown';
-        document.getElementById('reschedule-date').value = dateStr;
-        currentRescheduleEventType = eventType;
-
-        // Load valid times for the event type with scheduled counts
-        if (eventType) {
-            loadValidTimes(eventType, 'reschedule-time', dateStr);
-        }
-
-        document.getElementById('reschedule-modal').classList.add('show');
-    }
-
-    // Reload times when reschedule date changes
-    document.getElementById('reschedule-date')?.addEventListener('change', function() {
-        if (currentRescheduleEventType) {
-            loadValidTimes(currentRescheduleEventType, 'reschedule-time', this.value);
-        }
-    });
-
-    async function loadValidTimes(eventType, selectId, dateStr) {
-        try {
-            // Build URL with date parameter to get scheduled counts
-            let url = `/api/event-allowed-times/${encodeURIComponent(eventType)}`;
-            if (dateStr) {
-                url += `?date=${dateStr}`;
-            }
-
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                const select = document.getElementById(selectId);
-                select.innerHTML = '';
-
-                // Use time_details which includes scheduled counts
-                const times = data.time_details || data.allowed_times || [];
-
-                if (times.length === 0) {
-                    // No time restrictions - add common times
-                    const defaultTimes = ['09:00', '10:00', '11:00', '12:00'];
-                    defaultTimes.forEach(t => {
-                        const option = document.createElement('option');
-                        option.value = t;
-                        option.textContent = t;
-                        select.appendChild(option);
-                    });
-                } else {
-                    times.forEach(time => {
-                        const option = document.createElement('option');
-                        // Handle both object format {value, label} and string format
-                        if (typeof time === 'object') {
-                            option.value = time.value;
-                            option.textContent = time.label;
-                        } else {
-                            option.value = time;
-                            option.textContent = time;
-                        }
-                        select.appendChild(option);
-                    });
-                }
-            }
-        } catch (err) {
-            console.error('Error loading times:', err);
-        }
-    }
-
-    document.getElementById('reschedule-form').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const scheduleId = document.getElementById('reschedule-schedule-id').value;
-        const newDate = document.getElementById('reschedule-date').value;
-        const newTime = document.getElementById('reschedule-time').value;
-
-        showLoading();
-
-        try {
-            const response = await fetch(`/api/event/${scheduleId}/reschedule`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    new_date: newDate,
-                    new_time: newTime,
-                    override_conflicts: true
-                })
-            });
-
-            if (response.ok) {
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + (data.error || 'Failed to reschedule'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-            closeModal('reschedule-modal');
-        }
-    });
-
-    // ===== CHANGE EMPLOYEE MODAL =====
-    async function openChangeEmployeeModal(scheduleId, currentEmployee, dateStr, eventType) {
-        document.getElementById('change-schedule-id').value = scheduleId;
-        document.getElementById('change-current-employee').value = currentEmployee || 'Unknown';
-        document.getElementById('change-selected-employee').value = '';
-        document.getElementById('confirm-change-btn').disabled = true;
-
-        // Load available employees
-        const employeeList = document.getElementById('employee-list');
-        employeeList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-
-        document.getElementById('change-employee-modal').classList.add('show');
-
-        try {
-            const url = eventType
-                ? `/api/available_employees_for_change/${dateStr}/${eventType}`
-                : `/api/available_employees_for_change/${dateStr}/Core`;
-
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                renderEmployeeList(data.employees || data, 'employee-list', 'change');
-            } else {
-                employeeList.innerHTML = '<div class="text-danger">Error loading employees</div>';
-            }
-        } catch (err) {
-            employeeList.innerHTML = '<div class="text-danger">Error: ' + err.message + '</div>';
-        }
-    }
-
-    function renderEmployeeList(employees, containerId, mode) {
-        const container = document.getElementById(containerId);
-        if (!employees || employees.length === 0) {
-            container.innerHTML = '<div class="text-muted py-3">No available employees found</div>';
-            return;
-        }
-
-        container.innerHTML = employees.map(emp => `
-            <div class="employee-option" onclick="selectEmployee('${emp.id}', '${emp.name}', '${mode}')">
-                <div>
-                    <div class="employee-name">${emp.name}</div>
-                    <div class="employee-title">${emp.job_title || ''}</div>
-                </div>
-                ${emp.scheduled_count !== undefined ? `<span class="badge bg-secondary">${emp.scheduled_count} events</span>` : ''}
-            </div>
-        `).join('');
-    }
-
-    function selectEmployee(employeeId, employeeName, mode) {
-        // Remove selected class from all options in this mode
-        const container = mode === 'change' ? 'employee-list' : 'quick-schedule-employee-list';
-        document.querySelectorAll(`#${container} .employee-option`).forEach(opt => opt.classList.remove('selected'));
-
-        // Add selected class to clicked option
-        event.currentTarget.classList.add('selected');
-
-        // Update hidden field and enable button
-        if (mode === 'change') {
-            document.getElementById('change-selected-employee').value = employeeId;
-            document.getElementById('confirm-change-btn').disabled = false;
-        } else {
-            document.getElementById('quick-schedule-selected-employee').value = employeeId;
-            document.getElementById('confirm-schedule-btn').disabled = false;
-        }
-    }
-
-    async function confirmChangeEmployee() {
-        const scheduleId = document.getElementById('change-schedule-id').value;
-        const newEmployeeId = document.getElementById('change-selected-employee').value;
-
-        if (!newEmployeeId) {
-            alert('Please select an employee');
-            return;
-        }
-
-        showLoading();
-
-        try {
-            const response = await fetch(`/api/event/${scheduleId}/change-employee`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    new_employee_id: newEmployeeId,
-                    override_conflicts: true
-                })
-            });
-
-            if (response.ok) {
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + (data.error || 'Failed to change employee'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-            closeModal('change-employee-modal');
-        }
-    }
-
-    // ===== QUICK SCHEDULE MODAL =====
-    // Event delegation for quick schedule buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.quick-schedule-btn');
-        if (!btn) return;
-
-        const eventId = btn.dataset.eventId;
-        const eventName = btn.dataset.eventName;
-        const eventType = btn.dataset.eventType;
-        openQuickScheduleModal(eventId, eventName, eventType);
-    });
-
-    async function openQuickScheduleModal(eventId, eventName, eventType) {
-        document.getElementById('quick-schedule-event-id').value = eventId;
-        document.getElementById('quick-schedule-event-name').value = eventName;
-        document.getElementById('quick-schedule-event-type').value = eventType;
-        document.getElementById('quick-schedule-selected-employee').value = '';
-        document.getElementById('confirm-schedule-btn').disabled = true;
-
-        // Set default date to tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
-        document.getElementById('quick-schedule-date').value = tomorrowStr;
-
-        // Load valid times with scheduled counts
-        loadValidTimes(eventType, 'quick-schedule-time', tomorrowStr);
-
-        // Load available employees
-        const employeeList = document.getElementById('quick-schedule-employee-list');
-        employeeList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-
-        document.getElementById('quick-schedule-modal').classList.add('show');
-
-        try {
-            const dateStr = document.getElementById('quick-schedule-date').value;
-            const response = await fetch(`/api/available_employees_for_change/${dateStr}/${eventType}`);
-            if (response.ok) {
-                const data = await response.json();
-                renderEmployeeList(data.employees || data, 'quick-schedule-employee-list', 'schedule');
-            } else {
-                employeeList.innerHTML = '<div class="text-danger">Error loading employees</div>';
-            }
-        } catch (err) {
-            employeeList.innerHTML = '<div class="text-danger">Error: ' + err.message + '</div>';
-        }
-    }
-
-    // Update employee list and times when date changes
-    document.getElementById('quick-schedule-date')?.addEventListener('change', async function() {
-        const dateStr = this.value;
-        const eventType = document.getElementById('quick-schedule-event-type').value || 'Core';
-
-        // Reload times with new date to show updated scheduled counts
-        loadValidTimes(eventType, 'quick-schedule-time', dateStr);
-
-        const employeeList = document.getElementById('quick-schedule-employee-list');
-        employeeList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-
-        try {
-            const response = await fetch(`/api/available_employees_for_change/${dateStr}/${eventType}`);
-            if (response.ok) {
-                const data = await response.json();
-                renderEmployeeList(data.employees || data, 'quick-schedule-employee-list', 'schedule');
-            }
-        } catch (err) {
-            console.error('Error loading employees:', err);
-        }
-    });
-
-    async function confirmQuickSchedule() {
-        const eventId = document.getElementById('quick-schedule-event-id').value;
-        const dateStr = document.getElementById('quick-schedule-date').value;
-        const timeStr = document.getElementById('quick-schedule-time').value;
-        const employeeId = document.getElementById('quick-schedule-selected-employee').value;
-
-        if (!employeeId) {
-            alert('Please select an employee');
-            return;
-        }
-
-        showLoading();
-
-        try {
-            const response = await fetch('/api/schedule-event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    event_ref_num: eventId,
-                    employee_id: employeeId,
-                    schedule_date: dateStr,
-                    schedule_time: timeStr,
-                    override_conflicts: true
-                })
-            });
-
-            if (response.ok) {
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + (data.error || 'Failed to schedule event'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-            closeModal('quick-schedule-modal');
-        }
-    }
-
-    // ===== EMPLOYEE SCHEDULES MODAL (for conflicts) =====
-    async function showEmployeeSchedules(employeeId, dateStr, eventType) {
-        const container = document.getElementById('employee-schedules-list');
-        container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-
-        document.getElementById('employee-schedules-modal').classList.add('show');
-
-        try {
-            // Get employee's schedules for this date
-            const response = await fetch(`/api/events/daily/${dateStr}`);
-            if (response.ok) {
-                const data = await response.json();
-                const employeeSchedules = data.events.filter(e => e.employee_id === employeeId);
-
-                if (employeeSchedules.length === 0) {
-                    container.innerHTML = '<div class="text-muted py-3">No schedules found for this employee on this date</div>';
-                    return;
-                }
-
-                container.innerHTML = employeeSchedules.map(sched => `
-                    <div class="employee-option">
-                        <div>
-                            <div class="employee-name">${sched.event_name}</div>
-                            <div class="employee-title">${sched.event_type} - ${sched.start_time}</div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="action-btn primary" onclick="openChangeEmployeeModal('${sched.schedule_id}', '${sched.employee_name}', '${dateStr}', '${sched.event_type}'); closeModal('employee-schedules-modal');">
-                                <i class="fas fa-user-edit"></i> Reassign
-                            </button>
-                            <button class="action-btn danger" onclick="unscheduleEvent('${sched.schedule_id}'); closeModal('employee-schedules-modal');">
-                                <i class="fas fa-times"></i> Remove
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-            }
-        } catch (err) {
-            container.innerHTML = '<div class="text-danger">Error: ' + err.message + '</div>';
-        }
-    }
-
-    // ===== ASSIGN SUPERVISOR EVENT =====
-    async function assignSupervisorEvent(coreEventRef, dateStr) {
-        showLoading();
-
-        try {
-            const response = await fetch('/dashboard/api/validation/assign-supervisor', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    core_event_ref: coreEventRef,
-                    date: dateStr
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                alert('Supervisor event assigned successfully!');
-                location.reload();
-            } else {
-                alert('Error: ' + (data.error || 'Failed to assign supervisor'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // ===== REASSIGN TO ROTATION PERSON =====
-    async function reassignToRotation(scheduleId, rotationEmployee, dateStr) {
-        if (!confirm(`Reassign this event to ${rotationEmployee} (the rotation employee for this day)?`)) return;
-
-        showLoading();
-
-        try {
-            // First get the rotation employee's ID
-            const response = await fetch(`/api/available_employees_for_change/${dateStr}/Juicer`);
-            if (!response.ok) throw new Error('Failed to load employees');
-
-            const data = await response.json();
-            const employees = data.employees || data;
-            const rotationEmp = employees.find(e => e.name === rotationEmployee);
-
-            if (!rotationEmp) {
-                alert(`Could not find ${rotationEmployee} in available employees`);
-                return;
-            }
-
-            // Now change the employee
-            const changeResponse = await fetch(`/api/event/${scheduleId}/change-employee`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    new_employee_id: rotationEmp.id,
-                    override_conflicts: true
-                })
-            });
-
-            if (changeResponse.ok) {
-                location.reload();
-            } else {
-                const errorData = await changeResponse.json();
-                alert('Error: ' + (errorData.error || 'Failed to reassign'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // ===== SHOW DUPLICATE EVENTS =====
-    // Event delegation for duplicate events buttons
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.duplicate-events-btn');
-        if (!btn) return;
-
-        let events = [];
-        try {
-            events = JSON.parse(btn.dataset.events || '[]');
-        } catch (parseErr) {
-            console.error('Failed to parse events:', parseErr);
-        }
-        const dateStr = btn.dataset.date;
-        showDuplicateEvents(events, dateStr);
-    });
-
-    function showDuplicateEvents(events, dateStr) {
-        const container = document.getElementById('employee-schedules-list');
-
-        container.innerHTML = `
-            <p class="text-muted mb-3">Multiple events for the same product are scheduled. Choose one to reschedule or remove:</p>
-            ${events.map(evt => `
-                <div class="employee-option">
-                    <div>
-                        <div class="employee-name">${evt.event_name}</div>
-                        <div class="employee-title">Schedule ID: ${evt.schedule_id}</div>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button class="action-btn primary" onclick="openRescheduleModal('${evt.schedule_id}', '', '${dateStr}', 'Core'); closeModal('employee-schedules-modal');">
-                            <i class="fas fa-clock"></i> Move
-                        </button>
-                        <button class="action-btn danger" onclick="unscheduleEvent('${evt.schedule_id}'); closeModal('employee-schedules-modal');">
-                            <i class="fas fa-times"></i> Remove
-                        </button>
-                    </div>
-                </div>
-            `).join('')}
-        `;
-
-        document.getElementById('employee-schedules-modal').classList.add('show');
-    }
-
-    // ===== UNSCHEDULE EVENT =====
-    async function unscheduleEvent(scheduleId) {
-        if (!confirm('Are you sure you want to unschedule this event?')) return;
-
-        showLoading();
-
-        try {
-            const response = await fetch(`/api/event/${scheduleId}/unschedule`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
-            });
-
-            if (response.ok) {
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + (data.error || 'Failed to unschedule'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // ===== IGNORE ISSUE =====
-    // Event delegation for ignore buttons
-    document.addEventListener('click', async function(e) {
-        const btn = e.target.closest('.ignore-btn');
-        if (!btn) return;
-
-        if (!confirm('Ignore this issue? It won\'t appear in future validations until unignored.')) return;
-
-        const ruleName = btn.dataset.ruleName;
-        const message = btn.dataset.message;
-        const severity = btn.dataset.severity;
-        let details = {};
-
-        try {
-            details = JSON.parse(btn.dataset.details || '{}');
-        } catch (parseErr) {
-            console.error('Failed to parse details:', parseErr);
-        }
-
-        showLoading();
-
-        try {
-            const response = await fetch('/dashboard/api/validation/ignore', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    rule_name: ruleName,
-                    details: details,
-                    message: message,
-                    severity: severity
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                // Remove the issue from the DOM
-                btn.closest('.issue-item').remove();
-
-                // Update counts
-                updateIssueCounts();
-            } else {
-                alert('Error: ' + (data.error || 'Failed to ignore issue'));
-            }
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            hideLoading();
-        }
-    });
-
-    function updateIssueCounts() {
-        // Recount all issues (excluding removed ones)
-        const allIssues = document.querySelectorAll('.issue-item');
-        let totalCritical = 0;
-        let totalWarning = 0;
-
-        // Track issues by date
-        const issuesByDate = {};
-
-        allIssues.forEach(issue => {
-            const severity = issue.dataset.severity;
-            const date = issue.dataset.date;
-
-            if (severity === 'critical') totalCritical++;
-            if (severity === 'warning') totalWarning++;
-
-            // Track by date (skip 'weekly' issues for day pills)
-            if (date && date !== 'weekly') {
-                if (!issuesByDate[date]) {
-                    issuesByDate[date] = { critical: 0, warning: 0 };
-                }
-                if (severity === 'critical') issuesByDate[date].critical++;
-                if (severity === 'warning') issuesByDate[date].warning++;
-            }
-        });
-
-        // Update header stats
-        document.getElementById('critical-count').textContent = totalCritical;
-        document.getElementById('warning-count').textContent = totalWarning;
-
-        // Update day pills
-        const dayPills = document.querySelectorAll('.day-pill[data-filter]');
-        let passingDays = 0;
-
-        dayPills.forEach(pill => {
-            const date = pill.dataset.filter;
-            if (date === 'all') return; // Skip the "All" pill
-
-            const dateIssues = issuesByDate[date] || { critical: 0, warning: 0 };
-            const criticalCount = dateIssues.critical;
-            const warningCount = dateIssues.warning;
-
-            // Update pill styling
-            pill.classList.remove('has-critical', 'has-warning');
-            if (criticalCount > 0) {
-                pill.classList.add('has-critical');
-            } else if (warningCount > 0) {
-                pill.classList.add('has-warning');
-            }
-
-            // Update issue count display in pill
-            const issueCountEl = pill.querySelector('.issue-count');
-            if (issueCountEl) {
-                if (criticalCount > 0 || warningCount > 0) {
-                    let countHtml = '';
-                    if (criticalCount > 0) {
-                        countHtml += `<span class="critical">${criticalCount}</span>`;
-                    }
-                    if (warningCount > 0) {
-                        countHtml += `${criticalCount > 0 ? '/' : ''}<span class="warning">${warningCount}</span>`;
-                    }
-                    issueCountEl.innerHTML = countHtml;
-                } else {
-                    issueCountEl.innerHTML = '✓';
-                    passingDays++;
-                }
-            } else if (criticalCount === 0 && warningCount === 0) {
-                passingDays++;
-            }
-        });
-
-        // Update passing days count
-        const passingCountEl = document.getElementById('passing-count');
-        if (passingCountEl) {
-            passingCountEl.textContent = passingDays;
-        }
-
-        // Show/hide "no issues" message
-        const noIssuesMsg = document.getElementById('no-issues-message');
-        if (noIssuesMsg) {
-            if (totalCritical === 0 && totalWarning === 0) {
-                noIssuesMsg.style.display = '';
-            } else {
-                noIssuesMsg.style.display = 'none';
-            }
-        }
-    }
-
-    // Initialize counts on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        updateIssueCounts();
-    });
-
-    // Refresh data when navigating to this page via tab
-    if (performance.navigation.type === performance.navigation.TYPE_BACK_FORWARD) {
-        location.reload();
-    }
-</script>
+<script src="{{ url_for('static', filename='js/pages/weekly-validation.js') }}"></script>
 {% endblock %}

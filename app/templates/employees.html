@@ -1,3 +1,10 @@
+{#
+  Template: employees.html
+  Route: employees.employee_list (GET /employees)
+
+  Context variables:
+    employees  (list[Employee]) - All employees ordered by name
+#}
 {% extends "base.html" %}
 
 {% block title %}Employee Management - Product Connections Scheduler{% endblock %}
@@ -73,7 +80,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Add New Employee</h2>
-                <button class="close-modal" onclick="closeAddEmployeeModal()">&times;</button>
+                <button class="close-modal" data-action="close-add-employee-modal">&times;</button>
             </div>
 
             <div id="modal-alerts"></div>
@@ -114,55 +121,60 @@
                     </div>
                 </div>
 
-                <div class="checkbox-group">
-                    <label>
-                        <input type="checkbox" id="is-active" checked>
-                        <span>Active</span>
-                    </label>
-                    <label>
-                        <input type="checkbox" id="adult-beverage-trained">
-                        <span>Adult Beverage Trained</span>
-                    </label>
-                    <label>
-                        <input type="checkbox" id="juicer-trained">
-                        <span>Juicer Trained</span>
-                    </label>
-                </div>
+                <fieldset style="border: none; padding: 0; margin: 0;">
+                    <legend style="font-size: 1em; font-weight: 600; color: var(--primary-color); margin-bottom: 10px;">Employee Status &amp; Training</legend>
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="is-active" checked>
+                            <span>Active</span>
+                        </label>
+                        <label>
+                            <input type="checkbox" id="adult-beverage-trained">
+                            <span>Adult Beverage Trained</span>
+                        </label>
+                        <label>
+                            <input type="checkbox" id="juicer-trained">
+                            <span>Juicer Trained</span>
+                        </label>
+                    </div>
+                </fieldset>
 
-                <h4 style="margin-top: 20px; margin-bottom: 10px; color: var(--primary-color);">Weekly Availability</h4>
-                <div class="availability-form-grid">
-                    <div class="availability-form-cell">
-                        <label for="avail-monday">Mon</label>
-                        <input type="checkbox" id="avail-monday" checked>
+                <fieldset style="border: none; padding: 0; margin: 20px 0 0 0;">
+                    <legend style="font-size: 1em; font-weight: 600; color: var(--primary-color); margin-bottom: 10px;">Weekly Availability</legend>
+                    <div class="availability-form-grid">
+                        <div class="availability-form-cell">
+                            <label for="avail-monday">Mon</label>
+                            <input type="checkbox" id="avail-monday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-tuesday">Tue</label>
+                            <input type="checkbox" id="avail-tuesday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-wednesday">Wed</label>
+                            <input type="checkbox" id="avail-wednesday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-thursday">Thu</label>
+                            <input type="checkbox" id="avail-thursday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-friday">Fri</label>
+                            <input type="checkbox" id="avail-friday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-saturday">Sat</label>
+                            <input type="checkbox" id="avail-saturday" checked>
+                        </div>
+                        <div class="availability-form-cell">
+                            <label for="avail-sunday">Sun</label>
+                            <input type="checkbox" id="avail-sunday" checked>
+                        </div>
                     </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-tuesday">Tue</label>
-                        <input type="checkbox" id="avail-tuesday" checked>
-                    </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-wednesday">Wed</label>
-                        <input type="checkbox" id="avail-wednesday" checked>
-                    </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-thursday">Thu</label>
-                        <input type="checkbox" id="avail-thursday" checked>
-                    </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-friday">Fri</label>
-                        <input type="checkbox" id="avail-friday" checked>
-                    </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-saturday">Sat</label>
-                        <input type="checkbox" id="avail-saturday" checked>
-                    </div>
-                    <div class="availability-form-cell">
-                        <label for="avail-sunday">Sun</label>
-                        <input type="checkbox" id="avail-sunday" checked>
-                    </div>
-                </div>
+                </fieldset>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeAddEmployeeModal()">Cancel</button>
+                    <button type="button" class="btn btn-outline" data-action="close-add-employee-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Employee</button>
                 </div>
             </form>
@@ -177,7 +189,7 @@
                     <h2 style="margin: 0; font-size: 20px; font-weight: 600;">Sync & Import Employees</h2>
                     <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">Synchronize with MVRetail database</p>
                 </div>
-                <button class="close-modal" onclick="closeImportEmployeesModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 6px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+                <button class="close-modal" data-action="close-import-employees-modal" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 6px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
 
             <div id="import-modal-alerts" style="padding: 0 20px;"></div>
@@ -191,8 +203,8 @@
             </div>
 
             <div class="modal-footer" style="background: var(--color-neutral-100); border-top: 1px solid var(--color-neutral-200); padding: 16px 20px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button type="button" class="btn btn-outline" onclick="closeImportEmployeesModal()" style="padding: 10px 20px; border: 1px solid var(--color-neutral-300); background: var(--color-neutral-50); color: var(--color-neutral-600); border-radius: 6px; font-weight: 500; cursor: pointer;">Close</button>
-                <button type="button" class="btn btn-primary" onclick="importSelectedEmployees()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info) 100%); color: var(--color-neutral-50); border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: none;">Import Selected</button>
+                <button type="button" class="btn btn-outline" data-action="close-import-employees-modal" style="padding: 10px 20px; border: 1px solid var(--color-neutral-300); background: var(--color-neutral-50); color: var(--color-neutral-600); border-radius: 6px; font-weight: 500; cursor: pointer;">Close</button>
+                <button type="button" class="btn btn-primary" data-action="import-selected-employees" style="padding: 10px 20px; background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info) 100%); color: var(--color-neutral-50); border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: none;">Import Selected</button>
             </div>
         </div>
     </div>
@@ -201,4 +213,25 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/employees.js') }}"></script>
+<script>
+// Delegated event listener for all data-action buttons
+document.addEventListener('click', function(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+
+    const action = target.dataset.action;
+
+    switch (action) {
+        case 'close-add-employee-modal':
+            closeAddEmployeeModal();
+            break;
+        case 'close-import-employees-modal':
+            closeImportEmployeesModal();
+            break;
+        case 'import-selected-employees':
+            importSelectedEmployees();
+            break;
+    }
+});
+</script>
 {% endblock %}

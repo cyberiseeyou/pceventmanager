@@ -13,6 +13,7 @@ Business Rule: APPROVED events must be scanned out by 6 PM on:
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 from calendar import monthrange
+from app.constants import CANCELLED_VARIANTS
 from sqlalchemy import or_
 import logging
 
@@ -137,7 +138,7 @@ class ApprovedEventsService:
                 
                 # Filter: Only Core events, exclude cancelled events (check both condition AND edr_status)
                 # Note: DB uses "Canceled" (American) spelling, handle both variants
-                cancelled_values = ['Cancelled', 'Canceled']
+                cancelled_values = list(CANCELLED_VARIANTS)
                 matching_events = self.Event.query.filter(
                     self.Event.project_name.contains(event_id_str),
                     self.Event.event_type == 'Core',
@@ -184,7 +185,7 @@ class ApprovedEventsService:
                                     
                                     # Search for Juicer events on this date
                                     # Note: DB uses "Canceled" (American) spelling, handle both variants
-                                    cancelled_values = ['Cancelled', 'Canceled']
+                                    cancelled_values = list(CANCELLED_VARIANTS)
                                     query = self.Event.query.filter(
                                         self.Event.event_type.like('Juicer%'),
                                         self.Event.condition.notin_(cancelled_values),

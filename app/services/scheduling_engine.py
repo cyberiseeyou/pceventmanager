@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, or_
 from flask import current_app
 
+from app.constants import INACTIVE_CONDITIONS
 from .rotation_manager import RotationManager
 from .constraint_validator import ConstraintValidator
 from .conflict_resolver import ConflictResolver
@@ -2875,7 +2876,7 @@ class SchedulingEngine:
         supervisor_event = None
         for event in events:
             # Skip cancelled/expired events (defensive check)
-            if getattr(event, 'condition', None) in ('Canceled', 'Expired'):
+            if getattr(event, 'condition', None) in INACTIVE_CONDITIONS:
                 continue
             if event.event_type == 'Supervisor' and not event.is_scheduled:
                 # Primary: Check if parent_event_ref_num links to this Core event
@@ -2889,7 +2890,7 @@ class SchedulingEngine:
             if core_event_number:
                 for event in events:
                     # Skip cancelled/expired events (defensive check)
-                    if getattr(event, 'condition', None) in ('Canceled', 'Expired'):
+                    if getattr(event, 'condition', None) in INACTIVE_CONDITIONS:
                         continue
                     if event.event_type == 'Supervisor' and not event.is_scheduled:
                         supervisor_event_number = self._extract_event_number(event.project_name)
@@ -3004,7 +3005,7 @@ class SchedulingEngine:
             e for e in events
             if e.event_type == 'Supervisor'
             and not e.is_scheduled
-            and getattr(e, 'condition', None) not in ('Canceled', 'Expired')  # Exclude cancelled/expired
+            and getattr(e, 'condition', None) not in INACTIVE_CONDITIONS  # Exclude cancelled/expired
         ]
 
         current_app.logger.info(f"ORPHANED SUPERVISOR: Found {len(orphaned_supervisors)} unscheduled Supervisor events")
@@ -3047,7 +3048,7 @@ class SchedulingEngine:
                 self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
             ).filter(
                 self.Event.event_type == 'Core',
-                self.Event.condition.not_in(['Canceled', 'Expired']),  # Exclude cancelled/expired
+                self.Event.condition.not_in(list(INACTIVE_CONDITIONS)),  # Exclude cancelled/expired
                 self.PendingSchedule.scheduler_run_id == run.id,
                 self.PendingSchedule.failure_reason == None
             ).all()
@@ -3061,7 +3062,7 @@ class SchedulingEngine:
             self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
         ).filter(
             self.Event.event_type == 'Core',
-            self.Event.condition.not_in(['Canceled', 'Expired'])  # Exclude cancelled/expired
+            self.Event.condition.not_in(list(INACTIVE_CONDITIONS))  # Exclude cancelled/expired
         ).all()
 
         for s in permanent_schedules:
