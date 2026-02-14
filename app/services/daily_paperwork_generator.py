@@ -410,33 +410,43 @@ class DailyPaperworkGenerator:
         if not PDF_LIBRARIES_AVAILABLE:
             raise ImportError("PDF libraries required")
 
-        # Collect all unique items from EDR data (maintain order, no sorting)
-        items_list = []  # Use list to maintain order
-        seen_items = set()  # Track duplicates
+        # Collect items grouped by event (no deduplication - items appear under each event)
+        event_groups = []  # List of dicts: {event_id, event_name, items}
+        total_items = 0
 
         for edr_data in edr_data_list:
             if not edr_data:
                 continue
 
+            event_id = str(edr_data.get('demoId', 'N/A'))
+            event_name = str(edr_data.get('demoName', 'N/A'))
             item_details = edr_data.get('itemDetails', [])
             if item_details is None:
                 continue
 
+            event_items = []
             for item in item_details:
                 item_nbr = str(item.get('itemNbr', ''))
                 upc_nbr = str(item.get('gtin', ''))  # UPC number (gtin field) for barcode generation
                 item_desc = str(item.get('itemDesc', ''))
 
-                if item_nbr and item_nbr != 'N/A' and item_nbr not in seen_items:
+                if item_nbr and item_nbr != 'N/A':
                     # Use gtin (UPC) if available, otherwise fall back to itemNbr
                     barcode_number = upc_nbr if upc_nbr and upc_nbr not in ['', 'N/A', 'None'] else item_nbr
 
-                    # Debug logging for first few items
-                    if len(items_list) < 3:
+                    # Debug logging for first few items per event
+                    if len(event_items) < 3:
                         logger.debug(f" Item {item_nbr}: upcNbr='{upc_nbr}', using '{barcode_number}' for barcode")
 
-                    items_list.append((item_nbr, barcode_number, item_desc))
-                    seen_items.add(item_nbr)
+                    event_items.append((item_nbr, barcode_number, item_desc))
+
+            if event_items:
+                event_groups.append({
+                    'event_id': event_id,
+                    'event_name': event_name,
+                    'items': event_items
+                })
+                total_items += len(event_items)
 
         # Create PDF
         output_path = os.path.join(tempfile.gettempdir(), f'daily_item_numbers_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
@@ -482,57 +492,72 @@ class DailyPaperworkGenerator:
         story.append(Paragraph(help_text, help_style))
         story.append(Spacer(1, 20))
 
-        # Table
-        if items_list:
-            # Generate barcodes for each item
-            table_data = [['UPC Number', 'Barcode', 'Description']]
+        # Event header style
+        event_header_style = ParagraphStyle(
+            'EventHeader',
+            parent=styles['Heading2'],
+            fontSize=13,
+            spaceBefore=6,
+            spaceAfter=8,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#2E4C73'),
+            borderWidth=0,
+            borderColor=colors.HexColor('#2E4C73'),
+            borderPadding=4,
+        )
 
-            # Maintain the order items appear in the events (no sorting)
-            for item_num, barcode_num, desc in items_list:
-                # Generate barcode image based on the UPC number
-                barcode_path = self.generate_barcode_image(barcode_num)
+        # Table style template for each event's items
+        item_table_style = TableStyle([
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E4C73')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            # Data rows
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            # Alternating row colors
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+            # Borders and alignment
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DDDDDD')),
+            # Padding
+            ('TOPPADDING', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ])
 
-                if barcode_path:
-                    # Create ReportLab Image object for the barcode
-                    # Scale to fit nicely in the table (1.2 inches wide, 0.5 inches tall)
-                    barcode_img = ReportLabImage(barcode_path, width=1.2*inch, height=0.5*inch)
-                    # Display UPC number in first column, barcode in second column
-                    table_data.append([str(barcode_num), barcode_img, str(desc)])
-                else:
-                    # If barcode generation fails, just show the UPC number
-                    table_data.append([str(barcode_num), 'N/A', str(desc)])
+        # Render each event group with header + items table
+        if event_groups:
+            for group in event_groups:
+                # Event section header
+                header_text = f"{group['event_id']} - {group['event_name']}"
+                story.append(Paragraph(header_text, event_header_style))
 
-            item_table = Table(table_data, colWidths=[1.2*inch, 1.5*inch, 3.8*inch])
-            item_table.setStyle(TableStyle([
-                # Header row - match the daily schedule theme
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E4C73')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                # Data rows
-                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                # Alternating row colors
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
-                # Borders and alignment
-                ('ALIGN', (0, 0), (0, -1), 'LEFT'),    # Item Number column - left align
-                ('ALIGN', (1, 0), (1, -1), 'CENTER'),  # Barcode column - center align
-                ('ALIGN', (2, 0), (2, -1), 'LEFT'),    # Description column - left align
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DDDDDD')),
-                # Padding - extra for barcode rows
-                ('TOPPADDING', (0, 0), (-1, 0), 10),    # Header
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                ('TOPPADDING', (0, 1), (-1, -1), 8),    # Data rows - tighter for barcodes
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-                ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ]))
-            story.append(item_table)
+                # Build table for this event's items
+                table_data = [['UPC Number', 'Barcode', 'Description']]
+                for item_num, barcode_num, desc in group['items']:
+                    barcode_path = self.generate_barcode_image(barcode_num)
+                    if barcode_path:
+                        barcode_img = ReportLabImage(barcode_path, width=1.2*inch, height=0.5*inch)
+                        table_data.append([str(barcode_num), barcode_img, str(desc)])
+                    else:
+                        table_data.append([str(barcode_num), 'N/A', str(desc)])
 
-            # Add summary
-            story.append(Spacer(1, 20))
+                item_table = Table(table_data, colWidths=[1.2*inch, 1.5*inch, 3.8*inch])
+                item_table.setStyle(item_table_style)
+                story.append(item_table)
+                story.append(Spacer(1, 16))
+
+            # Summary
+            story.append(Spacer(1, 8))
             summary_style = ParagraphStyle(
                 'SummaryStyle',
                 parent=styles['Normal'],
@@ -540,7 +565,7 @@ class DailyPaperworkGenerator:
                 textColor=colors.HexColor('#2E4C73'),
                 fontName='Helvetica-Bold'
             )
-            summary_text = f"Total Items: {len(items_list)}"
+            summary_text = f"Total Items: {total_items}"
             story.append(Paragraph(summary_text, summary_style))
         else:
             story.append(Paragraph("No items found for today's events.", styles['Normal']))

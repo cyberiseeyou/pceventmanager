@@ -910,8 +910,9 @@ class DailyItemsListPDFGenerator:
             story.append(Paragraph("Use this list for getting the next day's product and printing price signs.", subtitle_style))
             story.append(Spacer(1, 20))
 
-            # Collect all unique items from all EDR reports
-            all_items = {}  # Use dict to avoid duplicates by item number
+            # Collect items grouped by event (no deduplication - items appear under each event)
+            event_groups = []  # List of dicts: {event_id, event_name, items}
+            total_items = 0
 
             for edr_data in edr_data_list:
                 event_id = edr_data.get('demoId', 'N/A')
@@ -923,109 +924,103 @@ class DailyItemsListPDFGenerator:
                     self.logger.warning(f"Event {event_id} has no item details (None)")
                     continue
 
+                event_items = []
                 for item in item_details:
                     item_nbr = str(item.get('itemNbr', ''))
                     upc_nbr = str(item.get('upcNbr', ''))  # UPC number for barcode generation
 
                     if item_nbr and item_nbr != 'N/A':
-                        # Store item with all its details
-                        if item_nbr not in all_items:
-                            dept_no = str(item.get('deptNbr', ''))
-                            # Use UPC for barcode, fallback to item number if UPC is empty/None/N/A
-                            final_upc = upc_nbr if upc_nbr and upc_nbr not in ['', 'N/A', 'None'] else item_nbr
+                        dept_no = str(item.get('deptNbr', ''))
+                        final_upc = upc_nbr if upc_nbr and upc_nbr not in ['', 'N/A', 'None'] else item_nbr
 
-                            # Debug logging for first few items
-                            if len(all_items) < 3:
-                                self.logger.info(f"Item {item_nbr}: upcNbr='{upc_nbr}', using '{final_upc}' for barcode")
+                        if len(event_items) < 3:
+                            self.logger.info(f"Item {item_nbr}: upcNbr='{upc_nbr}', using '{final_upc}' for barcode")
 
-                            all_items[item_nbr] = {
-                                'itemNbr': item_nbr,
-                                'upcNbr': final_upc,
-                                'itemDesc': str(item.get('itemDesc', '')),
-                                'deptNbr': dept_no,
-                                'category': self.get_department_description(dept_no),
-                                'events': [event_name]
-                            }
-                        else:
-                            # Add event to list if item appears in multiple events
-                            if event_name not in all_items[item_nbr]['events']:
-                                all_items[item_nbr]['events'].append(event_name)
+                        event_items.append({
+                            'itemNbr': item_nbr,
+                            'upcNbr': final_upc,
+                            'itemDesc': str(item.get('itemDesc', '')),
+                            'deptNbr': dept_no,
+                            'category': self.get_department_description(dept_no),
+                        })
 
-            if not all_items:
+                if event_items:
+                    event_groups.append({
+                        'event_id': event_id,
+                        'event_name': event_name,
+                        'items': event_items,
+                    })
+                    total_items += len(event_items)
+
+            if not event_groups:
                 self.logger.warning("No items found in EDR data")
-                # Still create PDF with message
                 story.append(Paragraph("No items found for this date.", styles['Normal']))
             else:
-                # Sort items by item number
-                sorted_items = sorted(all_items.values(), key=lambda x: x['itemNbr'])
+                # Event header style
+                event_header_style = ParagraphStyle(
+                    'EventHeader',
+                    parent=styles['Heading2'],
+                    fontSize=13,
+                    spaceBefore=6,
+                    spaceAfter=8,
+                    fontName='Helvetica-Bold',
+                    textColor=self.pc_blue,
+                )
 
-                # Create items table with barcode column
-                table_data = [['Item Number', 'Barcode', 'Description', 'Category']]
-
-                # Log barcode availability once
-                if not BARCODE_AVAILABLE:
-                    self.logger.warning(f"⚠ Barcode generation disabled - libraries not available. Install with: pip install python-barcode Pillow")
-
-                for item in sorted_items:
-                    # Generate barcode image based on the UPC number (primary item number)
-                    barcode_path = None
-                    if BARCODE_AVAILABLE:
-                        try:
-                            # Use upcNbr for barcode generation (this is the primary/UPC item number)
-                            barcode_path = self.generate_barcode_image(item['upcNbr'])
-                        except Exception as e:
-                            self.logger.error(f"Failed to generate barcode for item {item['itemNbr']} (UPC: {item['upcNbr']}): {e}")
-
-                    # Wrap category text if needed (18 char max per line)
-                    wrapped_category = self.wrap_category_text(item['category'], max_length=18)
-
-                    if barcode_path:
-                        # Create ReportLab Image object for the barcode
-                        barcode_img = ReportLabImage(barcode_path, width=1.2*inch, height=0.5*inch)
-                        # Keep item number visible in first column, barcode generated from item number in second column
-                        table_data.append([
-                            item['itemNbr'],
-                            barcode_img,
-                            item['itemDesc'],
-                            wrapped_category
-                        ])
-                    else:
-                        # If barcode generation fails, just show the item number
-                        table_data.append([
-                            item['itemNbr'],
-                            'N/A',
-                            item['itemDesc'],
-                            wrapped_category
-                        ])
-
-                # Calculate available width
-                page_width = letter[0] - 144  # 72 left + 72 right margins
-
-                # Create table with appropriate column widths - adjusted for barcode column
-                items_table = Table(table_data, colWidths=[1.0*inch, 1.5*inch, 2.3*inch, 1.7*inch])
-                items_table.setStyle(TableStyle([
+                # Table style for each event's items
+                event_table_style = TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), self.pc_blue),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                    # Column alignment
-                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Item Number column - CENTER
-                    ('ALIGN', (1, 0), (1, -1), 'CENTER'),  # Barcode column - CENTER
-                    ('ALIGN', (2, 0), (2, 0), 'CENTER'),   # Description header - CENTER
-                    ('ALIGN', (2, 1), (2, -1), 'LEFT'),    # Description data - LEFT
-                    ('ALIGN', (3, 0), (3, -1), 'CENTER'),  # Category column - CENTER
+                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                    ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                    ('ALIGN', (2, 0), (2, 0), 'CENTER'),
+                    ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+                    ('ALIGN', (3, 0), (3, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0, 0), (-1, -1), 9),
                     ('GRID', (0, 0), (-1, -1), 1, colors.black),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ('TOPPADDING', (0, 0), (-1, -1), 6),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ]))
+                ])
 
-                story.append(items_table)
+                # Log barcode availability once
+                if not BARCODE_AVAILABLE:
+                    self.logger.warning(f"Barcode generation disabled - libraries not available. Install with: pip install python-barcode Pillow")
 
-                # Add summary at bottom
-                story.append(Spacer(1, 20))
-                summary_text = f"<b>Total Items: {len(sorted_items)}</b>"
+                for group in event_groups:
+                    # Event section header
+                    header_text = f"{group['event_id']} - {group['event_name']}"
+                    story.append(Paragraph(header_text, event_header_style))
+
+                    # Build table for this event's items
+                    table_data = [['Item Number', 'Barcode', 'Description', 'Category']]
+
+                    for item in group['items']:
+                        barcode_path = None
+                        if BARCODE_AVAILABLE:
+                            try:
+                                barcode_path = self.generate_barcode_image(item['upcNbr'])
+                            except Exception as e:
+                                self.logger.error(f"Failed to generate barcode for item {item['itemNbr']} (UPC: {item['upcNbr']}): {e}")
+
+                        wrapped_category = self.wrap_category_text(item['category'], max_length=18)
+
+                        if barcode_path:
+                            barcode_img = ReportLabImage(barcode_path, width=1.2*inch, height=0.5*inch)
+                            table_data.append([item['itemNbr'], barcode_img, item['itemDesc'], wrapped_category])
+                        else:
+                            table_data.append([item['itemNbr'], 'N/A', item['itemDesc'], wrapped_category])
+
+                    items_table = Table(table_data, colWidths=[1.0*inch, 1.5*inch, 2.3*inch, 1.7*inch])
+                    items_table.setStyle(event_table_style)
+                    story.append(items_table)
+                    story.append(Spacer(1, 16))
+
+                # Summary
+                story.append(Spacer(1, 8))
+                summary_text = f"<b>Total Items: {total_items}</b>"
                 story.append(Paragraph(summary_text, styles['Normal']))
 
             # Build PDF
