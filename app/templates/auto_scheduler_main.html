@@ -342,6 +342,48 @@
         color: #721c24;
         border: 1px solid #f5c6cb;
     }
+
+    .solver-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1.4;
+    }
+
+    .solver-badge--cpsat {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+    }
+
+    .solver-badge--cpsat::before {
+        content: '';
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #43a047;
+    }
+
+    .solver-badge--greedy {
+        background: #fff3e0;
+        color: #e65100;
+        border: 1px solid #ffcc80;
+    }
+
+    .solver-badge--greedy::before {
+        content: '';
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #ef6c00;
+    }
 </style>
 {% endblock %}
 
@@ -420,10 +462,15 @@
                 The auto-scheduler will analyze unscheduled events within the next 3 weeks and create
                 assignment proposals based on weekly rotations, employee availability, and event priorities.
             </p>
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <button data-action="run-auto-scheduler" id="auto-schedule-btn" class="btn btn-primary">
                     Run Auto-Scheduler
                 </button>
+                {% if cpsat_enabled %}
+                <span class="solver-badge solver-badge--cpsat">CP-SAT Solver</span>
+                {% else %}
+                <span class="solver-badge solver-badge--greedy">Greedy Solver</span>
+                {% endif %}
                 <span id="auto-schedule-status" style="color: var(--text-muted); font-size: 0.9rem;"></span>
             </div>
         </div>
@@ -437,6 +484,15 @@
                 Never
                 {% endif %}
             </div>
+            {% if last_run and last_run.solver_type %}
+            <div style="margin-top: 6px;">
+                {% if last_run.solver_type == 'cpsat' %}
+                <span class="solver-badge solver-badge--cpsat" style="font-size: 0.75rem;">CP-SAT</span>
+                {% else %}
+                <span class="solver-badge solver-badge--greedy" style="font-size: 0.75rem;">Greedy</span>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -566,11 +622,14 @@
                 progressBar.classList.remove('indeterminate');
 
                 if (data.success) {
+                    const solverLabel = data.solver === 'cpsat' ? 'CP-SAT' : 'Greedy';
+                    const solverClass = data.solver === 'cpsat' ? 'solver-badge--cpsat' : 'solver-badge--greedy';
+
                     // Show success in modal
                     progressLabel.textContent = 'Schedule Created!';
                     progressBar.style.width = '100%';
                     currentEvent.textContent = `${data.stats.events_scheduled} events scheduled, ${data.stats.events_requiring_swaps} swaps proposed`;
-                    progressStatus.innerHTML = '<div class="progress-status success">Schedule proposal created successfully!</div>';
+                    progressStatus.innerHTML = `<div class="progress-status success">Schedule proposal created successfully! <span class="solver-badge ${solverClass}" style="margin-left: 8px; font-size: 0.75rem;">${solverLabel} Solver</span></div>`;
 
                     statusSpan.style.color = '#27ae60';
                     statusSpan.textContent = `✓ Completed: ${data.stats.events_scheduled} scheduled, ${data.stats.events_requiring_swaps} swaps, ${data.stats.events_failed} failed`;

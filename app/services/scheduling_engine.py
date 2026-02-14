@@ -371,7 +371,8 @@ class SchedulingEngine:
         run = self.SchedulerRunHistory(
             run_type=run_type,
             started_at=datetime.utcnow(),
-            status='running'
+            status='running',
+            solver_type='greedy',
         )
         self.db.add(run)
         self.db.flush()

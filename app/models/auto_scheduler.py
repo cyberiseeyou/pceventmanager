@@ -114,6 +114,7 @@ def create_auto_scheduler_models(db):
         events_requiring_swaps = db.Column(db.Integer, default=0)
         events_failed = db.Column(db.Integer, default=0)
 
+        solver_type = db.Column(db.String(20), nullable=True)  # 'cpsat' or 'greedy'
         error_message = db.Column(db.Text, nullable=True)
 
         # Approval tracking

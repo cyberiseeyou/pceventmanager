@@ -1402,12 +1402,11 @@ class DailyView {
             eventCard.querySelector('.event-info')?.textContent?.trim()?.replace(/^[^\s]+\s/, '') ||
             'Unknown Event';
         const eventType = eventCard.getAttribute('data-event-type') || 'Unknown';
-        const currentEmployeeName = eventCard.querySelector('.employee-name')?.textContent?.replace('👤 ', '') || 'Unknown';
+        const currentEmployeeName = eventCard.querySelector('.employee-name')?.textContent?.replace(/person|Assigned to|👤/g, '').trim() || 'Unknown';
         const currentEmployeeId = eventCard.getAttribute('data-employee-id');
 
-        // Get event datetime from card
-        const timeText = eventCard.querySelector('.event-time')?.textContent?.replace('⏰ ', '') || '';
-        const [startTime] = timeText.split(' - ');
+        // Get event start time from the <time> element inside event-time
+        const startTime = eventCard.querySelector('.event-time time')?.textContent?.trim() || '';
 
         console.log('Reschedule data:', { eventId, eventName, eventType, currentEmployeeName, currentEmployeeId, startTime });
 
@@ -2009,11 +2008,10 @@ class DailyView {
         }
 
         const eventId = eventCard.getAttribute('data-event-id');
-        const currentEmployeeName = eventCard.querySelector('.employee-name')?.textContent?.replace('👤 ', '') || 'Unknown';
+        const currentEmployeeName = eventCard.querySelector('.employee-name')?.textContent?.replace(/person|Assigned to|👤/g, '').trim() || 'Unknown';
 
-        // Get event datetime from card (parse from displayed time)
-        const timeText = eventCard.querySelector('.event-time')?.textContent?.replace('⏰ ', '') || '';
-        const [startTime] = timeText.split(' - ');
+        // Get event start time from the <time> element inside event-time
+        const startTime = eventCard.querySelector('.event-time time')?.textContent?.trim() || '';
 
         // Open change employee modal
         await this.openChangeEmployeeModal(scheduleId, eventId, currentEmployeeName, this.date, startTime);
@@ -2528,12 +2526,13 @@ class DailyView {
         }
 
         const eventId = eventCard.getAttribute('data-event-id');
-        const employeeName = eventCard.querySelector('.employee-name')?.textContent?.replace('👤 ', '') || 'Unknown';
-        const timeText = eventCard.querySelector('.event-time')?.textContent?.replace('⏰ ', '') || '';
+        const employeeName = eventCard.querySelector('.employee-name')?.textContent?.replace(/person|Assigned to|👤/g, '').trim() || 'Unknown';
         const eventName = eventCard.querySelector('.event-info')?.textContent;
 
-        // Extract date/time from event card
-        const [startTime, endTime] = timeText.split(' - ');
+        // Extract start/end times from <time> elements inside event-time
+        const timeElements = eventCard.querySelectorAll('.event-time time');
+        const startTime = timeElements[0]?.textContent?.trim() || '';
+        const endTime = timeElements[1]?.textContent?.trim() || '';
         const datetime = `${this.date} ${this.convertTo24Hour(startTime)}`;
 
         // Open trade modal
@@ -2916,7 +2915,7 @@ class DailyView {
 
         // Get event card for context
         const eventCard = document.querySelector(`[data-schedule-id="${scheduleId}"]`);
-        const employeeName = eventCard?.querySelector('.employee-name')?.textContent || 'this employee';
+        const employeeName = eventCard?.querySelector('.employee-name')?.textContent?.replace(/person|Assigned to|👤/g, '').trim() || 'this employee';
         const eventInfo = eventCard?.querySelector('.event-info')?.textContent || 'this event';
 
         // Show confirmation modal

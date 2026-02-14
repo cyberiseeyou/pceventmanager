@@ -66,12 +66,15 @@ def index():
         SchedulerRunHistory.started_at.desc()
     ).first()
 
+    cpsat_enabled = current_app.config.get('CPSAT_ENABLED', False)
+
     return render_template('auto_scheduler_main.html',
                          unscheduled_events_display=unscheduled_events_display,
                          total_events_display=total_events_display,
                          scheduled_events_display=scheduled_events_display,
                          scheduling_percentage=scheduling_percentage,
                          last_run=last_run,
+                         cpsat_enabled=cpsat_enabled,
                          today=today)
 
 
@@ -86,15 +89,39 @@ def run_scheduler():
         'CompanyHoliday'
     ]}
 
-    engine = SchedulingEngine(db.session, models)
+    # Use CP-SAT solver if enabled, otherwise fall back to greedy engine
+    use_cpsat = current_app.config.get('CPSAT_ENABLED', False)
+
+    # Allow per-request override via query param: ?solver=cpsat or ?solver=greedy
+    solver_override = request.args.get('solver')
+    if solver_override == 'cpsat':
+        use_cpsat = True
+    elif solver_override == 'greedy':
+        use_cpsat = False
 
     try:
-        run = engine.run_auto_scheduler(run_type='manual')
+        if use_cpsat:
+            from app.services.cpsat_scheduler import CPSATSchedulingEngine
+            cpsat_models = dict(models)
+            # CP-SAT engine needs additional models
+            for extra in ['LockedDay', 'EventSchedulingOverride', 'EventTypeOverride',
+                          'EmployeeAvailabilityOverride']:
+                if extra not in cpsat_models and extra in current_app.config:
+                    cpsat_models[extra] = current_app.config[extra]
+            engine = CPSATSchedulingEngine(db.session, cpsat_models)
+            time_limit = current_app.config.get('CPSAT_TIME_LIMIT', 60)
+            run = engine.run_auto_scheduler(run_type='manual', time_limit_seconds=time_limit)
+            solver_used = 'cpsat'
+        else:
+            engine = SchedulingEngine(db.session, models)
+            run = engine.run_auto_scheduler(run_type='manual')
+            solver_used = 'greedy'
 
         return jsonify({
             'success': True,
             'run_id': run.id,
             'message': 'Scheduler run completed',
+            'solver': solver_used,
             'stats': {
                 'total_events_processed': run.total_events_processed,
                 'events_scheduled': run.events_scheduled,
@@ -291,14 +318,19 @@ def get_pending_schedules():
             daily_preview[date_key].append(ps_data)
 
     # Get date range for fetching already-scheduled events
+    # Include from the first of the previous month through today (or max pending date, whichever is later)
     if daily_preview:
-        date_keys = list(daily_preview.keys())
-        min_date = min(date_keys)
-        max_date = max(date_keys)
+        today = date.today()
+        if today.month == 1:
+            first_of_prev_month = today.replace(year=today.year - 1, month=12, day=1)
+        else:
+            first_of_prev_month = today.replace(month=today.month - 1, day=1)
 
-        # Fetch already-scheduled events within this date range
-        from datetime import datetime
-        min_datetime = datetime.fromisoformat(min_date)
+        date_keys = list(daily_preview.keys())
+        max_pending = max(date_keys)
+        max_date = max(max_pending, today.isoformat())
+
+        min_datetime = datetime.combine(first_of_prev_month, datetime.min.time())
         max_datetime = datetime.fromisoformat(max_date).replace(hour=23, minute=59, second=59)
 
         existing_schedules = db.session.query(Schedule).filter(

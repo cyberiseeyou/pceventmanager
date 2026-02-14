@@ -59,6 +59,10 @@ class Config:
     ML_EMPLOYEE_RANKER_PATH = config('ML_EMPLOYEE_RANKER_PATH', default='app/ml/models/artifacts/employee_ranker_latest.pkl')
     ML_SHADOW_MODE = config('ML_SHADOW_MODE', default=False, cast=bool)  # Log predictions without using them
 
+    # CP-SAT Constraint Solver settings
+    CPSAT_ENABLED = config('CPSAT_ENABLED', default=True, cast=bool)
+    CPSAT_TIME_LIMIT = config('CPSAT_TIME_LIMIT', default=15, cast=int)  # Solver time limit in seconds
+
     @classmethod
     def validate(cls, validate_walmart: bool = True) -> None:
         """
@@ -114,6 +118,7 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     SYNC_ENABLED = False
+    WTF_CSRF_ENABLED = False
 
     @classmethod
     def validate(cls, validate_walmart: bool = True) -> None:
