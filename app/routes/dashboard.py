@@ -1026,15 +1026,15 @@ def assign_supervisor_event():
 @dashboard_bp.route('/approved-events')
 def approved_events():
     """
-    Approved Events Dashboard for Walmart scan-out tracking.
+    Left In Approved Dashboard for Walmart scan-out tracking.
 
-    Displays APPROVED events from Walmart Retail Link merged with local
+    Displays Left In Approved events from Walmart Retail Link merged with local
     database status to help users:
     - See which events need scheduling
     - See which events need API submission
     - See which events need scan-out in Walmart
 
-    Business Rule: APPROVED events must be scanned out by 6 PM on:
+    Business Rule: Left In Approved events must be scanned out by 6 PM on:
     - Fridays
     - Saturdays
     - Last day of the month

@@ -1,10 +1,10 @@
 """
 Approved Events Service
 
-Merges Walmart APPROVED events with local database status to provide
+Merges Walmart Left In Approved events with local database status to provide
 a unified view of events that need attention (scheduling, API submission, or scan-out).
 
-Business Rule: APPROVED events must be scanned out by 6 PM on:
+Business Rule: Left In Approved events must be scanned out by 6 PM on:
 - Fridays
 - Saturdays
 - Last day of the month
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class ApprovedEventsService:
     """
-    Service to merge Walmart APPROVED events with local database status.
+    Service to merge Walmart Left In Approved events with local database status.
 
     Provides a unified view showing:
     - Event details from Walmart
@@ -308,17 +308,12 @@ class ApprovedEventsService:
             local_status = self._determine_local_status(local_event, schedule, pending)
             status_info = self.STATUS_DISPLAY.get(local_status, {})
 
-            # Get employee info if scheduled
+            # Get employee info from Schedule record only
+            # Don't use stale PendingSchedule data for unscheduled events
             employee_name = None
             employee_id = None
             if schedule and schedule.employee_id:
                 employee = self.Employee.query.get(schedule.employee_id)
-                if employee:
-                    employee_name = employee.name
-                    employee_id = employee.id
-            # Fallback: Check PendingSchedule if no Schedule record or no employee in Schedule
-            elif pending and pending.employee_id:
-                employee = self.Employee.query.get(pending.employee_id)
                 if employee:
                     employee_name = employee.name
                     employee_id = employee.id
@@ -363,14 +358,14 @@ class ApprovedEventsService:
                 'due_datetime': local_event.due_datetime.isoformat() if local_event and local_event.due_datetime else None,
                 'start_datetime': local_event.start_datetime.isoformat() if local_event and local_event.start_datetime else None,
 
-                # Schedule data - use Schedule if available, fallback to PendingSchedule
+                # Schedule data - only from actual Schedule records
                 'assigned_employee_id': employee_id,
                 'assigned_employee_name': employee_name,
                 'schedule_datetime': (
                     schedule.schedule_datetime.isoformat() if schedule and schedule.schedule_datetime
-                    else (pending.schedule_datetime.isoformat() if pending and pending.schedule_datetime else None)
+                    else None
                 ),
-                'schedule_sync_status': schedule.sync_status if schedule else (pending.status if pending else None),
+                'schedule_sync_status': schedule.sync_status if schedule else None,
                 'last_synced': schedule.last_synced.isoformat() if schedule and schedule.last_synced else None,
                 'needs_rolling': needs_rolling,
 
@@ -399,15 +394,15 @@ class ApprovedEventsService:
         if event is None:
             return self.STATUS_NOT_IN_DB
 
-        if not event.is_scheduled and schedule is None:
-            return self.STATUS_UNSCHEDULED
-
-        # Check pending schedule status
+        # Check pending schedule status first (may have data even if Event.is_scheduled is False)
         if pending:
             if pending.status == 'api_submitted':
                 return self.STATUS_API_SUBMITTED
             elif pending.status == 'api_failed':
                 return self.STATUS_API_FAILED
+
+        if not event.is_scheduled and schedule is None and pending is None:
+            return self.STATUS_UNSCHEDULED
 
         # Check schedule sync status
         if schedule:
@@ -449,7 +444,7 @@ class ApprovedEventsService:
         """
         Check if scan-out warning should be displayed.
 
-        Business Rule: APPROVED events must be scanned out by 6 PM on:
+        Business Rule: Left In Approved events must be scanned out by 6 PM on:
         - Fridays
         - Saturdays
         - Last day of the month
@@ -519,19 +514,16 @@ class ApprovedEventsService:
 
         Returns:
             Tuple of (start_date, end_date) in YYYY-MM-DD format
-            - start_date: 2 Sundays ago
+            - start_date: First day of previous month
             - end_date: Today
         """
         today = date.today()
 
-        # Calculate 2 Sundays ago (the Sunday that started the previous week)
-        # weekday() returns 0=Monday, 6=Sunday
-        # If today is Monday, go back 1 day to last Sunday, then back 7 more days = 8 days
-        # If today is Sunday, go back 7 days to last Sunday, then back 7 more days = 14 days
-        days_since_sunday = (today.weekday() + 1) % 7
-
-        # Go back to last Sunday, then back 1 more week (7 days)
-        start_date = today - timedelta(days=days_since_sunday + 7)
+        # First day of previous month
+        if today.month == 1:
+            start_date = today.replace(year=today.year - 1, month=12, day=1)
+        else:
+            start_date = today.replace(month=today.month - 1, day=1)
 
         return (start_date.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d'))
 

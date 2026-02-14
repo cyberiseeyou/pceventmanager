@@ -260,6 +260,7 @@ async function fetchApprovedEvents() {
     document.getElementById('loadingState').style.display = 'flex';
     document.getElementById('eventsSection').style.display = 'none';
     document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('actionPanels').style.display = 'none';
 
     try {
         var response = await fetch('/api/walmart/events/approved?club=' + club);
@@ -295,7 +296,7 @@ async function fetchApprovedEvents() {
         currentEvents = data.events || [];
 
         // Log summary for debugging
-        console.log('Fetched ' + currentEvents.length + ' approved events from Walmart');
+        console.log('Fetched ' + currentEvents.length + ' Left In Approved events from Walmart');
         console.log('Date range:', data.date_range);
         console.log('Summary:', data.summary);
 
@@ -376,15 +377,8 @@ function updateStats(summary, events) {
         return !isOnOrBeforeToday(dateToCheck);
     }).length;
 
-    var rollUnscheduledCount = events.filter(function (e) {
-        // Must be unscheduled/unassigned
-        if (e.is_scheduled || e.assigned_employee_name) return false;
-
-        // Must be in unscheduled or not_in_db status
-        if (e.local_status !== 'unscheduled' && e.local_status !== 'not_in_db') return false;
-
-        return true;
-    }).length;
+    // Catch-all: everything not in scan-out or roll-scheduled needs scheduling
+    var rollUnscheduledCount = events.length - scanOutCount - rollScheduledCount;
 
     var totalLIAs = scanOutCount + rollScheduledCount + rollUnscheduledCount;
 
@@ -418,16 +412,11 @@ function renderPanelView(events) {
         return !isOnOrBeforeToday(dateToCheck);
     });
 
-    // Roll Unscheduled: Events not scheduled locally
-    // This includes both future events and past events that weren't scheduled
+    // Catch-all: everything not in scan-out or roll-scheduled needs scheduling
+    var scanOutIds = new Set(scanOutEvents.map(function (e) { return e.event_id; }));
+    var rollScheduledIds = new Set(rollScheduledEvents.map(function (e) { return e.event_id; }));
     var rollUnscheduledEvents = events.filter(function (e) {
-        // Must be unscheduled/unassigned
-        if (e.is_scheduled || e.assigned_employee_name) return false;
-
-        // Must be in unscheduled or not_in_db status
-        if (e.local_status !== 'unscheduled' && e.local_status !== 'not_in_db') return false;
-
-        return true;
+        return !scanOutIds.has(e.event_id) && !rollScheduledIds.has(e.event_id);
     });
 
     // Apply filter if set
@@ -896,12 +885,12 @@ function showEmptyState(authenticated) {
     if (!authenticated) {
         // User needs to authenticate first
         title.textContent = 'Authentication Required';
-        message.textContent = 'Please authenticate with Walmart Retail Link using the "Request MFA Code" button above to view approved events.';
+        message.textContent = 'Please authenticate with Walmart Retail Link using the "Request MFA Code" button above to view Left In Approved events.';
         emptyState.querySelector('.icon i').className = 'fas fa-lock';
     } else {
         // Authenticated but no events found
-        title.textContent = 'No Approved Events Remaining';
-        message.textContent = 'Great work! All approved events have been processed (scheduled, rolled, and scanned out), or there are no APPROVED events in the selected date range.';
+        title.textContent = 'No Events Left In Approved';
+        message.textContent = 'Great Work! No events are showing Left In Approved for today!';
         emptyState.querySelector('.icon i').className = 'fas fa-check-circle';
     }
 
