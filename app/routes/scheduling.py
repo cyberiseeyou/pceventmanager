@@ -278,13 +278,14 @@ def check_scheduling_conflicts():
     db = current_app.extensions['sqlalchemy']
 
     # Get all models
+    all_models = get_models()
     models = {
-        'Employee': models['Employee'],
-        'Event': models['Event'],
-        'Schedule': models['Schedule'],
-        'EmployeeAvailability': current_app.config.get('EmployeeAvailability'),
-        'EmployeeTimeOff': models['EmployeeTimeOff'],
-        'EmployeeWeeklyAvailability': current_app.config.get('EmployeeWeeklyAvailability')
+        'Employee': all_models['Employee'],
+        'Event': all_models['Event'],
+        'Schedule': all_models['Schedule'],
+        'EmployeeAvailability': all_models.get('EmployeeAvailability'),
+        'EmployeeTimeOff': all_models['EmployeeTimeOff'],
+        'EmployeeWeeklyAvailability': all_models.get('EmployeeWeeklyAvailability')
     }
 
     # Get parameters
