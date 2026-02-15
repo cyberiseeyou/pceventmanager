@@ -178,11 +178,15 @@ function initializeDateConstraints() {
     dateInput.max = window.eventData.endDate;
 
     // Add change event listener to validate date and fetch employees
+    // Note: Chrome fires 'change' on each keystroke when typing the year in a date input,
+    // producing partial values like 0002-02-12, 0020-02-12 before reaching 2026-02-12.
+    // Guard against this by requiring a 4-digit year >= 2000.
     dateInput.addEventListener('change', function () {
         validateDateSelection(this.value, submitButton);
-        if (this.value) {
+        const year = this.value ? parseInt(this.value.split('-')[0], 10) : 0;
+        if (this.value && year >= 2000) {
             fetchAvailableEmployees(this.value);
-            // NEW: Refresh allowed times to get updated counts
+            // Refresh allowed times to get updated counts
             initializeTimeRestrictions();
         }
     });
