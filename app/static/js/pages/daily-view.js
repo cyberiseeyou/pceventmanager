@@ -1099,6 +1099,7 @@ class DailyView {
         const isCancelled = event.is_cancelled || event.reporting_status === 'cancelled';
         const statusBadge = this.getStatusBadge(event.reporting_status, isCancelled);
         const overdueBadge = event.is_overdue ? '<span class="badge-overdue"><span class="material-symbols-outlined">warning</span> OVERDUE</span>' : '';
+        const reissuedBadge = event.is_reissued ? '<span class="badge-reissued"><span class="material-symbols-outlined">replay</span> REISSUED</span>' : '';
         const salesToolLink = event.sales_tool_url
             ? `<a href="${event.sales_tool_url}"
                    target="_blank"
@@ -1139,6 +1140,7 @@ class DailyView {
                         <span class="sr-only">Assigned to </span>
                         ${event.employee_name.toUpperCase()}
                     </h3>
+                    ${reissuedBadge}
                     ${overdueBadge}
                 </header>
 

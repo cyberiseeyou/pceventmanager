@@ -404,6 +404,7 @@ def get_daily_events(date):
             'walmart_event_id': getattr(evt, 'walmart_event_id', None),
             'billing_only': getattr(evt, 'billing_only', False),
             'walmart_items': getattr(evt, 'walmart_items', None),
+            'is_reissued': getattr(evt, 'is_reissued', False),
         }
 
     # PERFORMANCE: Pre-index Supervisor schedules by 6-digit event number: O(n)
@@ -5385,6 +5386,7 @@ def reissue_event():
             # Update local database
             # ========================================
             event.condition = 'Reissued'
+            event.is_reissued = True
 
             # Update schedule with new employee and datetime
             request_employee_id = str(employee_id) if employee_id is not None else None
