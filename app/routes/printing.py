@@ -1313,6 +1313,30 @@ def edr_authenticate():
 
         logger.info(f"Authentication complete, auth_token length: {len(edr_authenticator.auth_token)}")
 
+        # Opportunistic enrichment: store Walmart event numbers on local events
+        try:
+            from app.models import get_models as _get_models
+            _models = _get_models()
+            SystemSetting = _models.get('SystemSetting')
+            club = SystemSetting.get_setting('store_number') if SystemSetting else None
+            if club and edr_authenticator.session and edr_authenticator.auth_token:
+                from app.integrations.walmart_api.routes import _fetch_all_events_with_session
+                from app.services.walmart_event_enrichment import WalmartEventEnrichmentService
+                from datetime import date, timedelta
+                today = date.today()
+                start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+                end_date = (today + timedelta(days=120)).strftime('%Y-%m-%d')
+                all_events = _fetch_all_events_with_session(
+                    edr_authenticator.session, edr_authenticator.auth_token,
+                    club_numbers=[club], start_date=start_date, end_date=end_date
+                )
+                if all_events:
+                    svc = WalmartEventEnrichmentService()
+                    result = svc.enrich_events_from_walmart_data(all_events)
+                    logger.info(f"Opportunistic enrichment after EDR auth: {result}")
+        except Exception as enrich_err:
+            logger.error(f"Opportunistic enrichment failed (non-blocking): {enrich_err}")
+
         # Clear the timestamp on successful auth
         mfa_request_timestamp = None
         return jsonify({'success': True, 'message': 'Authentication successful'})

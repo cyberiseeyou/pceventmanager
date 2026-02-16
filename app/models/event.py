@@ -66,6 +66,11 @@ def create_event_model(db):
             nullable=True
         )
 
+        # Walmart event tracking fields
+        walmart_event_id = db.Column(db.String(10), nullable=True, index=True)
+        billing_only = db.Column(db.Boolean, nullable=False, default=False)
+        walmart_items = db.Column(db.Text, nullable=True)  # JSON array of items
+
         __table_args__ = (
             # Index for filtering scheduled/unscheduled events
             db.Index('idx_events_scheduled', 'is_scheduled', 'condition'),

@@ -319,6 +319,86 @@
         border-radius: var(--border-radius-sm);
         margin-bottom: var(--spacing-md);
     }
+
+    .summary-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .reissue-progress {
+        display: none;
+        padding: var(--spacing-md);
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: var(--border-radius-md);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .reissue-progress.active {
+        display: block;
+    }
+
+    .progress-bar-container {
+        background: #e5e7eb;
+        border-radius: 4px;
+        height: 8px;
+        margin: var(--spacing-sm) 0;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill {
+        background: var(--pc-blue);
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+        width: 0%;
+    }
+
+    .progress-text {
+        font-size: var(--font-size-small);
+        color: var(--text-secondary);
+    }
+
+    .progress-results {
+        margin-top: var(--spacing-sm);
+        font-size: var(--font-size-small);
+    }
+
+    .progress-results .success { color: #059669; }
+    .progress-results .failure { color: #dc2626; }
+
+    @media print {
+        .summary-actions,
+        .action-buttons,
+        .modal-overlay,
+        nav,
+        .page-subtitle,
+        .reissue-progress {
+            display: none !important;
+        }
+
+        .page-header {
+            border-bottom: 2px solid #000;
+        }
+
+        .events-table th {
+            background: #f3f4f6 !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .days-overdue {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .summary-bar {
+            background: none;
+            padding: 0;
+            margin-bottom: var(--spacing-md);
+        }
+    }
 </style>
 {% endblock %}
 
@@ -331,6 +411,23 @@
 {% if total_count > 0 %}
 <div class="summary-bar">
     <div class="summary-count">{{ total_count }} event{{ 's' if total_count != 1 else '' }} pending report</div>
+    <div class="summary-actions">
+        <button class="btn-primary" data-action="reissue-all">
+            Reissue All ({{ total_count }})
+        </button>
+        <button class="btn-secondary" data-action="print-unreported">
+            Print
+        </button>
+    </div>
+</div>
+
+<div id="reissueProgress" class="reissue-progress">
+    <strong>Reissuing events...</strong>
+    <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">0 / 0</div>
+    <div class="progress-results" id="progressResults"></div>
 </div>
 
 <table class="events-table">
@@ -766,8 +863,95 @@
             case 'submit-reissue':
                 submitReissue(e);
                 break;
+            case 'reissue-all':
+                reissueAll();
+                break;
+            case 'print-unreported':
+                window.print();
+                break;
         }
     });
+
+    // Reissue all unreported events sequentially
+    async function reissueAll() {
+        const buttons = document.querySelectorAll('.btn-reissue');
+        if (buttons.length === 0) return;
+
+        const count = buttons.length;
+        if (!confirm(`Reissue all ${count} unreported event${count !== 1 ? 's' : ''}?\n\nEach event will be reissued to its currently assigned employee with the same date and time.`)) {
+            return;
+        }
+
+        // Disable the Reissue All button
+        const reissueAllBtn = document.querySelector('[data-action="reissue-all"]');
+        reissueAllBtn.disabled = true;
+        reissueAllBtn.textContent = 'Reissuing...';
+
+        // Show progress
+        const progressEl = document.getElementById('reissueProgress');
+        const progressBar = document.getElementById('progressBarFill');
+        const progressText = document.getElementById('progressText');
+        const progressResults = document.getElementById('progressResults');
+        progressEl.classList.add('active');
+        progressResults.innerHTML = '';
+
+        let succeeded = 0;
+        let failed = 0;
+
+        for (let i = 0; i < buttons.length; i++) {
+            const btn = buttons[i];
+            const scheduleId = btn.dataset.scheduleId;
+            const eventName = btn.dataset.eventName;
+            const employeeId = btn.dataset.employeeId;
+            const scheduleDate = btn.dataset.scheduleDate;
+            const scheduleTime = btn.dataset.scheduleTime;
+            const expirationDate = btn.dataset.expirationDate;
+
+            progressText.textContent = `${i + 1} / ${count} — ${eventName}`;
+            progressBar.style.width = `${((i + 1) / count) * 100}%`;
+
+            try {
+                const response = await fetch('/api/reissue-event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        schedule_id: parseInt(scheduleId),
+                        employee_id: employeeId,
+                        schedule_date: scheduleDate,
+                        schedule_time: scheduleTime,
+                        expiration_date: expirationDate,
+                        include_responses: false
+                    })
+                });
+
+                if (response.ok) {
+                    succeeded++;
+                    // Visually mark row as done
+                    const row = btn.closest('tr');
+                    if (row) row.style.opacity = '0.4';
+                } else {
+                    const data = await response.json();
+                    failed++;
+                    console.error(`Failed to reissue ${eventName}:`, data.error);
+                }
+            } catch (error) {
+                failed++;
+                console.error(`Error reissuing ${eventName}:`, error);
+            }
+        }
+
+        // Show results
+        progressBar.style.width = '100%';
+        progressText.textContent = `Complete: ${succeeded + failed} / ${count}`;
+        progressResults.innerHTML =
+            `<span class="success">${succeeded} succeeded</span>` +
+            (failed > 0 ? ` · <span class="failure">${failed} failed</span>` : '');
+
+        reissueAllBtn.textContent = 'Done — Reloading...';
+
+        // Reload after a short delay so user can see results
+        setTimeout(() => window.location.reload(), 2000);
+    }
 
     // Unschedule event function
     async function unscheduleEvent(button) {

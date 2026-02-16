@@ -962,5 +962,47 @@ document.addEventListener('click', function(e) {
         case 'open-walmart': openInWalmart(target.dataset.eventId); break;
         case 'roll-event': rollEventToDate(target.dataset.eventId, target.dataset.date, target.dataset.rollType); break;
         case 'navigate-events': window.location.href = '/events?search=' + target.dataset.eventId; break;
+        case 'sync-event-numbers': syncEventNumbers(); break;
     }
 });
+
+async function syncEventNumbers() {
+    var club = document.getElementById('clubInput').value.trim();
+    if (!club) {
+        alert('Please enter a club number first');
+        return;
+    }
+
+    var btn = document.querySelector('[data-action="sync-event-numbers"]');
+    var originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+    btn.disabled = true;
+
+    try {
+        var response = await fetch('/api/walmart/events/sync-event-numbers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({ club: club })
+        });
+        var data = await response.json();
+
+        if (data.success) {
+            alert('Sync complete!\n\n' +
+                'Events matched: ' + data.matched + '\n' +
+                'Items stored: ' + data.items_stored + '\n' +
+                'Billing events created: ' + data.billing_created + '\n' +
+                'Errors: ' + data.errors);
+        } else {
+            alert('Sync failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Sync failed:', error);
+        alert('Sync failed: ' + error.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}

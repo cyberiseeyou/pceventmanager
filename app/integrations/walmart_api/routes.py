@@ -1113,6 +1113,15 @@ def get_approved_events():
         service = ApprovedEventsService(db, Event, Schedule, Employee, PendingSchedule)
         merged_events = service.merge_with_local_status(walmart_events)
 
+        # Non-blocking enrichment: store walmart_event_id on local events during LIA pull
+        try:
+            from app.services.walmart_event_enrichment import WalmartEventEnrichmentService
+            enrichment_service = WalmartEventEnrichmentService()
+            enrichment_result = enrichment_service.enrich_events_from_walmart_data(walmart_events)
+            logger.info(f"Event enrichment during LIA pull: {enrichment_result}")
+        except Exception as e:
+            logger.error(f"Event enrichment failed (non-blocking): {e}")
+
         # Optionally enrich with Core event data from local database
         include_core_events = request.args.get('include_core_events', '').lower() == 'true'
         if include_core_events:
@@ -1407,6 +1416,161 @@ def get_scanout_status():
         }
     """
     return jsonify(ApprovedEventsService.should_show_scanout_warning()), 200
+
+
+@walmart_bp.route('/events/sync-event-numbers', methods=['POST'])
+@require_authentication()
+def sync_event_numbers():
+    """
+    Manually sync Walmart event numbers to local events.
+
+    Fetches ALL events from Walmart (not just Approved) over a broad date range
+    and matches them to local events by name/date. Also creates billing-only
+    events for unmatched Walmart events.
+
+    Date range: 30 days back to 120 days ahead.
+
+    Returns:
+        JSON response with enrichment counts
+
+    Status Codes:
+        200: Sync completed
+        400: Missing parameters or no session
+        500: Sync failed
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = user.get('username', user.get('userId', 'unknown'))
+        club = request.json.get('club') if request.json else request.args.get('club')
+        if not club:
+            return jsonify({'success': False, 'message': 'Club parameter is required'}), 400
+
+        # Broad date range: 30 days back, 120 days ahead
+        from datetime import timedelta, date
+        today = date.today()
+        start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+        end_date = (today + timedelta(days=120)).strftime('%Y-%m-%d')
+
+        # Try to get authenticated session
+        walmart_events = None
+        user_session = session_manager.get_session(str(user_id))
+        if user_session and user_session.is_authenticated:
+            user_session.refresh()
+            authenticator = user_session.authenticator
+            if authenticator and authenticator.auth_token:
+                walmart_events = _fetch_all_events_with_session(
+                    authenticator.session,
+                    authenticator.auth_token,
+                    club_numbers=[club],
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+        if walmart_events is None:
+            # Try global authenticator from printing module
+            try:
+                from app.routes.printing import edr_authenticator as global_authenticator
+                if global_authenticator and global_authenticator.auth_token:
+                    walmart_events = _fetch_all_events_with_session(
+                        global_authenticator.session,
+                        global_authenticator.auth_token,
+                        club_numbers=[club],
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+            except ImportError:
+                logger.warning("Printing module not available for global authenticator")
+
+        if walmart_events is None:
+            return jsonify({
+                'success': False,
+                'message': 'No active Walmart session. Please authenticate first.'
+            }), 400
+
+        # Run enrichment
+        from app.services.walmart_event_enrichment import WalmartEventEnrichmentService
+        enrichment_service = WalmartEventEnrichmentService()
+        enrich_result = enrichment_service.enrich_events_from_walmart_data(walmart_events)
+
+        # Create billing-only events
+        events_by_id = enrichment_service._deduplicate_and_collect_items(walmart_events)
+        billing_result = enrichment_service.create_billing_only_events(events_by_id=events_by_id)
+
+        result = {
+            'success': True,
+            'matched': enrich_result.get('matched', 0),
+            'items_stored': enrich_result.get('items_stored', 0),
+            'billing_created': billing_result.get('billing_created', 0),
+            'errors': enrich_result.get('errors', 0) + billing_result.get('errors', 0),
+            'total_walmart_events': len(walmart_events),
+            'date_range': {'start_date': start_date, 'end_date': end_date}
+        }
+        logger.info(f"Event number sync complete: {result}")
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"Event number sync failed: {str(e)}")
+        return jsonify({'success': False, 'message': f'Sync failed: {str(e)}'}), 500
+
+
+def _fetch_all_events_with_session(session, auth_token, club_numbers, start_date, end_date):
+    """
+    Fetch ALL events (not just Approved) from Walmart daily-schedule-report API.
+
+    Same as _fetch_approved_events_with_session but without status filtering,
+    so we can match event numbers across all event statuses.
+    """
+    if not auth_token or not session:
+        return None
+
+    club_list = []
+    for club in club_numbers:
+        try:
+            club_list.append(int(club))
+        except (ValueError, TypeError):
+            pass
+
+    if not club_list:
+        return None
+
+    base_url = "https://retaillink2.wal-mart.com/EventManagement"
+    url = f"{base_url}/api/store-event/daily-schedule-report"
+
+    headers = {
+        'accept': '*/*',
+        'content-type': 'application/json',
+        'origin': 'https://retaillink2.wal-mart.com',
+        'referer': f"{base_url}/daily-scheduled-report"
+    }
+
+    event_types = [1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57]
+
+    payload = {
+        "startDate": start_date,
+        "endDate": end_date,
+        "eventType": event_types,
+        "clubList": club_list,
+        "walmartWeekYear": ""
+    }
+
+    logger.info(f"Fetching ALL events for clubs {club_list} from {start_date} to {end_date}")
+
+    try:
+        response = session.post(url, headers=headers, json=payload, timeout=60)
+        if response.status_code != 200:
+            logger.error(f"Walmart API error: status={response.status_code}")
+            return None
+
+        all_events = response.json()
+        logger.info(f"Walmart API returned {len(all_events)} total events (all statuses)")
+        return all_events
+
+    except Exception as e:
+        logger.error(f"Failed to fetch all events: {type(e).__name__}: {str(e)}")
+        return None
 
 
 # Error handlers for the blueprint

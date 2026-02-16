@@ -400,7 +400,10 @@ def get_daily_events(date):
             'reporting_status': rep_status,
             'is_overdue': _is_event_overdue(sched.schedule_datetime, rep_status),
             'edr_status': edr_status,
-            'is_cancelled': is_cancelled
+            'is_cancelled': is_cancelled,
+            'walmart_event_id': getattr(evt, 'walmart_event_id', None),
+            'billing_only': getattr(evt, 'billing_only', False),
+            'walmart_items': getattr(evt, 'walmart_items', None),
         }
 
     # PERFORMANCE: Pre-index Supervisor schedules by 6-digit event number: O(n)

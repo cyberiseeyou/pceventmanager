@@ -1152,7 +1152,7 @@ class DailyView {
                         <div class="event-info">
                             <span aria-hidden="true">${this.getEventIcon(event.event_type)}</span>
                             <span class="sr-only">Event: </span>
-                            ${event.event_name}
+                            ${event.walmart_event_id ? `<span class="walmart-event-id" title="Walmart Event #${event.walmart_event_id}">${event.walmart_event_id}</span> ` : ''}${event.event_name}
                         </div>
                         <div class="event-type-display">
                             <span class="material-symbols-outlined" aria-hidden="true">label</span>
@@ -1162,6 +1162,8 @@ class DailyView {
                         ${event.start_date ? `<div class="event-dates"><span class="material-symbols-outlined" aria-hidden="true">date_range</span> <span class="sr-only">Event dates: </span>${event.start_date} - ${event.due_date}</div>` : ''}
                         ${salesToolLink}
                     </div>
+
+                    ${this.renderWalmartItems(event, cardId)}
 
                     <div class="event-divider"></div>
 
@@ -1270,10 +1272,59 @@ class DailyView {
         return badges[status] || badges['scheduled'];
     }
 
+    renderWalmartItems(event, cardId) {
+        if (!event.walmart_items) return '';
+
+        let items;
+        try {
+            items = JSON.parse(event.walmart_items);
+        } catch (e) {
+            return '';
+        }
+        if (!items || items.length === 0) return '';
+
+        const itemRows = items.map(item =>
+            `<tr>
+                <td>${this.escapeHtml(item.itemNumber || '-')}</td>
+                <td>${this.escapeHtml(item.itemDesc || '-')}</td>
+                <td>${this.escapeHtml(item.vendorNbr || '-')}</td>
+            </tr>`
+        ).join('');
+
+        return `
+            <div class="event-divider"></div>
+            <div class="walmart-items-section">
+                <button class="walmart-items-toggle" aria-expanded="false" aria-controls="${cardId}-items"
+                        type="button">
+                    <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+                    Items (${items.length})
+                    <span class="material-symbols-outlined toggle-icon" aria-hidden="true">expand_more</span>
+                </button>
+                <div class="walmart-items-list" id="${cardId}-items" hidden>
+                    <table class="walmart-items-table">
+                        <thead><tr><th>Item #</th><th>Description</th><th>Vendor</th></tr></thead>
+                        <tbody>${itemRows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+    }
+
     /**
      * Attach event listeners to event card buttons
      */
     attachEventCardListeners() {
+        // Walmart items toggle
+        document.querySelectorAll('.walmart-items-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const section = e.currentTarget.closest('.walmart-items-section');
+                const list = section.querySelector('.walmart-items-list');
+                const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
+                e.currentTarget.setAttribute('aria-expanded', !expanded);
+                list.hidden = expanded;
+            });
+        });
+
         // Reschedule buttons
         document.querySelectorAll('.btn-reschedule').forEach(btn => {
             btn.addEventListener('click', (e) => {

@@ -357,6 +357,7 @@ class ApprovedEventsService:
                 'condition': local_event.condition if local_event else None,
                 'due_datetime': local_event.due_datetime.isoformat() if local_event and local_event.due_datetime else None,
                 'start_datetime': local_event.start_datetime.isoformat() if local_event and local_event.start_datetime else None,
+                'walmart_event_id': getattr(local_event, 'walmart_event_id', None) if local_event else None,
 
                 # Schedule data - only from actual Schedule records
                 'assigned_employee_id': employee_id,

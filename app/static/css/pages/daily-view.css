@@ -950,6 +950,81 @@
   text-overflow: ellipsis;
 }
 
+.walmart-event-id {
+  display: inline-block;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  background: #f0f9ff;
+  color: #0071ce;
+  border: 1px solid #bae6fd;
+  padding: 0 4px;
+  border-radius: 3px;
+  vertical-align: middle;
+  letter-spacing: 0.5px;
+}
+
+.walmart-items-section {
+  padding: 0 8px;
+}
+
+.walmart-items-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: #0071ce;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.walmart-items-toggle:hover {
+  color: #004f91;
+}
+
+.walmart-items-toggle .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.walmart-items-toggle .toggle-icon {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.walmart-items-toggle[aria-expanded="true"] .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.walmart-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  margin: 4px 0 6px;
+}
+
+.walmart-items-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 2px 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.walmart-items-table td {
+  padding: 2px 6px;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.walmart-items-table tr:last-child td {
+  border-bottom: none;
+}
+
 .event-type-display,
 .event-dates {
   font-size: 9px;
