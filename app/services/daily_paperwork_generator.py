@@ -1160,12 +1160,12 @@ class DailyPaperworkGenerator:
         # 2. First check for cancelled events from database (synced from Crossmark API)
         # This catches cancelled events BEFORE we try to fetch EDR data
         cancelled_events = []  # Track cancelled events to block generation
-        from app.utils.event_helpers import extract_event_number
+        from app.utils.event_helpers import get_walmart_event_id
 
         for schedule, event, employee in schedules:
             # Check if event is cancelled in the Crossmark system (condition field)
             if event.condition and event.condition.lower() == 'canceled':
-                event_num = extract_event_number(event.project_name)
+                event_num = get_walmart_event_id(event)
                 logger.warning(f" EVENT {event_num} is CANCELLED (from Crossmark API)! Cannot include in paperwork.")
                 cancelled_events.append({
                     'event_number': event_num or str(event.project_ref_num),
@@ -1194,7 +1194,7 @@ class DailyPaperworkGenerator:
                 # Fetch EDR data for ALL scheduled events to check for cancelled status
                 # This ensures we catch cancelled events regardless of event type
                 for schedule, event, employee in schedules:
-                    event_num = extract_event_number(event.project_name)
+                    event_num = get_walmart_event_id(event)
                     if event_num:
                         logger.info(f" Fetching EDR for event {event_num} ({event.event_type}) via get_edr_report()...")
 
@@ -1340,8 +1340,7 @@ class DailyPaperworkGenerator:
 
             # Only process documents for Core events
             if event.event_type == 'Core':
-                from app.utils.event_helpers import extract_event_number
-                event_num = extract_event_number(event.project_name)
+                event_num = get_walmart_event_id(event)
 
                 # Get EDR PDF if we have cached data
                 if event_num and event_num in edr_data_cache:

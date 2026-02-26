@@ -5,6 +5,7 @@ Covers hard constraints (must be satisfied), soft constraints (objective),
 and integration with the existing PendingSchedule approval workflow.
 """
 import pytest
+from unittest.mock import patch
 from datetime import datetime, timedelta, date, time
 
 
@@ -482,7 +483,8 @@ class TestRunLifecycle:
 class TestRouteIntegration:
     """Test the auto-scheduler route with CP-SAT solver."""
 
-    def test_solver_override_param(self, client, db_session, models):
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_solver_override_param(self, mock_auth, client, db_session, models):
         """Route accepts ?solver=cpsat override parameter."""
         _make_employee(models, db_session, 'emp1', 'Alice')
         _make_event(models, db_session, 100020, 'Core')
@@ -495,7 +497,8 @@ class TestRouteIntegration:
         assert data['success'] is True
         assert data.get('solver') == 'cpsat'
 
-    def test_greedy_override_param(self, client, db_session, models):
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_greedy_override_param(self, mock_auth, client, db_session, models):
         """Route accepts ?solver=greedy override parameter."""
         _make_employee(models, db_session, 'emp1', 'Alice')
         _make_event(models, db_session, 100021, 'Core')

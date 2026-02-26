@@ -2,6 +2,7 @@
 Schedule model - links events to employees with specific datetime
 """
 from datetime import datetime
+import sqlalchemy as sa
 
 
 def create_schedule_model(db):
@@ -32,6 +33,12 @@ def create_schedule_model(db):
         shift_block = db.Column(db.Integer, nullable=True)
         shift_block_assigned_at = db.Column(db.DateTime, nullable=True)
 
+        # Outcome tracking for ML training data
+        was_completed = db.Column(db.Boolean, default=False, server_default=sa.text('0'))
+        was_swapped = db.Column(db.Boolean, default=False, server_default=sa.text('0'))
+        was_no_show = db.Column(db.Boolean, default=False, server_default=sa.text('0'))
+        completion_notes = db.Column(db.Text, nullable=True)
+        solver_type = db.Column(db.String(20), nullable=True)  # 'cpsat', 'greedy', 'manual'
 
         __table_args__ = (
             # Existing index

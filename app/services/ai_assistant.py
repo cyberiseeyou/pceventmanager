@@ -329,17 +329,30 @@ Use them proactively to gather information before answering.
                 generation_config={'temperature': 0.1}
             )
 
-            if response.candidates[0].content.parts:
+            if response.candidates and response.candidates[0].content.parts:
+                # Filter to actual function calls — every Part proto has a
+                # function_call attribute, so hasattr() is always True.
+                # Check .name to find parts that are real function calls.
                 function_calls = [
                     part.function_call
                     for part in response.candidates[0].content.parts
-                    if hasattr(part, 'function_call')
+                    if part.function_call.name
                 ]
 
                 if function_calls:
                     return self._handle_gemini_function_calls(function_calls, messages)
 
-            text = response.text if hasattr(response, 'text') else "I'm not sure how to help with that."
+            # response.text raises ValueError when no text parts exist
+            # (e.g. empty response or function-call-only response that
+            # slipped past the check above), so access it safely.
+            try:
+                text = response.text
+            except (ValueError, AttributeError):
+                logger.warning(
+                    "Gemini returned no text content (finish_reason=%s)",
+                    response.candidates[0].finish_reason if response.candidates else 'no candidates'
+                )
+                text = "I'm not sure how to help with that. Could you try rephrasing your request?"
             return AssistantResponse(
                 response=text,
                 data=None
@@ -516,16 +529,17 @@ Use them proactively to gather information before answering.
         Confirm and execute a previously requested action
         """
         try:
-             # This re-routes to the existing tool execution logic but skips the LLM confirmation step
-             # The confirmation_data should contain tool_name and args
              tool_name = confirmation_data.get('tool_name')
-             args = confirmation_data.get('args')
-             
+             args = confirmation_data.get('tool_args') or confirmation_data.get('args')
+
              if not tool_name:
                  raise ValueError("Invalid confirmation data: missing tool_name")
-                 
-             # Direct tool execution
-             result = self.tools.execute_tool(tool_name, args)
+
+             if args is None:
+                 args = {}
+
+             # Pass confirmed via server-side param (execute_tool strips _confirmed from args)
+             result = self.tools.execute_tool(tool_name, args, confirmed=True)
              
              return AssistantResponse(
                  response=result.get('message', 'Action confirmed'),

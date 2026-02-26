@@ -385,6 +385,18 @@
             </div>
         </div>
 
+        <!-- Link to Employee/Event (shown based on note type) -->
+        <div id="quickNoteLinkEmployee" style="display: none;">
+            <label>Link to Employee</label>
+            <select id="quickNoteEmployeeId">
+                <option value="">None (unlinked)</option>
+            </select>
+        </div>
+        <div id="quickNoteLinkEvent" style="display: none;">
+            <label>Link to Event (Ref #)</label>
+            <input type="number" id="quickNoteEventRefNum" placeholder="Event reference number">
+        </div>
+
         <button class="btn-submit" data-action="submit-quick-note">
             <i class="fas fa-save"></i> Save Note
         </button>
@@ -508,6 +520,8 @@ function renderQuickNotesList(listType) {
                 <div class="meta">
                     <span><i class="${note.type_icon}"></i> ${note.display_type}</span>
                     ${note.due_date ? `<span class="due-date ${note.is_due_today ? 'today' : ''}">${formatNoteDate(note.due_date)}</span>` : ''}
+                    ${note.linked_employee_id ? `<span title="Linked to employee">👤</span>` : ''}
+                    ${note.linked_event_ref_num ? `<span title="Event #${note.linked_event_ref_num}">📋 #${note.linked_event_ref_num}</span>` : ''}
                 </div>
             </div>
             <button class="delete-btn" data-action="delete-note" data-note-id="${note.id}">
@@ -525,13 +539,16 @@ async function submitQuickNote() {
         return;
     }
 
+    const noteType = document.getElementById('quickNoteType').value;
     const noteData = {
         title: title,
         content: document.getElementById('quickNoteContent').value.trim(),
-        note_type: document.getElementById('quickNoteType').value,
+        note_type: noteType,
         priority: document.getElementById('quickNotePriority').value,
         due_date: document.getElementById('quickNoteDueDate').value || null,
-        due_time: document.getElementById('quickNoteDueTime').value || null
+        due_time: document.getElementById('quickNoteDueTime').value || null,
+        linked_employee_id: document.getElementById('quickNoteEmployeeId').value || null,
+        linked_event_ref_num: document.getElementById('quickNoteEventRefNum').value ? parseInt(document.getElementById('quickNoteEventRefNum').value) : null
     };
 
     try {
@@ -553,6 +570,9 @@ async function submitQuickNote() {
             document.getElementById('quickNoteDueTime').value = '';
             document.getElementById('quickNoteType').value = 'task';
             document.getElementById('quickNotePriority').value = 'normal';
+            document.getElementById('quickNoteEmployeeId').value = '';
+            document.getElementById('quickNoteEventRefNum').value = '';
+            updateNoteLinkFields();
 
             // Reload notes
             loadQuickNotes();
@@ -668,6 +688,40 @@ function showQuickNoteToast(message) {
         setTimeout(() => toast.remove(), 300);
     }, 2000);
 }
+
+// Show/hide link fields based on note type
+function updateNoteLinkFields() {
+    const noteType = document.getElementById('quickNoteType').value;
+    document.getElementById('quickNoteLinkEmployee').style.display =
+        (noteType === 'employee' || noteType === 'event') ? '' : 'none';
+    document.getElementById('quickNoteLinkEvent').style.display =
+        noteType === 'event' ? '' : 'none';
+}
+
+// Load employees for linking dropdown
+let noteLinkEmployeesLoaded = false;
+function loadNoteLinkEmployees() {
+    if (noteLinkEmployeesLoaded) return;
+    fetch('/api/employees/active')
+        .then(r => r.json())
+        .then(data => {
+            const select = document.getElementById('quickNoteEmployeeId');
+            const employees = data.employees || data;
+            employees.forEach(emp => {
+                const opt = document.createElement('option');
+                opt.value = emp.id;
+                opt.textContent = emp.name;
+                select.appendChild(opt);
+            });
+            noteLinkEmployeesLoaded = true;
+        })
+        .catch(err => console.error('Failed to load employees for notes:', err));
+}
+
+document.getElementById('quickNoteType').addEventListener('change', function() {
+    updateNoteLinkFields();
+    if (this.value === 'employee' || this.value === 'event') loadNoteLinkEmployees();
+});
 
 // Delegated click handler - replaces inline onclick attributes
 document.addEventListener('click', function(e) {

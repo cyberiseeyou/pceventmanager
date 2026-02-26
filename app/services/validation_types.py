@@ -15,6 +15,7 @@ class ConstraintType(str, Enum):
     ALREADY_SCHEDULED = "already_scheduled"
     EVENT_TYPE = "event_type"
     DUE_DATE = "due_date"
+    PAST_DATE = "past_date"
     ROTATION = "rotation"
 
 

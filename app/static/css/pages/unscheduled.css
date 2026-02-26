@@ -517,6 +517,26 @@
     background: rgba(46, 76, 115, 0.05);
 }
 
+.tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #e5e7eb;
+    color: #6b7280;
+    margin-left: 4px;
+}
+
+.tab-btn.active .tab-count {
+    background: var(--pc-navy);
+    color: white;
+}
+
 /* Event Condition Badge - styled like daily view status badges */
 .event-condition {
     display: inline-block;
@@ -554,6 +574,12 @@
     background: rgba(23, 162, 184, 0.15);
     color: #17a2b8;
     border: 1px solid #17a2b8;
+}
+
+.event-condition.status-cannot-complete {
+    background: rgba(107, 114, 128, 0.15);
+    color: #4b5563;
+    border: 1px solid #9ca3af;
 }
 
 .event-info {

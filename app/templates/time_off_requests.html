@@ -232,29 +232,59 @@
 {% block content %}
 <!-- Page Header -->
 <div class="page-header">
-    <h1 class="page-title">Time Off Requests</h1>
+    <h1 class="page-title">Availability Management</h1>
+</div>
+
+<!-- Tab Navigation -->
+<div class="condition-tabs" style="margin-bottom: var(--spacing-lg);">
+    <button class="tab-btn active" data-action="show-tab" data-tab="time-off">Time Off Requests</button>
+    <button class="tab-btn" data-action="show-tab" data-tab="overrides">Availability Overrides</button>
 </div>
 
 <!-- Flash messages -->
 <div id="flash-messages"></div>
 
-<!-- Controls Section -->
-<div class="controls-section">
-    <div class="filter-section">
-        <label for="employee-filter">Filter by Employee:</label>
-        <select id="employee-filter">
-            <option value="all">All Employees</option>
-        </select>
+<!-- ===== TIME OFF TAB ===== -->
+<div id="tab-time-off">
+    <!-- Controls Section -->
+    <div class="controls-section">
+        <div class="filter-section">
+            <label for="employee-filter">Filter by Employee:</label>
+            <select id="employee-filter">
+                <option value="all">All Employees</option>
+            </select>
+        </div>
+        <button id="add-request-btn" class="btn btn-primary">
+            + Add Request
+        </button>
     </div>
-    <button id="add-request-btn" class="btn btn-primary">
-        + Add Request
-    </button>
+
+    <!-- Time Off Requests List -->
+    <div class="time-off-list">
+        <div id="requests-container">
+            <div class="empty-state">Loading time off requests...</div>
+        </div>
+    </div>
 </div>
 
-<!-- Time Off Requests List -->
-<div class="time-off-list">
-    <div id="requests-container">
-        <div class="empty-state">Loading time off requests...</div>
+<!-- ===== OVERRIDES TAB ===== -->
+<div id="tab-overrides" style="display: none;">
+    <div class="controls-section">
+        <div class="filter-section">
+            <label for="override-employee-filter">Filter by Employee:</label>
+            <select id="override-employee-filter">
+                <option value="all">All Employees</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" data-action="show-add-override-modal">
+            + Add Override
+        </button>
+    </div>
+
+    <div class="time-off-list">
+        <div id="overrides-container">
+            <div class="empty-state">Loading availability overrides...</div>
+        </div>
     </div>
 </div>
 
@@ -302,6 +332,73 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-action="close-add-request-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Add Availability Override Modal -->
+<div id="add-override-modal" class="modal">
+    <div class="modal-overlay" data-action="close-override-modal"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2 class="modal-title">Add Availability Override</h2>
+            <button class="modal-close" data-action="close-override-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="override-modal-alerts"></div>
+            <form id="add-override-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="override-employee">Employee</label>
+                        <select id="override-employee" required>
+                            <option value="">Select Employee</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="override-start-date">Start Date</label>
+                        <input type="date" id="override-start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="override-end-date">End Date</label>
+                        <input type="date" id="override-end-date" required>
+                    </div>
+                </div>
+                <fieldset style="border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;">
+                    <legend style="font-weight: 600; font-size: 14px; padding: 0 8px;">Available Days</legend>
+                    <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-monday" checked> Mon
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-tuesday" checked> Tue
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-wednesday" checked> Wed
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-thursday" checked> Thu
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-friday" checked> Fri
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-saturday"> Sat
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" name="override-sunday"> Sun
+                        </label>
+                    </div>
+                </fieldset>
+                <div class="form-group">
+                    <label for="override-reason">Reason (optional)</label>
+                    <input type="text" id="override-reason" placeholder="e.g., College class schedule" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-action="close-override-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Override</button>
                 </div>
             </form>
         </div>
@@ -410,7 +507,7 @@
                 .forEach(emp => {
                     const option = document.createElement('option');
                     option.value = emp.id;
-                    option.textContent = emp.name;
+                    option.textContent = toTitleCase(emp.name);
                     filterSelect.appendChild(option);
                 });
 
@@ -424,7 +521,7 @@
                 .forEach(emp => {
                     const option = document.createElement('option');
                     option.value = emp.id;
-                    option.textContent = emp.name;
+                    option.textContent = toTitleCase(emp.name);
                     modalSelect.appendChild(option);
                 });
         } catch (error) {
@@ -507,7 +604,7 @@
         return `
         <div class="time-off-request-card">
             <div class="time-off-info">
-                <div class="time-off-employee">${request.employee_name}</div>
+                <div class="time-off-employee">${toTitleCase(request.employee_name)}</div>
                 <div class="time-off-dates">🗓️ ${dateDisplay}</div>
                 ${request.reason ? `<div class="time-off-reason">Comments: ${request.reason}</div>` : ''}
             </div>
@@ -717,6 +814,156 @@
         }, 5000);
     }
 
+    // ===== TAB SWITCHING =====
+    function showTab(tabName) {
+        document.getElementById('tab-time-off').style.display = tabName === 'time-off' ? '' : 'none';
+        document.getElementById('tab-overrides').style.display = tabName === 'overrides' ? '' : 'none';
+        document.querySelectorAll('[data-action="show-tab"]').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.tab === tabName);
+        });
+        if (tabName === 'overrides') loadOverrides();
+    }
+
+    // ===== OVERRIDES MANAGEMENT =====
+    function loadOverrides() {
+        var filter = document.getElementById('override-employee-filter').value;
+        var container = document.getElementById('overrides-container');
+        if (filter === 'all') {
+            // Load for all employees
+            container.innerHTML = '<div class="empty-state">Select an employee to view overrides, or add a new one.</div>';
+            // Load all active employees to show their overrides
+            fetch('/api/employees/active')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var employees = data.employees || data;
+                    if (!employees || employees.length === 0) return;
+                    var promises = employees.map(function(emp) {
+                        return fetch('/api/availability-overrides/' + emp.id)
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) { return { employee: emp, overrides: d.overrides || [] }; });
+                    });
+                    Promise.all(promises).then(function(results) {
+                        var all = [];
+                        results.forEach(function(r) {
+                            r.overrides.forEach(function(o) { o._employee_name = r.employee.name; all.push(o); });
+                        });
+                        renderOverrides(all);
+                    });
+                });
+        } else {
+            fetch('/api/availability-overrides/' + filter)
+                .then(function(r) { return r.json(); })
+                .then(function(data) { renderOverrides(data.overrides || []); });
+        }
+    }
+
+    function renderOverrides(overrides) {
+        var container = document.getElementById('overrides-container');
+        if (!overrides || overrides.length === 0) {
+            container.innerHTML = '<div class="empty-state">No availability overrides found.</div>';
+            return;
+        }
+        var dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        var html = '';
+        overrides.forEach(function(o) {
+            var days = [o.monday, o.tuesday, o.wednesday, o.thursday, o.friday, o.saturday, o.sunday];
+            var activeDays = days.map(function(d, i) { return d ? dayNames[i] : null; }).filter(Boolean).join(', ');
+            var empName = o._employee_name ? toTitleCase(o._employee_name) : 'Employee ' + o.employee_id;
+            var today = new Date().toISOString().split('T')[0];
+            var isExpired = o.end_date < today;
+            var statusClass = isExpired ? 'style="opacity: 0.5;"' : '';
+
+            html += '<div class="time-off-card" ' + statusClass + '>' +
+                '<div class="time-off-details">' +
+                '<div class="employee-name">' + escapeHtml(empName) + '</div>' +
+                '<div class="date-range">' + o.start_date + ' to ' + o.end_date +
+                (isExpired ? ' <span style="color:#dc3545;">(Expired)</span>' : '') + '</div>' +
+                '<div style="font-size:13px; color:#666;">Available: <strong>' + (activeDays || 'None') + '</strong></div>' +
+                (o.reason ? '<div style="font-size:12px; color:#888; margin-top:4px;">Reason: ' + escapeHtml(o.reason) + '</div>' : '') +
+                '</div>' +
+                '<div class="time-off-actions">' +
+                '<button class="btn btn-danger btn-sm" data-action="delete-override" data-override-id="' + o.id + '">Delete</button>' +
+                '</div></div>';
+        });
+        container.innerHTML = html;
+    }
+
+    function showAddOverrideModal() {
+        document.getElementById('add-override-modal').classList.add('active');
+        // Populate employee dropdown
+        fetch('/api/employees/active')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var select = document.getElementById('override-employee');
+                select.innerHTML = '<option value="">Select Employee</option>';
+                var employees = data.employees || data;
+                employees.forEach(function(emp) {
+                    select.innerHTML += '<option value="' + emp.id + '">' + toTitleCase(emp.name) + '</option>';
+                });
+            });
+    }
+
+    function closeOverrideModal() {
+        document.getElementById('add-override-modal').classList.remove('active');
+        document.getElementById('add-override-form').reset();
+    }
+
+    document.getElementById('add-override-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var payload = {
+            employee_id: document.getElementById('override-employee').value,
+            start_date: document.getElementById('override-start-date').value,
+            end_date: document.getElementById('override-end-date').value,
+            monday: document.querySelector('[name="override-monday"]').checked,
+            tuesday: document.querySelector('[name="override-tuesday"]').checked,
+            wednesday: document.querySelector('[name="override-wednesday"]').checked,
+            thursday: document.querySelector('[name="override-thursday"]').checked,
+            friday: document.querySelector('[name="override-friday"]').checked,
+            saturday: document.querySelector('[name="override-saturday"]').checked,
+            sunday: document.querySelector('[name="override-sunday"]').checked,
+            reason: document.getElementById('override-reason').value
+        };
+        fetch('/api/availability-overrides', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                closeOverrideModal();
+                loadOverrides();
+            } else {
+                document.getElementById('override-modal-alerts').innerHTML =
+                    '<div class="alert alert-error">' + (data.error || 'Failed to create override') + '</div>';
+            }
+        })
+        .catch(function(err) { alert('Error: ' + err); });
+    });
+
+    function deleteOverride(overrideId) {
+        if (!confirm('Delete this availability override?')) return;
+        fetch('/api/availability-overrides/' + overrideId, { method: 'DELETE' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) loadOverrides();
+                else alert(data.error || 'Failed to delete');
+            });
+    }
+
+    // Populate override employee filter
+    fetch('/api/employees/active')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var select = document.getElementById('override-employee-filter');
+            var employees = data.employees || data;
+            employees.forEach(function(emp) {
+                select.innerHTML += '<option value="' + emp.id + '">' + toTitleCase(emp.name) + '</option>';
+            });
+        });
+
+    document.getElementById('override-employee-filter').addEventListener('change', loadOverrides);
+
     // Delegated click handler for data-action buttons
     document.addEventListener('click', function(e) {
         var target = e.target.closest('[data-action]');
@@ -728,6 +975,18 @@
                 break;
             case 'delete-request':
                 deleteRequest(parseInt(target.dataset.requestId));
+                break;
+            case 'show-tab':
+                showTab(target.dataset.tab);
+                break;
+            case 'show-add-override-modal':
+                showAddOverrideModal();
+                break;
+            case 'close-override-modal':
+                closeOverrideModal();
+                break;
+            case 'delete-override':
+                deleteOverride(parseInt(target.dataset.overrideId));
                 break;
         }
     });

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Scan-Out Checklist - {{ view_date.strftime('%B %d, %Y') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .scanout-header {
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .scanout-header h1 { font-size: 24px; font-weight: 700; margin: 0; color: white; }
+    .scanout-header .date-info { opacity: 0.9; margin-top: 4px; }
+    .nav-btns { display: flex; gap: 8px; }
+    .nav-btns a {
+        background: rgba(255,255,255,0.2); color: white;
+        padding: 8px 16px; border-radius: 6px;
+        text-decoration: none; font-weight: 500;
+    }
+    .nav-btns a:hover { background: rgba(255,255,255,0.3); }
+
+    .progress-bar {
+        background: white; padding: 16px 24px; border-radius: 8px;
+        margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex; align-items: center; gap: 16px;
+    }
+    .progress-bar .progress-track {
+        flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-bar .progress-fill {
+        height: 100%; background: #059669; border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .progress-bar .progress-text { font-weight: 600; color: #374151; white-space: nowrap; }
+
+    .checklist-table {
+        width: 100%; border-collapse: collapse;
+        background: white; border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .checklist-table thead th {
+        background: #f8f9fa; padding: 12px 16px;
+        text-align: left; font-size: 12px;
+        text-transform: uppercase; font-weight: 600;
+        color: #6b7280; border-bottom: 2px solid #e5e7eb;
+    }
+    .checklist-table tbody tr { border-bottom: 1px solid #f3f4f6; }
+    .checklist-table tbody tr:hover { background: #f9fafb; }
+    .checklist-table tbody tr.checked-off {
+        background: #f0fdf4; opacity: 0.7;
+    }
+    .checklist-table tbody tr.checked-off td { text-decoration: line-through; color: #9ca3af; }
+    .checklist-table tbody tr.checked-off td:first-child { text-decoration: none; }
+    .checklist-table tbody td {
+        padding: 12px 16px; font-size: 14px; color: #374151;
+    }
+    .checklist-table .event-num {
+        font-weight: 700; font-family: monospace; font-size: 15px;
+        color: #1e40af; cursor: pointer;
+    }
+    .checklist-table .event-num:hover { text-decoration: underline; }
+    .checklist-table .no-number { color: #d1d5db; font-style: italic; }
+    .check-cell { text-align: center; width: 50px; }
+    .check-cell input[type="checkbox"] {
+        width: 20px; height: 20px; cursor: pointer;
+        accent-color: #059669;
+    }
+
+    @media print {
+        .scanout-header .nav-btns,
+        .no-print { display: none !important; }
+        .scanout-header { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .checklist-table { box-shadow: none; }
+        .checklist-table tbody tr.checked-off { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="scanout-header">
+        <div>
+            <h1>Scan-Out Checklist</h1>
+            <div class="date-info">{{ view_date.strftime('%A, %B %d, %Y') }}</div>
+        </div>
+        <div class="nav-btns">
+            <a href="{{ url_for('dashboard.scan_out_checklist', selected_date=prev_date.isoformat()) }}">
+                &larr; Prev
+            </a>
+            <a href="{{ url_for('dashboard.scan_out_checklist') }}">Today</a>
+            <a href="{{ url_for('dashboard.scan_out_checklist', selected_date=next_date.isoformat()) }}">
+                Next &rarr;
+            </a>
+            <a href="javascript:window.print()" class="no-print" style="background: rgba(255,255,255,0.3);">
+                Print
+            </a>
+            <button type="button" id="syncEventNumsBtn" class="no-print"
+                style="background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer;"
+                title="Pull event numbers from Walmart">
+                <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span>
+                Sync Event #s
+            </button>
+        </div>
+    </div>
+
+    <div class="progress-bar no-print">
+        <span class="progress-text" id="scanout-progress">0 / {{ events|length }} completed</span>
+        <div class="progress-track">
+            <div class="progress-fill" id="scanout-progress-fill" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <table class="checklist-table">
+        <thead>
+            <tr>
+                <th class="check-cell">Done</th>
+                <th>Event #</th>
+                <th>Event Name</th>
+                <th>Type</th>
+                <th>Employee</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr data-schedule-id="{{ event.schedule_id }}">
+                <td class="check-cell">
+                    <input type="checkbox" data-schedule-id="{{ event.schedule_id }}" aria-label="Mark scanned out">
+                </td>
+                <td>
+                    {% if event.event_number %}
+                    <span class="event-num" title="Click to copy" data-number="{{ event.event_number }}">{{ event.event_number }}</span>
+                    {% else %}
+                    <span class="no-number">--</span>
+                    {% endif %}
+                </td>
+                <td>{{ event.event_name }}</td>
+                <td>{{ event.event_type }}</td>
+                <td>{{ event.employee_name|title }}</td>
+                <td>{{ event.start_time }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not events %}
+    <div style="text-align: center; padding: 48px; color: #9ca3af;">
+        No events scheduled for this date.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const dateKey = 'scanout-{{ view_date.isoformat() }}';
+    const checkboxes = document.querySelectorAll('.checklist-table input[type="checkbox"]');
+    const total = checkboxes.length;
+
+    // Load saved state
+    const saved = JSON.parse(localStorage.getItem(dateKey) || '{}');
+    checkboxes.forEach(cb => {
+        const id = cb.getAttribute('data-schedule-id');
+        if (saved[id]) {
+            cb.checked = true;
+            cb.closest('tr').classList.add('checked-off');
+        }
+    });
+
+    function updateProgress() {
+        const checked = document.querySelectorAll('.checklist-table input[type="checkbox"]:checked').length;
+        const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+        document.getElementById('scanout-progress').textContent = `${checked} / ${total} completed`;
+        document.getElementById('scanout-progress-fill').style.width = `${pct}%`;
+    }
+
+    updateProgress();
+
+    // Save state on change
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+            const id = cb.getAttribute('data-schedule-id');
+            const state = JSON.parse(localStorage.getItem(dateKey) || '{}');
+            if (cb.checked) {
+                state[id] = true;
+                cb.closest('tr').classList.add('checked-off');
+            } else {
+                delete state[id];
+                cb.closest('tr').classList.remove('checked-off');
+            }
+            localStorage.setItem(dateKey, JSON.stringify(state));
+            updateProgress();
+        });
+    });
+
+    // Click-to-copy event numbers
+    document.querySelectorAll('.event-num').forEach(el => {
+        el.addEventListener('click', () => {
+            const num = el.getAttribute('data-number');
+            navigator.clipboard.writeText(num).then(() => {
+                const original = el.textContent;
+                el.textContent = 'Copied!';
+                setTimeout(() => { el.textContent = original; }, 1000);
+            });
+        });
+    });
+
+    // Sync Event Numbers from Walmart
+    const syncBtn = document.getElementById('syncEventNumsBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', async () => {
+            const club = '{{ club_number }}';
+            if (!club) {
+                alert('No Walmart club number configured. Go to Settings to set it.');
+                return;
+            }
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Syncing...';
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const resp = await fetch('/api/walmart/events/sync-event-numbers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({ club: club })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check</span> Synced ' + data.matched + ' events';
+                    setTimeout(() => { window.location.reload(); }, 1500);
+                } else {
+                    alert(data.message || 'Sync failed. Make sure you are logged in to Walmart.');
+                    syncBtn.disabled = false;
+                    syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span> Sync Event #s';
+                }
+            } catch (err) {
+                alert('Sync request failed: ' + err.message);
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span> Sync Event #s';
+            }
+        });
+    }
+})();
+</script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}

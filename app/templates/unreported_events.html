@@ -451,7 +451,7 @@
                 </span>
             </td>
             <td>
-                <strong>{{ item.employee.name }}</strong>
+                <strong>{{ item.employee.name|title }}</strong>
             </td>
             <td>
                 <div><span class="date-label">Date:</span> {{ item.schedule_date.strftime('%m/%d/%Y') }}</div>
@@ -477,8 +477,7 @@
                         data-event-type="{{ item.event.event_type }}" data-employee-id="{{ item.employee.id }}"
                         data-employee-name="{{ item.employee.name|escape }}"
                         data-schedule-date="{{ item.schedule_date.strftime('%Y-%m-%d') }}"
-                        data-schedule-time="{{ item.schedule.schedule_datetime.strftime('%H:%M') }}"
-                        data-expiration-date="{{ (item.event.due_datetime + timedelta(days=1)).strftime('%Y-%m-%d') }}">
+                        data-schedule-time="{{ item.schedule.schedule_datetime.strftime('%H:%M') }}">
                         Reissue
                     </button>
                     <button class="btn-unschedule" data-schedule-id="{{ item.schedule.id }}"
@@ -567,6 +566,15 @@
     let currentEventType = null;
     let availableTimeslots = [];
 
+    function getExpirationDate() {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     // Add event listeners to all reissue buttons when DOM is loaded
     document.addEventListener('DOMContentLoaded', function () {
         const reissueButtons = document.querySelectorAll('.btn-reissue');
@@ -579,9 +587,8 @@
                 const employeeName = this.dataset.employeeName;
                 const scheduleDate = this.dataset.scheduleDate;
                 const scheduleTime = this.dataset.scheduleTime;
-                const expirationDate = this.dataset.expirationDate;
 
-                openReissueModal(scheduleId, eventName, eventType, employeeId, employeeName, scheduleDate, scheduleTime, expirationDate);
+                openReissueModal(scheduleId, eventName, eventType, employeeId, employeeName, scheduleDate, scheduleTime, getExpirationDate());
             });
         });
     });
@@ -744,7 +751,7 @@
             activeEmployees.forEach(emp => {
                 const option = document.createElement('option');
                 option.value = emp.id;
-                option.textContent = emp.name;
+                option.textContent = toTitleCase(emp.name);
                 if (String(emp.id) === String(defaultEmployeeId)) {
                     option.selected = true;
                 }
@@ -905,7 +912,7 @@
             const employeeId = btn.dataset.employeeId;
             const scheduleDate = btn.dataset.scheduleDate;
             const scheduleTime = btn.dataset.scheduleTime;
-            const expirationDate = btn.dataset.expirationDate;
+            const expirationDate = getExpirationDate();
 
             progressText.textContent = `${i + 1} / ${count} — ${eventName}`;
             progressBar.style.width = `${((i + 1) / count) * 100}%`;

@@ -26,14 +26,16 @@ class TestShadowModeLogging:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'shadow_log_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(5)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            start = datetime.now() + timedelta(days=7)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                          start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -46,10 +48,7 @@ class TestShadowModeLogging:
             adapter = MLSchedulerAdapter(db_session, models, config)
 
             # Mock logger to capture logs
-            with patch('app.ml.inference.ml_scheduler_adapter.current_app') as mock_app:
-                mock_logger = Mock()
-                mock_app.logger = mock_logger
-
+            with patch('app.ml.inference.ml_scheduler_adapter.logger') as mock_logger:
                 # Rank employees in shadow mode
                 ranked = adapter.rank_employees(employees, event, datetime.now())
 
@@ -97,8 +96,9 @@ class TestShadowModeBehavior:
             # Create consistent test data
             employees = [
                 Employee(
+                    id=f'shadow_behav_{i}',
                     name=f'Employee {i}',
-                    role='Lead Event Specialist' if i < 2 else 'Specialist',
+                    job_title='Lead Event Specialist' if i < 2 else 'Specialist',
                     is_active=True
                 )
                 for i in range(10)
@@ -107,12 +107,16 @@ class TestShadowModeBehavior:
                 db_session.add(emp)
             db_session.commit()
 
+            start = datetime.now() + timedelta(days=7)
             events = [
                 Event(
                     project_name=f'Event {i}',
+                    project_ref_num=2000 + i,
                     event_type='Core',
+                    start_datetime=start,
+                    due_datetime=start + timedelta(days=7),
                     is_scheduled=False,
-                    time_to_complete=2.0
+                    estimated_time=2.0
                 )
                 for i in range(5)
             ]
@@ -166,14 +170,16 @@ class TestMLvsRuleComparison:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'ml_vs_rule_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            start = datetime.now() + timedelta(days=7)
+            event = Event(project_name='Test', project_ref_num=3000, event_type='Core',
+                          start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -212,14 +218,16 @@ class TestMLvsRuleComparison:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'rank_diff_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(5)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            start = datetime.now() + timedelta(days=7)
+            event = Event(project_name='Test', project_ref_num=3100, event_type='Core',
+                          start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -261,15 +269,17 @@ class TestConfidenceDistribution:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'conf_dist_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(20)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
+            start = datetime.now() + timedelta(days=7)
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(project_name=f'Event {i}', project_ref_num=4000 + i, event_type='Core',
+                      start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
                 for i in range(10)
             ]
             for event in events:
@@ -316,14 +326,16 @@ class TestConfidenceDistribution:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'conf_thresh_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(5)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            start = datetime.now() + timedelta(days=7)
+            event = Event(project_name='Test', project_ref_num=4100, event_type='Core',
+                          start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -364,14 +376,16 @@ class TestPredictionTracking:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'pred_track_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(3)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            start = datetime.now() + timedelta(days=7)
+            event = Event(project_name='Test', project_ref_num=5000, event_type='Core',
+                          start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -396,7 +410,7 @@ class TestPredictionTracking:
             print(f"\nAdapter stats: {stats}")
 
             assert stats['predictions_made'] >= initial_predictions
-            assert 'use_ml' in stats
+            assert 'ml_enabled' in stats
 
     def test_prediction_tracking_across_sessions(self, app, db_session, models):
         """Test that predictions can be tracked across multiple scheduling sessions"""
@@ -405,14 +419,16 @@ class TestPredictionTracking:
             Event = models['Event']
 
             employees = [
-                Employee(name='Test Employee', role='Specialist', is_active=True)
+                Employee(id='pred_sess_0', name='Test Employee', job_title='Specialist', is_active=True)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
+            start = datetime.now() + timedelta(days=7)
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(project_name=f'Event {i}', project_ref_num=5100 + i, event_type='Core',
+                      start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
                 for i in range(3)
             ]
             for event in events:
@@ -453,15 +469,17 @@ class TestShadowModeReport:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'shadow_rpt_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
+            start = datetime.now() + timedelta(days=7)
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(project_name=f'Event {i}', project_ref_num=6000 + i, event_type='Core',
+                      start_datetime=start, due_datetime=start + timedelta(days=7), is_scheduled=False)
                 for i in range(5)
             ]
             for event in events:

@@ -26,7 +26,7 @@ from app.models import Event, Schedule, Employee
 from app.integrations.edr import EDRReportGenerator, EDRPDFGenerator, AutomatedEDRPrinter, EnhancedEDRPrinter
 
 # Import utility functions
-from app.utils.event_helpers import extract_event_number
+from app.utils.event_helpers import extract_event_number, get_walmart_event_id
 
 logger = logging.getLogger(__name__)
 
@@ -381,10 +381,10 @@ class EDRService:
 
             for schedule, event, employee in schedules:
                 # Extract event number from project name
-                event_number = extract_event_number(event.project_name)
+                event_number = get_walmart_event_id(event)
 
                 if not event_number:
-                    self.logger.warning(f"Could not extract event number from: {event.project_name}")
+                    self.logger.warning(f"Could not determine Walmart event ID for: {event.project_name}")
                     continue
 
                 # Fetch EDR data

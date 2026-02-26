@@ -389,7 +389,7 @@
                     <td>${escapeHtml(event.event_name)}</td>
                     <td>${getEventTypeBadge(event.event_type)}</td>
                     <td>${formatEventPeriod(event.start_date, event.end_date)}</td>
-                    <td>${escapeHtml(event.employee_name)}</td>
+                    <td>${escapeHtml(toTitleCase(event.employee_name))}</td>
                     <td>${formatDateTime(event.schedule_date, event.schedule_time)}</td>
                     <td><button class="btn-edit" data-pending-id="${event.id}">Edit</button></td>
                 </tr>`;
@@ -427,7 +427,7 @@
                     : escapeHtml(event.event_name);
 
                 // Format the new schedule for the replacing event
-                const newScheduleDisplay = `${escapeHtml(event.employee_name)}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
+                const newScheduleDisplay = `${escapeHtml(toTitleCase(event.employee_name))}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
                 
                 // Format where the bumped event is being rescheduled to
                 let rescheduledToDisplay;
@@ -437,7 +437,7 @@
                         rescheduledToDisplay = `<span class="text-danger">Failed: ${escapeHtml(event.bumped_rescheduled_to.failure_reason)}</span>`;
                     } else {
                         // Show successful reschedule
-                        rescheduledToDisplay = `${escapeHtml(event.bumped_rescheduled_to.employee_name)}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
+                        rescheduledToDisplay = `${escapeHtml(toTitleCase(event.bumped_rescheduled_to.employee_name))}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
                     }
                 } else {
                     // This should never happen - scheduler always reschedules or fails
@@ -496,7 +496,7 @@
                     html += `<div class="event-item ${statusClass}">
                         <div class="time">${event.schedule_time || '-'}${statusLabel ? `<span class="status-badge ${statusBadgeClass}">${statusLabel}</span>` : ''}</div>
                         <div>${escapeHtml(event.event_name)}</div>
-                        <div class="employee">${escapeHtml(event.employee_name)}</div>
+                        <div class="employee">${escapeHtml(toTitleCase(event.employee_name))}</div>
                     </div>`;
                 });
                 html += '</div>';
@@ -602,7 +602,7 @@
 
                 // Update progress display
                 progressCount.textContent = `${currentNum} / ${totalCount}`;
-                currentEventDisplay.textContent = 'Scheduling: ' + schedule.event_name + ' \u2192 ' + schedule.employee_name;
+                currentEventDisplay.textContent = 'Scheduling: ' + schedule.event_name + ' \u2192 ' + toTitleCase(schedule.employee_name);
 
                 try {
                     // Call the approve-single endpoint
@@ -659,7 +659,7 @@
                 statusHtml += `<div class="progress-details">`;
                 failures.forEach(f => {
                     statusHtml += `<div class="progress-detail-item error">`;
-                    statusHtml += `${escapeHtml(f.event_name)} \u2192 ${escapeHtml(f.employee_name)}: ${escapeHtml(f.error)}`;
+                    statusHtml += `${escapeHtml(f.event_name)} \u2192 ${escapeHtml(toTitleCase(f.employee_name))}: ${escapeHtml(f.error)}`;
                     statusHtml += `</div>`;
                 });
                 statusHtml += `</div>`;
@@ -778,7 +778,7 @@
                 .forEach(emp => {
                     const option = document.createElement('option');
                     option.value = emp.id;
-                    option.textContent = emp.job_title ? `${emp.name} (${emp.job_title})` : emp.name;
+                    option.textContent = emp.job_title ? `${toTitleCase(emp.name)} (${emp.job_title})` : toTitleCase(emp.name);
                     if (String(emp.id) === String(currentEmployeeId)) {
                         option.selected = true;
                     }
@@ -1092,7 +1092,7 @@
                     .forEach(emp => {
                         const option = document.createElement('option');
                         option.value = emp.id;
-                        option.textContent = emp.job_title ? `${emp.name} (${emp.job_title})` : emp.name;
+                        option.textContent = emp.job_title ? `${toTitleCase(emp.name)} (${emp.job_title})` : toTitleCase(emp.name);
                         employeeSelect.appendChild(option);
                     });
             }

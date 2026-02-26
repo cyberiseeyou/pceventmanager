@@ -20,7 +20,7 @@
           <option value="">All Employees</option>
           {% for employee in all_employees %}
           <option value="{{ employee.id }}" {% if selected_employee and selected_employee.id == employee.id %}selected{% endif %}>
-            {{ employee.name }}
+            {{ employee.name|title }}
           </option>
           {% endfor %}
         </select>

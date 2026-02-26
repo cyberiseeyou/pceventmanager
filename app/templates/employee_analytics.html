@@ -26,7 +26,7 @@
         <tbody>
             {% for stat in employee_stats %}
             <tr style="{% if loop.index % 2 == 0 %}background: #f9f9f9;{% endif %}">
-                <td style="padding: 10px; border: 1px solid #ddd;">{{ stat.employee_name }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ stat.employee_name|title }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.days_scheduled }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ stat.total_events }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">

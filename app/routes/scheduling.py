@@ -454,6 +454,7 @@ def auto_schedule_supervisor_event(db, Event, Schedule, Employee, core_project_r
             return False, None
 
         # Create schedule for Supervisor event at 12:00 (noon)
+        # Always use the Core event's date — Supervisor must match its paired Core
         from datetime import datetime, time
         supervisor_datetime = datetime.combine(core_date, time(12, 0))  # 12:00 PM
 

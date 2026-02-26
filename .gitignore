@@ -19,6 +19,9 @@ build/
 .env.test
 .env.*.local
 
+# Database files
+instance/*.db
+
 # Sensitive files
 cookies.txt
 login_resp.json
@@ -34,9 +37,13 @@ logs/
 
 # Claude Code
 .claude/
+.mcp.json
 
 # Git worktrees
 .worktrees/
+
+# Backups
+backups/
 
 # OS
 .DS_Store

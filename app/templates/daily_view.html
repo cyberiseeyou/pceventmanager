@@ -102,6 +102,61 @@
   .hidden {
     display: none !important;
   }
+
+  /* Summary bar compact mode */
+  .summary-bar {
+    padding: 12px 16px !important;
+  }
+
+  /* Daily Tab Navigation */
+  .daily-tabs {
+    display: flex;
+    gap: 4px;
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+
+  .daily-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .daily-tab .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  .daily-tab:hover {
+    color: #374151;
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .daily-tab.active {
+    background: white;
+    color: #0071ce;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .daily-tab-panel {
+    display: none;
+  }
+
+  .daily-tab-panel.active {
+    display: block;
+  }
 </style>
 {% endblock %}
 
@@ -149,6 +204,20 @@
         <span class="icon" id="lock-icon"><span class="material-symbols-outlined">lock_open</span></span>
         <span class="btn-text" id="lock-text">Lock Day</span>
       </button>
+
+      <!-- Verify Today Link -->
+      <a href="{{ url_for('dashboard.weekly_validation', start_date=selected_date.strftime('%Y-%m-%d')) }}"
+        class="btn btn-secondary" aria-label="Verify schedule for this day">
+        <span class="icon"><span class="material-symbols-outlined">verified</span></span>
+        <span class="btn-text">Verify Schedule</span>
+      </a>
+
+      <!-- Scan-Out Checklist Link -->
+      <a href="{{ url_for('dashboard.scan_out_checklist', selected_date=selected_date.strftime('%Y-%m-%d')) }}"
+        class="btn btn-secondary" aria-label="Open scan-out checklist for this day">
+        <span class="icon"><span class="material-symbols-outlined">checklist</span></span>
+        <span class="btn-text">Scan-Out Checklist</span>
+      </a>
     </div>
 
     <!-- Role Assignments -->
@@ -158,7 +227,7 @@
         <span class="role-icon" aria-hidden="true"><span class="material-symbols-outlined">blender</span></span>
         <span class="role-label">Juicer:</span>
         {% if juicer and juicer.employee %}
-        <strong class="role-value">{{ juicer.employee.name }}</strong>
+        <strong class="role-value">{{ juicer.employee.name|title }}</strong>
         {% else %}
         <span class="no-assignment">No Juicer assigned</span>
         <a href="{{ url_for('rotations.index') }}" class="link-subtle"
@@ -170,7 +239,7 @@
         <span class="role-icon" aria-hidden="true"><span class="material-symbols-outlined">star</span></span>
         <span class="role-label">Primary Lead Event Specialist:</span>
         {% if primary_lead and primary_lead.employee %}
-        <strong class="role-value">{{ primary_lead.employee.name }}</strong>
+        <strong class="role-value">{{ primary_lead.employee.name|title }}</strong>
         {% else %}
         <span class="no-assignment">No Primary Lead assigned</span>
         <a href="{{ url_for('rotations.index') }}" class="link-subtle"
@@ -182,8 +251,8 @@
 
   <!-- Main Content Area -->
   <main class="daily-view-content" aria-label="Daily schedule content">
-    <!-- Event Type Summary -->
-    <div id="daily-summary" class="dashboard-section">
+    <!-- Compact Event Summary Bar -->
+    <div id="daily-summary" class="dashboard-section summary-bar">
       <!-- JavaScript will populate this -->
       <div class="loading-state" role="status" aria-live="polite">
         <div class="spinner"></div>
@@ -191,64 +260,94 @@
       </div>
     </div>
 
-    <!-- Core Timeslot Coverage -->
-    <div class="dashboard-section">
-      <h3 class="section-title">Core Timeslot Coverage</h3>
-      <div id="timeslot-blocks" class="timeslot-grid">
-        <!-- JavaScript will populate this -->
-        <div class="loading-state" role="status" aria-live="polite">
-          <div class="spinner"></div>
-          <span class="sr-only">Loading timeslots...</span>
+    <!-- Daily Notes Banner (injected by JS) -->
+    <div id="daily-notes-banner"></div>
+
+    <!-- Tabbed Section Navigation -->
+    <div class="daily-tabs" role="tablist" aria-label="Daily schedule sections">
+      <button role="tab" class="daily-tab active" data-tab="events" aria-selected="true" aria-controls="tab-panel-events" id="tab-events">
+        <span class="material-symbols-outlined">event</span> Events
+      </button>
+      <button role="tab" class="daily-tab" data-tab="attendance" aria-selected="false" aria-controls="tab-panel-attendance" id="tab-attendance">
+        <span class="material-symbols-outlined">how_to_reg</span> Attendance
+      </button>
+      <button role="tab" class="daily-tab" data-tab="coverage" aria-selected="false" aria-controls="tab-panel-coverage" id="tab-coverage">
+        <span class="material-symbols-outlined">grid_on</span> Coverage
+      </button>
+    </div>
+
+    <!-- Tab Panels -->
+    <!-- Events Tab -->
+    <div role="tabpanel" id="tab-panel-events" class="daily-tab-panel active" aria-labelledby="tab-events">
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h3 class="section-title">Scheduled Events</h3>
+          <div class="section-controls">
+            <!-- View Toggle -->
+            <div class="view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="view-toggle-btn active" data-view="card" aria-pressed="true">
+                <span class="toggle-icon"><span class="material-symbols-outlined">grid_view</span></span> Card
+              </button>
+              <button type="button" class="view-toggle-btn" data-view="list" aria-pressed="false">
+                <span class="toggle-icon"><span class="material-symbols-outlined">view_list</span></span> List
+              </button>
+            </div>
+            <!-- Employee Filter -->
+            <div class="event-filter">
+              <label for="event-employee-filter" class="filter-label">Employee:</label>
+              <select id="event-employee-filter" class="filter-select">
+                <option value="all">All Employees</option>
+              </select>
+            </div>
+            <!-- Type Filter -->
+            <div class="event-filter">
+              <label for="event-type-filter" class="filter-label">Type:</label>
+              <select id="event-type-filter" class="filter-select">
+                <option value="all">All Types</option>
+                <option value="Juicer">Juicer</option>
+                <option value="Core">Core</option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Freeosk">Freeosk</option>
+                <option value="Digital">Digital</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="event-cards-container" class="event-cards">
+          <!-- JavaScript will populate this -->
+          <div class="loading-state" role="status" aria-live="polite">
+            <div class="spinner"></div>
+            <span class="sr-only">Loading events...</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Employee Attendance Section (Separate from Events) -->
-    <div class="dashboard-section">
-      <h3 class="section-title">Employee Attendance</h3>
-      <div id="attendance-list-container" class="attendance-list">
-        <!-- JavaScript will populate this -->
-        <div class="loading-state" role="status" aria-live="polite">
-          <div class="spinner"></div>
-          <span class="sr-only">Loading attendance...</span>
+    <!-- Attendance Tab -->
+    <div role="tabpanel" id="tab-panel-attendance" class="daily-tab-panel" aria-labelledby="tab-attendance" hidden>
+      <div class="dashboard-section">
+        <h3 class="section-title">Employee Attendance</h3>
+        <div id="attendance-list-container" class="attendance-list">
+          <!-- JavaScript will populate this -->
+          <div class="loading-state" role="status" aria-live="polite">
+            <div class="spinner"></div>
+            <span class="sr-only">Loading attendance...</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Event Cards Section (Story 3.3) -->
-    <div class="dashboard-section">
-      <div class="section-header">
-        <h3 class="section-title">Scheduled Events</h3>
-        <div class="section-controls">
-          <!-- View Toggle -->
-          <div class="view-toggle" role="group" aria-label="View mode">
-            <button type="button" class="view-toggle-btn active" data-view="card" aria-pressed="true">
-              <span class="toggle-icon"><span class="material-symbols-outlined">grid_view</span></span> Card
-            </button>
-            <button type="button" class="view-toggle-btn" data-view="list" aria-pressed="false">
-              <span class="toggle-icon"><span class="material-symbols-outlined">view_list</span></span> List
-            </button>
+    <!-- Coverage Tab -->
+    <div role="tabpanel" id="tab-panel-coverage" class="daily-tab-panel" aria-labelledby="tab-coverage" hidden>
+      <div class="dashboard-section">
+        <h3 class="section-title">Core Timeslot Coverage</h3>
+        <div id="timeslot-blocks" class="timeslot-grid">
+          <!-- JavaScript will populate this -->
+          <div class="loading-state" role="status" aria-live="polite">
+            <div class="spinner"></div>
+            <span class="sr-only">Loading timeslots...</span>
           </div>
-          <!-- Type Filter -->
-          <div class="event-filter">
-            <label for="event-type-filter" class="filter-label">Filter:</label>
-            <select id="event-type-filter" class="filter-select">
-              <option value="all">All Types</option>
-              <option value="Juicer">Juicer</option>
-              <option value="Core">Core</option>
-              <option value="Supervisor">Supervisor</option>
-              <option value="Freeosk">Freeosk</option>
-              <option value="Digital">Digital</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div id="event-cards-container" class="event-cards">
-        <!-- JavaScript will populate this -->
-        <div class="loading-state" role="status" aria-live="polite">
-          <div class="spinner"></div>
-          <span class="sr-only">Loading events...</span>
         </div>
       </div>
     </div>
@@ -372,7 +471,7 @@
           <option value="">Select an employee...</option>
           {% for employee in employees %}
           {% if employee.job_title in ['Club Supervisor', 'Lead Event Specialist'] %}
-          <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.job_title }})</option>
+          <option value="{{ employee.id }}">{{ employee.name|title }} ({{ employee.job_title }})</option>
           {% endif %}
           {% endfor %}
         </select>
@@ -459,6 +558,22 @@
     </form>
   </div>
 </div>
+
+<!-- Call-Off Wizard Modal -->
+<div class="modal-backdrop" id="calloff-wizard-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="calloff-wizard-title">
+  <div class="action-modal" style="max-width: 700px;" role="document">
+    <header>
+      <h2 id="calloff-wizard-title">Manage Events</h2>
+      <button class="modal-close" aria-label="Close call-off wizard" data-action="close-calloff-wizard"><span aria-hidden="true">&times;</span></button>
+    </header>
+    <div id="calloff-wizard-content">
+      <!-- JS will populate -->
+    </div>
+    <footer class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-action="close-calloff-wizard">Close</button>
+    </footer>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -483,6 +598,9 @@ document.addEventListener('click', function(e) {
         case 'close-change-event-type-modal':
             window.dailyView.closeChangeEventTypeModal();
             break;
+        case 'close-calloff-wizard':
+            window.dailyView.closeCallOffWizard();
+            break;
     }
 });
 document.addEventListener('submit', function(e) {
@@ -493,5 +611,41 @@ document.addEventListener('submit', function(e) {
         window.dailyView.submitEventTypeChange();
     }
 });
+
+// Tab switching for daily schedule sections
+document.querySelectorAll('.daily-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+        var targetTab = this.dataset.tab;
+
+        // Update tab buttons
+        document.querySelectorAll('.daily-tab').forEach(function(t) {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
+        this.classList.add('active');
+        this.setAttribute('aria-selected', 'true');
+
+        // Update tab panels
+        document.querySelectorAll('.daily-tab-panel').forEach(function(panel) {
+            panel.classList.remove('active');
+            panel.hidden = true;
+        });
+        var targetPanel = document.getElementById('tab-panel-' + targetTab);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+            targetPanel.hidden = false;
+        }
+
+        // Persist tab preference
+        localStorage.setItem('dailyViewActiveTab', targetTab);
+    });
+});
+
+// Restore persisted tab preference
+var savedTab = localStorage.getItem('dailyViewActiveTab');
+if (savedTab) {
+    var tabBtn = document.querySelector('.daily-tab[data-tab="' + savedTab + '"]');
+    if (tabBtn) tabBtn.click();
+}
 </script>
 {% endblock %}

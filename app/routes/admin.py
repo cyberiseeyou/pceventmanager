@@ -2,7 +2,7 @@
 Admin routes blueprint
 Handles admin operations, sync management, testing, and utility endpoints
 """
-from flask import Blueprint, render_template, request, jsonify, current_app, abort, make_response
+from flask import Blueprint, render_template, request, jsonify, current_app, abort, make_response, redirect, url_for
 from app.models import get_models
 from app.routes.auth import require_authentication
 from app.utils.db_compat import disable_foreign_keys, is_sqlite
@@ -377,8 +377,9 @@ def universal_search():
 
         for event in events:
             # Calculate priority (days until deadline)
-            days_remaining = (event.due_datetime.date() - datetime.now().date()).days
-            if days_remaining <= 1:
+            # due_datetime means work must be done BEFORE that day, so subtract 1
+            days_remaining = (event.due_datetime.date() - datetime.now().date()).days - 1
+            if days_remaining <= 0:
                 priority = 'critical'
                 priority_color = 'red'
             elif days_remaining <= 7:
@@ -2786,17 +2787,9 @@ def generate_daily_paperwork():
 @require_authentication()
 def schedule_verification():
     """
-    Schedule Verification page
-
-    Allows managers to verify schedules for any date and identify potential issues.
-    Runs 8 validation rules to catch scheduling problems proactively.
+    Schedule Verification page - redirects to Weekly Validation
+    which is now the primary verification tool.
     """
-    from datetime import date, timedelta
-
-    # Default to tomorrow
-    tomorrow = date.today() + timedelta(days=1)
-
-    return render_template(
-        'schedule_verification.html',
-        default_date=tomorrow.isoformat()
-    )
+    from datetime import date
+    today = date.today()
+    return redirect(url_for('dashboard.weekly_validation', start_date=today.strftime('%Y-%m-%d')))

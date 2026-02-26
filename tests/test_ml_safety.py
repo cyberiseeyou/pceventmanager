@@ -20,6 +20,10 @@ import os
 from app.services.scheduling_engine import SchedulingEngine
 from app.ml.inference.ml_scheduler_adapter import MLSchedulerAdapter
 
+# Default datetime values for Event construction (NOT NULL fields)
+_EVT_START = datetime(2026, 3, 1, 8, 0, 0)
+_EVT_DUE = datetime(2026, 3, 8, 17, 0, 0)
+
 
 class TestMLDisabledFallback:
     """Test system works correctly with ML disabled"""
@@ -32,7 +36,7 @@ class TestMLDisabledFallback:
 
             # Create test data
             employees = [
-                Employee(name=f'Lead {i}', role='Lead Event Specialist', is_active=True)
+                Employee(id=f'lead_{i}', name=f'Lead {i}', job_title='Lead Event Specialist', is_active=True)
                 for i in range(3)
             ]
             for emp in employees:
@@ -40,7 +44,9 @@ class TestMLDisabledFallback:
             db_session.commit()
 
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(project_name=f'Event {i}', project_ref_num=1000+i, event_type='Core',
+                      start_datetime=_EVT_START + timedelta(days=i), due_datetime=_EVT_DUE + timedelta(days=i),
+                      is_scheduled=False)
                 for i in range(5)
             ]
             for event in events:
@@ -52,22 +58,26 @@ class TestMLDisabledFallback:
                 mock_app.config = {'ML_ENABLED': False}
                 engine = SchedulingEngine(db_session, models)
 
-                # Should work without ML
-                assert engine.ml_adapter is None
+                # Should work without ML — adapter exists but use_ml is False
+                if engine.ml_adapter is not None:
+                    assert engine.ml_adapter.use_ml is False
 
                 # Should still be able to get employees
                 for event in events:
                     leads = engine._get_available_leads(event, datetime.now())
                     assert isinstance(leads, list)
 
-    def test_ml_adapter_none_when_disabled(self, app, db_session, models):
-        """Test that ml_adapter is None when ML is disabled"""
+    def test_ml_adapter_disabled_when_ml_off(self, app, db_session, models):
+        """Test that ml_adapter has use_ml=False when ML is disabled"""
         with app.app_context():
             with patch('app.services.scheduling_engine.current_app') as mock_app:
                 mock_app.config = {'ML_ENABLED': False}
                 engine = SchedulingEngine(db_session, models)
 
-                assert engine.ml_adapter is None
+                if engine.ml_adapter is not None:
+                    assert engine.ml_adapter.use_ml is False
+                else:
+                    assert engine.ml_adapter is None
 
 
 class TestModelLoadingFailure:
@@ -92,12 +102,13 @@ class TestModelLoadingFailure:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -165,8 +176,8 @@ class TestCorruptedModelFallback:
 
             adapter = MLSchedulerAdapter(db_session, models, config)
 
-            # Mock pickle.load to raise exception
-            with patch('pickle.load', side_effect=Exception("Unpickle error")):
+            # Mock joblib.load to raise exception (model uses joblib, not pickle)
+            with patch('app.ml.models.employee_ranker.joblib.load', side_effect=Exception("Unpickle error")):
                 # Force reload
                 adapter._employee_ranker = None
                 model = adapter.employee_ranker
@@ -184,11 +195,12 @@ class TestFeatureExtractionError:
             Employee = models['Employee']
             Event = models['Event']
 
-            employee = Employee(name='Test', role='Specialist', is_active=True)
+            employee = Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)
             db_session.add(employee)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -198,7 +210,7 @@ class TestFeatureExtractionError:
             # Mock feature extraction to raise exception
             with patch.object(
                 adapter.employee_features,
-                'extract_features',
+                'extract',
                 side_effect=Exception("Feature error")
             ):
                 # Should fallback to rule-based ranking
@@ -215,14 +227,15 @@ class TestFeatureExtractionError:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'emp_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(3)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -230,7 +243,7 @@ class TestFeatureExtractionError:
             adapter = MLSchedulerAdapter(db_session, models, config)
 
             # Mock feature extraction to fail for one employee
-            original_extract = adapter.employee_features.extract_features
+            original_extract = adapter.employee_features.extract
             call_count = [0]
 
             def selective_failure(*args, **kwargs):
@@ -241,7 +254,7 @@ class TestFeatureExtractionError:
 
             with patch.object(
                 adapter.employee_features,
-                'extract_features',
+                'extract',
                 side_effect=selective_failure
             ):
                 # Should handle partial failure gracefully
@@ -260,12 +273,13 @@ class TestPredictionExceptionHandling:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -290,12 +304,13 @@ class TestPredictionExceptionHandling:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -323,12 +338,13 @@ class TestLowConfidenceFallback:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -354,12 +370,13 @@ class TestLowConfidenceFallback:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -436,14 +453,15 @@ class TestConstraintValidationUnchanged:
             Event = models['Event']
 
             # Create available and unavailable employees
-            available = Employee(name='Available', role='Specialist', is_active=True)
-            unavailable = Employee(name='Unavailable', role='Specialist', is_active=False)
+            available = Employee(id='avail_emp', name='Available', job_title='Specialist', is_active=True)
+            unavailable = Employee(id='unavail_emp', name='Unavailable', job_title='Specialist', is_active=False)
 
             db_session.add(available)
             db_session.add(unavailable)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -475,7 +493,7 @@ class TestConstraintValidationUnchanged:
                 pytest.skip("EmployeeTimeOff model not available")
 
             # Create employee
-            employee = Employee(name='Test', role='Specialist', is_active=True)
+            employee = Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)
             db_session.add(employee)
             db_session.commit()
 
@@ -484,14 +502,14 @@ class TestConstraintValidationUnchanged:
             time_off = EmployeeTimeOff(
                 employee_id=employee.id,
                 start_date=test_date.date(),
-                end_date=test_date.date(),
-                status='approved'
+                end_date=test_date.date()
             )
             db_session.add(time_off)
             db_session.commit()
 
             # Create event on time-off day
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -516,11 +534,12 @@ class TestConstraintValidationUnchanged:
             Employee = models['Employee']
             Event = models['Event']
 
-            employee = Employee(name='Test', role='Specialist', is_active=True)
+            employee = Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)
             db_session.add(employee)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -548,12 +567,13 @@ class TestSystemResilience:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -568,7 +588,7 @@ class TestSystemResilience:
             # Mock feature extraction to also fail
             with patch.object(
                 adapter.employee_features,
-                'extract_features',
+                'extract',
                 side_effect=Exception("Feature error")
             ):
                 # Should still work (double fallback)
@@ -583,12 +603,13 @@ class TestSystemResilience:
             Employee = models['Employee']
             Event = models['Event']
 
-            employees = [Employee(name='Test', role='Specialist', is_active=True)]
+            employees = [Employee(id='test_emp', name='Test', job_title='Specialist', is_active=True)]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            event = Event(project_name='Test', event_type='Core', is_scheduled=False)
+            event = Event(project_name='Test', project_ref_num=1000, event_type='Core',
+                      start_datetime=_EVT_START, due_datetime=_EVT_DUE, is_scheduled=False)
             db_session.add(event)
             db_session.commit()
 
@@ -596,14 +617,11 @@ class TestSystemResilience:
             adapter = MLSchedulerAdapter(db_session, models, config)
 
             # Mock logger
-            with patch('app.ml.inference.ml_scheduler_adapter.current_app') as mock_app:
-                mock_logger = Mock()
-                mock_app.logger = mock_logger
-
+            with patch('app.ml.inference.ml_scheduler_adapter.logger') as mock_logger:
                 # Force an error
                 with patch.object(adapter, '_ml_rank_employees', side_effect=Exception("Test error")):
                     ranked = adapter.rank_employees(employees, event, datetime.now())
 
-                    # Should have logged the error (if logging is implemented)
-                    # This test documents the expected behavior
+                    # Should have logged the error
+                    mock_logger.error.assert_called()
                     assert len(ranked) > 0

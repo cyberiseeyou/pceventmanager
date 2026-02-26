@@ -2,72 +2,62 @@
 
 ## Target
 
-Review UI/UX structure to ensure it is optimized for usability and ease-of-use, and that the layout follows UI/UX best practices. This is a Flask scheduling webapp (Crossmark employee scheduling) with 108 UI/UX files.
+All uncommitted changes in the flask-schedule-webapp repository — includes code review remediation fixes, ML test repairs, new features (CP-SAT scheduler, fix wizard, constraint modifier, AI tools), CSRF security fixes, and scheduling engine improvements.
 
-## Files
+## Files — Modified (27 production + test files)
 
-### Templates (48 files)
-- `app/templates/base.html` - Master layout template
-- `app/templates/login.html` - Login page (standalone, no base.html)
-- `app/templates/index.html` - Dashboard landing page
-- `app/templates/daily_view.html` - Daily schedule view with inline modal styles
-- `app/templates/calendar.html` - Calendar view
-- `app/templates/schedule.html` - Main schedule page
-- `app/templates/schedule_verification.html` - Verification interface (inline styles)
-- `app/templates/unscheduled.html` - Events view with condition tabs
-- `app/templates/unreported_events.html` - Unreported events
-- `app/templates/auto_scheduler_main.html` - Auto-scheduler interface (inline styles)
-- `app/templates/auto_schedule_review.html` - Review auto-schedule proposals
-- `app/templates/employees.html` - Employee management
-- `app/templates/employees/add.html` - Add employee form
-- `app/templates/employees/import_selection.html` - Import employees
-- `app/templates/attendance.html` - Attendance tracking
-- `app/templates/time_off_requests.html` - Time-off requests
-- `app/templates/shift_blocks.html` - Shift blocks
-- `app/templates/rotations.html` - Rotation assignments
-- `app/templates/event_times.html` - Event times config
-- `app/templates/settings.html` - Settings page
-- `app/templates/printing.html` - PDF reports
-- `app/templates/scheduler_history.html` - Scheduler history
-- `app/templates/employee_analytics.html` - Employee analytics
-- `app/templates/workload_dashboard.html` - Workload analytics
-- `app/templates/api_tester.html` - API testing utility
-- `app/templates/sync_admin.html` - Sync admin
-- `app/templates/dashboard/command_center.html` (27KB)
-- `app/templates/dashboard/daily_validation.html` (57KB)
-- `app/templates/dashboard/weekly_validation.html` (68KB)
-- `app/templates/dashboard/approved_events.html` (73KB)
-- `app/templates/inventory/index.html` (37KB)
-- `app/templates/inventory/orders.html`
-- `app/templates/inventory/order_detail.html`
-- `app/templates/help/` (11 help pages)
-- `app/templates/components/modal_base.html` - Reusable modal macro
-- `app/templates/components/ai_chat_bubble.html` - AI chat widget
-- `app/templates/components/ai_panel.html` - AI panel
-- `app/templates/components/quick_note_widget.html` - Quick notes
-- `app/templates/components/floating_verification_widget.html` - Verification widget
-- `app/templates/auth/loading.html` - Loading state
+### Production Code
+- `app/__init__.py` — localtime filter registration
+- `app/ai/prompts/templates.py` — AI prompt templates
+- `app/ml/inference/ml_scheduler_adapter.py` — ML adapter fallback logic fixes
+- `app/models/schedule.py` — Boolean column defaults
+- `app/routes/api.py` — REST API changes
+- `app/routes/auto_scheduler.py` — Auto-scheduler route refactor
+- `app/routes/dashboard.py` — Dashboard validation routes
+- `app/routes/scheduling.py` — Schedule management
+- `app/services/ai_assistant.py` — AI assistant service
+- `app/services/ai_tools.py` — AI tool definitions (+723 lines)
+- `app/services/constraint_validator.py` — Business rule validation
+- `app/services/cpsat_scheduler.py` — CP-SAT constraint solver (+622 lines)
+- `app/services/database_refresh_service.py` — Database refresh ops
+- `app/services/scheduling_engine.py` — Core scheduling logic, date validation fix
+- `app/services/validation_types.py` — Validation type definitions
+- `app/static/js/components/ai-assistant.js` — AI panel JS, aria-hidden fix
+- `app/static/js/pages/daily-view.js` — CSRF header standardization
+- `app/templates/auto_scheduler_main.html` — CSRF header fix
+- `app/templates/components/ai_panel.html` — AI panel template
+- `app/templates/dashboard/weekly_validation.html` — Dialog role/aria fixes
+- `app/templates/scheduler_history.html` — Scheduler history template
 
-### CSS (23 files)
-- Core: `design-tokens.css`, `style.css`, `responsive.css`
-- Pages: `pages/index.css`, `pages/daily-view.css`, `pages/dashboard.css`, `pages/employees.css`, `pages/auto-schedule-review.css`, `pages/unscheduled.css`, `pages/attendance-calendar.css`, `pages/workload-dashboard.css`
-- Components: `components/modal.css`, `components/schedule-modal.css`, `components/notification-modal.css`, `components/ai-chat.css`
-- Functional: `modals.css`, `login.css`, `validation.css`, `form-validation.css`, `loading.css`, `loading-states.css`, `keyboard-shortcuts.css`, `help.css`
+### New Files
+- `app/services/constraint_modifier.py` — Runtime constraint adjustments
+- `app/services/fix_wizard.py` — Guided schedule issue resolution
+- `app/static/js/pages/fix-wizard.js` — Fix wizard UI (CSRF + error handling)
+- `app/templates/dashboard/fix_wizard.html` — Fix wizard template
+- `app/utils/timezone.py` — Timezone utility (configurable, cached)
+- `migrations/versions/6a96501dd084_add_schedule_outcomes.py` — Migration
 
-### JavaScript (37 files)
-- Core: `main.js`, `csrf_helper.js`, `notifications.js`, `navigation.js`, `search.js`, `user_dropdown.js`, `database-refresh.js`, `login.js`, `loading-progress.js`
-- Utils: `utils/api-client.js`, `utils/debounce.js`, `utils/cache-manager.js`, `utils/loading-state.js`, `utils/focus-trap.js`, `utils/sr-announcer.js`
-- Modules: `modules/focus-trap.js`, `modules/aria-announcer.js`, `modules/state-manager.js`, `modules/toast-notifications.js`, `modules/validation-engine.js`
-- Components: `components/modal.js`, `components/schedule-modal.js`, `components/reschedule-modal.js`, `components/change-employee-modal.js`, `components/notification-modal.js`, `components/trade-modal.js`, `components/conflict-validator.js`, `components/ai-chat.js`, `components/ai-assistant.js`
-- Pages: `pages/daily-view.js`, `pages/daily-view-attendance-methods.js`, `pages/dashboard.js`, `pages/schedule-verification.js`, `pages/schedule-form.js`, `pages/attendance-calendar.js`, `pages/workload-dashboard.js`
-- Standalone: `employees.js`
+### Tests
+- `tests/test_ml_effectiveness.py` — ML effectiveness tests (schema fixes)
+- `tests/test_ml_functional.py` — ML functional tests (schema fixes)
+- `tests/test_ml_performance.py` — ML performance tests (schema fixes)
+- `tests/test_ml_safety.py` — ML safety tests (schema fixes)
+- `tests/test_ml_shadow_mode.py` — ML shadow mode tests (schema fixes)
+- `tests/test_validator.py` — Validator tests
+- `tests/test_cancelled_events.py` — Cancelled events tests (new)
+- `tests/test_cpsat_double_booking.py` — CP-SAT double booking tests (new)
+- `tests/test_fix_wizard.py` — Fix wizard tests (new)
+
+### Config
+- `CLAUDE.md` — Project instructions update
+- `.mcp.json` — MCP server configuration (new)
 
 ## Flags
 
 - Security Focus: no
 - Performance Critical: no
 - Strict Mode: no
-- Framework: Flask/Jinja2 with vanilla JS, CSS custom properties design system
+- Framework: Flask/SQLAlchemy/Jinja2 (auto-detected)
 
 ## Review Phases
 
@@ -76,13 +66,3 @@ Review UI/UX structure to ensure it is optimized for usability and ease-of-use, 
 3. Testing & Documentation
 4. Best Practices & Standards
 5. Consolidated Report
-
-## Key Architectural Observations
-
-- **Design System**: Centralized `design-tokens.css` with CSS custom properties
-- **Template Inheritance**: `base.html` → all content pages
-- **Component Pattern**: Jinja2 macros for reusable modals
-- **Accessibility**: Dedicated ARIA/focus-trap modules
-- **Mixed Patterns**: Some pages use inline CSS (daily_view, auto_scheduler_main, schedule_verification) while most use external files
-- **Large Templates**: Dashboard validation templates are 57-73KB - potential maintainability concern
-- **BEM Naming**: CSS uses BEM convention for components

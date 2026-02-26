@@ -1,10 +1,19 @@
 import pytest
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
+
+def _next_weekday(weekday):
+    """Return a future date for the given weekday (0=Mon, 1=Tue, etc.), at least 7 days out."""
+    today = date.today()
+    future = today + timedelta(days=7)
+    days_ahead = weekday - future.weekday()
+    if days_ahead < 0:
+        days_ahead += 7
+    return future + timedelta(days=days_ahead)
 
 def test_validator_availability(db_session, models):
     """Test availability validation."""
     from app.services.constraint_validator import ConstraintValidator, ConstraintType
-    
+
     validator = ConstraintValidator(db_session, models)
     Employee = models['Employee']
     EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
@@ -14,24 +23,27 @@ def test_validator_availability(db_session, models):
     emp = Employee(id="test_emp", name="Test Emp", job_title="Event Specialist")
     db_session.add(emp)
     db_session.commit() # Commit employee first
-    
+
     # Available on Monday (0), Unavailable on Tuesday (1)
     avail = EmployeeWeeklyAvailability(employee_id=emp.id, monday=True, tuesday=False)
     db_session.add(avail)
-    
+
+    # Use future dates to avoid past-date validation
+    future_monday = _next_weekday(0)  # Monday
+    future_tuesday = future_monday + timedelta(days=1)  # Tuesday
     event = Event(project_ref_num=999, project_name="Test Event", event_type="Core", estimated_time=60)
-    event.start_datetime = datetime(2026, 1, 1) # Past date
-    event.due_datetime = datetime(2026, 1, 10) # Future date
+    event.start_datetime = datetime.combine(future_monday - timedelta(days=7), time(0, 0))
+    event.due_datetime = datetime.combine(future_tuesday + timedelta(days=7), time(0, 0))
     db_session.add(event)
     db_session.commit()
 
-    # Test Monday (2026-01-05 is a Monday)
-    monday = datetime(2026, 1, 5, 10, 0)
+    # Test Monday - employee is available
+    monday = datetime.combine(future_monday, time(10, 0))
     result = validator.validate_assignment(event, emp, monday)
     assert result.is_valid is True
 
-    # Test Tuesday (2026-01-06 is a Tuesday)
-    tuesday = datetime(2026, 1, 6, 10, 0)
+    # Test Tuesday - employee is NOT available
+    tuesday = datetime.combine(future_tuesday, time(10, 0))
     result = validator.validate_assignment(event, emp, tuesday)
     assert result.is_valid is False
     assert len(result.violations) == 1

@@ -135,6 +135,34 @@
         </div>
     </div>
 
+    <!-- Scan-Out Checklist Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background-color: #e91e63;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-check"></i> Scan-Out Checklist
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Compact event list for end-of-day Walmart scan-out. Shows event numbers, product names, and checkboxes.</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="scanout-date" class="form-label">Select Date</label>
+                            <input type="date" class="form-control" id="scanout-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a id="scanout-link" href="{{ url_for('dashboard.scan_out_checklist') }}" class="btn text-white" style="background-color: #e91e63;" target="_blank">
+                            <i class="fas fa-clipboard-check"></i> Open Scan-Out Checklist
+                        </a>
+                        <small class="text-muted ms-2">Opens in new tab for printing</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Weekly & Employee Schedules Section -->
     <div class="row mb-4">
         <div class="col-md-6 mb-3">
@@ -713,6 +741,13 @@
         document.getElementById('instructions-batch-date').value = today;
         document.getElementById('edr-batch-date').value = today;
         document.getElementById('item-list-date').value = today;
+        document.getElementById('scanout-date').value = today;
+
+        // Update scan-out link when date changes
+        document.getElementById('scanout-date').addEventListener('change', function() {
+            const link = document.getElementById('scanout-link');
+            link.href = '/dashboard/scan-out-checklist/' + this.value;
+        });
 
         // Set default date for Freeosk manual test to upcoming Friday
         const freeoskDateInput = document.getElementById('freeosk-manual-date');
@@ -846,7 +881,7 @@
             events.forEach(event => {
                 tableHTML += `
                 <tr>
-                    <td>${event.employee_name}</td>
+                    <td>${toTitleCase(event.employee_name)}</td>
                     <td>${event.time}</td>
                     <td>${event.event_name}</td>
                 </tr>
@@ -1131,7 +1166,7 @@
                     <div class="day-content">
                         ${day.events.length > 0 ? day.events.map(event => `
                             <div class="event-entry">
-                                <div class="employee-name">${event.employee_name}</div>
+                                <div class="employee-name">${toTitleCase(event.employee_name)}</div>
                                 <div class="event-time">${event.time}</div>
                             </div>
                         `).join('') : '<div class="no-events">No events scheduled</div>'}
@@ -1363,7 +1398,7 @@
                         <div class="day-content">
                             ${day.events.length > 0 ? day.events.map(event => `
                                 <div class="event-entry">
-                                    <div class="employee-name">${event.employee_name}</div>
+                                    <div class="employee-name">${toTitleCase(event.employee_name)}</div>
                                     <div class="event-time">${event.time}</div>
                                 </div>
                             `).join('') : '<div class="no-events">No events scheduled</div>'}
@@ -1403,7 +1438,7 @@
                         <div class="day-content">
                             ${day.events.length > 0 ? day.events.map(event => `
                                 <div class="event-entry">
-                                    <div class="employee-name">${event.employee_name}</div>
+                                    <div class="employee-name">${toTitleCase(event.employee_name)}</div>
                                     <div class="event-time">${event.time}</div>
                                 </div>
                             `).join('') : '<div class="no-events">Continued from page 1</div>'}
@@ -1435,7 +1470,7 @@
                     data.employees.forEach(emp => {
                         const option = document.createElement('option');
                         option.value = emp.id;
-                        option.textContent = emp.name;
+                        option.textContent = toTitleCase(emp.name);
                         select.appendChild(option);
                     });
                 }
@@ -1561,7 +1596,7 @@
                 <div class="header-left">
                     <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
                     <div class="header-text">
-                        <h1 class="employee-name">${data.employee_name}</h1>
+                        <h1 class="employee-name">${toTitleCase(data.employee_name)}</h1>
                         <h2 class="title">Bi-Weekly Schedule</h2>
                         <p class="date-range">${data.formatted_range}</p>
                     </div>
@@ -1808,7 +1843,7 @@
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Employee Schedule - ${data.employee_name}</title>
+        <title>Employee Schedule - ${toTitleCase(data.employee_name)}</title>
         <style>
             @page {
                 size: landscape;
@@ -1977,7 +2012,7 @@
             <div class="header-left">
                 <img src="/static/img/PC-Logo_Primary_Full-Color-1024x251.png" alt="Product Connections" class="logo-img">
                 <div class="header-text">
-                    <h1 class="employee-name">${data.employee_name}</h1>
+                    <h1 class="employee-name">${toTitleCase(data.employee_name)}</h1>
                     <h2 class="title">Bi-Weekly Schedule</h2>
                     <p class="date-range">${data.formatted_range}</p>
                 </div>
@@ -2370,12 +2405,17 @@
         fetch('/printing/edr/request-mfa', {
             method: 'POST'
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().catch(() => ({ success: false, error: `Server returned ${response.status} ${response.statusText}` }));
+                }
+                return response.json();
+            })
             .then(data => {
                 hideLoading();
 
                 if (!data.success) {
-                    alert(data.error || 'Failed to request MFA code');
+                    alert('EDR Authentication Error\n\n' + (data.error || 'Failed to request MFA code') + '\n\nCheck Settings page for Walmart credentials.');
                     return;
                 }
 
@@ -2915,7 +2955,7 @@
         const eventList = cancelledEvents.map(e =>
             `<li class="cancelled-event-item">
                 <strong>${e.event_number}</strong>: ${e.event_name}
-                <br><small>Assigned to: ${e.employee_name}</small>
+                <br><small>Assigned to: ${toTitleCase(e.employee_name)}</small>
                 <br><small>EDR Status: <span class="text-danger">${e.edr_status}</span></small>
             </li>`
         ).join('');
@@ -3194,7 +3234,7 @@
             <tbody>
                 ${printableEvents.map(event => `
                     <tr>
-                        <td class="employee-name">${event.employee_name}</td>
+                        <td class="employee-name">${toTitleCase(event.employee_name)}</td>
                         <td class="event-time">${event.time}</td>
                         <td class="event-name">${event.event_name}</td>
                     </tr>

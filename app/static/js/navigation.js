@@ -1,14 +1,16 @@
 /**
  * Navigation Manager
- * Handles dropdown menus and mobile hamburger menu
+ * Handles sidebar toggle, overlay, and keyboard navigation
  */
 
 class NavigationManager {
     constructor() {
         this.hamburgerBtn = document.getElementById('hamburgerBtn');
-        this.navLinks = document.getElementById('navLinks');
-        this.navDropdowns = document.querySelectorAll('.nav-dropdown');
-        this.isMobileMenuOpen = false;
+        this.sidebar = document.getElementById('sidebar');
+        this.sidebarOverlay = document.getElementById('sidebarOverlay');
+        this.sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+        this.sidebarRefreshBtn = document.getElementById('sidebarRefreshBtn');
+        this.isSidebarOpen = false;
 
         this.init();
     }
@@ -16,127 +18,75 @@ class NavigationManager {
     init() {
         // Hamburger menu toggle
         if (this.hamburgerBtn) {
-            this.hamburgerBtn.addEventListener('click', () => this.toggleMobileMenu());
+            this.hamburgerBtn.addEventListener('click', () => this.toggleSidebar());
         }
 
-        // Mobile nav close button (FLAW-014)
-        const navCloseBtn = document.getElementById('navCloseBtn');
-        if (navCloseBtn) {
-            navCloseBtn.addEventListener('click', () => this.closeMobileMenu());
+        // Sidebar close button
+        if (this.sidebarCloseBtn) {
+            this.sidebarCloseBtn.addEventListener('click', () => this.closeSidebar());
         }
 
-        // Desktop dropdown toggles - click only (no hover)
-        this.navDropdowns.forEach(dropdown => {
-            const toggle = dropdown.querySelector('.nav-dropdown-toggle');
-            const menu = dropdown.querySelector('.nav-dropdown-menu');
+        // Overlay click closes sidebar
+        if (this.sidebarOverlay) {
+            this.sidebarOverlay.addEventListener('click', () => this.closeSidebar());
+        }
 
-            // Click to toggle (no hover - click only)
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleDropdown(dropdown);
-            });
-        });
-
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.nav-dropdown')) {
-                this.closeAllDropdowns();
-            }
-        });
-
-        // Close mobile menu when clicking nav link
-        const navLinksElements = document.querySelectorAll('.nav-link:not(.nav-dropdown-toggle), .nav-dropdown-item');
-        navLinksElements.forEach(link => {
-            link.addEventListener('click', () => {
-                if (this.isMobileMenuOpen) {
-                    this.closeMobileMenu();
+        // Sidebar refresh database button triggers the same modal
+        if (this.sidebarRefreshBtn) {
+            this.sidebarRefreshBtn.addEventListener('click', () => {
+                this.closeSidebar();
+                const refreshBtn = document.getElementById('refreshDatabaseBtn');
+                if (refreshBtn) {
+                    refreshBtn.click();
                 }
             });
-        });
+        }
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if (window.innerWidth >= 768 && this.isMobileMenuOpen) {
-                this.closeMobileMenu();
-            }
-        });
+        // Close sidebar when clicking a nav link
+        if (this.sidebar) {
+            this.sidebar.querySelectorAll('a.sidebar-item').forEach(link => {
+                link.addEventListener('click', () => {
+                    this.closeSidebar();
+                });
+            });
+        }
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeAllDropdowns();
-                if (this.isMobileMenuOpen) {
-                    this.closeMobileMenu();
-                }
+            if (e.key === 'Escape' && this.isSidebarOpen) {
+                this.closeSidebar();
             }
         });
     }
 
-    toggleMobileMenu() {
-        if (this.isMobileMenuOpen) {
-            this.closeMobileMenu();
+    toggleSidebar() {
+        if (this.isSidebarOpen) {
+            this.closeSidebar();
         } else {
-            this.openMobileMenu();
+            this.openSidebar();
         }
     }
 
-    openMobileMenu() {
-        this.navLinks.classList.add('nav-links--open');
-        this.hamburgerBtn.classList.add('hamburger-menu--open');
-        this.hamburgerBtn.setAttribute('aria-expanded', 'true');
-        this.isMobileMenuOpen = true;
-
-        // Prevent body scroll
+    openSidebar() {
+        if (this.sidebar) this.sidebar.classList.add('open');
+        if (this.sidebarOverlay) this.sidebarOverlay.classList.add('active');
+        if (this.hamburgerBtn) {
+            this.hamburgerBtn.classList.add('hamburger-menu--open');
+            this.hamburgerBtn.setAttribute('aria-expanded', 'true');
+        }
+        this.isSidebarOpen = true;
         document.body.style.overflow = 'hidden';
     }
 
-    closeMobileMenu() {
-        this.navLinks.classList.remove('nav-links--open');
-        this.hamburgerBtn.classList.remove('hamburger-menu--open');
-        this.hamburgerBtn.setAttribute('aria-expanded', 'false');
-        this.isMobileMenuOpen = false;
-
-        // Restore body scroll
-        document.body.style.overflow = '';
-
-        // Close all dropdowns
-        this.closeAllDropdowns();
-    }
-
-    toggleDropdown(dropdown) {
-        const isOpen = dropdown.classList.contains('nav-dropdown--open');
-
-        // Close all other dropdowns
-        this.closeAllDropdowns();
-
-        // Toggle this dropdown
-        if (!isOpen) {
-            this.openDropdown(dropdown);
+    closeSidebar() {
+        if (this.sidebar) this.sidebar.classList.remove('open');
+        if (this.sidebarOverlay) this.sidebarOverlay.classList.remove('active');
+        if (this.hamburgerBtn) {
+            this.hamburgerBtn.classList.remove('hamburger-menu--open');
+            this.hamburgerBtn.setAttribute('aria-expanded', 'false');
         }
-    }
-
-    openDropdown(dropdown) {
-        dropdown.classList.add('nav-dropdown--open');
-        const toggle = dropdown.querySelector('.nav-dropdown-toggle');
-        const menu = dropdown.querySelector('.nav-dropdown-menu');
-
-        toggle.setAttribute('aria-expanded', 'true');
-        menu.hidden = false;
-    }
-
-    closeDropdown(dropdown) {
-        dropdown.classList.remove('nav-dropdown--open');
-        const toggle = dropdown.querySelector('.nav-dropdown-toggle');
-        const menu = dropdown.querySelector('.nav-dropdown-menu');
-
-        toggle.setAttribute('aria-expanded', 'false');
-        menu.hidden = true;
-    }
-
-    closeAllDropdowns() {
-        this.navDropdowns.forEach(dropdown => {
-            this.closeDropdown(dropdown);
-        });
+        this.isSidebarOpen = false;
+        document.body.style.overflow = '';
     }
 }
 

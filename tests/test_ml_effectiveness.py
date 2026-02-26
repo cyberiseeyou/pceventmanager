@@ -29,10 +29,10 @@ class TestBaselineMetrics:
 
             # Create test data
             employees = [
-                Employee(name=f'Lead {i}', role='Lead Event Specialist', is_active=True)
+                Employee(id=f'lead_{i}', name=f'Lead {i}', job_title='Lead Event Specialist', is_active=True)
                 for i in range(3)
             ] + [
-                Employee(name=f'Spec {i}', role='Specialist', is_active=True)
+                Employee(id=f'spec_{i}', name=f'Spec {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
@@ -41,10 +41,13 @@ class TestBaselineMetrics:
 
             events = [
                 Event(
+                    project_ref_num=1000 + i,
                     project_name=f'Event {i}',
                     event_type='Core',
                     is_scheduled=False,
-                    time_to_complete=2.0
+                    estimated_time=120,
+                    start_datetime=datetime.now() + timedelta(days=1),
+                    due_datetime=datetime.now() + timedelta(days=14)
                 )
                 for i in range(20)
             ]
@@ -81,28 +84,40 @@ class TestBaselineMetrics:
         """Test collecting baseline workload balance"""
         with app.app_context():
             Employee = models['Employee']
+            Event = models['Event']
             Schedule = models['Schedule']
 
             # Create employees
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'emp_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
                 db_session.add(emp)
             db_session.commit()
 
-            # Simulate some schedules
+            # Create events to reference from schedules
             base_date = datetime.now()
+            event_ref_counter = 2000
             for i, emp in enumerate(employees[:5]):
                 # Give some employees more events than others
                 num_events = (i % 3) + 1  # 1-3 events per employee
                 for j in range(num_events):
+                    ref_num = event_ref_counter
+                    event_ref_counter += 1
+                    event = Event(
+                        project_ref_num=ref_num,
+                        project_name=f'Workload Event {ref_num}',
+                        event_type='Core',
+                        start_datetime=base_date + timedelta(days=j),
+                        due_datetime=base_date + timedelta(days=j + 7)
+                    )
+                    db_session.add(event)
+                    db_session.flush()
                     schedule = Schedule(
-                        event_id=None,  # Mock
+                        event_ref_num=ref_num,
                         employee_id=emp.id,
-                        scheduled_datetime=base_date + timedelta(days=j),
-                        status='confirmed'
+                        schedule_datetime=base_date + timedelta(days=j)
                     )
                     db_session.add(schedule)
             db_session.commit()
@@ -142,10 +157,10 @@ class TestMLEnabledMetrics:
 
             # Create test data
             employees = [
-                Employee(name=f'Lead {i}', role='Lead Event Specialist', is_active=True)
+                Employee(id=f'lead_{i}', name=f'Lead {i}', job_title='Lead Event Specialist', is_active=True)
                 for i in range(3)
             ] + [
-                Employee(name=f'Spec {i}', role='Specialist', is_active=True)
+                Employee(id=f'spec_{i}', name=f'Spec {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
@@ -154,10 +169,13 @@ class TestMLEnabledMetrics:
 
             events = [
                 Event(
-                    project_name=f'Event {i}',
+                    project_ref_num=3000 + i,
+                    project_name=f'ML Event {i}',
                     event_type='Core',
                     is_scheduled=False,
-                    time_to_complete=2.0
+                    estimated_time=120,
+                    start_datetime=datetime.now() + timedelta(days=1),
+                    due_datetime=datetime.now() + timedelta(days=14)
                 )
                 for i in range(20)
             ]
@@ -206,7 +224,7 @@ class TestSuccessRateImprovement:
 
             # Create test data
             employees = [
-                Employee(name=f'Employee {i}', role='Lead Event Specialist', is_active=True)
+                Employee(id=f'emp_{i}', name=f'Employee {i}', job_title='Lead Event Specialist', is_active=True)
                 for i in range(5)
             ]
             for emp in employees:
@@ -214,7 +232,14 @@ class TestSuccessRateImprovement:
             db_session.commit()
 
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(
+                    project_ref_num=4000 + i,
+                    project_name=f'Compare Event {i}',
+                    event_type='Core',
+                    is_scheduled=False,
+                    start_datetime=datetime.now() + timedelta(days=1),
+                    due_datetime=datetime.now() + timedelta(days=14)
+                )
                 for i in range(10)
             ]
             for event in events:
@@ -267,7 +292,7 @@ class TestWorkloadBalanceImprovement:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'emp_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(10)
             ]
             for emp in employees:
@@ -275,7 +300,14 @@ class TestWorkloadBalanceImprovement:
             db_session.commit()
 
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(
+                    project_ref_num=5000 + i,
+                    project_name=f'Workload Dist Event {i}',
+                    event_type='Core',
+                    is_scheduled=False,
+                    start_datetime=datetime.now() + timedelta(days=1),
+                    due_datetime=datetime.now() + timedelta(days=14)
+                )
                 for i in range(20)
             ]
             for event in events:
@@ -361,7 +393,7 @@ class TestStatisticalSignificance:
             Event = models['Event']
 
             employees = [
-                Employee(name=f'Employee {i}', role='Specialist', is_active=True)
+                Employee(id=f'emp_{i}', name=f'Employee {i}', job_title='Specialist', is_active=True)
                 for i in range(5)
             ]
             for emp in employees:
@@ -369,7 +401,14 @@ class TestStatisticalSignificance:
             db_session.commit()
 
             events = [
-                Event(project_name=f'Event {i}', event_type='Core', is_scheduled=False)
+                Event(
+                    project_ref_num=6000 + i,
+                    project_name=f'Regression Event {i}',
+                    event_type='Core',
+                    is_scheduled=False,
+                    start_datetime=datetime.now() + timedelta(days=1),
+                    due_datetime=datetime.now() + timedelta(days=14)
+                )
                 for i in range(10)
             ]
             for event in events:
@@ -420,6 +459,7 @@ class TestMetricsTracking:
 
             # Create test run history
             run = SchedulerRunHistory(
+                run_type='manual',
                 started_at=datetime.now() - timedelta(minutes=5),
                 completed_at=datetime.now(),
                 total_events_processed=50,

@@ -1,6 +1,14 @@
 // static/js/pages/daily-view.js
 
 /**
+ * Convert a string to Title Case for consistent name display
+ */
+function toTitleCase(text) {
+    if (text == null) return '';
+    return String(text).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
  * Daily View Page Controller
  *
  * Manages daily schedule view including summary, timeslots, and event cards.
@@ -28,8 +36,9 @@ class DailyView {
         this.eventsContainer = document.getElementById('event-cards-container');  // NEW for Story 3.3
         this.attendanceContainer = document.getElementById('attendance-list-container');  // NEW for attendance
         this.typeFilter = document.getElementById('event-type-filter');  // Type filter dropdown
+        this.employeeFilter = document.getElementById('event-employee-filter');  // Employee filter dropdown
         this.allEvents = [];  // Store all events for filtering
-        this.viewMode = 'card';  // 'card' or 'list' - default to card view
+        this.viewMode = localStorage.getItem('dailyViewMode') || 'list';  // default to list view, persist preference
         this.init();
     }
 
@@ -41,9 +50,11 @@ class DailyView {
             this.loadDailySummary(),   // From Story 3.2
             this.loadAttendance(),     // For attendance
             this.loadDailyEvents(),    // From Story 3.3
-            this.checkLockStatus()     // Check if day is locked
+            this.checkLockStatus(),    // Check if day is locked
+            this.loadDailyNotes()      // Load contextual notes for this date
         ]);
         this.setupTypeFilter();        // Setup filter listener
+        this.setupEmployeeFilter();   // Setup employee filter listener
         this.setupViewToggle();        // Setup view mode toggle
         this.setupLockButton();        // Setup lock/unlock button
         this.setupKeyboardShortcuts(); // Setup keyboard navigation
@@ -61,15 +72,69 @@ class DailyView {
     }
 
     /**
+     * Setup employee filter event listener
+     */
+    setupEmployeeFilter() {
+        if (this.employeeFilter) {
+            this.employeeFilter.addEventListener('change', () => {
+                this.filterAndRenderEvents();
+            });
+        }
+    }
+
+    /**
+     * Populate employee filter dropdown from loaded events
+     */
+    populateEmployeeFilter() {
+        if (!this.employeeFilter) return;
+
+        // Extract unique employees from events
+        const employeeMap = new Map();
+        this.allEvents.forEach(event => {
+            if (event.employee_id && event.employee_name) {
+                employeeMap.set(event.employee_id, event.employee_name);
+            }
+        });
+
+        // Sort by name
+        const employees = Array.from(employeeMap.entries())
+            .sort((a, b) => a[1].localeCompare(b[1]));
+
+        // Rebuild options keeping current selection
+        const currentValue = this.employeeFilter.value;
+        this.employeeFilter.innerHTML = '<option value="all">All Employees</option>';
+        employees.forEach(([id, name]) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = toTitleCase(name);
+            this.employeeFilter.appendChild(option);
+        });
+
+        // Restore selection if still valid
+        if (currentValue !== 'all' && employeeMap.has(currentValue)) {
+            this.employeeFilter.value = currentValue;
+        }
+    }
+
+    /**
      * Setup view toggle button listeners
      */
     setupViewToggle() {
         const toggleButtons = document.querySelectorAll('.view-toggle-btn');
+
+        // Set initial active state from persisted preference
+        toggleButtons.forEach(b => {
+            const isActive = b.getAttribute('data-view') === this.viewMode;
+            b.classList.toggle('active', isActive);
+            b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
         toggleButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const newView = e.currentTarget.getAttribute('data-view');
                 if (newView !== this.viewMode) {
                     this.viewMode = newView;
+                    localStorage.setItem('dailyViewMode', newView);
                     // Update button states
                     toggleButtons.forEach(b => {
                         const isActive = b.getAttribute('data-view') === newView;
@@ -106,14 +171,18 @@ class DailyView {
      */
     filterAndRenderEvents() {
         const selectedType = this.typeFilter ? this.typeFilter.value : 'all';
+        const selectedEmployee = this.employeeFilter ? this.employeeFilter.value : 'all';
         let filteredEvents = this.allEvents;
 
         if (selectedType !== 'all') {
-            // Filter by category - matches all event types in that category
-            filteredEvents = this.allEvents.filter(event => {
+            filteredEvents = filteredEvents.filter(event => {
                 const category = this.getEventTypeCategory(event.event_type);
                 return category === selectedType;
             });
+        }
+
+        if (selectedEmployee !== 'all') {
+            filteredEvents = filteredEvents.filter(event => event.employee_id === selectedEmployee);
         }
 
         // Render based on view mode
@@ -646,6 +715,11 @@ class DailyView {
             if (response.ok && data.success) {
                 this.showNotification(`Attendance recorded: ${data.attendance.status_label}`, 'success');
                 await this.loadAttendance();  // Reload attendance list
+
+                // Trigger Call-Off Wizard for absence statuses
+                if (status === 'called_in' || status === 'no_call_no_show') {
+                    this.showCallOffWizard(employeeId, status);
+                }
             } else {
                 throw new Error(data.error || 'Failed to record attendance');
             }
@@ -736,10 +810,64 @@ class DailyView {
 
             const data = await response.json();
             this.allEvents = data.events;  // Store for filtering
+            this.populateEmployeeFilter(); // Populate employee dropdown
             this.filterAndRenderEvents();  // Render with current filter
         } catch (error) {
             console.error('Failed to load daily events:', error);
             this.showEventsError('Failed to load events. Please refresh the page.');
+        }
+    }
+
+    /**
+     * Load contextual notes for today's events and employees
+     */
+    async loadDailyNotes() {
+        try {
+            const response = await fetch(`/api/daily-notes/${this.date}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data.success && data.count > 0) {
+                this.renderNotesBanner(data.notes);
+            }
+        } catch (error) {
+            console.error('Failed to load daily notes:', error);
+        }
+    }
+
+    renderNotesBanner(notes) {
+        const banner = document.createElement('div');
+        banner.className = 'daily-notes-banner';
+        banner.style.cssText = 'background: linear-gradient(135deg, #fefce8, #fef9c3); border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; cursor: pointer;';
+        header.innerHTML = `<span style="font-weight: 600; font-size: 14px; color: #92400e;">📝 ${notes.length} note${notes.length !== 1 ? 's' : ''} for today</span><span style="color: #92400e; font-size: 12px;">Click to expand</span>`;
+
+        const list = document.createElement('div');
+        list.style.cssText = 'display: none; margin-top: 8px; border-top: 1px solid #fde68a; padding-top: 8px;';
+
+        notes.forEach(function(note) {
+            var item = document.createElement('div');
+            item.style.cssText = 'padding: 6px 0; font-size: 13px; border-bottom: 1px solid #fef3c7;';
+            var linked = '';
+            if (note.linked_event_ref_num) linked += ' <span style="color:#6b7280;">📋 Event #' + note.linked_event_ref_num + '</span>';
+            if (note.linked_employee_id) linked += ' <span style="color:#6b7280;">👤 ' + note.linked_employee_id + '</span>';
+            item.innerHTML = '<strong>' + escapeHtml(note.title) + '</strong>' + linked +
+                (note.content ? '<div style="color:#78716c; font-size:12px; margin-top:2px;">' + escapeHtml(note.content) + '</div>' : '');
+            list.appendChild(item);
+        });
+
+        header.addEventListener('click', function() {
+            list.style.display = list.style.display === 'none' ? '' : 'none';
+        });
+
+        banner.appendChild(header);
+        banner.appendChild(list);
+
+        // Insert before the events section
+        var eventsSection = this.eventsContainer;
+        if (eventsSection && eventsSection.parentNode) {
+            eventsSection.parentNode.insertBefore(banner, eventsSection);
         }
     }
 
@@ -1052,8 +1180,8 @@ class DailyView {
                  data-event-name="${this.escapeHtml(event.event_name)}">
                 <div class="event-list-row__time">${event.start_time}</div>
                 <div class="event-list-row__name" title="${this.escapeHtml(event.event_name)}">${event.event_name}</div>
-                <div class="event-list-row__employee">${event.employee_name}</div>
-                <div class="event-list-row__type">${event.event_type}</div>
+                <div class="event-list-row__employee">${toTitleCase(event.employee_name)}</div>
+                <div class="event-list-row__type">${event.event_type} ${this.getUrgencyBadge(event)}</div>
                 <div class="event-list-row__actions">
                     <button class="btn btn-primary btn-sm btn-reschedule-list"
                             data-schedule-id="${event.schedule_id}"
@@ -1089,6 +1217,35 @@ class DailyView {
     }
 
     /**
+     * Get urgency badge HTML based on days remaining until event due date
+     *
+     * @param {Object} event - Event object with due_datetime (YYYY-MM-DD)
+     * @returns {string} HTML string for urgency badge, or empty string
+     */
+    getUrgencyBadge(event) {
+        if (!event.due_datetime) return '';
+
+        const today = new Date(this.date || new Date().toISOString().split('T')[0]);
+        const dueDate = new Date(event.due_datetime);
+        const diffMs = dueDate - today;
+        // due_datetime means work must be completed BEFORE that day,
+        // so subtract 1: if due 2/22 and today is 2/21, that's due today
+        const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24)) - 1;
+
+        if (daysRemaining < 0) {
+            return '<span class="badge-urgency badge-urgency--critical">OVERDUE</span>';
+        } else if (daysRemaining === 0) {
+            return '<span class="badge-urgency badge-urgency--critical">DUE TODAY</span>';
+        } else if (daysRemaining === 1) {
+            return '<span class="badge-urgency badge-urgency--high">1 DAY LEFT</span>';
+        } else if (daysRemaining <= 3) {
+            return `<span class="badge-urgency badge-urgency--medium">${daysRemaining} DAYS LEFT</span>`;
+        } else {
+            return `<span class="badge-urgency badge-urgency--low">${daysRemaining} DAYS LEFT</span>`;
+        }
+    }
+
+    /**
      * Create HTML for a single event card
      *
      * @param {Object} event - Event object from API
@@ -1099,6 +1256,7 @@ class DailyView {
         const isCancelled = event.is_cancelled || event.reporting_status === 'cancelled';
         const statusBadge = this.getStatusBadge(event.reporting_status, isCancelled);
         const overdueBadge = event.is_overdue ? '<span class="badge-overdue"><span class="material-symbols-outlined">warning</span> OVERDUE</span>' : '';
+        const urgencyBadge = this.getUrgencyBadge(event);
         const salesToolLink = event.sales_tool_url
             ? `<a href="${event.sales_tool_url}"
                    target="_blank"
@@ -1137,8 +1295,9 @@ class DailyView {
                     <h3 class="employee-name" id="${cardId}-title">
                         <span class="material-symbols-outlined" aria-hidden="true">person</span>
                         <span class="sr-only">Assigned to </span>
-                        ${event.employee_name.toUpperCase()}
+                        ${toTitleCase(event.employee_name)}
                     </h3>
+                    ${urgencyBadge}
                     ${overdueBadge}
                 </header>
 
@@ -1262,7 +1421,7 @@ class DailyView {
     getStatusBadge(status, isCancelled = false) {
         // Support both the new reporting_status='cancelled' and legacy is_cancelled flag
         if (status === 'cancelled' || isCancelled) {
-            return '<span class="status-badge status-cancelled">🔴 CANCELLED (EDR)</span>';
+            return '<span class="status-badge status-cancelled">🔴 CANCELLED</span>';
         }
 
         const badges = {
@@ -1793,7 +1952,7 @@ class DailyView {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
+                    'X-CSRF-Token': csrfToken
                 },
                 body: JSON.stringify({
                     date: dateToUse,
@@ -2164,7 +2323,7 @@ class DailyView {
                 {
                     method: 'GET',
                     headers: {
-                        'X-CSRFToken': this.getCsrfToken()
+                        'X-CSRF-Token': this.getCsrfToken()
                     }
                 }
             );
@@ -2266,7 +2425,7 @@ class DailyView {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCsrfToken()
+                    'X-CSRF-Token': this.getCsrfToken()
                 },
                 body: JSON.stringify({
                     new_employee_id: newEmployeeId,
@@ -2852,7 +3011,7 @@ class DailyView {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCsrfToken()
+                    'X-CSRF-Token': this.getCsrfToken()
                 },
                 body: JSON.stringify({
                     schedule_1_id: schedule1Id,
@@ -2996,7 +3155,7 @@ class DailyView {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCsrfToken()
+                    'X-CSRF-Token': this.getCsrfToken()
                 }
             });
 
@@ -3779,6 +3938,154 @@ class DailyView {
         if (firstButton) {
             firstButton.focus();
         }
+    }
+
+    /* ===================================================================
+       Call-Off Wizard - Manages absent employee's events (Feature 3.3)
+       =================================================================== */
+
+    /**
+     * Show the Call-Off Wizard for managing an absent employee's events.
+     *
+     * Triggered when an employee is marked as "Called-In" or "No-Call-No-Show".
+     * Displays a modal with each of the employee's scheduled events and provides
+     * Reassign, Reschedule, and Unschedule actions for each.
+     *
+     * @param {number} employeeId - Employee ID
+     * @param {string} status - Attendance status ('called_in' or 'no_call_no_show')
+     */
+    async showCallOffWizard(employeeId, status) {
+        // Find this employee's events from loaded data
+        const employeeEvents = this.allEvents.filter(e => e.employee_id === employeeId);
+
+        if (employeeEvents.length === 0) {
+            this.showNotification('No events found for this employee today.', 'info');
+            return;
+        }
+
+        const employeeName = toTitleCase(employeeEvents[0].employee_name);
+        const statusLabel = status === 'called_in' ? 'Called-In' : 'No-Call-No-Show';
+
+        const modal = document.getElementById('calloff-wizard-modal');
+        const title = document.getElementById('calloff-wizard-title');
+        const content = document.getElementById('calloff-wizard-content');
+
+        title.textContent = `Manage ${employeeName}'s Events`;
+
+        // Build event list with actions
+        let html = `
+            <div class="calloff-wizard-info" style="background: #FEF3C7; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <strong>${this.escapeHtml(employeeName)}</strong> marked as <strong>${statusLabel}</strong>.
+                They have <strong>${employeeEvents.length} event${employeeEvents.length > 1 ? 's' : ''}</strong> scheduled today.
+            </div>
+            <div class="calloff-wizard-events">
+        `;
+
+        employeeEvents.forEach(event => {
+            const urgencyBadge = this.getUrgencyBadge(event);
+            html += `
+                <div class="calloff-event-row" id="calloff-event-${event.schedule_id}"
+                     style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong>${this.escapeHtml(event.event_name)}</strong>
+                        ${urgencyBadge}
+                    </div>
+                    <div style="color: #666; font-size: 13px; margin-bottom: 8px;">
+                        ${this.escapeHtml(event.event_type)} &bull; ${event.start_time} - ${event.end_time}
+                    </div>
+                    <div class="calloff-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-primary btn-sm calloff-btn-reassign"
+                                data-schedule-id="${event.schedule_id}">
+                            Reassign
+                        </button>
+                        <button class="btn btn-secondary btn-sm calloff-btn-reschedule"
+                                data-schedule-id="${event.schedule_id}">
+                            Reschedule
+                        </button>
+                        <button class="btn btn-secondary btn-sm calloff-btn-unschedule"
+                                style="color: #dc2626;"
+                                data-schedule-id="${event.schedule_id}">
+                            Unschedule
+                        </button>
+                    </div>
+                    <div class="calloff-action-result" style="display: none; margin-top: 8px;"></div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        content.innerHTML = html;
+
+        // Attach action listeners - Reassign
+        content.querySelectorAll('.calloff-btn-reassign').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const scheduleId = btn.getAttribute('data-schedule-id');
+                this.closeCallOffWizard();
+                this.handleChangeEmployee(scheduleId);
+            });
+        });
+
+        // Attach action listeners - Reschedule
+        content.querySelectorAll('.calloff-btn-reschedule').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const scheduleId = btn.getAttribute('data-schedule-id');
+                this.closeCallOffWizard();
+                this.handleReschedule(scheduleId);
+            });
+        });
+
+        // Attach action listeners - Unschedule
+        content.querySelectorAll('.calloff-btn-unschedule').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const scheduleId = btn.getAttribute('data-schedule-id');
+                if (confirm('Are you sure you want to unschedule this event?')) {
+                    try {
+                        const response = await fetch(`/api/event/${scheduleId}/unschedule`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': this.getCsrfToken()
+                            }
+                        });
+                        const data = await response.json();
+                        if (response.ok && data.success) {
+                            const row = document.getElementById(`calloff-event-${scheduleId}`);
+                            if (row) {
+                                row.style.opacity = '0.5';
+                                row.querySelector('.calloff-actions').style.display = 'none';
+                                const result = row.querySelector('.calloff-action-result');
+                                result.style.display = 'block';
+                                result.innerHTML = '<span style="color: #059669; font-weight: 500;">Unscheduled</span>';
+                            }
+                            // Also remove the event card from the main view
+                            const eventCard = document.querySelector(`[data-schedule-id="${scheduleId}"]`);
+                            if (eventCard) {
+                                eventCard.style.transition = 'opacity 300ms ease, transform 300ms ease';
+                                eventCard.style.opacity = '0';
+                                eventCard.style.transform = 'translateX(20px)';
+                                setTimeout(() => eventCard.remove(), 300);
+                            }
+                            // Reload summary stats
+                            await this.loadDailySummary();
+                        } else {
+                            throw new Error(data.error || 'Failed to unschedule event');
+                        }
+                    } catch (error) {
+                        this.showNotification(error.message || 'Failed to unschedule event', 'error');
+                    }
+                }
+            });
+        });
+
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Close the Call-Off Wizard modal
+     */
+    closeCallOffWizard() {
+        const modal = document.getElementById('calloff-wizard-modal');
+        if (modal) modal.style.display = 'none';
     }
 }
 

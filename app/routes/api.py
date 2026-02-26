@@ -4,7 +4,7 @@ Handles all API endpoints for schedule operations, imports, exports, and AJAX ca
 """
 from flask import Blueprint, request, jsonify, current_app, make_response
 from app.models import get_models
-from app.constants import INACTIVE_CONDITIONS
+from app.constants import CANCELLED_VARIANTS, INACTIVE_CONDITIONS
 from app.routes.auth import require_authentication
 from datetime import datetime, timedelta, date
 import csv
@@ -367,7 +367,7 @@ def get_daily_events(date):
         # Check for cancelled status from BOTH sources:
         # 1. condition field from Crossmark API (synced during database refresh)
         # 2. edr_status field from Walmart EDR API (fetched during paperwork generation)
-        is_cancelled_from_condition = evt.condition and evt.condition.lower() == 'canceled'
+        is_cancelled_from_condition = evt.condition in CANCELLED_VARIANTS
         is_cancelled_from_edr = edr_status and edr_status.lower() == 'cancelled'
         is_cancelled = is_cancelled_from_condition or is_cancelled_from_edr
 
@@ -4031,6 +4031,123 @@ def export_events():
         return jsonify({'error': f'Error generating export: {str(e)}'}), 500
 
 
+@api_bp.route('/export/corporate-report')
+@require_authentication()
+def export_corporate_report():
+    """Generate a corporate report CSV for a date range with summary stats."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+
+    try:
+        date_from_str = request.args.get('date_from', '')
+        date_to_str = request.args.get('date_to', '')
+
+        today = date.today()
+        # Default to current week if no dates specified
+        if date_from_str:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+        else:
+            date_from = today - timedelta(days=today.weekday())  # Monday of current week
+        if date_to_str:
+            date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+        else:
+            date_to = date_from + timedelta(days=6)  # Sunday of current week
+
+        # Get all events in the date range
+        events = Event.query.filter(
+            Event.start_datetime >= datetime.combine(date_from, datetime.min.time()),
+            Event.start_datetime <= datetime.combine(date_to, datetime.max.time())
+        ).order_by(Event.start_datetime.asc()).all()
+
+        # Compute summary stats
+        total = len(events)
+        by_condition = {}
+        for event in events:
+            cond = event.condition or 'Unknown'
+            by_condition[cond] = by_condition.get(cond, 0) + 1
+
+        submitted = by_condition.get('Submitted', 0)
+        completion_rate = round((submitted / total * 100), 1) if total > 0 else 0
+
+        # Group events by week
+        from collections import defaultdict
+        weeks = defaultdict(list)
+        for event in events:
+            # Calculate week start (Monday)
+            event_date = event.start_datetime.date()
+            week_start = event_date - timedelta(days=event_date.weekday())
+            weeks[week_start].append(event)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Summary header
+        writer.writerow(['Corporate Event Report'])
+        writer.writerow([f'Period: {date_from.strftime("%m/%d/%Y")} - {date_to.strftime("%m/%d/%Y")}'])
+        writer.writerow([f'Generated: {today.strftime("%m/%d/%Y")}'])
+        writer.writerow([])
+        writer.writerow(['Summary'])
+        writer.writerow([f'Total Events: {total}'])
+        writer.writerow([f'Completion Rate: {completion_rate}%'])
+        for cond, count in sorted(by_condition.items()):
+            writer.writerow([f'  {cond}: {count}'])
+        writer.writerow([])
+
+        # Detail rows grouped by week
+        for week_start in sorted(weeks.keys()):
+            week_end = week_start + timedelta(days=6)
+            week_events = weeks[week_start]
+            writer.writerow([f'Week of {week_start.strftime("%m/%d/%Y")} - {week_end.strftime("%m/%d/%Y")} ({len(week_events)} events)'])
+            writer.writerow([
+                'Event #', 'Event Name', 'Event Type', 'Status',
+                'Start Date', 'Due Date', 'Assigned Employee',
+                'Schedule Date', 'Days Available'
+            ])
+
+            for event in week_events:
+                # Get employee assignment
+                schedule = Schedule.query.filter_by(event_ref_num=event.project_ref_num).first()
+                employee_name = ''
+                schedule_date = ''
+                if schedule:
+                    employee = db.session.get(Employee, schedule.employee_id)
+                    employee_name = employee.name if employee else ''
+                    schedule_date = schedule.schedule_datetime.strftime('%m/%d/%Y') if schedule.schedule_datetime else ''
+
+                days_available = (event.due_datetime.date() - event.start_datetime.date()).days
+
+                writer.writerow([
+                    event.project_ref_num,
+                    event.project_name,
+                    event.event_type,
+                    event.condition,
+                    event.start_datetime.strftime('%m/%d/%Y'),
+                    event.due_datetime.strftime('%m/%d/%Y'),
+                    employee_name,
+                    schedule_date,
+                    days_available
+                ])
+
+            writer.writerow([])
+
+        filename = f'Corporate_Report_{date_from.strftime("%m%d%Y")}_{date_to.strftime("%m%d%Y")}.csv'
+        output.seek(0)
+        csv_data = output.getvalue()
+        output.close()
+
+        response = make_response(csv_data)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
+    except Exception as e:
+        logger.error(f'Error generating corporate report: {e}')
+        return jsonify({'error': f'Error generating report: {str(e)}'}), 500
+
+
 @api_bp.route('/import/events', methods=['POST'])
 def import_events():
     """Import unscheduled events from WorkBankVisits.csv file"""
@@ -5621,6 +5738,158 @@ def remove_event_type_override(event_ref):
     return jsonify({
         'success': True,
         'new_auto_detected_type': event.event_type if event else None
+    })
+
+
+@api_bp.route('/daily-notes/<date>', methods=['GET'])
+@require_authentication()
+def get_daily_notes(date):
+    """Get notes linked to events or employees scheduled on a given date."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Note = models['Note']
+    Schedule = models['Schedule']
+
+    try:
+        from datetime import datetime as dt
+        target_date = dt.strptime(date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    # Find event ref nums scheduled on this date
+    scheduled_refs = db.session.query(Schedule.event_ref_num).filter(
+        db.func.date(Schedule.schedule_datetime) == target_date
+    ).distinct().all()
+    ref_nums = [r[0] for r in scheduled_refs]
+
+    # Find employee IDs scheduled on this date
+    scheduled_emps = db.session.query(Schedule.employee_id).filter(
+        db.func.date(Schedule.schedule_datetime) == target_date
+    ).distinct().all()
+    emp_ids = [e[0] for e in scheduled_emps]
+
+    # Get incomplete notes linked to these events or employees, or due on this date
+    from sqlalchemy import or_
+    conditions = []
+    if ref_nums:
+        conditions.append(Note.linked_event_ref_num.in_(ref_nums))
+    if emp_ids:
+        conditions.append(Note.linked_employee_id.in_(emp_ids))
+    conditions.append(Note.due_date == target_date)
+
+    notes = Note.query.filter(
+        Note.is_completed == False,
+        or_(*conditions)
+    ).order_by(Note.priority.desc(), Note.created_at.desc()).all()
+
+    return jsonify({
+        'success': True,
+        'notes': [n.to_dict() for n in notes],
+        'count': len(notes)
+    })
+
+
+@api_bp.route('/events/<int:event_id>/cannot-complete', methods=['POST'])
+@require_authentication()
+def mark_cannot_complete(event_id):
+    """Mark an event as Cannot Complete with a reason."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Event = models['Event']
+    Schedule = models['Schedule']
+
+    data = request.get_json() or {}
+    reason = data.get('reason', 'Other')
+
+    event = db.session.get(Event, event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    # Remove any existing schedules
+    schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
+    for schedule in schedules:
+        db.session.delete(schedule)
+
+    event.condition = 'Cannot Complete'
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'success': True, 'message': f'Event marked as Cannot Complete: {reason}'})
+
+
+@api_bp.route('/bulk-unschedule', methods=['POST'])
+@require_authentication()
+def bulk_unschedule():
+    """Bulk unschedule multiple events by event IDs."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+
+    data = request.get_json()
+    if not data or 'event_ids' not in data:
+        return jsonify({'error': 'Missing event_ids'}), 400
+
+    event_ids = data['event_ids']
+    if not isinstance(event_ids, list) or not event_ids:
+        return jsonify({'error': 'event_ids must be a non-empty list'}), 400
+
+    results = {'success': [], 'errors': []}
+
+    for event_id in event_ids:
+        try:
+            event = db.session.get(Event, int(event_id))
+            if not event:
+                results['errors'].append({'event_id': event_id, 'error': 'Event not found'})
+                continue
+
+            schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
+            if not schedules:
+                results['errors'].append({'event_id': event_id, 'error': 'No schedules found'})
+                continue
+
+            # Check locked days
+            LockedDay = current_app.config.get('LockedDay')
+            if LockedDay:
+                locked = False
+                for schedule in schedules:
+                    locked_info = LockedDay.get_locked_day(schedule.schedule_datetime.date())
+                    if locked_info:
+                        results['errors'].append({
+                            'event_id': event_id,
+                            'error': f'Date {schedule.schedule_datetime.date().isoformat()} is locked'
+                        })
+                        locked = True
+                        break
+                if locked:
+                    continue
+
+            # Delete schedules
+            for schedule in schedules:
+                db.session.delete(schedule)
+
+            # Update event condition
+            event.condition = 'Unstaffed'
+            results['success'].append(event_id)
+
+        except Exception as e:
+            results['errors'].append({'event_id': event_id, 'error': str(e)})
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+    return jsonify({
+        'success': True,
+        'unscheduled_count': len(results['success']),
+        'error_count': len(results['errors']),
+        'results': results
     })
 
 

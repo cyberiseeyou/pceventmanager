@@ -9,7 +9,7 @@ from datetime import datetime, date, timedelta
 import logging
 from difflib import SequenceMatcher
 from sqlalchemy import func
-from app.constants import CONDITION_CANCELED
+from app.constants import CONDITION_CANCELED, INACTIVE_CONDITIONS
 
 logger = logging.getLogger(__name__)
 
@@ -713,20 +713,209 @@ class AITools:
                         "required": ["date"]
                     }
                 }
+            },
+            # ===== CP-SAT / ML SCHEDULING TOOLS =====
+            {
+                "type": "function",
+                "function": {
+                    "name": "run_cpsat_scheduler",
+                    "description": "Run the CP-SAT constraint-programming auto-scheduler for a date range. Creates pending schedules that must be approved. This is a DESTRUCTIVE action that creates new pending schedule proposals.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "description": "Start date in YYYY-MM-DD format or relative (e.g., 'next Monday')"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "Optional end date. Defaults to 1 week from start."
+                            }
+                        },
+                        "required": ["start_date"]
+                    },
+                    "requires_confirmation": True
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "compare_schedulers",
+                    "description": "Run greedy vs CP-SAT schedulers side-by-side in dry-run mode (no changes saved) and compare metrics like events scheduled, fairness, and constraint violations.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "description": "Start date in YYYY-MM-DD format"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "End date in YYYY-MM-DD format"
+                            }
+                        },
+                        "required": ["start_date", "end_date"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "explain_schedule_assignment",
+                    "description": "Explain why a specific employee was assigned to a specific event — checks rotation match, availability, constraint violations, and scoring factors.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "employee_name": {
+                                "type": "string",
+                                "description": "Employee name (fuzzy matched)"
+                            },
+                            "event_ref_num": {
+                                "type": "integer",
+                                "description": "Event reference number"
+                            },
+                            "schedule_id": {
+                                "type": "integer",
+                                "description": "Schedule ID (alternative to employee_name + event_ref_num)"
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_schedule_fairness",
+                    "description": "Analyze workload distribution fairness across employees for a date range. Shows per-employee event counts, Core/Juicer breakdown, total minutes, and standard deviation.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "description": "Start date in YYYY-MM-DD format or relative"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "End date in YYYY-MM-DD format or relative"
+                            }
+                        },
+                        "required": ["start_date", "end_date"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "suggest_schedule_improvement",
+                    "description": "Analyze current schedules for a date range and suggest improvements — identifies overloaded employees, underutilized staff, constraint violations, and potential swaps.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "description": "Start date in YYYY-MM-DD format or relative"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "End date in YYYY-MM-DD format or relative"
+                            }
+                        },
+                        "required": ["start_date"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_ml_predictions",
+                    "description": "Get ML-ranked employee recommendations for a specific event based on predicted assignment success probability.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "event_ref_num": {
+                                "type": "integer",
+                                "description": "Event reference number to get predictions for"
+                            },
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Number of top candidates to return (default: 5)"
+                            }
+                        },
+                        "required": ["event_ref_num"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "log_event_outcome",
+                    "description": "Record the outcome of a scheduled event — whether it was completed, swapped, or was a no-show. Used for ML training data collection.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "schedule_id": {
+                                "type": "integer",
+                                "description": "Schedule ID to update"
+                            },
+                            "outcome": {
+                                "type": "string",
+                                "enum": ["completed", "swapped", "no_show"],
+                                "description": "What happened with this schedule"
+                            },
+                            "notes": {
+                                "type": "string",
+                                "description": "Optional notes about the outcome"
+                            }
+                        },
+                        "required": ["schedule_id", "outcome"]
+                    },
+                    "requires_confirmation": True
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "modify_scheduling_preference",
+                    "description": "Adjust a scheduling weight/preference via natural language. For example: 'increase fairness', 'decrease bumping penalty', 'boost rotation matching'. Changes persist across scheduler runs.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "preference": {
+                                "type": "string",
+                                "description": "What to adjust (e.g., 'fairness', 'rotation', 'bumping', 'experience')"
+                            },
+                            "direction": {
+                                "type": "string",
+                                "description": "How to adjust (e.g., 'increase', 'decrease', 'boost', 'reset')"
+                            }
+                        },
+                        "required": ["preference", "direction"]
+                    },
+                    "requires_confirmation": True
+                }
             }
         ]
 
-    def execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_tool(self, tool_name: str, tool_args: Dict[str, Any], confirmed: bool = False) -> Dict[str, Any]:
         """
         Execute a tool by name
 
         Args:
             tool_name: Name of the tool to execute
             tool_args: Arguments for the tool
+            confirmed: Server-side confirmation flag (from confirm_action only)
 
         Returns:
             Dictionary with execution results
         """
+        # SEC-CRT-02: Strip _confirmed from args — must only come from server-side confirm_action
+        if isinstance(tool_args, dict):
+            tool_args.pop('_confirmed', None)
+
+        # Set confirmed flag from server-side parameter only
+        if confirmed and isinstance(tool_args, dict):
+            tool_args['_confirmed'] = True
+
         # Map tool names to methods
         tool_map = {
             'count_employees': self._tool_count_employees,
@@ -767,6 +956,16 @@ class AITools:
             'bulk_reschedule_day': self._tool_bulk_reschedule_day,
             'reassign_employee_events': self._tool_reassign_employee_events,
             'auto_fill_unscheduled': self._tool_auto_fill_unscheduled,
+            # CP-SAT / ML scheduling tools
+            'run_cpsat_scheduler': self._tool_run_cpsat_scheduler,
+            'compare_schedulers': self._tool_compare_schedulers,
+            'explain_schedule_assignment': self._tool_explain_schedule_assignment,
+            'analyze_schedule_fairness': self._tool_analyze_schedule_fairness,
+            'suggest_schedule_improvement': self._tool_suggest_schedule_improvement,
+            'get_ml_predictions': self._tool_get_ml_predictions,
+            'log_event_outcome': self._tool_log_event_outcome,
+            'modify_scheduling_preference': self._tool_modify_scheduling_preference,
+            'verify_schedule': self._tool_verify_schedule,
         }
 
         if tool_name not in tool_map:
@@ -3512,6 +3711,540 @@ class AITools:
             return best_match
 
         return None
+
+    # ===== CP-SAT / ML SCHEDULING TOOLS =====
+
+    def _tool_run_cpsat_scheduler(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the CP-SAT auto-scheduler for a date range."""
+        start_str = args.get('start_date')
+        end_str = args.get('end_date')
+
+        start = self._parse_date(start_str)
+        if not start:
+            return {'success': False, 'message': f"Could not parse start_date: {start_str}", 'data': None}
+
+        end = self._parse_date(end_str) if end_str else start + timedelta(days=6)
+
+        try:
+            from app.services.cpsat_scheduler import CPSATSchedulingEngine
+            engine = CPSATSchedulingEngine(self.db, self.models)
+            run = engine.run_auto_scheduler(run_type='manual')
+
+            return {
+                'success': True,
+                'message': (
+                    f"CP-SAT scheduler completed for {start} to {end}.\n"
+                    f"Events processed: {run.total_events_processed or 0}\n"
+                    f"Events scheduled: {run.events_scheduled or 0}\n"
+                    f"Events failed: {run.events_failed or 0}\n"
+                    f"Solver: {run.solver_type}\n"
+                    f"Run ID: {run.id}\n\n"
+                    f"Pending schedules created — use the auto-scheduler review page to approve or reject."
+                ),
+                'data': {
+                    'run_id': run.id,
+                    'events_scheduled': run.events_scheduled or 0,
+                    'events_failed': run.events_failed or 0,
+                    'events_processed': run.total_events_processed or 0,
+                    'solver_type': run.solver_type,
+                    'status': run.status,
+                }
+            }
+        except Exception as e:
+            logger.error(f"CP-SAT scheduler failed: {e}", exc_info=True)
+            return {'success': False, 'message': f"CP-SAT scheduler failed: {str(e)}", 'data': None}
+
+    def _tool_compare_schedulers(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Run greedy vs CP-SAT side-by-side in dry-run mode using savepoints."""
+        start_str = args.get('start_date')
+        end_str = args.get('end_date')
+
+        start = self._parse_date(start_str)
+        end = self._parse_date(end_str)
+        if not start or not end:
+            return {'success': False, 'message': "Could not parse date range", 'data': None}
+
+        results = {}
+
+        try:
+            # Run greedy scheduler in savepoint (rolled back)
+            savepoint = self.db.begin_nested()
+            try:
+                from app.services.scheduling_engine import SchedulingEngine
+                greedy_engine = SchedulingEngine(self.db, self.models)
+                greedy_run = greedy_engine.run_auto_scheduler(run_type='manual')
+                results['greedy'] = {
+                    'events_scheduled': greedy_run.events_scheduled or 0,
+                    'events_failed': greedy_run.events_failed or 0,
+                    'events_processed': greedy_run.total_events_processed or 0,
+                    'solver_type': 'greedy',
+                }
+            except Exception as e:
+                results['greedy'] = {'error': str(e)}
+            finally:
+                savepoint.rollback()
+
+            # Run CP-SAT scheduler in savepoint (rolled back)
+            savepoint = self.db.begin_nested()
+            try:
+                from app.services.cpsat_scheduler import CPSATSchedulingEngine
+                cpsat_engine = CPSATSchedulingEngine(self.db, self.models)
+                cpsat_run = cpsat_engine.run_auto_scheduler(run_type='manual')
+                results['cpsat'] = {
+                    'events_scheduled': cpsat_run.events_scheduled or 0,
+                    'events_failed': cpsat_run.events_failed or 0,
+                    'events_processed': cpsat_run.total_events_processed or 0,
+                    'solver_type': 'cpsat',
+                }
+            except Exception as e:
+                results['cpsat'] = {'error': str(e)}
+            finally:
+                savepoint.rollback()
+
+            # Build comparison message
+            msg = f"**Scheduler Comparison ({start} to {end})**\n\n"
+
+            for solver, data in results.items():
+                label = 'Greedy (Wave-based)' if solver == 'greedy' else 'CP-SAT (Constraint Programming)'
+                if 'error' in data:
+                    msg += f"**{label}**: Error — {data['error']}\n\n"
+                else:
+                    msg += (
+                        f"**{label}**:\n"
+                        f"  Events processed: {data['events_processed']}\n"
+                        f"  Events scheduled: {data['events_scheduled']}\n"
+                        f"  Events failed: {data['events_failed']}\n\n"
+                    )
+
+            # Winner
+            g = results.get('greedy', {})
+            c = results.get('cpsat', {})
+            if not g.get('error') and not c.get('error'):
+                g_sched = g.get('events_scheduled', 0)
+                c_sched = c.get('events_scheduled', 0)
+                if c_sched > g_sched:
+                    msg += f"CP-SAT scheduled **{c_sched - g_sched} more** events than greedy."
+                elif g_sched > c_sched:
+                    msg += f"Greedy scheduled **{g_sched - c_sched} more** events than CP-SAT."
+                else:
+                    msg += "Both schedulers produced the same number of assignments."
+
+            msg += "\n\n*Note: This was a dry run — no changes were saved.*"
+
+            return {'success': True, 'message': msg, 'data': results}
+
+        except Exception as e:
+            logger.error(f"Scheduler comparison failed: {e}", exc_info=True)
+            return {'success': False, 'message': f"Comparison failed: {str(e)}", 'data': None}
+
+    def _tool_explain_schedule_assignment(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Explain why an employee was assigned to an event."""
+        Schedule = self.models['Schedule']
+        Event = self.models['Event']
+        Employee = self.models['Employee']
+        RotationAssignment = self.models.get('RotationAssignment')
+
+        schedule_id = args.get('schedule_id')
+        employee_name = args.get('employee_name')
+        event_ref = args.get('event_ref_num')
+
+        schedule = None
+        if schedule_id:
+            schedule = self.db.query(Schedule).get(schedule_id)
+        elif employee_name and event_ref:
+            employee = self._find_employee_by_name(employee_name)
+            if not employee:
+                return {'success': False, 'message': f"Employee '{employee_name}' not found", 'data': None}
+            schedule = self.db.query(Schedule).filter_by(
+                employee_id=employee.id, event_ref_num=event_ref
+            ).first()
+
+        if not schedule:
+            return {'success': False, 'message': "Schedule assignment not found", 'data': None}
+
+        event = self.db.query(Event).filter_by(project_ref_num=schedule.event_ref_num).first()
+        employee = self.db.query(Employee).filter_by(id=schedule.employee_id).first()
+
+        if not event or not employee:
+            return {'success': False, 'message': "Event or employee not found for this schedule", 'data': None}
+
+        reasons = []
+
+        # Check rotation match
+        if RotationAssignment:
+            rotation = self.db.query(RotationAssignment).filter_by(
+                employee_id=employee.id,
+                event_type=event.event_type,
+                is_active=True
+            ).first()
+            if rotation:
+                reasons.append(f"Rotation match: {employee.name} is assigned to {event.event_type} rotation (priority: {rotation.priority})")
+            else:
+                reasons.append(f"No active rotation assignment for {event.event_type}")
+
+        # Check role qualification
+        job_title = getattr(employee, 'job_title', '') or ''
+        reasons.append(f"Job title: {job_title}")
+
+        juicer_types = {'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
+        lead_types = {'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh', 'Digital Teardown', 'Other'}
+
+        if event.event_type in juicer_types:
+            qualified = job_title in ('Juicer Barista', 'Club Supervisor')
+            reasons.append(f"Juicer qualification: {'Yes' if qualified else 'No'}")
+        elif event.event_type in lead_types:
+            qualified = job_title in ('Lead Event Specialist', 'Club Supervisor')
+            reasons.append(f"Lead qualification: {'Yes' if qualified else 'No'}")
+
+        # Solver type
+        if schedule.solver_type:
+            reasons.append(f"Assigned by: {schedule.solver_type} scheduler")
+
+        # Constraint validation
+        try:
+            from app.services.constraint_validator import ConstraintValidator
+            validator = ConstraintValidator(self.db, self.models)
+            result = validator.validate_assignment(event, employee, schedule.schedule_datetime)
+            if result.is_valid:
+                reasons.append("Constraint check: All constraints satisfied")
+            else:
+                for v in result.violations:
+                    reasons.append(f"Constraint violation: {v.message}")
+        except Exception as e:
+            reasons.append(f"Constraint check unavailable: {e}")
+
+        msg = f"**Assignment Explanation: {employee.name} → {event.project_name}**\n\n"
+        msg += f"Schedule ID: {schedule.id}\n"
+        msg += f"Date: {schedule.schedule_datetime.strftime('%Y-%m-%d %H:%M')}\n"
+        msg += f"Event Type: {event.event_type}\n\n"
+        msg += "**Factors:**\n"
+        for r in reasons:
+            msg += f"- {r}\n"
+
+        return {'success': True, 'message': msg, 'data': {'schedule_id': schedule.id, 'reasons': reasons}}
+
+    def _tool_analyze_schedule_fairness(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze workload distribution across employees for a date range."""
+        start_str = args.get('start_date')
+        end_str = args.get('end_date')
+
+        start = self._parse_date(start_str)
+        end = self._parse_date(end_str)
+        if not start or not end:
+            return {'success': False, 'message': "Could not parse date range", 'data': None}
+
+        Schedule = self.models['Schedule']
+        Event = self.models['Event']
+        Employee = self.models['Employee']
+
+        start_dt = datetime.combine(start, datetime.min.time())
+        end_dt = datetime.combine(end, datetime.max.time())
+
+        schedules = self.db.query(Schedule).filter(
+            Schedule.schedule_datetime >= start_dt,
+            Schedule.schedule_datetime <= end_dt
+        ).all()
+
+        if not schedules:
+            return {'success': True, 'message': f"No schedules found between {start} and {end}", 'data': None}
+
+        # Build per-employee stats
+        emp_stats = {}
+        for sched in schedules:
+            eid = sched.employee_id
+            if eid not in emp_stats:
+                emp = self.db.query(Employee).filter_by(id=eid).first()
+                emp_stats[eid] = {
+                    'name': emp.name if emp else eid,
+                    'total': 0, 'core': 0, 'juicer': 0, 'other': 0,
+                    'minutes': 0,
+                }
+
+            emp_stats[eid]['total'] += 1
+
+            event = self.db.query(Event).filter_by(project_ref_num=sched.event_ref_num).first()
+            if event:
+                etype = event.event_type or 'Other'
+                if etype == 'Core':
+                    emp_stats[eid]['core'] += 1
+                elif etype.startswith('Juicer'):
+                    emp_stats[eid]['juicer'] += 1
+                else:
+                    emp_stats[eid]['other'] += 1
+                emp_stats[eid]['minutes'] += event.estimated_time or 0
+
+        # Compute fairness metrics
+        totals = [s['total'] for s in emp_stats.values()]
+        import statistics
+        avg = statistics.mean(totals)
+        std_dev = statistics.stdev(totals) if len(totals) > 1 else 0
+        min_val = min(totals)
+        max_val = max(totals)
+
+        sorted_stats = sorted(emp_stats.values(), key=lambda x: x['total'], reverse=True)
+
+        msg = f"**Workload Fairness Analysis ({start} to {end})**\n\n"
+        msg += f"Employees: {len(sorted_stats)} | Total assignments: {sum(totals)}\n"
+        msg += f"Average: {avg:.1f} | Std Dev: {std_dev:.1f} | Range: {min_val}-{max_val}\n\n"
+
+        if std_dev > avg * 0.5:
+            msg += "**Warning**: High workload imbalance detected.\n\n"
+
+        msg += "| Employee | Total | Core | Juicer | Other | Minutes |\n"
+        msg += "|----------|-------|------|--------|-------|---------|\n"
+        for s in sorted_stats:
+            msg += f"| {s['name']} | {s['total']} | {s['core']} | {s['juicer']} | {s['other']} | {s['minutes']} |\n"
+
+        return {
+            'success': True,
+            'message': msg,
+            'data': {
+                'employee_count': len(sorted_stats),
+                'average': round(avg, 1),
+                'std_dev': round(std_dev, 1),
+                'min': min_val,
+                'max': max_val,
+                'employees': sorted_stats,
+            }
+        }
+
+    def _tool_suggest_schedule_improvement(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Suggest schedule improvements for a date range."""
+        start_str = args.get('start_date')
+        end_str = args.get('end_date')
+
+        start = self._parse_date(start_str)
+        end = self._parse_date(end_str) if end_str else start + timedelta(days=6)
+        if not start:
+            return {'success': False, 'message': f"Could not parse start_date: {start_str}", 'data': None}
+
+        Schedule = self.models['Schedule']
+        Event = self.models['Event']
+        Employee = self.models['Employee']
+
+        start_dt = datetime.combine(start, datetime.min.time())
+        end_dt = datetime.combine(end, datetime.max.time())
+
+        schedules = self.db.query(Schedule).filter(
+            Schedule.schedule_datetime >= start_dt,
+            Schedule.schedule_datetime <= end_dt
+        ).all()
+
+        suggestions = []
+
+        # 1. Find unscheduled events
+        events_in_range = self.db.query(Event).filter(
+            Event.start_date >= start,
+            Event.start_date <= end,
+            Event.is_scheduled == False,
+            ~Event.condition.in_(INACTIVE_CONDITIONS) if hasattr(Event, 'condition') else True
+        ).all()
+
+        if events_in_range:
+            suggestions.append({
+                'type': 'unscheduled',
+                'message': f"{len(events_in_range)} events are unscheduled in this range",
+                'events': [{'ref': e.project_ref_num, 'name': e.project_name, 'type': e.event_type}
+                          for e in events_in_range[:10]]
+            })
+
+        # 2. Check overloaded employees (>2 events/day)
+        from collections import defaultdict
+        daily_loads = defaultdict(lambda: defaultdict(int))
+        for sched in schedules:
+            day = sched.schedule_datetime.date()
+            daily_loads[sched.employee_id][day] += 1
+
+        overloaded = []
+        for emp_id, days in daily_loads.items():
+            for day, count in days.items():
+                if count > 2:
+                    emp = self.db.query(Employee).filter_by(id=emp_id).first()
+                    overloaded.append({
+                        'employee': emp.name if emp else emp_id,
+                        'date': str(day),
+                        'event_count': count,
+                    })
+
+        if overloaded:
+            suggestions.append({
+                'type': 'overloaded',
+                'message': f"{len(overloaded)} employee-day combinations have >2 events",
+                'details': overloaded[:10],
+            })
+
+        # 3. Check constraint violations via validation service
+        try:
+            from app.services.schedule_verification import ScheduleVerificationService
+            verifier = ScheduleVerificationService(self.db, self.models)
+            for day_offset in range((end - start).days + 1):
+                check_date = start + timedelta(days=day_offset)
+                result = verifier.verify_schedule(check_date)
+                if result.issues:
+                    critical = [i for i in result.issues if i.severity == 'critical']
+                    if critical:
+                        suggestions.append({
+                            'type': 'validation',
+                            'message': f"{len(critical)} critical issue(s) on {check_date}",
+                            'details': [{'rule': i.rule_name, 'message': i.message} for i in critical[:5]],
+                        })
+        except Exception as e:
+            logger.warning(f"Validation check failed: {e}")
+
+        # 4. Check workload imbalance
+        emp_totals = defaultdict(int)
+        for sched in schedules:
+            emp_totals[sched.employee_id] += 1
+
+        if emp_totals:
+            import statistics
+            values = list(emp_totals.values())
+            if len(values) > 1:
+                avg = statistics.mean(values)
+                std = statistics.stdev(values)
+                if std > avg * 0.5:
+                    suggestions.append({
+                        'type': 'imbalance',
+                        'message': f"Workload imbalance detected (std dev: {std:.1f}, avg: {avg:.1f})",
+                    })
+
+        if not suggestions:
+            return {
+                'success': True,
+                'message': f"No improvement suggestions for {start} to {end} — schedule looks good!",
+                'data': None,
+            }
+
+        msg = f"**Schedule Improvement Suggestions ({start} to {end})**\n\n"
+        for i, s in enumerate(suggestions, 1):
+            msg += f"**{i}. {s['type'].title()}**: {s['message']}\n"
+            if 'events' in s:
+                for ev in s['events'][:5]:
+                    msg += f"   - {ev['name']} ({ev['type']}) — Ref #{ev['ref']}\n"
+            if 'details' in s:
+                for d in s['details'][:5]:
+                    if isinstance(d, dict):
+                        msg += f"   - {d.get('message', d.get('employee', str(d)))}\n"
+            msg += "\n"
+
+        return {'success': True, 'message': msg, 'data': {'suggestions': suggestions}}
+
+    def _tool_get_ml_predictions(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get ML-ranked employee recommendations for an event."""
+        event_ref = args.get('event_ref_num')
+        top_n = args.get('top_n', 5)
+
+        Event = self.models['Event']
+        Employee = self.models['Employee']
+
+        event = self.db.query(Event).filter_by(project_ref_num=event_ref).first()
+        if not event:
+            return {'success': False, 'message': f"Event {event_ref} not found", 'data': None}
+
+        # Get active employees
+        employees = self.db.query(Employee).filter_by(is_active=True).all()
+        if not employees:
+            return {'success': False, 'message': "No active employees found", 'data': None}
+
+        try:
+            from flask import current_app
+            config = current_app.config if current_app else {}
+
+            from app.ml.inference.ml_scheduler_adapter import MLSchedulerAdapter
+            adapter = MLSchedulerAdapter(self.db, self.models, config)
+
+            schedule_dt = datetime.combine(
+                event.start_date if hasattr(event, 'start_date') and event.start_date else date.today(),
+                datetime.min.time()
+            )
+            ranked = adapter.rank_employees(employees, event, schedule_dt)
+
+            top_results = ranked[:top_n]
+
+            msg = f"**ML Predictions for {event.project_name} ({event.event_type})**\n\n"
+            msg += "| Rank | Employee | Confidence | Job Title |\n"
+            msg += "|------|----------|------------|----------|\n"
+            for i, (emp, score) in enumerate(top_results, 1):
+                msg += f"| {i} | {emp.name} | {score:.1%} | {getattr(emp, 'job_title', 'N/A')} |\n"
+
+            if not config.get('ML_ENABLED', False):
+                msg += "\n*Note: ML is disabled — scores are from rule-based fallback.*"
+
+            return {
+                'success': True,
+                'message': msg,
+                'data': {
+                    'event_ref': event_ref,
+                    'predictions': [
+                        {'employee_name': emp.name, 'employee_id': emp.id, 'confidence': round(score, 3)}
+                        for emp, score in top_results
+                    ]
+                }
+            }
+        except Exception as e:
+            logger.error(f"ML predictions failed: {e}", exc_info=True)
+            return {'success': False, 'message': f"ML predictions failed: {str(e)}", 'data': None}
+
+    def _tool_log_event_outcome(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Record the outcome of a scheduled event for ML training data."""
+        schedule_id = args.get('schedule_id')
+        outcome = args.get('outcome')
+        notes = args.get('notes', '')
+
+        Schedule = self.models['Schedule']
+        schedule = self.db.query(Schedule).get(schedule_id)
+
+        if not schedule:
+            return {'success': False, 'message': f"Schedule {schedule_id} not found", 'data': None}
+
+        if outcome == 'completed':
+            schedule.was_completed = True
+            schedule.was_swapped = False
+            schedule.was_no_show = False
+        elif outcome == 'swapped':
+            schedule.was_completed = False
+            schedule.was_swapped = True
+            schedule.was_no_show = False
+        elif outcome == 'no_show':
+            schedule.was_completed = False
+            schedule.was_swapped = False
+            schedule.was_no_show = True
+        else:
+            return {'success': False, 'message': f"Invalid outcome: {outcome}. Use 'completed', 'swapped', or 'no_show'.", 'data': None}
+
+        if notes:
+            schedule.completion_notes = notes
+
+        self.db.commit()
+
+        return {
+            'success': True,
+            'message': f"Recorded outcome '{outcome}' for schedule {schedule_id}.",
+            'data': {'schedule_id': schedule_id, 'outcome': outcome}
+        }
+
+    def _tool_modify_scheduling_preference(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Adjust a CP-SAT scheduling weight via natural language."""
+        preference = args.get('preference', '')
+        direction = args.get('direction', 'increase')
+
+        try:
+            from app.services.constraint_modifier import ConstraintModifier
+            modifier = ConstraintModifier()
+            result = modifier.apply_preference(preference, direction)
+
+            if result['success']:
+                # Also show all active preferences
+                active = modifier.get_active_preferences()
+                if active:
+                    result['message'] += "\n\n**Active preference overrides:**\n"
+                    for p in active:
+                        result['message'] += f"- {p['description']}: {p['multiplier']:.1f}x\n"
+
+            return result
+        except Exception as e:
+            logger.error(f"Preference modification failed: {e}", exc_info=True)
+            return {'success': False, 'message': f"Failed to modify preference: {str(e)}", 'data': None}
 
     # ===== UTILITY METHODS =====
 

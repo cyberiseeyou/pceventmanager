@@ -905,6 +905,31 @@
   font-weight: 600;
 }
 
+/* Urgency badges - days remaining until due */
+.badge-urgency {
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-urgency--critical {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+.badge-urgency--high {
+  background: #FFEDD5;
+  color: #9A3412;
+}
+.badge-urgency--medium {
+  background: #FEF9C3;
+  color: #854D0E;
+}
+.badge-urgency--low {
+  background: #ECFDF5;
+  color: #065F46;
+}
+
 /**
  * Core Event Badge
  * Bright, eye-catching badge to identify Core events by their time slot

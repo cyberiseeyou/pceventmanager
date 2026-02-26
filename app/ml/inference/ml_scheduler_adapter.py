@@ -121,6 +121,9 @@ class MLSchedulerAdapter:
             except Exception as e:
                 logger.error(f"ML ranking failed: {e}", exc_info=True)
                 self.fallbacks_triggered += 1
+        elif self.use_ml and self.use_employee_ranking:
+            # ML was enabled but model couldn't load — count as fallback
+            self.fallbacks_triggered += 1
 
         # Fallback: rule-based ranking
         return self._fallback_rank_employees(employees, event, schedule_datetime)
@@ -155,6 +158,7 @@ class MLSchedulerAdapter:
 
         if not valid_features:
             logger.warning("No valid features extracted, falling back")
+            self.fallbacks_triggered += 1
             return self._fallback_rank_employees(employees, event, schedule_datetime)
 
         # Get ML rankings
@@ -170,6 +174,12 @@ class MLSchedulerAdapter:
         # Add employees with failed feature extraction at the end with low confidence
         failed_employees = [employees[i] for i in range(len(employees)) if i not in valid_indices]
         ranked_employees.extend([(emp, 0.3) for emp in failed_employees])
+
+        # If all ML predictions were below confidence threshold, fall back to rule-based
+        if not ranked_employees:
+            logger.info("All ML predictions below confidence threshold, falling back to rule-based")
+            self.fallbacks_triggered += 1
+            return self._fallback_rank_employees(employees, event, schedule_datetime)
 
         self.predictions_made += 1
 
@@ -193,10 +203,10 @@ class MLSchedulerAdapter:
 
         Returns employees with neutral confidence scores.
         """
-        # Separate by role
-        leads = [emp for emp in employees if emp.role == 'Lead']
-        specialists = [emp for emp in employees if emp.role == 'Specialist']
-        juicers = [emp for emp in employees if emp.role == 'Juicer']
+        # Separate by job_title
+        leads = [emp for emp in employees if 'lead' in (emp.job_title or '').lower()]
+        specialists = [emp for emp in employees if 'specialist' in (emp.job_title or '').lower() and 'lead' not in (emp.job_title or '').lower()]
+        juicers = [emp for emp in employees if 'juicer' in (emp.job_title or '').lower()]
 
         # Combine in priority order
         ranked = []

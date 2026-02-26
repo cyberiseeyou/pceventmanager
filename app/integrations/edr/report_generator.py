@@ -56,6 +56,7 @@ class EDRReportGenerator:
         self.username = ""
         self.password = ""
         self.mfa_credential_id = ""
+        self.last_error = None  # Stores detail from the most recent failure
 
         # Event report table headers from the JavaScript component
         self.report_headers = [
@@ -117,6 +118,7 @@ class EDRReportGenerator:
     def step1_submit_password(self) -> bool:
         """Step 1: Submit username and password."""
         login_url = "https://retaillink.login.wal-mart.com/api/login"
+        self.last_error = None
 
         # First, visit the login page to get fresh cookies
         print("➡️ Step 1a: Visiting login page to obtain fresh cookies...")
@@ -126,7 +128,8 @@ class EDRReportGenerator:
                 headers={
                     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
                     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                }
+                },
+                timeout=15
             )
             print(f"   Login page status: {login_page_response.status_code}")
             print(f"   Cookies received: {len(self.session.cookies)} cookies")
@@ -154,25 +157,39 @@ class EDRReportGenerator:
 
         print("➡️ Step 1b: Submitting username and password...")
         try:
-            response = self.session.post(login_url, headers=headers, json=payload)
+            response = self.session.post(login_url, headers=headers, json=payload, timeout=15)
             print(f"   Response status: {response.status_code}")
             print(f"   Response body preview: {response.text[:200] if response.text else 'empty'}")
             response.raise_for_status()
             print("✅ Password accepted. MFA required.")
             return True
         except requests.exceptions.HTTPError as e:
-            print(f"❌ Step 1 failed with HTTP error: {e}")
+            status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
+            body = ''
             if hasattr(e, 'response') and e.response is not None:
-                print(f"   Status code: {e.response.status_code}")
-                print(f"   Response body: {e.response.text[:500] if e.response.text else 'empty'}")
+                body = e.response.text[:300] if e.response.text else ''
+            self.last_error = f"Walmart login returned HTTP {status}: {body}" if body else f"Walmart login returned HTTP {status}"
+            print(f"❌ Step 1 failed with HTTP error: {e}")
+            print(f"   Status code: {status}")
+            print(f"   Response body: {body}")
+            return False
+        except requests.exceptions.ConnectionError:
+            self.last_error = "Could not connect to Walmart login service. The service may be down."
+            print(f"❌ Step 1 failed: connection error")
+            return False
+        except requests.exceptions.Timeout:
+            self.last_error = "Walmart login service timed out. Please try again."
+            print(f"❌ Step 1 failed: timeout")
             return False
         except requests.exceptions.RequestException as e:
+            self.last_error = f"Walmart login request failed: {e}"
             print(f"❌ Step 1 failed: {e}")
             return False
 
     def step2_request_mfa_code(self) -> bool:
         """Step 2: Request MFA code to be sent to user's device."""
         send_code_url = "https://retaillink.login.wal-mart.com/api/mfa/sendCode"
+        self.last_error = None
         headers = {
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.9',
@@ -193,16 +210,32 @@ class EDRReportGenerator:
         print(f"🔍 DEBUG: MFA Credential ID = {self.mfa_credential_id}")
         print(f"🔍 DEBUG: Payload = {payload}")
         try:
-            response = self.session.post(send_code_url, headers=headers, json=payload)
+            response = self.session.post(send_code_url, headers=headers, json=payload, timeout=15)
             print(f"🔍 DEBUG: Response status = {response.status_code}")
             print(f"🔍 DEBUG: Response body = {response.text[:500] if response.text else 'empty'}")
             response.raise_for_status()
             print("✅ MFA code sent successfully. Check your device.")
             return True
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Step 2 failed: {e}")
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
+            body = ''
             if hasattr(e, 'response') and e.response is not None:
-                print(f"🔍 DEBUG: Error response body = {e.response.text[:500] if e.response.text else 'empty'}")
+                body = e.response.text[:300] if e.response.text else ''
+            self.last_error = f"MFA request returned HTTP {status}: {body}" if body else f"MFA request returned HTTP {status}"
+            print(f"❌ Step 2 failed: {e}")
+            print(f"🔍 DEBUG: Error response body = {body}")
+            return False
+        except requests.exceptions.ConnectionError:
+            self.last_error = "Could not connect to Walmart MFA service. The service may be down."
+            print("❌ Step 2 failed: connection error")
+            return False
+        except requests.exceptions.Timeout:
+            self.last_error = "Walmart MFA service timed out. Please try again."
+            print("❌ Step 2 failed: timeout")
+            return False
+        except requests.exceptions.RequestException as e:
+            self.last_error = f"MFA request failed: {e}"
+            print(f"❌ Step 2 failed: {e}")
             return False
 
     def step3_validate_mfa_code(self, code: str) -> bool:

@@ -147,7 +147,7 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '09:45' %}
-                                <div class="time-slot-employee-name">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name|title }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['9:45'] == 0 %}
@@ -160,7 +160,7 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '10:30' %}
-                                <div class="time-slot-employee-name">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name|title }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['10:30'] == 0 %}
@@ -173,7 +173,7 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '11:00' %}
-                                <div class="time-slot-employee-name">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name|title }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['11:00'] == 0 %}
@@ -186,7 +186,7 @@
                     <div class="time-slot-employees">
                         {% for schedule, event, employee in today_core_events %}
                             {% if schedule.schedule_datetime.strftime('%H:%M') == '11:30' %}
-                                <div class="time-slot-employee-name">{{ employee.name }}</div>
+                                <div class="time-slot-employee-name">{{ employee.name|title }}</div>
                             {% endif %}
                         {% endfor %}
                         {% if core_time_slots['11:30'] == 0 %}
@@ -202,7 +202,7 @@
                     {% for schedule, event, employee in today_core_events %}
                     <div class="core-event-item core-event-item--clickable" data-action="show-event-details" data-schedule-id="{{ schedule.id }}" data-ref-num="{{ event.project_ref_num }}" data-event-name="{{ event.project_name }}" data-employee-name="{{ employee.name if employee else 'Unassigned' }}" data-scheduled-date="{{ schedule.schedule_datetime.strftime('%m-%d-%Y') }}" data-scheduled-time="{{ schedule.schedule_datetime.strftime('%I:%M %p') }}" data-start-date="{{ event.start_datetime.strftime('%m-%d-%Y') }}" data-due-date="{{ event.due_datetime.strftime('%m-%d-%Y') }}" data-event-type="{{ event.event_type }}">
                         <div class="core-event-time">{{ schedule.schedule_datetime.strftime('%I:%M %p') }}</div>
-                        <div class="core-event-employee">{{ employee.name if employee else 'Unassigned' }}</div>
+                        <div class="core-event-employee">{{ employee.name|title if employee else 'Unassigned' }}</div>
                         <div class="core-event-name" title="{{ event.project_name }}">{{ event.project_name }}</div>
                     </div>
                     {% endfor %}
@@ -456,7 +456,7 @@
     "todayCoreEvents": [
         {% for schedule, event, employee in today_core_events %}
         {
-            "employee_name": {{ employee.name | tojson }},
+            "employee_name": {{ employee.name|title | tojson }},
             "time": {{ schedule.schedule_datetime.strftime('%I:%M %p') | tojson }},
             "event_name": {{ event.project_name | tojson }},
             "event_type": {{ event.event_type | tojson }}
@@ -466,7 +466,7 @@
     "tomorrowCoreEvents": [
         {% for schedule, event, employee in tomorrow_core_events %}
         {
-            "employee_name": {{ employee.name | tojson }},
+            "employee_name": {{ employee.name|title | tojson }},
             "time": {{ schedule.schedule_datetime.strftime('%I:%M %p') | tojson }},
             "event_name": {{ event.project_name | tojson }},
             "event_type": {{ event.event_type | tojson }}

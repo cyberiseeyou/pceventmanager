@@ -145,6 +145,128 @@
         margin-top: 8px;
     }
 
+    /* Quick Actions */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .quick-action-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        text-decoration: none;
+        color: #1f2937;
+        transition: box-shadow 0.2s, transform 0.1s;
+    }
+
+    .quick-action-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+    }
+
+    .quick-action-card .qa-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .quick-action-card .qa-icon.blue { background: #eff6ff; color: #0071ce; }
+    .quick-action-card .qa-icon.green { background: #ecfdf5; color: #10b981; }
+    .quick-action-card .qa-icon.purple { background: #f5f3ff; color: #8b5cf6; }
+    .quick-action-card .qa-icon.orange { background: #fff7ed; color: #f59e0b; }
+
+    .quick-action-card .qa-label {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    /* Weekly Outlook */
+    .weekly-outlook {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+
+    .weekly-outlook h3 {
+        margin: 0 0 16px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .outlook-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+    }
+
+    .outlook-day {
+        text-align: center;
+        padding: 12px 8px;
+        border-radius: 8px;
+        background: #f9fafb;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.2s;
+    }
+
+    .outlook-day:hover {
+        background: #f3f4f6;
+    }
+
+    .outlook-day.today {
+        background: #eff6ff;
+        border: 2px solid #0071ce;
+    }
+
+    .outlook-day .day-name {
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .outlook-day .day-num {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 4px 0;
+    }
+
+    .outlook-day .day-stats {
+        font-size: 11px;
+    }
+
+    .outlook-day .day-stats .sched { color: #10b981; }
+    .outlook-day .day-stats .unsched { color: #dc2626; }
+
+    @media (max-width: 768px) {
+        .quick-actions {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .outlook-days {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
     /* Main Grid */
     .cc-grid {
         display: grid;
@@ -493,6 +615,74 @@
         </div>
     </div>
 
+    <!-- Setup Checklist (shown only when incomplete) -->
+    {% if data.setup_status and not data.setup_status.all_done %}
+    <div style="background: #fffbeb; border: 1px solid #fbbf24; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 12px; font-size: 16px; color: #92400e;">
+            <i class="fas fa-clipboard-list" style="margin-right: 6px;"></i>
+            Setup Checklist ({{ data.setup_status.completed }}/{{ data.setup_status.total }})
+        </h3>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            {% for step in data.setup_status.steps %}
+            <a href="{{ step.url }}" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: white; border-radius: 8px; text-decoration: none; border: 1px solid {{ '#d1fae5' if step.done else '#fed7aa' }};">
+                <span style="font-size: 18px;">{{ '&#9745;' if step.done else '&#9744;' }}</span>
+                <span style="flex: 1;">
+                    <span style="font-weight: 600; color: {{ '#065f46' if step.done else '#1f2937' }};">{{ step.name }}</span>
+                    <span style="font-size: 12px; color: #6b7280; margin-left: 6px;">{{ step.description }}</span>
+                </span>
+                {% if not step.done %}
+                <span style="font-size: 12px; font-weight: 600; color: #ea580c;">Set up</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="/schedule/daily/{{ data.today }}" class="quick-action-card">
+            <div class="qa-icon blue"><i class="fas fa-calendar-day"></i></div>
+            <div class="qa-label">Today's Schedule</div>
+        </a>
+        <a href="/printing" class="quick-action-card">
+            <div class="qa-icon green"><i class="fas fa-print"></i></div>
+            <div class="qa-label">Print Paperwork</div>
+        </a>
+        <a href="/events?condition=unstaffed" class="quick-action-card">
+            <div class="qa-icon orange"><i class="fas fa-calendar-times"></i></div>
+            <div class="qa-label">Unscheduled Events</div>
+        </a>
+        <a href="/dashboard/weekly-validation" class="quick-action-card">
+            <div class="qa-icon purple"><i class="fas fa-check-double"></i></div>
+            <div class="qa-label">Verify Schedule</div>
+        </a>
+    </div>
+
+    <!-- Weekly Outlook -->
+    {% if data.weekly_outlook %}
+    <div class="weekly-outlook">
+        <h3>
+            <i class="fas fa-chart-bar" style="color: #0071ce;"></i>
+            7-Day Outlook
+        </h3>
+        <div class="outlook-days">
+            {% for day in data.weekly_outlook %}
+            <a href="/schedule/daily/{{ day.date }}" class="outlook-day {{ 'today' if day.is_today else '' }}">
+                <div class="day-name">{{ day.day_name }}</div>
+                <div class="day-num">{{ day.day_num }}</div>
+                <div class="day-stats">
+                    <span class="sched">{{ day.scheduled }}</span>
+                    {% if day.unscheduled > 0 %}
+                    / <span class="unsched">{{ day.unscheduled }}</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Main Grid -->
     <div class="cc-grid">
         <!-- Left Column -->
@@ -594,7 +784,7 @@
                         <div class="rotation-card">
                             <div class="role">Juicer</div>
                             {% if data.rotation_info.juicer %}
-                            <div class="name">{{ data.rotation_info.juicer.name }}</div>
+                            <div class="name">{{ data.rotation_info.juicer.name|title }}</div>
                             {% else %}
                             <div class="name not-assigned">Not Assigned</div>
                             {% endif %}
@@ -602,7 +792,7 @@
                         <div class="rotation-card">
                             <div class="role">Primary Lead</div>
                             {% if data.rotation_info.primary_lead %}
-                            <div class="name">{{ data.rotation_info.primary_lead.name }}</div>
+                            <div class="name">{{ data.rotation_info.primary_lead.name|title }}</div>
                             {% else %}
                             <div class="name not-assigned">Not Assigned</div>
                             {% endif %}
@@ -628,7 +818,7 @@
                                 <i class="fas fa-user-minus"></i>
                             </div>
                             <div class="content">
-                                <div class="title">{{ emp.name }}</div>
+                                <div class="title">{{ emp.name|title }}</div>
                                 <div class="meta">
                                     Off: {{ emp.start_date }} - {{ emp.end_date }}
                                     {% if emp.reason %}({{ emp.reason }}){% endif %}
@@ -653,7 +843,7 @@
                                 <i class="fas fa-calendar-day"></i>
                             </div>
                             <div class="content">
-                                <div class="title">{{ emp.name }}</div>
+                                <div class="title">{{ emp.name|title }}</div>
                                 <div class="meta">{{ emp.start_date }} - {{ emp.end_date }}</div>
                             </div>
                         </div>

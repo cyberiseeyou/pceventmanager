@@ -2,10 +2,11 @@
 Daily Validation Dashboard Blueprint
 Provides visual overview of scheduling status and validation checks
 """
-from flask import Blueprint, render_template, jsonify, current_app, redirect, url_for
+from flask import Blueprint, render_template, jsonify, current_app, redirect, url_for, request as flask_request
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
 from urllib.parse import quote
+from app.routes.auth import require_authentication
 
 # Create blueprint
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
@@ -86,8 +87,10 @@ def daily_validation():
     - date: Date to validate (YYYY-MM-DD format), defaults to today
     """
     from flask import request
+    from app.models import get_models
 
     db = current_app.extensions['sqlalchemy']
+    models = get_models()
 
     # Get models
     Event = models['Event']
@@ -530,13 +533,16 @@ def _calculate_health_score(total_events, total_unscheduled, validation_issues):
 
 
 @dashboard_bp.route('/api/validation-summary')
+@require_authentication()
 def validation_summary_api():
     """
     API endpoint for validation summary (for widgets or external monitoring)
     """
+    from app.models import get_models
+    all_models = get_models()
     db = current_app.extensions['sqlalchemy']
-    Event = models['Event']
-    Schedule = models['Schedule']
+    Event = all_models['Event']
+    Schedule = all_models['Schedule']
 
     today = date.today()
 
@@ -1023,6 +1029,166 @@ def assign_supervisor_event():
         return jsonify({'error': str(e)}), 500
 
 
+def _get_fix_wizard_models():
+    """Build the models dict needed by FixWizardService."""
+    from app.models import get_models
+    all_models = get_models()
+    return {
+        'Event': all_models['Event'],
+        'Schedule': all_models['Schedule'],
+        'Employee': all_models['Employee'],
+        'EmployeeTimeOff': all_models['EmployeeTimeOff'],
+        'EmployeeAvailability': all_models.get('EmployeeAvailability'),
+        'EmployeeWeeklyAvailability': all_models.get('EmployeeWeeklyAvailability'),
+        'EmployeeAttendance': all_models.get('EmployeeAttendance'),
+        'RotationAssignment': all_models['RotationAssignment'],
+        'ScheduleException': all_models.get('ScheduleException'),
+        'PendingSchedule': all_models.get('PendingSchedule'),
+        'IgnoredValidationIssue': all_models.get('IgnoredValidationIssue'),
+    }
+
+
+@dashboard_bp.route('/fix-wizard')
+@require_authentication()
+def fix_wizard():
+    """
+    Interactive Fix Wizard - walks through validation issues one-by-one
+    with numbered fix options and AI-assist mode.
+
+    Query Parameters:
+        start_date: First day of week (YYYY-MM-DD), defaults to current week Sunday
+    """
+    date_param = flask_request.args.get('start_date')
+    if date_param:
+        try:
+            start_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = date.today()
+    else:
+        start_date = date.today()
+
+    # Align to Sunday
+    days_since_sunday = (start_date.weekday() + 1) % 7
+    start_date = start_date - timedelta(days=days_since_sunday)
+    end_date = start_date + timedelta(days=6)
+
+    return render_template('dashboard/fix_wizard.html',
+                         start_date=start_date,
+                         end_date=end_date)
+
+
+@dashboard_bp.route('/api/fix-wizard/issues')
+@require_authentication()
+def fix_wizard_issues():
+    """
+    API: Returns all fixable issues with options as JSON.
+
+    Query Parameters:
+        start_date: First day of week (YYYY-MM-DD)
+    """
+    from app.services.fix_wizard import FixWizardService
+
+    db = current_app.extensions['sqlalchemy']
+    models = _get_fix_wizard_models()
+
+    date_param = flask_request.args.get('start_date')
+    if date_param:
+        try:
+            start_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = date.today()
+    else:
+        start_date = date.today()
+
+    days_since_sunday = (start_date.weekday() + 1) % 7
+    start_date = start_date - timedelta(days=days_since_sunday)
+
+    try:
+        service = FixWizardService(db.session, models)
+        issues = service.get_fixable_issues(start_date)
+        return jsonify({
+            'status': 'success',
+            'issues': [i.to_dict() for i in issues],
+            'total': len(issues),
+        })
+    except Exception as e:
+        current_app.logger.error(f"Fix wizard issues error: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/fix-wizard/apply', methods=['POST'])
+@require_authentication()
+def fix_wizard_apply():
+    """
+    API: Apply a selected fix.
+
+    Request body:
+        action_type: One of reassign, unschedule, reschedule, assign_supervisor, ignore
+        target: Dict payload for the action
+    """
+    from app.services.fix_wizard import FixWizardService
+
+    db = current_app.extensions['sqlalchemy']
+    models = _get_fix_wizard_models()
+
+    data = flask_request.get_json(silent=True)
+    if not data:
+        return jsonify({'status': 'error', 'error': 'No data provided'}), 400
+
+    action_type = data.get('action_type')
+    target = data.get('target')
+
+    if not action_type:
+        return jsonify({'status': 'error', 'error': 'action_type is required'}), 400
+    if not target:
+        return jsonify({'status': 'error', 'error': 'target is required'}), 400
+
+    # SEC-CRT-04: Validate action_type against allowed enum values
+    from app.services.fix_wizard import FixActionType
+    valid_actions = {e.value for e in FixActionType}
+    if action_type not in valid_actions:
+        return jsonify({'status': 'error', 'error': f'Invalid action_type: {action_type}'}), 400
+
+    service = FixWizardService(db.session, models)
+    result = service.apply_fix(action_type, target)
+
+    if result.get('success'):
+        return jsonify({'status': 'success', **result})
+    else:
+        return jsonify({'status': 'error', 'error': result.get('message', 'Fix failed')}), 400
+
+
+@dashboard_bp.route('/api/fix-wizard/skip', methods=['POST'])
+@require_authentication()
+def fix_wizard_skip():
+    """
+    API: Skip/ignore a validation issue.
+
+    Request body:
+        rule_name: The rule name of the issue
+        details: Issue details dict
+        date: Optional ISO date
+        message: Issue message
+        severity: Issue severity
+    """
+    from app.services.fix_wizard import FixWizardService, FixActionType
+
+    db = current_app.extensions['sqlalchemy']
+    models = _get_fix_wizard_models()
+
+    data = flask_request.get_json(silent=True)
+    if not data:
+        return jsonify({'status': 'error', 'error': 'No data provided'}), 400
+
+    service = FixWizardService(db.session, models)
+    result = service.apply_fix(FixActionType.IGNORE, data)
+
+    if result.get('success'):
+        return jsonify({'status': 'success', **result})
+    else:
+        return jsonify({'status': 'error', 'error': result.get('message', 'Skip failed')}), 400
+
+
 @dashboard_bp.route('/approved-events')
 def approved_events():
     """
@@ -1048,3 +1214,178 @@ def approved_events():
     club = request.args.get('club', '8135')
 
     return render_template('dashboard/approved_events.html', club=club)
+
+
+@dashboard_bp.route('/employee-availability')
+def employee_availability():
+    """
+    Employee Availability weekly view - capacity planning tool.
+
+    Shows all available employees per day for the selected week.
+    Used to forecast whether there are enough people for upcoming events.
+
+    Query Parameters:
+    - start_date: First day of week (YYYY-MM-DD), defaults to today's week
+    """
+    from flask import request
+    from app.models import get_models
+    from app.services.weekly_planning_service import WeeklyPlanningService
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+
+    # Parse and align to Sunday
+    date_param = request.args.get('start_date')
+    if date_param:
+        try:
+            start_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = date.today()
+    else:
+        start_date = date.today()
+
+    days_since_sunday = (start_date.weekday() + 1) % 7
+    start_date = start_date - timedelta(days=days_since_sunday)
+    end_date = start_date + timedelta(days=6)
+
+    service = WeeklyPlanningService(db.session, models)
+    availability = service.get_available_employees(start_date, end_date)
+    holidays = availability.pop('_holidays', set())
+
+    # Build ordered list of days
+    days = []
+    for i in range(7):
+        d = start_date + timedelta(days=i)
+        days.append({
+            'date': d,
+            'employees': availability.get(d, []),
+            'is_holiday': d in holidays,
+            'count': len(availability.get(d, []))
+        })
+
+    total_available = sum(day['count'] for day in days)
+
+    return render_template('dashboard/employee_availability.html',
+                         days=days,
+                         start_date=start_date,
+                         end_date=end_date,
+                         total_available=total_available,
+                         today_date=date.today(),
+                         timedelta=timedelta)
+
+
+@dashboard_bp.route('/available-blocks')
+def available_blocks():
+    """
+    Available Schedule Blocks weekly view - scheduling action tool.
+
+    Shows employees still open for main event assignment each day.
+    Used to manually fill remaining events by seeing who is free.
+
+    Query Parameters:
+    - start_date: First day of week (YYYY-MM-DD), defaults to today's week
+    """
+    from flask import request
+    from app.models import get_models
+    from app.services.weekly_planning_service import WeeklyPlanningService
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+
+    # Parse and align to Sunday
+    date_param = request.args.get('start_date')
+    if date_param:
+        try:
+            start_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = date.today()
+    else:
+        start_date = date.today()
+
+    days_since_sunday = (start_date.weekday() + 1) % 7
+    start_date = start_date - timedelta(days=days_since_sunday)
+    end_date = start_date + timedelta(days=6)
+
+    service = WeeklyPlanningService(db.session, models)
+    blocks = service.get_available_for_main_events(start_date, end_date)
+    holidays = blocks.pop('_holidays', set())
+
+    # Build ordered list of days
+    days = []
+    for i in range(7):
+        d = start_date + timedelta(days=i)
+        days.append({
+            'date': d,
+            'employees': blocks.get(d, []),
+            'is_holiday': d in holidays,
+            'count': len(blocks.get(d, []))
+        })
+
+    total_available = sum(day['count'] for day in days)
+
+    return render_template('dashboard/available_blocks.html',
+                         days=days,
+                         start_date=start_date,
+                         end_date=end_date,
+                         total_available=total_available,
+                         today_date=date.today(),
+                         timedelta=timedelta)
+
+
+@dashboard_bp.route('/scan-out-checklist')
+@dashboard_bp.route('/scan-out-checklist/<selected_date>')
+def scan_out_checklist(selected_date=None):
+    """Scan-Out Checklist - minimal event list for end-of-day scan-out."""
+    from app.models import get_models
+    from sqlalchemy.orm import joinedload
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+
+    if selected_date:
+        try:
+            view_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+        except ValueError:
+            view_date = date.today()
+    else:
+        view_date = date.today()
+
+    date_start = datetime.combine(view_date, datetime.min.time())
+    date_end = datetime.combine(view_date + timedelta(days=1), datetime.min.time())
+
+    schedules = db.session.query(Schedule).options(
+        joinedload(Schedule.event),
+        joinedload(Schedule.employee)
+    ).filter(
+        Schedule.schedule_datetime >= date_start,
+        Schedule.schedule_datetime < date_end
+    ).order_by(Schedule.schedule_datetime.asc()).all()
+
+    events = []
+    for sched in schedules:
+        evt = sched.event
+        emp = sched.employee
+        events.append({
+            'schedule_id': sched.id,
+            'event_number': getattr(evt, 'walmart_event_id', None) or '',
+            'event_name': evt.project_name,
+            'event_type': evt.event_type,
+            'employee_name': emp.name if emp else 'Unassigned',
+            'start_time': sched.schedule_datetime.strftime('%I:%M %p'),
+        })
+
+    prev_date = view_date - timedelta(days=1)
+    next_date = view_date + timedelta(days=1)
+
+    # Get club number for Walmart sync
+    SystemSetting = models['SystemSetting']
+    club_setting = SystemSetting.query.filter_by(key='walmart_club_number').first()
+    club_number = club_setting.value if club_setting else ''
+
+    return render_template('dashboard/scan_out_checklist.html',
+                         events=events,
+                         view_date=view_date,
+                         prev_date=prev_date,
+                         next_date=next_date,
+                         club_number=club_number)

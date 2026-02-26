@@ -4,6 +4,7 @@ Handles fetching events from Crossmark API and updating the local database
 """
 from datetime import datetime
 from flask import current_app
+from app.constants import INACTIVE_CONDITIONS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,33 @@ class DatabaseRefreshService:
             current_app.logger.info("Clearing all existing events from database")
             existing_count = Event.query.count()
 
+            # Preserve locally-approved schedules before clearing
+            # These are schedules created via the auto-scheduler approval flow
+            PendingSchedule = models.get('PendingSchedule')
+            local_schedules = []
+            if PendingSchedule:
+                approved_pending = db.session.query(PendingSchedule).filter(
+                    PendingSchedule.status.in_(['api_submitted', 'approved']),
+                    PendingSchedule.employee_id.isnot(None),
+                    PendingSchedule.schedule_datetime.isnot(None)
+                ).all()
+                for ps in approved_pending:
+                    # Look up the matching Schedule record to preserve its external_id
+                    existing_schedule = db.session.query(Schedule).filter_by(
+                        event_ref_num=ps.event_ref_num,
+                        employee_id=ps.employee_id
+                    ).first()
+                    local_schedules.append({
+                        'event_ref_num': ps.event_ref_num,
+                        'employee_id': ps.employee_id,
+                        'schedule_datetime': ps.schedule_datetime,
+                        'external_id': existing_schedule.external_id if existing_schedule else None,
+                        'sync_status': existing_schedule.sync_status if existing_schedule else 'pending_sync'
+                    })
+                current_app.logger.info(
+                    f"Preserved {len(local_schedules)} locally-approved schedules for restoration after refresh"
+                )
+
             with disable_foreign_keys(db.session):
                 # Clear auto scheduler results if table exists
                 try:
@@ -199,7 +227,56 @@ class DatabaseRefreshService:
             )
 
             db.session.commit()
-            
+
+            # Restore locally-approved schedules
+            restored_count = 0
+            skipped_cancelled = 0
+            if local_schedules:
+                for sched_data in local_schedules:
+                    # Only restore if the event still exists after refresh
+                    event = Event.query.filter_by(
+                        project_ref_num=sched_data['event_ref_num']
+                    ).first()
+                    if not event:
+                        continue
+
+                    # Don't restore schedules for cancelled/expired events —
+                    # the API condition is authoritative after a fresh import
+                    if event.condition in INACTIVE_CONDITIONS:
+                        skipped_cancelled += 1
+                        continue
+
+                    # Don't duplicate — skip if the API sync already created a schedule for this event
+                    existing = Schedule.query.filter_by(
+                        event_ref_num=sched_data['event_ref_num']
+                    ).first()
+                    if existing:
+                        continue
+
+                    schedule = Schedule(
+                        event_ref_num=sched_data['event_ref_num'],
+                        employee_id=sched_data['employee_id'],
+                        schedule_datetime=sched_data['schedule_datetime'],
+                        external_id=sched_data['external_id'],
+                        last_synced=datetime.utcnow(),
+                        sync_status=sched_data['sync_status']
+                    )
+                    db.session.add(schedule)
+
+                    event.is_scheduled = True
+                    event.condition = 'Scheduled'
+                    restored_count += 1
+
+                if restored_count:
+                    db.session.commit()
+                    current_app.logger.info(
+                        f"Restored {restored_count} locally-approved schedules after refresh"
+                    )
+                if skipped_cancelled:
+                    current_app.logger.info(
+                        f"Skipped {skipped_cancelled} schedule restorations for cancelled/expired events"
+                    )
+
             # Post-import fix: Correct truncated event types using pairing logic
             # Events with 100-char names have their type suffix cut off
             truncated_fixed = self._fix_truncated_event_types(db, Event)
@@ -211,26 +288,69 @@ class DatabaseRefreshService:
             if overrides_applied > 0:
                 current_app.logger.info(f"Reapplied {overrides_applied} event type overrides")
 
-            # Check for staffed events without schedules
+            # Reconcile: mark events with Schedule records as scheduled
+            # The planning API may report condition='Unstaffed' even for events
+            # that have schedules (created via the scheduling API).
             from sqlalchemy import select
+            scheduled_event_refs = select(Schedule.event_ref_num).distinct()
+            unstaffed_with_schedule = Event.query.filter(
+                Event.condition == 'Unstaffed',
+                Event.is_scheduled == False,
+                Event.project_ref_num.in_(scheduled_event_refs)
+            ).all()
+
+            if unstaffed_with_schedule:
+                for event in unstaffed_with_schedule:
+                    event.is_scheduled = True
+                    event.condition = 'Scheduled'
+                db.session.commit()
+                current_app.logger.info(
+                    f"Reconciled {len(unstaffed_with_schedule)} events: had schedules but were marked Unstaffed"
+                )
+
+            # Check for staffed events without schedules
             staffed_without_schedule = Event.query.filter(
                 Event.condition == 'Staffed',
-                ~Event.project_ref_num.in_(select(Schedule.event_ref_num))
+                ~Event.project_ref_num.in_(scheduled_event_refs)
             ).count()
 
             warning_message = None
             if staffed_without_schedule:
                 warning_message = f"{staffed_without_schedule} events are marked as 'Staffed' but have no schedule records."
 
+            # Attempt Walmart event number sync if EDR is enabled
+            event_numbers_synced = 0
+            event_number_warning = None
+            try:
+                config = current_app.config
+                if config.get('ENABLE_EDR_FEATURES') or config.get('WALMART_EDR_USERNAME'):
+                    event_numbers_synced = self._sync_event_numbers_if_available()
+                    if event_numbers_synced > 0:
+                        current_app.logger.info(f"Auto-synced event numbers for {event_numbers_synced} events during refresh")
+                    else:
+                        event_number_warning = "Event number sync skipped: no active Walmart session. Sync manually from Left in Approved."
+                        current_app.logger.info(event_number_warning)
+            except Exception as e:
+                event_number_warning = f"Event number sync failed (non-blocking): {e}"
+                current_app.logger.warning(event_number_warning)
+
+            if event_number_warning and not warning_message:
+                warning_message = event_number_warning
+            elif event_number_warning and warning_message:
+                warning_message = f"{warning_message} {event_number_warning}"
+
             stats = {
                 'total_fetched': total_fetched,
                 'cleared': existing_count,
                 'created': created_count,
-                'schedules': schedule_count
+                'schedules': schedule_count,
+                'restored_schedules': restored_count,
+                'event_numbers_synced': event_numbers_synced
             }
 
             current_app.logger.info(
-                f"Database refresh completed: Cleared {existing_count}, created {created_count} events, {schedule_count} schedules"
+                f"Database refresh completed: Cleared {existing_count}, created {created_count} events, "
+                f"{schedule_count} API schedules, {restored_count} restored local schedules"
             )
 
             self._update_progress(
@@ -358,7 +478,10 @@ class DatabaseRefreshService:
             end_date = datetime.utcnow()
 
         condition = event_record.get('condition', 'Unstaffed')
-        is_event_scheduled = (condition != 'Unstaffed') or (schedule_date is not None)
+        is_event_scheduled = (
+            condition not in INACTIVE_CONDITIONS
+            and (condition != 'Unstaffed' or schedule_date is not None)
+        )
 
         # Extract SalesToolURL
         sales_tools_url = None
@@ -602,6 +725,77 @@ class DatabaseRefreshService:
 
         except Exception as e:
             current_app.logger.error(f"Error reapplying overrides: {e}")
+            return 0
+
+    def _sync_event_numbers_if_available(self):
+        """
+        Attempt to sync Walmart event numbers using any active session.
+        Returns the count of events synced, or 0 if no session is available.
+        """
+        try:
+            from app.integrations.walmart_api.session_manager import session_manager
+            from app.integrations.walmart_api.routes import _fetch_all_events_with_session
+            from app.services.walmart_event_enrichment import WalmartEventEnrichmentService
+            from datetime import timedelta, date
+
+            # Look for any active authenticated session
+            authenticator = None
+            for user_id, user_session in session_manager._sessions.items():
+                if user_session.is_authenticated and user_session.authenticator:
+                    if user_session.authenticator.auth_token:
+                        authenticator = user_session.authenticator
+                        break
+
+            # Try global authenticator from printing module as fallback
+            if not authenticator:
+                try:
+                    from app.routes.printing import edr_authenticator as global_authenticator
+                    if global_authenticator and global_authenticator.auth_token:
+                        authenticator = global_authenticator
+                except ImportError:
+                    pass
+
+            if not authenticator:
+                return 0
+
+            # Get club number from settings
+            from app.models import get_models
+            models = get_models()
+            SystemSetting = models.get('SystemSetting')
+            club = None
+            if SystemSetting:
+                setting = SystemSetting.query.filter_by(key='walmart_club_number').first()
+                if setting:
+                    club = setting.value
+
+            if not club:
+                current_app.logger.info("No club number configured; skipping event number sync")
+                return 0
+
+            today = date.today()
+            start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+            end_date = (today + timedelta(days=120)).strftime('%Y-%m-%d')
+
+            walmart_events = _fetch_all_events_with_session(
+                authenticator.session,
+                authenticator.auth_token,
+                club_numbers=[club],
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if not walmart_events:
+                return 0
+
+            enrichment_service = WalmartEventEnrichmentService()
+            result = enrichment_service.enrich_events_from_walmart_data(walmart_events)
+            return result.get('matched', 0)
+
+        except ImportError:
+            current_app.logger.info("Walmart integration not available; skipping event number sync")
+            return 0
+        except Exception as e:
+            current_app.logger.warning(f"Event number sync attempt failed: {e}")
             return 0
 
     def _find_employee(self, event_record, Employee):

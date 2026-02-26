@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Fix Wizard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" />
+<style>
+    .wizard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .wizard-header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .wizard-header .date-range {
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+
+    .nav-btns {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .nav-btns a {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .nav-btns a:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Progress bar */
+    .progress-section {
+        background: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .progress-text {
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .progress-bar-container {
+        flex: 1;
+        background: #e5e7eb;
+        border-radius: 999px;
+        height: 8px;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.3s ease;
+    }
+
+    .ai-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+    }
+
+    .ai-toggle label {
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #4b5563;
+    }
+
+    .ai-toggle input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    /* Issue card */
+    .issue-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .issue-card-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .severity-badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .severity-badge.critical {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .severity-badge.warning {
+        background: #fffbeb;
+        color: #d97706;
+    }
+
+    .severity-badge.info {
+        background: #eff6ff;
+        color: #2563eb;
+    }
+
+    .issue-rule {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .issue-date {
+        color: #6b7280;
+        font-size: 13px;
+        margin-left: auto;
+    }
+
+    .issue-card-body {
+        padding: 16px 24px;
+    }
+
+    .issue-message {
+        font-size: 15px;
+        line-height: 1.5;
+        color: #4b5563;
+        margin-bottom: 16px;
+    }
+
+    .issue-details {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .issue-details span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* Fix options */
+    .options-header {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12px;
+        padding-top: 8px;
+    }
+
+    .option-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .option-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: all 0.15s ease;
+    }
+
+    .option-card:hover {
+        border-color: #a5b4fc;
+        background: #f5f7ff;
+    }
+
+    .option-card.selected {
+        border-color: #667eea;
+        background: #eef2ff;
+    }
+
+    .option-card.recommended {
+        border-color: #22c55e;
+        background: #f0fdf4;
+    }
+
+    .option-card.selected.recommended {
+        border-color: #16a34a;
+        background: #dcfce7;
+    }
+
+    .option-num {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        color: #374151;
+        flex-shrink: 0;
+    }
+
+    .option-card.selected .option-num {
+        background: #667eea;
+        color: white;
+    }
+
+    .option-card.recommended .option-num {
+        background: #22c55e;
+        color: white;
+    }
+
+    .option-icon {
+        color: #6b7280;
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .option-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .option-desc {
+        font-size: 14px;
+        color: #374151;
+    }
+
+    .option-badges {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-top: 4px;
+    }
+
+    .recommended-badge {
+        background: #dcfce7;
+        color: #16a34a;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+    }
+
+    .confidence-bar {
+        width: 60px;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 999px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .confidence-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.3s ease;
+    }
+
+    .confidence-fill.high { background: #22c55e; }
+    .confidence-fill.medium { background: #eab308; }
+    .confidence-fill.low { background: #ef4444; }
+
+    .confidence-text {
+        font-size: 11px;
+        color: #9ca3af;
+        width: 28px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    /* Action buttons */
+    .action-btns {
+        display: flex;
+        gap: 12px;
+        padding: 16px 24px;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .btn-apply {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-apply:hover { background: #5a6fd6; }
+    .btn-apply:disabled {
+        background: #c7d2fe;
+        cursor: not-allowed;
+    }
+
+    .btn-skip {
+        background: #f3f4f6;
+        color: #4b5563;
+        border: 1px solid #d1d5db;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-skip:hover { background: #e5e7eb; }
+
+    /* States */
+    .wizard-loading, .wizard-empty, .wizard-summary {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 48px 32px;
+        text-align: center;
+    }
+
+    .wizard-loading i, .wizard-empty i, .wizard-summary .summary-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    .wizard-loading i { color: #667eea; }
+    .wizard-empty i { color: #22c55e; }
+
+    .wizard-empty h2, .wizard-summary h2 {
+        margin: 0 0 8px 0;
+        font-size: 22px;
+    }
+
+    .wizard-empty p, .wizard-summary .summary-subtitle {
+        color: #6b7280;
+        margin: 0;
+    }
+
+    /* Summary */
+    .summary-icon { color: #667eea; }
+
+    .summary-stats {
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+        margin: 20px 0;
+    }
+
+    .summary-stat {
+        text-align: center;
+    }
+
+    .summary-stat .count {
+        font-size: 28px;
+        font-weight: 700;
+    }
+
+    .summary-stat .label {
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .summary-stat.fixed .count { color: #22c55e; }
+    .summary-stat.skipped .count { color: #eab308; }
+
+    .summary-fixes {
+        margin-top: 24px;
+        text-align: left;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .summary-fixes h3 {
+        font-size: 15px;
+        margin-bottom: 12px;
+        color: #374151;
+    }
+
+    .summary-fix-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .summary-fix-item i.fa-check-circle { color: #22c55e; }
+    .summary-fix-item i.fa-forward { color: #eab308; }
+
+    /* Keyboard hint */
+    .keyboard-hint {
+        text-align: center;
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 12px;
+    }
+
+    kbd {
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-family: monospace;
+        font-size: 11px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wizard-header">
+    <div>
+        <h1><i class="fas fa-magic"></i> Fix Wizard</h1>
+        <div class="date-range">{{ start_date.strftime('%B %d') }} - {{ end_date.strftime('%B %d, %Y') }}</div>
+    </div>
+    <div class="nav-btns">
+        <a href="{{ url_for('dashboard.weekly_validation', start_date=start_date.isoformat()) }}">
+            <i class="fas fa-arrow-left"></i> Back to Validation
+        </a>
+    </div>
+</div>
+
+<div id="wizard-root">
+    <div class="wizard-loading" id="wizard-loading">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading validation issues...</p>
+    </div>
+</div>
+
+<script>
+    window.WIZARD_CONFIG = {
+        issuesUrl: '{{ url_for("dashboard.fix_wizard_issues") }}',
+        applyUrl: '{{ url_for("dashboard.fix_wizard_apply") }}',
+        skipUrl: '{{ url_for("dashboard.fix_wizard_skip") }}',
+        startDate: '{{ start_date.isoformat() }}'
+    };
+</script>
+<script src="{{ url_for('static', filename='js/pages/fix-wizard.js') }}"></script>
+{% endblock %}

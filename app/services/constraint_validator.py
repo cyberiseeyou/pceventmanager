@@ -113,7 +113,8 @@ class ConstraintValidator:
         if duration_minutes is None:
             duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
 
-        # Check all constraints
+        # Check all constraints (past-date first as a safety net)
+        self._check_past_date(schedule_datetime, result)
         self._check_company_holiday(schedule_datetime, result)
         self._check_time_off(employee, schedule_datetime, result)
         self._check_availability(employee, schedule_datetime, result)
@@ -468,6 +469,26 @@ class ConstraintValidator:
                                 }
                             ))
                             return  # Found a conflict, no need to check further
+
+    def _check_past_date(self, schedule_datetime: datetime,
+                        result: ValidationResult) -> None:
+        """Reject scheduling in the past — safety net for all code paths"""
+        from zoneinfo import ZoneInfo
+        from flask import current_app
+        tz_name = current_app.config.get(
+            'EXTERNAL_API_TIMEZONE', 'America/Indiana/Indianapolis'
+        )
+        local_today = datetime.now(ZoneInfo(tz_name)).date()
+        if schedule_datetime.date() < local_today:
+            result.add_violation(ConstraintViolation(
+                constraint_type=ConstraintType.PAST_DATE,
+                message=f"Cannot schedule in the past ({schedule_datetime.date()})",
+                severity=ConstraintSeverity.HARD,
+                details={
+                    'proposed_date': str(schedule_datetime.date()),
+                    'today': str(local_today)
+                }
+            ))
 
     def _check_due_date(self, event: object, schedule_datetime: datetime,
                        result: ValidationResult) -> None:

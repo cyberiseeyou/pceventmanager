@@ -273,6 +273,51 @@
         border-top-right-radius: 0;
     }
 
+    /* Confirmation Dialog */
+    .ai-confirmation {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 8px 1rem;
+    }
+    .ai-confirmation-text {
+        font-size: 13px;
+        color: #856404;
+        margin-bottom: 8px;
+    }
+    .ai-confirmation-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .ai-confirm-btn {
+        flex: 1;
+        padding: 8px;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .ai-confirm-btn.confirm {
+        background: #28a745;
+        color: white;
+    }
+    .ai-confirm-btn.confirm:hover {
+        background: #218838;
+    }
+    .ai-confirm-btn.cancel {
+        background: #6c757d;
+        color: white;
+    }
+    .ai-confirm-btn.cancel:hover {
+        background: #5a6268;
+    }
+    .ai-confirm-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
     /* Suggestions */
     .ai-suggestions-bar {
         padding: 0.75rem 1rem;

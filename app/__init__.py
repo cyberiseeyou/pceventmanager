@@ -13,6 +13,7 @@ from datetime import datetime, time, date, timedelta
 
 from .extensions import db, migrate, csrf, limiter
 from .config import get_config
+from .utils.timezone import to_local_time
 
 
 def create_app(config_name=None):
@@ -145,6 +146,9 @@ def create_app(config_name=None):
     app.config['OrderItem'] = models.get('OrderItem')
     app.config['InventoryReminder'] = models.get('InventoryReminder')
     app.config['LockedDay'] = models.get('LockedDay')
+
+    # Register Jinja filters
+    app.jinja_env.filters['localtime'] = to_local_time
 
     # Register blueprints
     register_blueprints(app, db, models)
@@ -304,7 +308,7 @@ def setup_request_handlers(app):
     @app.context_processor
     def inject_now():
         """Make datetime.now available in templates for dynamic year display"""
-        return {'now': datetime.now}
+        return {'now': datetime.now, 'today_date': datetime.now().strftime('%Y-%m-%d')}
 
     @app.after_request
     def add_csrf_token_cookie(response):

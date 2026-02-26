@@ -43,6 +43,23 @@
         </div>
     </div>
 
+    <!-- Search & Filter Bar -->
+    <div class="employee-filter-bar" style="display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-md); align-items: center; flex-wrap: wrap;">
+        <input type="text" id="employee-search" placeholder="Search by name..." style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+        <select id="employee-role-filter" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+            <option value="">All Roles</option>
+            <option value="Lead Event Specialist">Lead Event Specialist</option>
+            <option value="Event Specialist">Event Specialist</option>
+            <option value="Juicer Barista">Juicer Barista</option>
+            <option value="Club Supervisor">Club Supervisor</option>
+        </select>
+        <select id="employee-status-filter" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+            <option value="active">Active Only</option>
+            <option value="all">All</option>
+            <option value="inactive">Inactive Only</option>
+        </select>
+    </div>
+
     <!-- Employees Grid -->
     <div id="employees-grid" class="employee-grid">
         <div class="loading">Loading employees</div>

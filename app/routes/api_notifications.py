@@ -23,6 +23,7 @@ def init_notification_routes(db, models):
     Event = models['Event']
     Schedule = models['Schedule']
     Employee = models['Employee']
+    Note = models.get('Note')
 
     @notifications_api_bp.route('', methods=['GET'])
     def get_notifications():
@@ -203,6 +204,38 @@ def init_notification_routes(db, models):
                             'action_url': '/auto-schedule/review',
                             'action_text': 'Review Schedules'
                         })
+
+            # Check 8: Notes due today or overdue
+            if Note:
+                overdue_notes = Note.query.filter(
+                    Note.is_completed == False,
+                    Note.due_date < today
+                ).count()
+
+                if overdue_notes > 0:
+                    notifications['warning'].append({
+                        'id': 'overdue_notes',
+                        'type': 'overdue_notes',
+                        'title': f'{overdue_notes} Overdue Note(s)',
+                        'message': f'{overdue_notes} note(s) are past their due date',
+                        'action_url': '/notes?filter=overdue',
+                        'action_text': 'View Notes'
+                    })
+
+                due_today_notes = Note.query.filter(
+                    Note.is_completed == False,
+                    Note.due_date == today
+                ).count()
+
+                if due_today_notes > 0:
+                    notifications['info'].append({
+                        'id': 'due_today_notes',
+                        'type': 'notes_due_today',
+                        'title': f'{due_today_notes} Note(s) Due Today',
+                        'message': f'{due_today_notes} note(s) are due today',
+                        'action_url': '/notes?filter=due_today',
+                        'action_text': 'View Notes'
+                    })
 
             # Calculate total count
             notifications['count'] = (

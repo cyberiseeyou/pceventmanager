@@ -208,7 +208,201 @@
     .calendar-day.is-locked:hover {
         border-color: #dc3545;
     }
-    
+
+    /* Calendar Day Tooltip */
+    .calendar-day {
+        position: relative;
+    }
+
+    .day-tooltip {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1f2937;
+        color: #f9fafb;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+        margin-bottom: 6px;
+    }
+
+    .day-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #1f2937;
+    }
+
+    .calendar-day:hover .day-tooltip {
+        display: block;
+    }
+
+    .day-tooltip .tt-line {
+        line-height: 1.6;
+    }
+
+    .day-tooltip .tt-total {
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+        padding-bottom: 4px;
+        margin-bottom: 4px;
+    }
+
+    .day-tooltip .tt-unsched {
+        color: #fca5a5;
+    }
+
+    /* View Mode Toggle */
+    .view-mode-toggle {
+        display: inline-flex;
+        background: #f3f4f6;
+        border-radius: 8px;
+        padding: 2px;
+        margin-left: 8px;
+    }
+
+    .view-mode-btn {
+        padding: 6px 14px;
+        border: none;
+        background: transparent;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #6b7280;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .view-mode-btn.active {
+        background: white;
+        color: #0071ce;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Week View */
+    .week-view-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        margin-top: 16px;
+    }
+
+    .week-day-col {
+        background: white;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        min-height: 300px;
+    }
+
+    .week-day-col.today {
+        border-color: #0071ce;
+        border-width: 2px;
+    }
+
+    .week-day-header {
+        padding: 10px 12px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .week-day-header:hover {
+        background: #f3f4f6;
+    }
+
+    .week-day-col.today .week-day-header {
+        background: #eff6ff;
+    }
+
+    .week-day-header .wk-day-name {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #6b7280;
+        letter-spacing: 0.5px;
+    }
+
+    .week-day-header .wk-day-num {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .week-day-body {
+        padding: 8px;
+    }
+
+    .week-event-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+        background: #f9fafb;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .week-event-item:hover {
+        background: #f3f4f6;
+    }
+
+    .week-event-badge {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .week-event-badge.type-Core { background: #28a745; }
+    .week-event-badge.type-Juicer { background: #e91e63; }
+    .week-event-badge.type-Supervisor { background: #6610f2; }
+    .week-event-badge.type-Freeosk { background: #fd7e14; }
+    .week-event-badge.type-Digital, .week-event-badge.type-Digitals { background: #007bff; }
+    .week-event-badge.type-Other { background: #6c757d; }
+
+    .week-event-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #374151;
+    }
+
+    .week-event-emp {
+        font-size: 11px;
+        color: #6b7280;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80px;
+    }
+
+    .week-empty {
+        text-align: center;
+        padding: 20px 8px;
+        color: #9ca3af;
+        font-size: 12px;
+    }
+
+    @media (max-width: 1024px) {
+        .week-view-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     /* Day Detail Modal */
     .day-detail-modal {
         position: fixed;
@@ -569,11 +763,15 @@
         <div class="calendar-header">
             <div class="calendar-nav">
                 <button class="btn btn-secondary" data-action="go-today">Today</button>
+                <div class="view-mode-toggle" role="group" aria-label="View mode">
+                    <button class="view-mode-btn active" data-calview="month">Month</button>
+                    <button class="view-mode-btn" data-calview="week">Week</button>
+                </div>
             </div>
             <div class="month-nav">
-                <button class="btn btn-outline" data-action="change-month" data-delta="-1">‹ Previous</button>
+                <button class="btn btn-outline" data-action="change-month" data-delta="-1" id="nav-prev">‹ Previous</button>
                 <h2 class="month-title" id="month-title">{{ selected_date.strftime('%B %Y') }}</h2>
-                <button class="btn btn-outline" data-action="change-month" data-delta="1">Next ›</button>
+                <button class="btn btn-outline" data-action="change-month" data-delta="1" id="nav-next">Next ›</button>
             </div>
         </div>
 
@@ -589,6 +787,11 @@
             <div class="calendar-day-header">Sat</div>
             
             <!-- Calendar days will be generated by JavaScript -->
+        </div>
+
+        <!-- Week View Grid (hidden by default) -->
+        <div class="week-view-grid" id="week-view-grid" style="display: none;">
+            <!-- JavaScript will populate this -->
         </div>
     </div>
 
@@ -773,6 +976,10 @@
     document.addEventListener('DOMContentLoaded', async function() {
         await loadLockedDays();
         generateCalendar();
+        // Restore saved view mode
+        if (currentCalendarView === 'week') {
+            switchCalendarView('week');
+        }
     });
 
     /**
@@ -884,7 +1091,22 @@
                 dayElement.classList.add('is-locked');
             }
 
+            // Build tooltip content
+            const totalEvents = dayEvents.length;
+            let tooltipLines = [];
+            if (totalEvents > 0 || unscheduledCount > 0) {
+                tooltipLines.push(`<div class="tt-line tt-total">${totalEvents} scheduled event${totalEvents !== 1 ? 's' : ''}</div>`);
+                badges.forEach(b => {
+                    if (b.count > 0) tooltipLines.push(`<div class="tt-line">${b.label === 'C' ? 'Core' : b.label === 'S' ? 'Supervisor' : b.label === 'J' ? 'Juicer' : b.label === 'F' ? 'Freeosk' : b.label === 'D' ? 'Digital' : 'Other'}: ${b.count}</div>`);
+                });
+                if (unscheduledCount > 0) {
+                    tooltipLines.push(`<div class="tt-line tt-unsched">${unscheduledCount} unscheduled</div>`);
+                }
+            }
+            const tooltipHtml = tooltipLines.length > 0 ? `<div class="day-tooltip">${tooltipLines.join('')}</div>` : '';
+
             dayElement.innerHTML = `
+                ${tooltipHtml}
                 ${isLocked ? `<div class="lock-indicator" data-date="${dayStr}" title="Day is locked: ${escapeHtml(lockedDaysData[dayStr]?.reason || 'No reason provided')}">🔒</div>` : ''}
                 ${unscheduledCount > 0 ? `<div class="unscheduled-warning" data-date="${dayStr}" title="${unscheduledCount} unscheduled event(s)">⚠️</div>` : ''}
                 <div class="day-number">${dayDate.getDate()}</div>
@@ -912,8 +1134,11 @@
     }
     
     function changeMonth(delta) {
-        currentDate.setMonth(currentDate.getMonth() + delta);
-        // Reload with new month
+        if (currentCalendarView === 'week') {
+            currentDate.setDate(currentDate.getDate() + (delta * 7));
+        } else {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+        }
         const newUrl = new URL(window.location);
         newUrl.searchParams.set('date', currentDate.toISOString().split('T')[0]);
         window.location.href = newUrl.toString();
@@ -972,7 +1197,7 @@
                             <div class="event-name">${escapeHtml(event.event_name)}</div>
                             <div class="event-details">
                                 <span class="event-type-badge event-type-${escapeHtml(event.event_type.toLowerCase().replace(/ /g, '-'))}">${escapeHtml(event.event_type)}</span>
-                                <span>👤 ${escapeHtml(event.employee_name)}</span>
+                                <span>👤 ${escapeHtml(toTitleCase(event.employee_name))}</span>
                                 ${event.store_name ? `<span>🏪 ${escapeHtml(event.store_name)}</span>` : ''}
                                 ${event.estimated_time ? `<span>⏱️ ${escapeHtml(event.estimated_time)} min</span>` : ''}
                                 ${event.supervisor_name ? `<span style="color: #6610f2; font-weight: bold;">👨‍💼 Supervisor: ${escapeHtml(event.supervisor_name)} (${escapeHtml(event.supervisor_time)})</span>` : ''}
@@ -1286,7 +1511,7 @@
                 <tbody>
                     ${printableEvents.map(event => `
                         <tr>
-                            <td class="employee-name">${escapeHtml(event.employee_name)}</td>
+                            <td class="employee-name">${escapeHtml(toTitleCase(event.employee_name))}</td>
                             <td class="event-time">${escapeHtml(event.time)}</td>
                             <td class="event-name">${escapeHtml(event.event_name)}</td>
                         </tr>
@@ -1487,7 +1712,7 @@
                 employees.forEach(employee => {
                     const option = document.createElement('option');
                     option.value = employee.id;
-                    option.textContent = `${employee.name} (${employee.job_title})`;
+                    option.textContent = `${toTitleCase(employee.name)} (${employee.job_title})`;
                     select.appendChild(option);
                 });
             })
@@ -1496,7 +1721,7 @@
                 select.innerHTML = '<option value="">Error loading employees</option>';
             });
     }
-    
+
     function loadAvailableEmployeesForReschedule(selectId, date, eventType, employeeId, currentDate) {
         const select = document.getElementById(selectId);
         select.innerHTML = '<option value="">Loading...</option>';
@@ -1516,7 +1741,7 @@
                 employees.forEach(employee => {
                     const option = document.createElement('option');
                     option.value = employee.id;
-                    option.textContent = `${employee.name} (${employee.job_title})`;
+                    option.textContent = `${toTitleCase(employee.name)} (${employee.job_title})`;
                     select.appendChild(option);
                 });
             })
@@ -1525,7 +1750,7 @@
                 select.innerHTML = '<option value="">Error loading employees</option>';
             });
     }
-    
+
     function loadCoreEmployeesForTrade(date, currentScheduleId) {
         const select = document.getElementById('trade-with-employee');
         select.innerHTML = '<option value="">Loading...</option>';
@@ -1540,7 +1765,7 @@
                     employees.forEach(emp => {
                         const option = document.createElement('option');
                         option.value = emp.schedule_id;
-                        option.textContent = `${emp.employee_name} - ${emp.event_name} at ${emp.time}`;
+                        option.textContent = `${toTitleCase(emp.employee_name)} - ${emp.event_name} at ${emp.time}`;
                         select.appendChild(option);
                     });
                 }
@@ -1562,7 +1787,7 @@
                 employees.forEach(employee => {
                     const option = document.createElement('option');
                     option.value = employee.id;
-                    option.textContent = `${employee.name} (${employee.job_title})`;
+                    option.textContent = `${toTitleCase(employee.name)} (${employee.job_title})`;
                     select.appendChild(option);
                 });
             })
@@ -1728,6 +1953,112 @@
     }
 
     /* ===================================================================
+       Week View Functions
+       =================================================================== */
+
+    let currentCalendarView = localStorage.getItem('calendarViewMode') || 'month';
+
+    function switchCalendarView(mode) {
+        currentCalendarView = mode;
+        localStorage.setItem('calendarViewMode', mode);
+
+        const monthGrid = document.getElementById('calendar-grid');
+        const weekGrid = document.getElementById('week-view-grid');
+
+        // Update toggle buttons
+        document.querySelectorAll('.view-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.calview === mode);
+        });
+
+        if (mode === 'week') {
+            monthGrid.style.display = 'none';
+            weekGrid.style.display = 'grid';
+            renderWeekView();
+        } else {
+            monthGrid.style.display = 'grid';
+            weekGrid.style.display = 'none';
+            // Restore month title
+            document.getElementById('month-title').textContent = currentDate.toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        // Update nav button labels
+        document.getElementById('nav-prev').textContent = mode === 'week' ? '‹ Prev Week' : '‹ Previous';
+        document.getElementById('nav-next').textContent = mode === 'week' ? 'Next Week ›' : 'Next ›';
+    }
+
+    function renderWeekView() {
+        const weekGrid = document.getElementById('week-view-grid');
+        weekGrid.innerHTML = '';
+
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+
+        // Get the start of the week (Sunday) for currentDate
+        const weekStart = new Date(currentDate);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+
+        for (let i = 0; i < 7; i++) {
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(weekStart.getDate() + i);
+            const dayStr = dayDate.toISOString().split('T')[0];
+            const isToday = dayStr === todayStr;
+
+            const col = document.createElement('div');
+            col.className = 'week-day-col' + (isToday ? ' today' : '');
+
+            const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
+            const dayNum = dayDate.getDate();
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'week-day-header';
+            header.innerHTML = `<div class="wk-day-name">${dayName}</div><div class="wk-day-num">${dayNum}</div>`;
+            header.addEventListener('click', () => {
+                window.location.href = `/schedule/daily/${dayStr}`;
+            });
+            col.appendChild(header);
+
+            // Body with events
+            const body = document.createElement('div');
+            body.className = 'week-day-body';
+
+            const dayEvents = eventsData[dayStr] || [];
+            if (dayEvents.length === 0) {
+                body.innerHTML = '<div class="week-empty">No events</div>';
+            } else {
+                dayEvents.forEach(evt => {
+                    const item = document.createElement('div');
+                    item.className = 'week-event-item';
+                    const eventType = evt.event_type || 'Other';
+                    const typeCls = eventType.replace(/\s+/g, '');
+                    item.innerHTML = `
+                        <span class="week-event-badge type-${escapeHtml(typeCls)}"></span>
+                        <span class="week-event-name">${escapeHtml(evt.event_name || evt.name || '')}</span>
+                        <span class="week-event-emp">${escapeHtml(evt.employee_name ? toTitleCase(evt.employee_name) : '')}</span>
+                    `;
+                    item.addEventListener('click', () => {
+                        window.location.href = `/schedule/daily/${dayStr}`;
+                    });
+                    body.appendChild(item);
+                });
+            }
+
+            col.appendChild(body);
+            weekGrid.appendChild(col);
+        }
+
+        // Update the month title to show the week range
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const startLabel = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endLabel = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        document.getElementById('month-title').textContent = `${startLabel} – ${endLabel}`;
+    }
+
+    /* ===================================================================
        Lock/Unlock Day Functions
        =================================================================== */
 
@@ -1874,6 +2205,13 @@
 
     // Delegated click handler - replaces inline onclick attributes
     document.addEventListener('click', function(e) {
+        // View mode toggle
+        const calviewBtn = e.target.closest('[data-calview]');
+        if (calviewBtn) {
+            switchCalendarView(calviewBtn.dataset.calview);
+            return;
+        }
+
         const target = e.target.closest('[data-action]');
         if (!target) return;
         const action = target.dataset.action;

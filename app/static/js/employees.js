@@ -10,9 +10,12 @@
  * @module employees
  */
 
+let allEmployees = [];
+
 document.addEventListener('DOMContentLoaded', function () {
     loadEmployees();
     setupModalHandlers();
+    setupEmployeeFilters();
 });
 
 // ========================================
@@ -30,7 +33,8 @@ function loadEmployees() {
     fetch('/api/employees')
         .then(response => response.json())
         .then(employees => {
-            renderEmployees(employees);
+            allEmployees = employees;
+            applyEmployeeFilters();
         })
         .catch(error => {
             console.error('Error loading employees:', error);
@@ -77,6 +81,44 @@ function updateStatistics(employees) {
     document.getElementById('stat-es').textContent = eventSpecialists;
     document.getElementById('stat-leads').textContent = leadSpecialists;
     document.getElementById('stat-ab').textContent = abTrained;
+}
+
+/**
+ * Set up search and filter event listeners for the employee grid.
+ */
+function setupEmployeeFilters() {
+    const searchInput = document.getElementById('employee-search');
+    const roleFilter = document.getElementById('employee-role-filter');
+    const statusFilter = document.getElementById('employee-status-filter');
+
+    if (searchInput) searchInput.addEventListener('input', applyEmployeeFilters);
+    if (roleFilter) roleFilter.addEventListener('change', applyEmployeeFilters);
+    if (statusFilter) statusFilter.addEventListener('change', applyEmployeeFilters);
+}
+
+/**
+ * Filter allEmployees based on current search/filter values and re-render.
+ */
+function applyEmployeeFilters() {
+    const searchVal = (document.getElementById('employee-search')?.value || '').toLowerCase();
+    const roleVal = document.getElementById('employee-role-filter')?.value || '';
+    const statusVal = document.getElementById('employee-status-filter')?.value || 'active';
+
+    let filtered = allEmployees;
+
+    if (searchVal) {
+        filtered = filtered.filter(emp => emp.name.toLowerCase().includes(searchVal));
+    }
+    if (roleVal) {
+        filtered = filtered.filter(emp => emp.job_title === roleVal);
+    }
+    if (statusVal === 'active') {
+        filtered = filtered.filter(emp => emp.is_active);
+    } else if (statusVal === 'inactive') {
+        filtered = filtered.filter(emp => !emp.is_active);
+    }
+
+    renderEmployees(filtered);
 }
 
 /**
@@ -170,7 +212,12 @@ function createEmployeeCard(employee) {
                     <button type="button" class="btn btn-sm btn-secondary" onclick="toggleEmployeeStatus('${employee.id}', ${!employee.is_active})">
                         ${employee.is_active ? 'Deactivate' : 'Activate'}
                     </button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteEmployee('${employee.id}')">Delete</button>
+                    <div class="overflow-menu" style="position: relative; display: inline-block;">
+                        <button type="button" class="btn btn-sm btn-outline" onclick="toggleOverflowMenu(this)" style="padding: 4px 8px; font-size: 16px; line-height: 1;">&#8942;</button>
+                        <div class="overflow-menu-dropdown" style="display: none; position: absolute; right: 0; bottom: 100%; background: white; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 50; min-width: 140px;">
+                            <button type="button" class="overflow-menu-item" onclick="deleteEmployee('${employee.id}')" style="display: block; width: 100%; padding: 8px 14px; border: none; background: none; text-align: left; cursor: pointer; font-size: 13px; color: #dc3545;">Delete Employee</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -772,6 +819,21 @@ async function toggleEmployeeStatus(employeeId, newActiveStatus) {
  * @param {string} employeeId - ID of the employee to delete
  * @returns {Promise<void>}
  */
+function toggleOverflowMenu(btn) {
+    const dropdown = btn.nextElementSibling;
+    const isOpen = dropdown.style.display !== 'none';
+    // Close all other open menus
+    document.querySelectorAll('.overflow-menu-dropdown').forEach(d => d.style.display = 'none');
+    dropdown.style.display = isOpen ? 'none' : 'block';
+}
+
+// Close overflow menus when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.overflow-menu')) {
+        document.querySelectorAll('.overflow-menu-dropdown').forEach(d => d.style.display = 'none');
+    }
+});
+
 async function deleteEmployee(employeeId) {
     try {
         const response = await fetch('/api/employees');

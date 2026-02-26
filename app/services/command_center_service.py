@@ -55,6 +55,7 @@ class CommandCenterService:
             'day_of_week': today.strftime('%A'),
             'is_deadline_day': self._is_deadline_day(today),
             'deadline_info': self._get_deadline_info(today, now),
+            'setup_status': self._get_setup_status(),
             'quick_stats': self._get_quick_stats(today),
             'deadline_events': self._get_deadline_events(today),
             'unscheduled_urgent': self._get_unscheduled_urgent(today),
@@ -62,6 +63,7 @@ class CommandCenterService:
             'employee_issues': self._get_employee_issues(today),
             'rotation_info': self._get_rotation_info(today),
             'inventory_alerts': self._get_inventory_alerts(),
+            'weekly_outlook': self._get_weekly_outlook(today),
         }
 
     def _is_deadline_day(self, check_date: date) -> bool:
@@ -420,3 +422,97 @@ class CommandCenterService:
         ).count()
 
         return alerts
+
+    def _get_weekly_outlook(self, today: date) -> List[Dict]:
+        """Get staffing coverage for the next 7 days"""
+        if not self.Event or not self.Schedule:
+            return []
+
+        outlook = []
+        for i in range(7):
+            day = today + timedelta(days=i)
+            day_start = datetime.combine(day, datetime.min.time())
+            day_end = datetime.combine(day, datetime.max.time())
+
+            scheduled = self.db.session.query(self.Schedule).filter(
+                self.Schedule.schedule_datetime >= day_start,
+                self.Schedule.schedule_datetime <= day_end
+            ).count()
+
+            unscheduled = self.db.session.query(self.Event).filter(
+                self.Event.condition == 'Unstaffed',
+                self.Event.start_datetime <= day_end,
+                self.Event.due_datetime >= day_start
+            ).count()
+
+            outlook.append({
+                'date': day.isoformat(),
+                'day_name': day.strftime('%a'),
+                'day_num': day.day,
+                'scheduled': scheduled,
+                'unscheduled': unscheduled,
+                'is_today': i == 0
+            })
+
+        return outlook
+
+    def _get_setup_status(self) -> Dict[str, Any]:
+        """Check which critical settings are configured."""
+        from flask import current_app
+
+        steps = []
+
+        # 1. Check employees
+        has_employees = False
+        if self.Employee:
+            has_employees = self.Employee.query.filter_by(is_active=True).count() > 0
+        steps.append({
+            'name': 'Add Employees',
+            'done': has_employees,
+            'url': '/employees',
+            'description': 'Add your team members'
+        })
+
+        # 2. Check events loaded
+        has_events = False
+        if self.Event:
+            has_events = self.Event.query.count() > 0
+        steps.append({
+            'name': 'Load Events',
+            'done': has_events,
+            'url': '/settings',
+            'description': 'Refresh database to load events'
+        })
+
+        # 3. Check Walmart credentials
+        SystemSetting = current_app.config.get('SystemSetting')
+        has_walmart = False
+        if SystemSetting:
+            has_walmart = bool(SystemSetting.get_setting('edr_username'))
+        elif current_app.config.get('WALMART_EDR_USERNAME'):
+            has_walmart = True
+        steps.append({
+            'name': 'Walmart Credentials',
+            'done': has_walmart,
+            'url': '/settings',
+            'description': 'Configure Retail Link access'
+        })
+
+        # 4. Check event time settings
+        has_event_times = False
+        if SystemSetting:
+            has_event_times = bool(SystemSetting.get_setting('freeosk_start_time'))
+        steps.append({
+            'name': 'Event Time Settings',
+            'done': has_event_times,
+            'url': '/event-times',
+            'description': 'Set time slots for each event type'
+        })
+
+        completed = sum(1 for s in steps if s['done'])
+        return {
+            'steps': steps,
+            'completed': completed,
+            'total': len(steps),
+            'all_done': completed == len(steps)
+        }

@@ -1217,11 +1217,15 @@ def edr_request_mfa():
 
         # Step 1: Submit password
         if not edr_authenticator.step1_submit_password():
-            return jsonify({'success': False, 'error': 'Failed to submit password'}), 400
+            detail = edr_authenticator.last_error or 'Failed to submit password'
+            logger.error(f"EDR step1 failed: {detail}")
+            return jsonify({'success': False, 'error': f'Walmart login failed: {detail}'}), 400
 
         # Step 2: Request MFA code
         if not edr_authenticator.step2_request_mfa_code():
-            return jsonify({'success': False, 'error': 'Failed to request MFA code'}), 400
+            detail = edr_authenticator.last_error or 'Failed to request MFA code'
+            logger.error(f"EDR step2 failed: {detail}")
+            return jsonify({'success': False, 'error': f'MFA request failed: {detail}'}), 400
 
         # Store timestamp when MFA was requested for expiration tracking
         mfa_request_timestamp = time.time()

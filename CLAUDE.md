@@ -110,12 +110,18 @@ flask db downgrade                          # Rollback
 
 | File | Purpose |
 |------|---------|
-| `app/routes/api.py` | Main REST API (42k tokens) |
-| `app/services/scheduling_engine.py` | Auto-scheduler logic (35k tokens) |
+| `app/routes/api.py` | Main REST API |
+| `app/services/scheduling_engine.py` | Auto-scheduler logic |
+| `app/services/cpsat_scheduler.py` | CP-SAT constraint solver |
 | `app/services/schedule_verification.py` | Daily validation |
 | `app/services/constraint_validator.py` | Business rule validation |
+| `app/services/constraint_modifier.py` | Runtime constraint adjustments |
+| `app/services/fix_wizard.py` | Guided schedule issue resolution |
 | `app/services/rotation_manager.py` | Rotation assignments |
-| `app/constants.py` | Event types, department codes (46k tokens) |
+| `app/services/weekly_validation.py` | Weekly schedule validation |
+| `app/services/ai_assistant.py` | AI assistant service |
+| `app/services/database_refresh_service.py` | Database refresh operations |
+| `app/constants.py` | Event types, department codes |
 | `app/config.py` | Environment configuration |
 | `app/integrations/external_api/` | MVRetail sync |
 | `app/integrations/walmart_api/` | Walmart EDR integration |
@@ -172,12 +178,11 @@ GET        /api/schedules/validation
 
 ### Auto-Scheduler
 ```
-POST       /auto-scheduler/run      # Run scheduler
-GET        /auto-scheduler/pending  # Pending schedules
-POST       /auto-scheduler/approve  # Approve one
-POST       /auto-scheduler/approve-all  # Bulk approve
-POST       /auto-scheduler/reject   # Reject
-GET        /auto-scheduler/rotations
+POST       /auto-schedule/run             # Run scheduler
+GET        /auto-schedule/api/pending     # Pending schedules
+POST       /auto-schedule/approve         # Approve batch
+POST       /auto-schedule/approve-single/<id>  # Approve one
+GET        /auto-schedule/review          # Review UI
 ```
 
 ### Response Format
@@ -221,61 +226,7 @@ if not config.SYNC_ENABLED:
 
 ---
 
-## Creating New Models
-
-```python
-# app/models/your_model.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from datetime import datetime
-
-def create_your_model(db):
-    class YourModel(db.Model):
-        __tablename__ = 'your_model'
-        id = Column(Integer, primary_key=True)
-        name = Column(String(100), nullable=False)
-        created_at = Column(DateTime, default=datetime.utcnow)
-
-        def to_dict(self):
-            return {'id': self.id, 'name': self.name}
-
-    return YourModel
-```
-
-Register in `app/models/__init__.py`:
-```python
-from .your_model import create_your_model
-# Add to init_models(): 'YourModel': create_your_model(db)
-```
-
----
-
-## Service Pattern
-
-```python
-# app/services/your_service.py
-from app.models import get_models, get_db
-from app.error_handlers.exceptions import ValidationError
-import logging
-
-logger = logging.getLogger(__name__)
-
-class YourService:
-    def __init__(self):
-        self.models = get_models()
-        self.db = get_db()
-
-    def perform_action(self, param):
-        if not param:
-            raise ValidationError("param required")
-        try:
-            # Business logic
-            self.db.session.commit()
-            return {'status': 'success'}
-        except Exception as e:
-            self.db.session.rollback()
-            logger.error(f"Failed: {e}")
-            raise
-```
+> **Templates**: See `docs/component-patterns.md` for model creation and service patterns.
 
 ---
 
@@ -310,7 +261,6 @@ pytest -k "schedule"                # Pattern match
 
 ## Migrations
 
-### Process
 1. **Backup**: `./backup_now.sh`
 2. **Edit model** in `app/models/`
 3. **Generate**: `flask db migrate -m "description"`
@@ -318,35 +268,11 @@ pytest -k "schedule"                # Pattern match
 5. **Test**: `DATABASE_URL=sqlite:///instance/scheduler_test.db flask db upgrade`
 6. **Apply**: `flask db upgrade`
 
-### Common Patterns
-```python
-# Add nullable column (safe)
-def upgrade():
-    op.add_column('table', sa.Column('col', sa.String(100), nullable=True))
-def downgrade():
-    op.drop_column('table', 'col')
-
-# Add non-nullable with default
-def upgrade():
-    op.add_column('table', sa.Column('col', sa.String(100), nullable=True))
-    op.execute("UPDATE table SET col = 'default'")
-    op.alter_column('table', 'col', nullable=False)
-```
+For non-nullable columns: add as nullable first, backfill data, then alter to non-nullable.
 
 ---
 
 ## Common Pitfalls
-
-### Model Access
-```python
-# WRONG
-from app.models.employee import Employee
-
-# CORRECT
-from app.models import get_models
-models = get_models()
-Employee = models['Employee']
-```
 
 ### Session Management
 ```python
@@ -386,7 +312,7 @@ if not validator.can_assign(employee, event):
 
 ```
 Employee
-├── EmployeeAvailability (one-to-many)
+├── EmployeeAvailability / EmployeeWeeklyAvailability / EmployeeAvailabilityOverride
 ├── EmployeeTimeOff (one-to-many)
 ├── Schedule (one-to-many)
 ├── RotationAssignment (one-to-many)
@@ -394,7 +320,8 @@ Employee
 
 Event
 ├── Schedule (one-to-many)
-└── Notes (one-to-many)
+├── Note (one-to-many)
+└── EventSchedulingOverride / EventTypeOverride
 
 Schedule
 ├── Employee (many-to-one)
@@ -403,6 +330,11 @@ Schedule
 PendingSchedule (approval workflow)
 ├── Event, Employee (many-to-one)
 └── Status: pending | approved | rejected
+
+Auto-Scheduler: RotationAssignment, SchedulerRunHistory, ScheduleException, LockedDay
+System: AuditLog, SystemSetting, CompanyHoliday, ShiftBlockSetting, UserSession
+Content: Note, RecurringReminder, PaperworkTemplate, IgnoredValidationIssue
+Inventory: SupplyCategory, Supply, SupplyAdjustment, PurchaseOrder, OrderItem, InventoryReminder
 ```
 
 ---
@@ -423,13 +355,28 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 | Blueprint | Prefix | Purpose |
 |-----------|--------|---------|
 | main_bp | / | Dashboard, calendar |
+| auth_bp | / | Authentication, sessions |
 | api_bp | /api | REST API |
-| employees_bp | /employees | Employee CRUD |
-| auto_scheduler_bp | /auto-scheduler | Scheduling UI |
-| scheduling_bp | /scheduling | Schedule management |
+| employees_bp | / | Employee CRUD |
+| scheduling_bp | / | Schedule management |
+| auto_scheduler_bp | /auto-schedule | Scheduling UI |
 | dashboard_bp | /dashboard | Validation dashboards |
+| rotations_bp | /rotations | Rotation management |
+| admin_bp | / | Admin panel |
 | printing_bp | /printing | PDF generation |
 | walmart_bp | /walmart | Walmart integration |
+| edr_sync_bp | /api/sync | EDR synchronization |
+| ai_bp | /api/ai | AI assistant |
+| inventory_bp | /inventory | Supply inventory |
+| health_bp | /health | Health checks |
+| help_bp | /help | Help pages |
+| attendance_api_bp | /api/attendance | Attendance endpoints |
+| notifications_api_bp | /api/notifications | Notification endpoints |
+| api_notes_bp | /api/notes | Notes endpoints |
+| api_locked_days_bp | /api/locked-days | Locked days endpoints |
+| api_shift_blocks_bp | /api/shift-blocks | Shift block endpoints |
+| api_company_holidays_bp | /api/company-holidays | Company holiday endpoints |
+| api_paperwork_templates_bp | /api/paperwork-templates | Paperwork template endpoints |
 
 ---
 
@@ -437,15 +384,16 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 
 API calls should use centralized client:
 ```javascript
-import { api } from './utils/api.js';
+import { api } from './utils/api-client.js';
 const events = await api.getEvents();
 ```
 
 Key files:
-- `app/static/js/utils/api.js` - API client
+- `app/static/js/utils/api-client.js` - API client
 - `app/static/js/main.js` - Main application
 - `app/static/js/pages/daily-view.js` - Daily view
-- `app/static/js/modules/auto-scheduler.js` - Auto-scheduler
+- `app/static/js/pages/fix-wizard.js` - Fix wizard UI
+- `app/static/js/components/ai-assistant.js` - AI assistant panel
 
 ---
 
@@ -477,4 +425,4 @@ cp instance/scheduler.db instance/scheduler_test.db
 
 ---
 
-**Last updated**: 2026-01-28 | **Architecture docs**: `docs/CODEBASE_MAP.md`
+**Last updated**: 2026-02-18 | **Architecture docs**: `docs/CODEBASE_MAP.md`

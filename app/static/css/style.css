@@ -136,7 +136,7 @@ body {
 
 /* Hamburger Menu (Hidden on Desktop) */
 .hamburger-menu {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: 5px;
     background: transparent;

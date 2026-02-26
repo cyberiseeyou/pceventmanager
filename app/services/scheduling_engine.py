@@ -166,6 +166,7 @@ class SchedulingEngine:
         """
         self.db = db_session
         self.models = models
+        self.emergency_mode = False  # When True, reduces scheduling buffer to 0 days
 
         self.Event = models['Event']
         self.Schedule = models['Schedule']
@@ -503,7 +504,8 @@ class SchedulingEngine:
             datetime: Earliest date this event can be scheduled
         """
         today = datetime.now().date()
-        earliest_allowed = today + timedelta(days=self.SCHEDULING_WINDOW_DAYS)
+        buffer_days = 0 if self.emergency_mode else self.SCHEDULING_WINDOW_DAYS
+        earliest_allowed = today + timedelta(days=buffer_days)
         earliest_allowed_datetime = datetime.combine(earliest_allowed, time(0, 0))
 
         # Return the later of the two dates
@@ -715,7 +717,29 @@ class SchedulingEngine:
         # ONLY try to schedule on the event's START DATE
         # Juicer events should not be auto-moved to different days
         target_date = event.start_datetime
-        
+
+        # Juicer events MUST be on their start date — reject if past or within buffer
+        today = date.today()
+        buffer_days = 0 if self.emergency_mode else self.SCHEDULING_WINDOW_DAYS
+        earliest_allowed = today + timedelta(days=buffer_days)
+
+        if target_date.date() < today:
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {target_date.date()} is in the past"
+            )
+            run.events_failed += 1
+            return
+
+        if target_date.date() < earliest_allowed:
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {target_date.date()} is within the "
+                f"{self.SCHEDULING_WINDOW_DAYS}-day scheduling buffer (earliest: {earliest_allowed})"
+            )
+            run.events_failed += 1
+            return
+
         # Get rotation employee for this specific date
         employee = self.rotation_manager.get_rotation_employee(target_date, 'juicer')
 
@@ -1401,7 +1425,29 @@ class SchedulingEngine:
         # Schedule on start date (like Juicer events)
         target_date = event.start_datetime.date()
         schedule_datetime = datetime.combine(target_date, time(9, 0))  # 9 AM start
-        
+
+        # Full-day events MUST be on their start date — reject if past or within buffer
+        today_date = date.today()
+        buffer_days = 0 if self.emergency_mode else self.SCHEDULING_WINDOW_DAYS
+        earliest_allowed = today_date + timedelta(days=buffer_days)
+
+        if target_date < today_date:
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {target_date} is in the past"
+            )
+            run.events_failed += 1
+            return
+
+        if target_date < earliest_allowed:
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {target_date} is within the "
+                f"{self.SCHEDULING_WINDOW_DAYS}-day scheduling buffer (earliest: {earliest_allowed})"
+            )
+            run.events_failed += 1
+            return
+
         # Check if day is locked
         if self._is_day_locked(target_date):
             locked_info = self._get_locked_day_info(target_date)
@@ -3452,9 +3498,9 @@ class SchedulingEngine:
             )
             return False
         
-        # CRITICAL VALIDATION: Ensure schedule_datetime is within event period
+        # CRITICAL VALIDATION: Ensure schedule_datetime is within event period (date-only comparison)
         # This should never happen if the scheduling logic is correct, but this is a safety check
-        if schedule_datetime and not (event.start_datetime <= schedule_datetime <= event.due_datetime):
+        if schedule_datetime and not (event.start_datetime.date() <= schedule_datetime.date() <= event.due_datetime.date()):
             current_app.logger.error(
                 f"CRITICAL BUG: Attempting to schedule event {event.project_ref_num} ({event.project_name}) "
                 f"at {schedule_datetime.strftime('%Y-%m-%d %H:%M')}, which is outside the event period "

@@ -34,7 +34,7 @@ WEIGHT_UNSCHEDULED = 1000        # S1: Penalty per unscheduled event
 WEIGHT_URGENCY = 10              # S2: Per-day urgency bonus multiplier
 WEIGHT_TYPE_PRIORITY = 5         # S3: Per-priority-level bonus
 WEIGHT_ROTATION = 50             # S4: Bonus for rotation employee match
-WEIGHT_SUPERVISOR_MISUSE = 30    # S5: Penalty for Club Supervisor on wrong type
+WEIGHT_SUPERVISOR_MISUSE = 200   # S5: Penalty for Club Supervisor on wrong type (escalating)
 WEIGHT_SUP_ASSIGNMENT = 20       # S6: Bonus for correct Supervisor assignment
 WEIGHT_LEAD_BLOCK1 = 25          # S7: Bonus for Primary Lead on Block 1
 WEIGHT_LEAD_DAILY = 20           # S8: Bonus for Primary Lead on Freeosk/Refresh
@@ -44,6 +44,7 @@ WEIGHT_DUPLICATE_PRODUCT = 75    # S11: Penalty per duplicate product on day
 WEIGHT_PROXIMITY = 15            # S12: Penalty per time-proximity violation
 WEIGHT_SHIFT_BALANCE = 10        # S13: Penalty per imbalanced day
 WEIGHT_BUMP = 200                # S14: Penalty per bumped existing schedule
+WEIGHT_ML_AFFINITY = 8           # S15: Bonus for ML-predicted employee-event affinity
 
 # ---------------------------------------------------------------------------
 # Scheduling constants
@@ -53,6 +54,7 @@ MAX_CORE_EVENTS_PER_DAY = 1
 MAX_CORE_EVENTS_PER_WEEK = 6
 MAX_JUICER_PRODUCTION_PER_WEEK = 5
 FULL_DAY_MINUTES = 480
+MAX_WEEKLY_MINUTES = 2400               # 40 hours × 60 minutes
 NUM_CORE_BLOCKS = 8
 
 EVENT_TYPE_PRIORITY = {
@@ -86,6 +88,7 @@ class CPSATSchedulingEngine:
     def __init__(self, db_session, models: dict):
         self.db = db_session
         self.models = models
+        self.emergency_mode = False  # When True, reduces scheduling buffer to 0 days
 
         self.Event = models['Event']
         self.Schedule = models['Schedule']
@@ -104,6 +107,9 @@ class CPSATSchedulingEngine:
 
         # Load time settings
         self._load_time_settings()
+
+        # Load user preference multipliers from SystemSetting
+        self.user_pref_multipliers = self._load_user_preferences()
 
     # ------------------------------------------------------------------
     # Time settings
@@ -155,6 +161,63 @@ class CPSATSchedulingEngine:
         for b in self.shift_blocks:
             self.block_arrive_time[b['block']] = b['arrive']
 
+    def _load_user_preferences(self):
+        """
+        Load scheduling preference multipliers from SystemSetting.
+        These are set by the AI assistant's modify_scheduling_preference tool.
+
+        Returns:
+            dict mapping weight name (e.g. 'WEIGHT_FAIRNESS') to float multiplier
+        """
+        try:
+            from app.services.constraint_modifier import ConstraintModifier
+            modifier = ConstraintModifier()
+            return modifier.get_multipliers()
+        except Exception as e:
+            logger.warning(f"Could not load user preferences: {e}")
+            return {}
+
+    def _get_effective_weight(self, base_weight, weight_name):
+        """Apply user preference multiplier to a base weight."""
+        multiplier = self.user_pref_multipliers.get(weight_name, 1.0)
+        return int(base_weight * multiplier)
+
+    def _get_ml_affinity_scores(self):
+        """
+        Get ML affinity scores for all (event, employee) pairs.
+        Gated by ML_ENABLED config flag. Returns empty dict on failure.
+
+        Returns:
+            dict[(event_ref_num, employee_id)] -> float (0.0 to 1.0)
+        """
+        from flask import current_app
+        config = current_app.config if current_app else {}
+
+        if not config.get('ML_ENABLED', False):
+            return {}
+
+        try:
+            from app.ml.inference.ml_scheduler_adapter import MLSchedulerAdapter
+            adapter = MLSchedulerAdapter(self.db, self.models, config)
+
+            scores = {}
+            for event in self.events:
+                ranked = adapter.rank_employees(
+                    list(self.employees.values()),
+                    event,
+                    event.start_date if hasattr(event, 'start_date') else datetime.now()
+                )
+                for employee, score in ranked:
+                    scores[(event.project_ref_num, employee.id)] = score
+
+            logger.info(f"ML affinity: got {len(scores)} scores for "
+                        f"{len(self.events)} events × {len(self.employees)} employees")
+            return scores
+
+        except Exception as e:
+            logger.warning(f"ML affinity scoring failed (graceful fallback): {e}")
+            return {}
+
     # ------------------------------------------------------------------
     # Data loading
     # ------------------------------------------------------------------
@@ -164,7 +227,8 @@ class CPSATSchedulingEngine:
         from sqlalchemy import or_, and_
 
         today = date.today()
-        earliest = today + timedelta(days=SCHEDULING_WINDOW_DAYS)
+        buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
+        earliest = today + timedelta(days=buffer_days)
         horizon_end = today + timedelta(weeks=3)
 
         # --- Employees ---
@@ -181,6 +245,7 @@ class CPSATSchedulingEngine:
         # --- Events to schedule ---
         # Only unscheduled, active events within the scheduling horizon
         all_events = self.Event.query.filter(
+            self.Event.is_scheduled == False,
             ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
             self.Event.due_datetime > earliest,
             self.Event.start_datetime <= horizon_end,
@@ -264,6 +329,9 @@ class CPSATSchedulingEngine:
         # --- Week boundaries (Sunday-Saturday) ---
         self._compute_weeks()
 
+        # --- Existing Core counts for H11/H12 constraint adjustments ---
+        self._compute_existing_core_counts()
+
         # --- Core-Supervisor pairing ---
         self._compute_pairings()
 
@@ -278,9 +346,16 @@ class CPSATSchedulingEngine:
         return getattr(event, '_override_event_type', None) or event.event_type
 
     def _extract_event_number(self, project_name):
-        """Extract the 6-digit event number from a project name."""
+        """Extract the unique event identifier from a project name.
+
+        Uses the full parenthesized ref number (e.g. '(260115542007)') for precise matching.
+        Falls back to first 6 digits only if no parenthesized number exists.
+        """
         if not project_name:
             return None
+        paren_match = re.search(r'\((\d{9,12})\)', project_name)
+        if paren_match:
+            return paren_match.group(1)
         match = re.search(r'(\d{6})', project_name)
         return match.group(1) if match else None
 
@@ -333,8 +408,15 @@ class CPSATSchedulingEngine:
                                 self.unavailable.add((ov.employee_id, d))
 
         # Time off
+        # TODO Fix #3: When EmployeeTimeOff gains an 'approved' or 'status'
+        # column, filter here: .filter_by(status='approved') or
+        # .filter(EmployeeTimeOff.approved == True)
         if self.EmployeeTimeOff:
             for to in self.EmployeeTimeOff.query.all():
+                # TODO Fix #2: When partial-day time-off is supported
+                # (start_time/end_time fields), only block the employee for
+                # events whose scheduled time overlaps the time-off window
+                # instead of blocking the entire day.
                 for d in self.valid_days:
                     if to.start_date <= d <= to.end_date:
                         self.unavailable.add((to.employee_id, d))
@@ -392,9 +474,11 @@ class CPSATSchedulingEngine:
             # Track by employee+day for conflict checks
             event = self.Event.query.filter_by(project_ref_num=s.event_ref_num).first()
             etype = event.event_type if event else 'Unknown'
+            est_time = (event.estimated_time if event and event.estimated_time else 60)
             self.existing_by_emp_day[(s.employee_id, sd)].append({
                 'event_ref': s.event_ref_num,
                 'event_type': etype,
+                'estimated_time': est_time,
             })
 
     def _compute_weeks(self):
@@ -423,6 +507,47 @@ class CPSATSchedulingEngine:
             self.week_of_day[d] = w
 
         self.num_weeks = max(self.weeks.keys()) + 1 if self.weeks else 0
+
+    def _compute_existing_core_counts(self):
+        """Pre-compute existing event counts per employee per day/week.
+
+        Tracks Core counts (for H11/H12), Juicer counts (for H22/H23),
+        and total estimated minutes (for H24 weekly hours cap).
+        """
+        self.existing_core_count_by_emp_day = defaultdict(int)   # (emp_id, date) -> int
+        self.existing_core_count_by_emp_week = defaultdict(int)  # (emp_id, week_idx) -> int
+        self.existing_juicer_count_by_emp_day = defaultdict(int)
+        self.existing_juicer_count_by_emp_week = defaultdict(int)
+        self.existing_minutes_by_emp_week = defaultdict(int)
+
+        # Compute week_start reference (same as _compute_weeks) so we can map
+        # any date to a week index, not just valid_days.
+        if not self.valid_days:
+            return
+        first = self.valid_days[0]
+        days_since_sunday = (first.weekday() + 1) % 7
+        week_start = first - timedelta(days=days_since_sunday)
+
+        for (emp_id, day), entries in self.existing_by_emp_day.items():
+            core_count = sum(1 for e in entries if e['event_type'] == 'Core')
+            juicer_count = sum(1 for e in entries if e['event_type'] in JUICER_EVENT_TYPES)
+            total_minutes = sum(e.get('estimated_time', 60) for e in entries)
+
+            if core_count > 0:
+                self.existing_core_count_by_emp_day[(emp_id, day)] = core_count
+            if juicer_count > 0:
+                self.existing_juicer_count_by_emp_day[(emp_id, day)] = juicer_count
+
+            # Compute week index for this date using the same reference
+            days_since = (day - week_start).days
+            if days_since >= 0:
+                week_idx = days_since // 7
+                if week_idx in self.weeks:
+                    if core_count > 0:
+                        self.existing_core_count_by_emp_week[(emp_id, week_idx)] += core_count
+                    if juicer_count > 0:
+                        self.existing_juicer_count_by_emp_week[(emp_id, week_idx)] += juicer_count
+                    self.existing_minutes_by_emp_week[(emp_id, week_idx)] += total_minutes
 
     def _compute_pairings(self):
         """Match Core events to their Supervisor events."""
@@ -509,7 +634,8 @@ class CPSATSchedulingEngine:
     def _valid_days_for_event(self, event):
         """Return list of valid days for a specific event."""
         today = date.today()
-        earliest = today + timedelta(days=SCHEDULING_WINDOW_DAYS)
+        buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
+        earliest = today + timedelta(days=buffer_days)
 
         e_start = event.start_datetime
         if isinstance(e_start, datetime):
@@ -691,6 +817,23 @@ class CPSATSchedulingEngine:
                               if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
         self._add_mutual_exclusion_per_day(model, juicer_prod_events, core_events)
 
+        # H22: Max 1 Juicer event per employee per day
+        juicer_all_events = [e for e in self.events
+                             if self._get_event_type(e) in JUICER_EVENT_TYPES]
+        self._add_emp_day_limits(
+            model, juicer_all_events, 1,
+            existing_counts=self.existing_juicer_count_by_emp_day,
+        )
+
+        # H23: Max 5 Juicer events per employee per week (HARD — was soft S10)
+        self._add_emp_week_limits(
+            model, juicer_all_events, MAX_JUICER_PRODUCTION_PER_WEEK,
+            existing_counts=self.existing_juicer_count_by_emp_week,
+        )
+
+        # H24: 40-hour weekly cap per employee
+        self._add_weekly_hours_cap(model)
+
         # H14: Juicer Deep Clean and Production can't be on same calendar day
         deep_clean_events = [e for e in self.events
                              if self._get_event_type(e) == 'Juicer Deep Clean']
@@ -711,11 +854,25 @@ class CPSATSchedulingEngine:
         # H21: Shift block uniqueness per day (one employee per block per day)
         self._add_block_uniqueness(model)
 
-    def _add_emp_day_limits(self, model, typed_events, limit):
-        """H11: Limit events of a type per employee per day."""
-        # Group by (emp, day) -> list of indicator variables
+        # Note (Fix #11): Block ordering (consecutive blocks for same employee)
+        # is not needed because H11 limits Core to 1/employee/day. If that
+        # limit is ever raised, add a constraint here enforcing block
+        # contiguity (e.g. blocks {3,4} allowed but not {2,5}).
+
+    def _add_emp_day_limits(self, model, typed_events, limit, existing_counts=None):
+        """Limit events of a type per employee per day.
+
+        Accounts for already-posted schedules so that if an employee already
+        has `existing` events on a day, the solver can only assign
+        `limit - existing` more (possibly zero).
+        """
+        if existing_counts is None:
+            existing_counts = self.existing_core_count_by_emp_day
         for emp_id in self.employee_ids:
             for d in self.valid_days:
+                existing = existing_counts.get((emp_id, d), 0)
+                effective_limit = limit - existing
+
                 indicators = []
                 for event in typed_events:
                     eid = event.id
@@ -735,13 +892,30 @@ class CPSATSchedulingEngine:
                     ]).OnlyEnforceIf(ind.Not())
                     indicators.append(ind)
 
-                if len(indicators) > limit:
-                    model.Add(sum(indicators) <= limit)
+                if not indicators:
+                    continue
 
-    def _add_emp_week_limits(self, model, typed_events, limit):
-        """H12: Limit events of a type per employee per week."""
+                if effective_limit <= 0:
+                    # Employee already at/over limit — forbid all new assignments
+                    for ind in indicators:
+                        model.Add(ind == 0)
+                else:
+                    model.Add(sum(indicators) <= effective_limit)
+
+    def _add_emp_week_limits(self, model, typed_events, limit, existing_counts=None):
+        """Limit events of a type per employee per week.
+
+        Accounts for already-posted schedules so that if an employee already
+        has `existing` events in a week, the solver can only assign
+        `limit - existing` more.
+        """
+        if existing_counts is None:
+            existing_counts = self.existing_core_count_by_emp_week
         for emp_id in self.employee_ids:
             for w_idx, week_days in self.weeks.items():
+                existing = existing_counts.get((emp_id, w_idx), 0)
+                effective_limit = limit - existing
+
                 indicators = []
                 for event in typed_events:
                     eid = event.id
@@ -761,8 +935,72 @@ class CPSATSchedulingEngine:
                         ]).OnlyEnforceIf(ind.Not())
                         indicators.append(ind)
 
-                if len(indicators) > limit:
-                    model.Add(sum(indicators) <= limit)
+                if not indicators:
+                    continue
+
+                if effective_limit <= 0:
+                    for ind in indicators:
+                        model.Add(ind == 0)
+                else:
+                    model.Add(sum(indicators) <= effective_limit)
+
+    def _add_weekly_hours_cap(self, model):
+        """H24: Total estimated work per employee per week <= 40 hours.
+
+        Sums estimated_time (minutes) for every event assigned to an employee
+        within a week, including already-posted schedules, and caps at
+        MAX_WEEKLY_MINUTES.
+        """
+        for emp_id in self.employee_ids:
+            for w_idx, week_days in self.weeks.items():
+                existing_minutes = self.existing_minutes_by_emp_week.get(
+                    (emp_id, w_idx), 0
+                )
+                remaining = MAX_WEEKLY_MINUTES - existing_minutes
+                if remaining <= 0:
+                    # Already at/over cap — forbid all new assignments this week
+                    for event in self.events:
+                        eid = event.id
+                        if (eid, emp_id) not in self.v_assign_emp:
+                            continue
+                        for d in week_days:
+                            if (eid, d) not in self.v_assign_day:
+                                continue
+                            ind = model.NewBoolVar(f'wh_{eid}_{emp_id}_{w_idx}_{d}')
+                            model.AddBoolAnd([
+                                self.v_assign_emp[(eid, emp_id)],
+                                self.v_assign_day[(eid, d)]
+                            ]).OnlyEnforceIf(ind)
+                            model.AddBoolOr([
+                                self.v_assign_emp[(eid, emp_id)].Not(),
+                                self.v_assign_day[(eid, d)].Not()
+                            ]).OnlyEnforceIf(ind.Not())
+                            model.Add(ind == 0)
+                    continue
+
+                # Sum estimated_time × indicator for all events in this week
+                time_terms = []
+                for event in self.events:
+                    eid = event.id
+                    est = event.estimated_time or 60
+                    if (eid, emp_id) not in self.v_assign_emp:
+                        continue
+                    for d in week_days:
+                        if (eid, d) not in self.v_assign_day:
+                            continue
+                        ind = model.NewBoolVar(f'wh_{eid}_{emp_id}_{w_idx}_{d}')
+                        model.AddBoolAnd([
+                            self.v_assign_emp[(eid, emp_id)],
+                            self.v_assign_day[(eid, d)]
+                        ]).OnlyEnforceIf(ind)
+                        model.AddBoolOr([
+                            self.v_assign_emp[(eid, emp_id)].Not(),
+                            self.v_assign_day[(eid, d)].Not()
+                        ]).OnlyEnforceIf(ind.Not())
+                        time_terms.append(ind * est)
+
+                if time_terms:
+                    model.Add(sum(time_terms) <= remaining)
 
     def _add_mutual_exclusion_per_day(self, model, type_a_events, type_b_events):
         """H13: Two event types can't share the same employee on the same day."""
@@ -1011,7 +1249,7 @@ class CPSATSchedulingEngine:
     # ------------------------------------------------------------------
 
     def _add_objective(self, model):
-        """Build objective function from soft constraints S1-S14."""
+        """Build objective function from soft constraints S1-S15."""
         terms = []
         today = date.today()
 
@@ -1024,7 +1262,7 @@ class CPSATSchedulingEngine:
             if isinstance(svar, int):
                 continue
             # Reward scheduling
-            terms.append(svar * WEIGHT_UNSCHEDULED)
+            terms.append(svar * self._get_effective_weight(WEIGHT_UNSCHEDULED, 'WEIGHT_UNSCHEDULED'))
 
         # S2: Due date urgency bonus
         for event in self.events:
@@ -1042,7 +1280,7 @@ class CPSATSchedulingEngine:
             max_days = 21  # 3-week horizon
             urgency = max(0, max_days - days_until)
             if urgency > 0:
-                terms.append(svar * (WEIGHT_URGENCY * urgency))
+                terms.append(svar * (self._get_effective_weight(WEIGHT_URGENCY, 'WEIGHT_URGENCY') * urgency))
 
         # S3: Event type priority bonus
         for event in self.events:
@@ -1092,21 +1330,49 @@ class CPSATSchedulingEngine:
                         self.v_assign_emp[(eid, primary)].Not(),
                         self.v_assign_day[(eid, d)].Not()
                     ]).OnlyEnforceIf(ind.Not())
-                    terms.append(ind * WEIGHT_ROTATION)
+                    terms.append(ind * self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION'))
 
-        # S5: Club Supervisor misuse penalty
+                # Smaller bonus for backup rotation employee
+                if backup and backup != primary and (eid, backup) in self.v_assign_emp:
+                    ind_bk = model.NewBoolVar(f'rot_bk_{eid}_{d}_{backup}')
+                    model.AddBoolAnd([
+                        self.v_assign_emp[(eid, backup)],
+                        self.v_assign_day[(eid, d)]
+                    ]).OnlyEnforceIf(ind_bk)
+                    model.AddBoolOr([
+                        self.v_assign_emp[(eid, backup)].Not(),
+                        self.v_assign_day[(eid, d)].Not()
+                    ]).OnlyEnforceIf(ind_bk.Not())
+                    terms.append(ind_bk * (self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION') // 2))
+
+        # S5: Club Supervisor misuse penalty (escalating)
+        # Tier k costs k × WEIGHT, so 1st misuse = -W, 2nd = -2W, 3rd = -3W, etc.
         club_sup_ids = [eid for eid, e in self.employees.items()
                         if e.job_title == 'Club Supervisor']
-        for event in self.events:
-            eid = event.id
-            etype = self._get_event_type(event)
-            if etype in SUPERVISOR_PREFERRED_TYPES:
-                continue
-            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
-                continue
-            for cs_id in club_sup_ids:
+        for cs_id in club_sup_ids:
+            misuse_vars = []
+            for event in self.events:
+                eid = event.id
+                etype = self._get_event_type(event)
+                if etype in SUPERVISOR_PREFERRED_TYPES:
+                    continue
+                if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                    continue
                 if (eid, cs_id) in self.v_assign_emp:
-                    terms.append(self.v_assign_emp[(eid, cs_id)] * (-WEIGHT_SUPERVISOR_MISUSE))
+                    misuse_vars.append(self.v_assign_emp[(eid, cs_id)])
+
+            if not misuse_vars:
+                continue
+
+            count = model.NewIntVar(0, len(misuse_vars), f'cs_misuse_{cs_id}')
+            model.Add(count == sum(misuse_vars))
+
+            max_tiers = min(len(misuse_vars), 5)
+            for k in range(1, max_tiers + 1):
+                at_least_k = model.NewBoolVar(f'cs_tier_{cs_id}_{k}')
+                model.Add(count >= k).OnlyEnforceIf(at_least_k)
+                model.Add(count <= k - 1).OnlyEnforceIf(at_least_k.Not())
+                terms.append(at_least_k * (-self._get_effective_weight(WEIGHT_SUPERVISOR_MISUSE, 'WEIGHT_SUPERVISOR_MISUSE') * k))
 
         # S7: Primary Lead gets Block 1
         for event in self.events:
@@ -1138,6 +1404,33 @@ class CPSATSchedulingEngine:
                     ]).OnlyEnforceIf(ind.Not())
                     terms.append(ind * WEIGHT_LEAD_BLOCK1)
 
+        # S8: Primary Lead on Freeosk/Digital Refresh
+        lead_daily_types = {'Freeosk', 'Digital Refresh'}
+        for event in self.events:
+            eid = event.id
+            etype = self._get_event_type(event)
+            if etype not in lead_daily_types:
+                continue
+            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                continue
+
+            valid_days = self._valid_days_for_event(event)
+            for d in valid_days:
+                if (eid, d) not in self.v_assign_day:
+                    continue
+                primary, _ = self._get_rotation_employee(d, 'primary_lead')
+                if primary and (eid, primary) in self.v_assign_emp:
+                    ind = model.NewBoolVar(f'ld_{eid}_{d}_{primary}')
+                    model.AddBoolAnd([
+                        self.v_assign_emp[(eid, primary)],
+                        self.v_assign_day[(eid, d)]
+                    ]).OnlyEnforceIf(ind)
+                    model.AddBoolOr([
+                        self.v_assign_emp[(eid, primary)].Not(),
+                        self.v_assign_day[(eid, d)].Not()
+                    ]).OnlyEnforceIf(ind.Not())
+                    terms.append(ind * WEIGHT_LEAD_DAILY)
+
         # S9: Fairness — minimize max-min spread of Core assignments per employee
         core_events = [e for e in self.events if self._get_event_type(e) == 'Core']
         if core_events and len(self.employee_ids) > 1:
@@ -1166,9 +1459,11 @@ class CPSATSchedulingEngine:
                 model.AddMinEquality(min_core, list(emp_core_counts.values()))
                 spread = model.NewIntVar(0, len(core_events), 'core_spread')
                 model.Add(spread == max_core - min_core)
-                terms.append(spread * (-WEIGHT_FAIRNESS))
+                terms.append(spread * (-self._get_effective_weight(WEIGHT_FAIRNESS, 'WEIGHT_FAIRNESS')))
 
         # S10: Weekly Juicer Production limit (soft penalty for > 5)
+        # Note: H23 now enforces this as a hard constraint. S10 remains as a
+        # secondary signal but the hard constraint prevents actual violations.
         juicer_prod_events = [e for e in self.events
                               if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
         if juicer_prod_events:
@@ -1200,7 +1495,7 @@ class CPSATSchedulingEngine:
                         model.Add(
                             excess >= sum(indicators) - MAX_JUICER_PRODUCTION_PER_WEEK
                         )
-                        terms.append(excess * (-WEIGHT_JUICER_WEEKLY))
+                        terms.append(excess * (-self._get_effective_weight(WEIGHT_JUICER_WEEKLY, 'WEIGHT_JUICER_WEEKLY')))
 
         # S11: Duplicate product penalty (RULE-020)
         # Penalize scheduling events from the same product/brand on the same day
@@ -1240,7 +1535,32 @@ class CPSATSchedulingEngine:
                         0, len(day_indicators), f'dp_excess_{product_key}_{d}'
                     )
                     model.Add(excess >= sum(day_indicators) - 1)
-                    terms.append(excess * (-WEIGHT_DUPLICATE_PRODUCT))
+                    terms.append(excess * (-self._get_effective_weight(WEIGHT_DUPLICATE_PRODUCT, 'WEIGHT_DUPLICATE_PRODUCT')))
+
+        # S13: Daily shift balance — penalize uneven event distribution across days
+        for w_idx, week_days in self.weeks.items():
+            if len(week_days) < 2:
+                continue
+            day_counts = {}
+            for d in week_days:
+                day_vars = []
+                for event in self.events:
+                    eid = event.id
+                    if (eid, d) in self.v_assign_day:
+                        day_vars.append(self.v_assign_day[(eid, d)])
+                if day_vars:
+                    dc = model.NewIntVar(0, len(self.events), f'dc_{w_idx}_{d}')
+                    model.Add(dc == sum(day_vars))
+                    day_counts[d] = dc
+
+            if len(day_counts) >= 2:
+                max_day = model.NewIntVar(0, len(self.events), f'max_day_{w_idx}')
+                min_day = model.NewIntVar(0, len(self.events), f'min_day_{w_idx}')
+                model.AddMaxEquality(max_day, list(day_counts.values()))
+                model.AddMinEquality(min_day, list(day_counts.values()))
+                spread = model.NewIntVar(0, len(self.events), f'day_spread_{w_idx}')
+                model.Add(spread == max_day - min_day)
+                terms.append(spread * (-self._get_effective_weight(WEIGHT_SHIFT_BALANCE, 'WEIGHT_SHIFT_BALANCE')))
 
         # S14: Minimize bumps of existing schedules
         for existing in self.existing_schedules:
@@ -1269,7 +1589,18 @@ class CPSATSchedulingEngine:
                     self.v_assign_day[(eid, sd)].Not(),
                     self.v_assign_emp[(eid, emp_id)].Not()
                 ]).OnlyEnforceIf(kept.Not())
-                terms.append(kept * WEIGHT_BUMP)
+                terms.append(kept * self._get_effective_weight(WEIGHT_BUMP, 'WEIGHT_BUMP'))
+
+        # S15: ML affinity bonus — nudge assignments toward ML-predicted matches
+        affinity_scores = self._get_ml_affinity_scores()
+        if affinity_scores:
+            ml_weight = self._get_effective_weight(WEIGHT_ML_AFFINITY, 'WEIGHT_ML_AFFINITY')
+            for (eid, emp_id), score in affinity_scores.items():
+                key = (eid, emp_id)
+                if key in self.v_assign_emp:
+                    weight = int(score * ml_weight)
+                    if weight > 0:
+                        terms.append(self.v_assign_emp[key] * weight)
 
         # Final objective: maximize
         if terms:
@@ -1444,6 +1775,232 @@ class CPSATSchedulingEngine:
 
         return self.default_times.get(etype, time(11, 0))
 
+    def _post_solve_review(self, run):
+        """Defensive post-solve review to catch any remaining Core double-bookings.
+
+        Runs after _extract_solution() and before commit. Scans all proposed
+        PendingSchedule records for this run and removes violations:
+          1. Same-run duplicates: 2+ Core events for same (emp, day) in this run
+          2. Cross-run conflicts: new Core conflicts with an existing posted Schedule
+          3. Weekly excess: total Core count (new + existing) exceeds weekly limit
+
+        Removed assignments get failure_reason set, employee/datetime cleared.
+        Returns count of removed assignments.
+        """
+        removed = 0
+
+        # Gather all proposed (non-failed) PendingSchedules from this run
+        pending = self.PendingSchedule.query.filter_by(
+            scheduler_run_id=run.id,
+        ).filter(
+            self.PendingSchedule.employee_id.isnot(None),
+            self.PendingSchedule.schedule_datetime.isnot(None),
+        ).all()
+
+        # Resolve event types for each pending schedule
+        event_type_cache = {}
+        for ps in pending:
+            if ps.event_ref_num not in event_type_cache:
+                event = self.Event.query.filter_by(project_ref_num=ps.event_ref_num).first()
+                event_type_cache[ps.event_ref_num] = event.event_type if event else 'Unknown'
+
+        core_pending = [ps for ps in pending if event_type_cache.get(ps.event_ref_num) == 'Core']
+
+        # --- Check 1: Same-run duplicates (2+ Core for same emp+day) ---
+        emp_day_cores = defaultdict(list)
+        for ps in core_pending:
+            sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
+            emp_day_cores[(ps.employee_id, sd)].append(ps)
+
+        for (emp_id, day), ps_list in emp_day_cores.items():
+            if len(ps_list) <= MAX_CORE_EVENTS_PER_DAY:
+                continue
+            # Keep first (highest priority by insertion order), remove rest
+            for ps in ps_list[MAX_CORE_EVENTS_PER_DAY:]:
+                logger.warning(
+                    f"POST-REVIEW: Removing same-run duplicate Core for "
+                    f"employee={emp_id} day={day} event={ps.event_ref_num}"
+                )
+                ps.failure_reason = (
+                    f"Post-review: duplicate Core on {day} (same run). "
+                    f"Limit is {MAX_CORE_EVENTS_PER_DAY} per day."
+                )
+                ps.employee_id = None
+                ps.schedule_datetime = None
+                ps.schedule_time = None
+                removed += 1
+
+        # Refresh core_pending to exclude just-removed ones
+        core_pending = [ps for ps in core_pending if ps.employee_id is not None]
+
+        # --- Check 2: Cross-run conflicts with posted schedules ---
+        for ps in list(core_pending):
+            sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
+            existing_count = self.existing_core_count_by_emp_day.get((ps.employee_id, sd), 0)
+            # Count how many new Core events for this emp+day are still alive (before this one)
+            new_count = sum(
+                1 for other in core_pending
+                if other.employee_id == ps.employee_id
+                and other is not ps
+                and (other.schedule_datetime.date() if isinstance(other.schedule_datetime, datetime) else other.schedule_datetime) == sd
+            )
+            # This pending + others already counted + existing
+            total = existing_count + new_count + 1
+            if total > MAX_CORE_EVENTS_PER_DAY:
+                logger.warning(
+                    f"POST-REVIEW: Removing cross-run conflict Core for "
+                    f"employee={ps.employee_id} day={sd} event={ps.event_ref_num} "
+                    f"(existing={existing_count}, new={new_count + 1})"
+                )
+                ps.failure_reason = (
+                    f"Post-review: conflicts with {existing_count} existing posted "
+                    f"Core event(s) on {sd}. Limit is {MAX_CORE_EVENTS_PER_DAY} per day."
+                )
+                ps.employee_id = None
+                ps.schedule_datetime = None
+                ps.schedule_time = None
+                core_pending.remove(ps)
+                removed += 1
+
+        # --- Check 3: Weekly excess ---
+        emp_week_new_cores = defaultdict(list)
+        for ps in core_pending:
+            sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
+            week_idx = self.week_of_day.get(sd)
+            if week_idx is not None:
+                emp_week_new_cores[(ps.employee_id, week_idx)].append(ps)
+
+        for (emp_id, week_idx), ps_list in emp_week_new_cores.items():
+            existing_week = self.existing_core_count_by_emp_week.get((emp_id, week_idx), 0)
+            total = existing_week + len(ps_list)
+            if total > MAX_CORE_EVENTS_PER_WEEK:
+                excess = total - MAX_CORE_EVENTS_PER_WEEK
+                # Remove from the end (lower priority by insertion order)
+                for ps in ps_list[-excess:]:
+                    logger.warning(
+                        f"POST-REVIEW: Removing weekly excess Core for "
+                        f"employee={emp_id} week={week_idx} event={ps.event_ref_num}"
+                    )
+                    ps.failure_reason = (
+                        f"Post-review: weekly Core limit exceeded "
+                        f"(existing={existing_week}, new={len(ps_list)}, "
+                        f"limit={MAX_CORE_EVENTS_PER_WEEK})"
+                    )
+                    ps.employee_id = None
+                    ps.schedule_datetime = None
+                    ps.schedule_time = None
+                    removed += 1
+
+        return removed
+
+    def _log_solution_explanations(self, solver):
+        """Post-solve explainability: log why each assignment was made.
+
+        Examines solver variable values to explain:
+        - Why a specific employee was chosen (rotation, only eligible, best fit)
+        - Why a specific day was chosen (only valid day, closest to due date)
+        - Why an event failed to schedule (no employees, constraint blocked)
+        """
+        explanations = []
+
+        for event in self.events:
+            eid = event.id
+            etype = self._get_event_type(event)
+            svar = self.v_scheduled.get(eid)
+
+            if svar is None or isinstance(svar, int):
+                reasons = []
+                eligible = self.eligible_employees.get(eid, set())
+                valid_days = self._valid_days_for_event(event)
+                if not valid_days:
+                    reasons.append("no valid days in scheduling window")
+                if not eligible:
+                    reasons.append(f"no eligible employees for {etype}")
+                explanations.append(
+                    f"  SKIP {etype} ref={event.project_ref_num}: "
+                    f"{'; '.join(reasons) or 'pre-filtered'}"
+                )
+                continue
+
+            if solver.Value(svar) == 0:
+                # Analyze why it couldn't be scheduled
+                eligible = self.eligible_employees.get(eid, set())
+                valid_days = self._valid_days_for_event(event)
+                available_combos = sum(
+                    1 for e in eligible for d in valid_days
+                    if (e, d) not in self.unavailable
+                )
+                explanations.append(
+                    f"  FAIL {etype} ref={event.project_ref_num}: "
+                    f"solver rejected ({len(eligible)} eligible employees, "
+                    f"{len(valid_days)} valid days, {available_combos} combos) "
+                    f"— blocked by hard constraints"
+                )
+                continue
+
+            # Find assigned day and employee
+            assigned_day = None
+            for d in self._valid_days_for_event(event):
+                if (eid, d) in self.v_assign_day and solver.Value(self.v_assign_day[(eid, d)]):
+                    assigned_day = d
+                    break
+
+            assigned_emp = None
+            eligible = self.eligible_employees.get(eid, set())
+            for emp_id in eligible:
+                if (eid, emp_id) in self.v_assign_emp and solver.Value(self.v_assign_emp[(eid, emp_id)]):
+                    assigned_emp = emp_id
+                    break
+
+            if not assigned_day or not assigned_emp:
+                continue
+
+            # Explain employee choice
+            emp_reasons = []
+            emp = self.employees.get(assigned_emp)
+            emp_name = emp.name if emp else assigned_emp
+
+            # Check rotation match
+            rot_type = None
+            if etype in ('Juicer', 'Juicer Production'):
+                rot_type = 'juicer'
+            elif etype == 'Core':
+                rot_type = 'primary_lead'
+            if rot_type:
+                primary, backup = self._get_rotation_employee(assigned_day, rot_type)
+                if assigned_emp == primary:
+                    emp_reasons.append("rotation primary")
+                elif assigned_emp == backup:
+                    emp_reasons.append("rotation backup")
+
+            if len(eligible) == 1:
+                emp_reasons.append("only eligible employee")
+
+            # Explain day choice
+            valid_days = self._valid_days_for_event(event)
+            day_reason = ""
+            if len(valid_days) == 1:
+                day_reason = " (only valid day)"
+
+            block_str = ""
+            if etype == 'Core':
+                for b in range(1, NUM_CORE_BLOCKS + 1):
+                    if (eid, b) in self.v_assign_block and solver.Value(self.v_assign_block[(eid, b)]):
+                        block_str = f" block={b}"
+                        break
+
+            explanations.append(
+                f"  OK   {etype} ref={event.project_ref_num} -> "
+                f"{emp_name} on {assigned_day}{day_reason}{block_str}"
+                f"{' [' + ', '.join(emp_reasons) + ']' if emp_reasons else ''}"
+            )
+
+        if explanations:
+            logger.info(
+                f"CP-SAT Solution Explanations ({len(explanations)} events):\n"
+                + "\n".join(explanations)
+            )
+
     def _create_pending_schedule(self, run, event, employee_id, schedule_dt,
                                   is_swap=False, bumped_event_ref_num=None,
                                   swap_reason=None, shift_block=None):
@@ -1541,6 +2098,16 @@ class CPSATSchedulingEngine:
                 )
 
                 scheduled, failed, swaps = self._extract_solution(solver, run)
+
+                # Post-solve explainability logging
+                self._log_solution_explanations(solver)
+
+                # Post-solve validation: catch any remaining double-bookings
+                removed = self._post_solve_review(run)
+                if removed > 0:
+                    scheduled -= removed
+                    failed += removed
+                    logger.info(f"CP-SAT post-review: removed {removed} duplicate/excess assignments")
 
                 run.status = 'completed'
                 run.completed_at = datetime.utcnow()

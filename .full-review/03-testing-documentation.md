@@ -1,99 +1,100 @@
 # Phase 3: Testing & Documentation Review
 
-## Testing Coverage Findings
+## Test Coverage Findings
 
-Full report: `docs/TESTING_COVERAGE_ANALYSIS.md`
+### Critical
 
-### Executive Summary
+**TST-CRT-01: Zero tests for ConstraintModifier service (280 lines)**
+- File: `app/services/constraint_modifier.py`
+- No coverage for `apply_preference()`, `get_multipliers()`, `clear_preference()`, `_match_preference()`, `_parse_direction()`.
 
-**CRITICAL:** The webapp has **ZERO UI/UX test coverage** despite 108 UI files and 277 routes. All 86 existing tests focus on business logic (ML models, scheduling engine, validators).
+**TST-CRT-02: Zero tests for AI Tools (4,100+ lines, 37 tools)**
+- File: `app/services/ai_tools.py`
+- No unit tests for any tool function. Write tools that modify DB state are completely untested.
 
-### Coverage Breakdown
+**TST-CRT-03: Zero tests for AI Assistant (560 lines)**
+- File: `app/services/ai_assistant.py`
+- `confirm_action()` sets `_confirmed=True` from untrusted `confirmation_data` — no test validates this is secure.
 
-| Category | Coverage | Tests | Details |
-|----------|----------|-------|---------|
-| Backend business logic | ~85% | 83 | ML, scheduling engine, validators |
-| API routes | <1% | 3 | Health check + index only |
-| Templates/UI | 0% | 0 | 50 Jinja2 templates untested |
-| JavaScript | 0% | 0 | 37 JS files untested |
-| CSS rendering | 0% | 0 | 23 CSS files untested |
-| Security (XSS/CSRF) | 0% | 0 | No security regression tests |
-| E2E workflows | 0% | 0 | No workflow tests |
+**TST-CRT-04: No authentication tests for Fix Wizard or auto-scheduler routes**
+- Fix Wizard: 4 routes with no `@require_authentication()`, zero tests verify auth requirement
+- Auto-scheduler: `run_scheduler()` POST has no auth, zero tests verify
 
-### Critical Test Gaps (5)
+**TST-CRT-05: `.in_(CONDITION_CANCELED)` bug has no regression test**
+- `ai_tools.py` line 4030 iterates string characters. No test catches this.
 
-| ID | Gap | Priority | Tests Needed |
-|----|-----|----------|-------------|
-| TEST-C1 | Zero XSS test coverage for 161 inline onclick handlers | P0 | ~50 |
-| TEST-C2 | Zero CSRF validation tests despite 4 token implementations | P0 | ~20 |
-| TEST-C3 | Zero security header tests (headers defined but never applied) | P0 | ~10 |
-| TEST-C4 | Zero template rendering tests (50 templates) | P1 | ~200 |
-| TEST-C5 | Zero JavaScript unit tests (37 files, 633KB) | P1 | ~300 |
+**TST-CRT-06: `_confirmed` bypass has no test**
+- LLM can inject `_confirmed: true` into tool args. No test verifies stripping.
 
-### Test Effort Estimate
+### High
 
-| Test Type | Tests Needed | Estimated Effort |
-|-----------|-------------|-----------------|
-| Security regression | 80 | 40 hours |
-| Template rendering | 200 | 100 hours |
-| JavaScript unit | 300 | 150 hours |
-| API endpoint | 150 | 75 hours |
-| E2E workflows | 65 | 135 hours |
-| **TOTAL** | **795** | **~500 hours** |
+**TST-HGH-01**: CP-SAT Supervisor pairing (`_compute_pairings`) — zero tests
+**TST-HGH-02**: `_get_effective_weight()` with user preference multipliers — zero tests
+**TST-HGH-03**: Fix Wizard `_apply_assign_supervisor()` — creates Schedule records, untested
+**TST-HGH-04**: Fix Wizard `_apply_unschedule()` paired Supervisor cascade — untested
+**TST-HGH-05**: Constraint validator `_check_time_off()`, `_check_weekly_limit()`, `_check_already_scheduled()` — untested
+**TST-HGH-06**: `get_available_employees()` used by Fix Wizard and AI tools — untested
+**TST-HGH-07**: N+1 query regression in `_load_existing_schedules()` — no query count test
+**TST-HGH-08**: `_parse_date()` and `_find_employee()` fuzzy matching — untested
+**TST-HGH-09**: Silent assertion patterns in `test_cancelled_events.py` — `if cancelled:` guard silently passes when event not found
+
+### Medium
+
+**TST-MED-01**: CP-SAT soft constraints (S1-S15) objective weights — zero tests
+**TST-MED-02**: Fix Wizard option generators (5 of 7 untested): `_options_for_core_limit`, `_options_for_supervisor_pairing`, `_options_for_juicer_core_conflict`, `_options_for_weekly_limit`, `_options_for_duplicate_product`
+**TST-MED-03**: Fix Wizard input validation — invalid action_type, non-existent schedule_id, past datetime
+**TST-MED-04**: Timezone utility (`to_local_time`) — zero tests
+**TST-MED-05**: CP-SAT event type override handling — untested
+**TST-MED-06**: CP-SAT locked days, company holidays — untested
+**TST-MED-07**: `_extract_product_key()` parsing — untested
+
+### Test Quality Assessment
+
+| Level | Count | % | Health |
+|-------|-------|---|--------|
+| Unit (no DB) | ~15 | 8% | LOW |
+| Integration (service + DB) | ~130 | 72% | MODERATE |
+| Route/API | ~35 | 20% | LOW |
+| E2E | 0 | 0% | MISSING |
+
+Test pyramid is inverted — almost all tests require a database.
 
 ---
 
 ## Documentation Findings
 
-Full report: `docs/UI_UX_DOCUMENTATION_REVIEW.md`
+### Critical
 
-### Overall Grade: C+ (70%)
+**DOC-CRT-01: `docs/CODEBASE_MAP.md` has zero references to any new files**
+- Last updated 2026-02-09. Missing: `cpsat_scheduler.py` (2,157 lines), `fix_wizard.py` (923 lines), `constraint_modifier.py` (282 lines), `timezone.py`, all new templates/JS/tests.
+- Also missing: CP-SAT data flow diagram, Schedule outcome columns.
 
-| Category | Score | Status |
-|----------|-------|--------|
-| JavaScript API Documentation (JSDoc) | 90% | Excellent |
-| Design System Documentation | 40% | Poor |
-| Component Documentation | 50% | Fair |
-| Architecture Documentation | 45% | Poor |
-| Template Documentation | 15% | Critical Gap |
-| Style Guide / Conventions | 10% | Critical Gap |
+### High
 
-### Key Findings (16 total)
+**DOC-HGH-01**: `CLAUDE.md` API Endpoints section missing Fix Wizard and Dashboard validation endpoints (8+ undocumented routes)
+**DOC-HGH-02**: `docs/scheduling_validation_rules.md` missing 5 CP-SAT hard constraints (H18, H20, H22-H24)
+**DOC-HGH-03**: No changelog entries for CP-SAT scheduler, Fix Wizard, AI tools expansion, or schema changes
+**DOC-HGH-04**: `CONTRIBUTING.md` line 58 references wrong JS filename (`api.js` instead of `api-client.js`)
 
-#### Positive
-- 27/37 JavaScript files (73%) have JSDoc annotations (525+ total)
-- `api-client.js`, `modal.js`, `daily-view.js` have excellent documentation
-- `CLAUDE.md` provides good onboarding foundation
+### Medium
 
-#### Critical Gaps
-| ID | Gap | Impact |
-|----|-----|--------|
-| DOC-C1 | No design system usage guide despite 50+ tokens in `design-tokens.css` | Developers bypass tokens (388 inline styles found) |
-| DOC-C2 | No style guide or CSS conventions documented | Three competing naming conventions (BEM, flat, Bootstrap) |
-| DOC-C3 | Zero template documentation (50 Jinja2 templates) | No context variable docs, no macro usage guide |
-| DOC-C4 | No component documentation -- three modal implementations undocumented | Developers create new implementations instead of reusing |
-| DOC-C5 | No architectural decision records (ADRs) | No record of why Bootstrap 4.6 is on dashboard pages |
-| DOC-C6 | 10 legacy JS files have zero JSDoc (`main.js`, `employees.js`, `login.js`) | Cannot understand function contracts without reading source |
+**DOC-MED-01**: `CLAUDE.md` Key Files table missing `ai_tools.py`, `validation_types.py`, `timezone.py`
+**DOC-MED-02**: `CLAUDE.md` Change Ripple Effects missing CP-SAT and Fix Wizard dependencies
+**DOC-MED-03**: No documentation of runtime constraint modifier system in business rules doc
+**DOC-MED-04**: AI Tools confirmation workflow not documented in code or tool schemas
+**DOC-MED-05**: New migration not documented in any changelog
+**DOC-MED-06**: No top-level `README.md` exists (CLAUDE.md serves as primary docs)
+**DOC-MED-07**: Schedule model outcome columns undocumented in CODEBASE_MAP
 
-### Remediation Roadmap
+### Low
 
-| Phase | Action | Priority |
-|-------|--------|----------|
-| 1 | Create design system usage guide + component catalog | P0 |
-| 2 | Document canonical patterns (modal, CSRF, API client) | P0 |
-| 3 | Add JSDoc to 10 legacy JS files | P1 |
-| 4 | Create template context documentation | P1 |
+**DOC-LOW-01**: Fix Wizard dispatcher mapping not cross-referenced to validation rule sources
+**DOC-LOW-02**: `_post_solve_review` defense-in-depth rationale not fully explained in docstring
+**DOC-LOW-03**: CODEBASE_MAP Navigation Guide missing Fix Wizard task entry
+**DOC-LOW-04**: Migration nullable defaults inconsistent with model `server_default`
 
----
+### Positive Observations
 
-## Cross-Phase Implications
-
-### For Phase 4 (Best Practices)
-1. **No automated quality gates** -- zero linting, no pre-commit hooks, no CI/CD
-2. **No testing framework for JS** -- no Jest, Mocha, or Cypress configured
-3. **Documentation gaps enable anti-patterns** -- undocumented canonical patterns lead to duplication
-
-### For Final Report
-1. Testing gap is the **single highest-risk finding** -- no automated detection of regressions
-2. Documentation gaps directly cause the architectural fragmentation found in Phase 1
-3. Security vulnerabilities from Phase 2 have no regression test protection
+- CP-SAT scheduler has excellent inline documentation (constraint IDs H2-H24, S1-S15, weight comments)
+- Constraint Modifier has well-structured self-documenting dictionaries
+- Fix Wizard dataclasses and enums provide clear API contract

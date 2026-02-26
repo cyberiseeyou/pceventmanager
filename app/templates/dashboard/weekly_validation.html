@@ -456,6 +456,9 @@
                 href="{{ url_for('dashboard.weekly_validation', start_date=(start_date + timedelta(days=7)).isoformat()) }}">
                 Next <i class="fas fa-chevron-right"></i>
             </a>
+            <a href="{{ url_for('dashboard.fix_wizard', start_date=start_date.isoformat()) }}">
+                <i class="fas fa-magic"></i> Fix Wizard
+            </a>
         </div>
     </div>
 
@@ -856,7 +859,7 @@
 </div>
 
 <!-- Reschedule Modal -->
-<div class="modal-backdrop" id="reschedule-modal">
+<div class="modal-backdrop" id="reschedule-modal" role="dialog" aria-modal="true" aria-label="Reschedule Event">
     <div class="modal-content">
         <div class="modal-header">
             <h4>Reschedule Event</h4>
@@ -890,7 +893,7 @@
 </div>
 
 <!-- Change Employee Modal -->
-<div class="modal-backdrop" id="change-employee-modal">
+<div class="modal-backdrop" id="change-employee-modal" role="dialog" aria-modal="true" aria-label="Change Employee Assignment">
     <div class="modal-content">
         <div class="modal-header">
             <h4>Change Employee Assignment</h4>
@@ -916,7 +919,7 @@
 </div>
 
 <!-- Quick Schedule Modal -->
-<div class="modal-backdrop" id="quick-schedule-modal">
+<div class="modal-backdrop" id="quick-schedule-modal" role="dialog" aria-modal="true" aria-label="Quick Schedule Event">
     <div class="modal-content">
         <div class="modal-header">
             <h4>Quick Schedule Event</h4>
@@ -956,7 +959,7 @@
 </div>
 
 <!-- Employee Schedules Modal (for resolving conflicts) -->
-<div class="modal-backdrop" id="employee-schedules-modal">
+<div class="modal-backdrop" id="employee-schedules-modal" role="dialog" aria-modal="true" aria-label="Employee Schedules">
     <div class="modal-content">
         <div class="modal-header">
             <h4>Employee's Schedules - Choose One to Modify</h4>

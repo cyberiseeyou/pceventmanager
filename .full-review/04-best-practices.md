@@ -1,119 +1,109 @@
 # Phase 4: Best Practices & Standards
 
-## Best Practices & Standards Review
+## Framework & Language Findings
 
-Full report: `.full-review/04a-best-practices-standards.md`
+### Critical
 
-### Finding Summary: 5 Critical, 8 High, 10 Medium, 6 Low, 10 Positive
+**BP-CRT-01: `NameError` in `validation_summary_api` — missing `get_models()` call**
+- File: `app/routes/dashboard.py` line 540
+- References `models['Event']` without calling `get_models()` first. Runtime crash on every request.
 
-### Critical (5)
+**BP-CRT-02: Missing authentication on all dashboard mutation endpoints**
+- File: `app/routes/dashboard.py`
+- `fix_wizard_apply`, `fix_wizard_skip`, `assign_supervisor_event` perform writes without `@require_authentication()`.
 
-| ID | Finding | Standard Violated | Impact |
-|----|---------|-------------------|--------|
-| BP-C1 | **Three competing modal implementations** with inconsistent a11y (Jinja2 macro, JS component, inline dashboard HTML + 2 inline modals in base.html) | WCAG 4.1.2 | Screen reader/keyboard users get different behavior per page |
-| BP-C2 | **262 native alert()/confirm() calls** despite shipping ToastManager and Modal components | WCAG 4.1.3 | Main thread blocked, unstyled, inaccessible |
-| BP-C3 | **161 inline onclick handlers** across 23 templates | Separation of concerns, CSP | XSS vectors, prevents CSP enforcement |
-| BP-C4 | **380 inline style attributes** across 35 templates (base.html has 22) | Design system adoption | Design tokens entirely bypassed |
-| BP-C5 | **Zero `<fieldset>` elements** in all 48 templates | WCAG 1.3.1 | Checkbox/radio groups have no programmatic grouping |
+**BP-CRT-03: No input validation on `fix_wizard_apply` action type**
+- File: `app/routes/dashboard.py` line 1140
+- `action_type` from request JSON passed directly to service without enum validation.
 
-### High (8)
+### High
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| BP-H1 | Duplicate FocusTrap implementations (utils/ vs modules/) | Inconsistent keyboard behavior |
-| BP-H2 | Duplicate ScreenReader Announcer (utils/ vs modules/) | Potential duplicate announcements |
-| BP-H3 | 846 hardcoded hex colors in CSS despite token system | Design tokens bypassed in 40% of CSS |
-| BP-H4 | Duplicate CSS rules in style.css with conflicting values | `.event-type-core` green in first def, red in second |
-| BP-H5 | Dashboard loads external frameworks (Font Awesome, Bootstrap classes without Bootstrap) | Visual inconsistency, extra payload |
-| BP-H6 | No semantic HTML landmarks on most pages (only 17/48 templates) | Screen reader navigation broken |
-| BP-H7 | ES module/global script race condition in base.html | Future runtime errors if globals referenced early |
-| BP-H8 | 150 innerHTML assignments in JS without sanitization | XSS vectors in 20 files |
+**BP-HGH-01: Repeated indicator BoolVar construction — code duplication (~30 times)**
+- File: `app/services/cpsat_scheduler.py`
+- Same 7-line pattern copy-pasted across 8 constraint methods. Extract `_make_emp_day_indicator()` helper.
 
-### Key Metrics
+**BP-HGH-02: `isinstance(svar, int)` guard for CP-SAT constants is fragile**
+- File: `app/services/cpsat_scheduler.py`
+- `model.NewConstant(0)` returns `IntVar`, not Python `int`. Use a separate `_unschedulable_events` set.
 
-| Metric | Value | Assessment |
-|--------|-------|------------|
-| Inline `style` attributes | 380 across 35 templates | Poor |
-| Inline `onclick` handlers | 161 across 23 templates | Poor |
-| `alert()`/`confirm()` calls | 262 across 21 files | Poor |
-| Hardcoded hex colors in CSS | 846 across 20 files | Poor |
-| `var()` token references | 1,783 across 21 files | Good (where adopted) |
-| ARIA attributes | 120 across 14 templates | Moderate |
-| Semantic landmarks | 64 across 17 templates | Low |
-| `<fieldset>` elements | 0 | Critical gap |
-| `window.*` assignments | 182 across 28 files | High pollution |
+**BP-HGH-03: Duplicate model dict construction in dashboard Fix Wizard routes (3x)**
+- File: `app/routes/dashboard.py`
+- Extract helper or pass `get_models()` output directly to FixWizardService.
 
-### Positive Findings (10)
-1. Comprehensive design token system (246 lines, well-documented)
-2. Skip-to-content link and keyboard navigation infrastructure
-3. Reduced motion + high contrast media query support
-4. 44x44px touch targets, iOS zoom prevention, safe area insets
-5. Proper ARIA on navigation (aria-haspopup, aria-expanded, hidden)
-6. Well-designed modal_base.html Jinja2 macro
-7. API client with timeout, retry, CSRF, offline detection
-8. Comprehensive responsive breakpoints (6 breakpoints + landscape)
-9. Accessible toast notification system (aria-live regions)
-10. Strong login form accessibility (labels, autocomplete, aria-describedby)
+**BP-HGH-04: `auto_scheduler.py:run_scheduler` uses `current_app.config` instead of `get_models()`**
+- File: `app/routes/auto_scheduler.py` line 86
+- Violates the documented model factory pattern. Other routes in same file use `get_models()` correctly.
+
+**BP-HGH-05: N+1 queries in `_load_existing_schedules`**
+- File: `app/services/cpsat_scheduler.py` line 473
+- Per-schedule event lookup inside loop. Pre-load events into lookup dict.
+
+### Medium
+
+**BP-MED-01**: Deprecated `Session.query(Model).get(id)` — use `Session.get(Model, id)` (SQLAlchemy 2.0)
+**BP-MED-02**: `ConstraintModifier` uses `get_models()` at constructor time — should accept DI params
+**BP-MED-03**: Bare `except:` in `database_refresh_service.py` line 359 — use `except Exception:`
+**BP-MED-04**: `ai_assistant.py` indentation inconsistency (5-space in `confirm_action`)
+**BP-MED-05**: `fix-wizard.js` uses `var` exclusively — rest of codebase uses `let`/`const`
+**BP-MED-06**: `showError` function defined twice in `fix-wizard.js`
+**BP-MED-07**: AI tools `get_tool_schemas()` returns 900-line inline dict — extract to data module
+**BP-MED-08**: Missing `match/case` opportunity in `fix_wizard.py:apply_fix` (Python 3.10+)
+**BP-MED-09**: `_check_already_scheduled` bypasses cached `_get_active_run_ids()` method
+**BP-MED-10**: No type hints on `FixWizardService._apply_*` methods
+
+### Low
+
+**BP-LOW-01**: `to_local_time` regex could strip intentional leading zeros in edge cases
+**BP-LOW-02**: `_compute_pairings` mutates `self.events` list in-place during setup
+**BP-LOW-03**: Template ARIA improvements incomplete — missing `aria-labelledby` on modals
+**BP-LOW-04**: `daily-view.js` CSRF fix correct but audit should confirm no other files use old header
+**BP-LOW-05**: `ai_assistant.py` provider selection could use strategy pattern
+**BP-LOW-06**: `test_validator.py:_next_weekday` helper should be shared fixture in `conftest.py`
 
 ---
 
-## DevOps & Tooling Review
+## CI/CD & DevOps Findings
 
-Full report: `.full-review/04b-devops-tooling.md`
+### Critical
 
-### Finding Summary: 3 Critical, 4 High, 6 Medium, 4 Low
+**OPS-CRT-01: Production database (`instance/scheduler.db`) tracked in git**
+- 2.8MB binary with employee PII. Not in `.gitignore`. Must be untracked immediately.
 
-### Critical (3)
+**OPS-CRT-02: Dashboard, API, and scheduling routes lack authentication (systemic)**
+- `dashboard.py`: All 15 routes unprotected
+- `api.py`: ~21 of 30+ routes unprotected (including POST/DELETE)
+- `scheduling.py`: All 5 routes unprotected (`require_authentication` imported but never used)
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| DT-C1 | **Zero frontend build pipeline** -- no bundler, minifier, preprocessor. 708KB JS + 400KB CSS served raw | 1MB+ per page load, 17+ HTTP requests |
-| DT-C2 | **No cache busting** with 1-year immutable cache headers in nginx. Users get stale JS/CSS after every deploy | Silent data corruption from stale code |
-| DT-C3 | **No CI quality gates** -- both GitHub Actions workflows only run Claude AI review. pytest never runs in CI | Regressions merge silently |
+### High
 
-### High (4)
+**OPS-HGH-01**: No deployment stage in CI (only test + lint, no CD)
+**OPS-HGH-02**: No security scanning (no Dependabot, Bandit, pip-audit, Trivy)
+**OPS-HGH-03**: No blue-green or canary deployment — single container, manual deploys
+**OPS-HGH-04**: Single gunicorn worker — CP-SAT solver blocks all requests for 15s+
+**OPS-HGH-05**: Nginx SSL not configured (commented out); relies on Cloudflare
+**OPS-HGH-06**: No log rotation — `FileHandler` grows unbounded
+**OPS-HGH-07**: No external monitoring or alerting (no Sentry, Prometheus, PagerDuty)
+**OPS-HGH-08**: Weak production `SECRET_KEY` default — validation not auto-run
+**OPS-HGH-09**: MCP server (`.mcp.json`) points at production database with full write access
+**OPS-HGH-10**: Handcrafted migration revision IDs (non-Alembic hashes)
+**OPS-HGH-11**: No automated backup schedule — manual-only `./backup_now.sh`
+**OPS-HGH-12**: SQLite with bind mount shared by app + Celery containers (corruption risk)
+**OPS-HGH-13**: No migration testing in CI pipeline
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| DT-H1 | No JavaScript testing framework (no Jest, Vitest, Cypress, Playwright) | 14,117 lines of untested frontend code |
-| DT-H2 | No JS/CSS linting (no ESLint, Prettier, Stylelint) | 250 console.log, only 2/37 files use strict |
-| DT-H3 | No pre-commit hooks (no husky, no .pre-commit-config.yaml) | No automated quality checks |
-| DT-H4 | No Python linting or type checking (no ruff, flake8, mypy) | Backend quality relies on manual review |
+### Medium
 
-### Current Tooling State
+**OPS-MED-01**: CI skips 51 ML tests without substitute/tracking job
+**OPS-MED-02**: JS lint job swallows all errors with `|| true`
+**OPS-MED-03**: Two conflicting docker-compose production configs (SQLite vs PostgreSQL)
+**OPS-MED-04**: Health endpoint exposes Python version, PID, memory, disk without auth
+**OPS-MED-05**: No rollback procedure documented or automated
+**OPS-MED-06**: Mixed dependency pinning (exact vs `>=`) in `requirements.txt`
+**OPS-MED-07**: No backup restoration testing
 
-| Category | Status |
-|----------|--------|
-| JS Bundler | Not present |
-| CSS Preprocessor | Not present |
-| JS/CSS Minification | Not present |
-| Asset Fingerprinting | Not present |
-| JS Linter (ESLint) | Not present |
-| CSS Linter (Stylelint) | Not present |
-| Code Formatter | Not present |
-| Pre-commit Hooks | Not present |
-| JS Test Framework | Not present |
-| Python Linter | Not present |
-| CI Test Runner | Not present |
-| CI Quality Gates | Not present |
-| Dependency Scanning | Not present |
-| Error Monitoring | Not present |
-| Live Reload (dev) | Not present |
+### Low
 
-### Recommended Pipeline
-
-| Phase | Action | Timeframe |
-|-------|--------|-----------|
-| 1 | Add Vite bundler + ESLint + Prettier + ruff + pre-commit hooks | 1-2 days |
-| 2 | Add CI workflow (pytest, lint, build) + cache busting + .dockerignore | 3-5 days |
-| 3 | Add Vitest for JS unit tests + Playwright for E2E | 1-2 weeks |
-| 4 | Error monitoring, dependency scanning, nginx consolidation | Ongoing |
-
-### Estimated Performance Impact
-
-| Metric | Current | After Pipeline |
-|--------|---------|---------------|
-| JS payload | ~708KB raw | ~150-200KB minified+gzipped |
-| CSS payload | ~400KB raw | ~80-100KB minified+gzipped |
-| HTTP requests (base) | 17+ | 4-5 |
-| Time to interactive (3G) | ~3-5s | ~1-2s |
+**OPS-LOW-01**: Python version mismatch (CI: 3.11, local: 3.12)
+**OPS-LOW-02**: Duplicate Dockerfiles (root and `deployment/docker/`)
+**OPS-LOW-03**: Hardcoded credentials in dev docker-compose
+**OPS-LOW-04**: 7-day backup retention may be insufficient
+**OPS-LOW-05**: Testing dependencies in production `requirements.txt`

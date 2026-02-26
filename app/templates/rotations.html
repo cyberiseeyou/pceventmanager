@@ -250,7 +250,7 @@
                         {% for employee in juicers %}
                         <option value="{{ employee.id }}"
                             {% if rotations.juicer.get(day_index) and (rotations.juicer[day_index] is mapping and rotations.juicer[day_index].primary == employee.id) or (rotations.juicer[day_index] is not mapping and rotations.juicer[day_index] == employee.id) %}selected{% endif %}>
-                            {{ employee.name }}
+                            {{ employee.name|title }}
                         </option>
                         {% endfor %}
                     </select>
@@ -268,7 +268,7 @@
                         {% for employee in juicers %}
                         <option value="{{ employee.id }}"
                             {% if rotations.juicer.get(day_index) and rotations.juicer[day_index] is mapping and rotations.juicer[day_index].backup == employee.id %}selected{% endif %}>
-                            {{ employee.name }}
+                            {{ employee.name|title }}
                         </option>
                         {% endfor %}
                     </select>
@@ -300,7 +300,7 @@
                         {% for employee in leads %}
                         <option value="{{ employee.id }}"
                             {% if rotations.primary_lead.get(day_index) and (rotations.primary_lead[day_index] is mapping and rotations.primary_lead[day_index].primary == employee.id) or (rotations.primary_lead[day_index] is not mapping and rotations.primary_lead[day_index] == employee.id) %}selected{% endif %}>
-                            {{ employee.name }}
+                            {{ employee.name|title }}
                         </option>
                         {% endfor %}
                     </select>
@@ -318,7 +318,7 @@
                         {% for employee in leads %}
                         <option value="{{ employee.id }}"
                             {% if rotations.primary_lead.get(day_index) and rotations.primary_lead[day_index] is mapping and rotations.primary_lead[day_index].backup == employee.id %}selected{% endif %}>
-                            {{ employee.name }}
+                            {{ employee.name|title }}
                         </option>
                         {% endfor %}
                     </select>

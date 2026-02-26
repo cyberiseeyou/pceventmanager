@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Availability{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" />
+<style>
+    .planning-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .planning-header h1 { font-size: 24px; font-weight: 700; margin: 0; }
+    .planning-header .date-range { opacity: 0.9; margin-top: 4px; }
+    .nav-btns { display: flex; gap: 8px; }
+    .nav-btns a {
+        background: rgba(255,255,255,0.2); color: white;
+        padding: 8px 16px; border-radius: 6px;
+        text-decoration: none; font-weight: 500;
+    }
+    .nav-btns a:hover { background: rgba(255,255,255,0.3); }
+
+    .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-item {
+        background: white; padding: 16px 24px; border-radius: 8px;
+        display: flex; align-items: center; gap: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .stat-item .count { font-size: 28px; font-weight: 700; color: #667eea; }
+    .stat-item .label { color: #666; font-size: 13px; }
+
+    .week-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 992px) {
+        .week-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 576px) {
+        .week-grid { grid-template-columns: 1fr; }
+    }
+
+    .day-column {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .day-header {
+        padding: 12px 16px;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e5e7eb;
+        text-align: center;
+    }
+    .day-header .day-name {
+        font-size: 11px; text-transform: uppercase;
+        font-weight: 600; color: #666; letter-spacing: 0.5px;
+    }
+    .day-header .day-date { font-size: 20px; font-weight: 700; color: #1f2937; }
+    .day-header .day-count {
+        font-size: 12px; font-weight: 600;
+        color: #667eea; margin-top: 2px;
+    }
+    .day-header.today { background: #f0f4ff; border-bottom-color: #667eea; }
+    .day-header.holiday { background: #fef2f2; border-bottom-color: #dc2626; }
+
+    .day-body { padding: 8px 12px; min-height: 120px; }
+    .employee-row {
+        padding: 6px 8px; border-radius: 6px;
+        font-size: 13px; color: #374151;
+    }
+    .employee-row:hover { background: #f3f4f6; }
+    .holiday-notice {
+        text-align: center; padding: 24px 8px;
+        color: #dc2626; font-weight: 600; font-size: 14px;
+    }
+    .holiday-notice i { display: block; font-size: 24px; margin-bottom: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="planning-header">
+        <div>
+            <h1><i class="fas fa-users me-2"></i>Employee Availability</h1>
+            <div class="date-range">{{ start_date.strftime('%B %d') }} - {{ end_date.strftime('%B %d, %Y') }}</div>
+        </div>
+        <div class="nav-btns">
+            <a href="{{ url_for('dashboard.employee_availability', start_date=(start_date - timedelta(days=7)).isoformat()) }}">
+                <i class="fas fa-chevron-left"></i> Prev
+            </a>
+            <a href="{{ url_for('dashboard.employee_availability') }}">Today</a>
+            <a href="{{ url_for('dashboard.employee_availability', start_date=(start_date + timedelta(days=7)).isoformat()) }}">
+                Next <i class="fas fa-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-item">
+            <div class="count">{{ total_available }}</div>
+            <div class="label">Total Available<br>Slots This Week</div>
+        </div>
+    </div>
+
+    <div class="week-grid">
+        {% for day in days %}
+        <div class="day-column">
+            <div class="day-header {% if day.date == today_date %}today{% endif %}{% if day.is_holiday %} holiday{% endif %}">
+                <div class="day-name">{{ day.date.strftime('%a') }}</div>
+                <div class="day-date">{{ day.date.strftime('%b %d') }}</div>
+                {% if day.is_holiday %}
+                <div class="day-count" style="color: #dc2626;">Closed</div>
+                {% else %}
+                <div class="day-count">{{ day.count }} available</div>
+                {% endif %}
+            </div>
+            <div class="day-body">
+                {% if day.is_holiday %}
+                <div class="holiday-notice">
+                    <i class="fas fa-store-slash"></i>
+                    Store Closed
+                </div>
+                {% elif day.employees %}
+                    {% for emp in day.employees %}
+                    <div class="employee-row">{{ emp.name|title }}</div>
+                    {% endfor %}
+                {% else %}
+                <div class="holiday-notice" style="color: #666;">
+                    <i class="fas fa-user-slash"></i>
+                    No one available
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

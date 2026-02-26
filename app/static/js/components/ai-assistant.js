@@ -89,6 +89,7 @@ class AIAssistantPanel {
 
     openPanel() {
         this.panel.classList.add('open');
+        this.panel.setAttribute('aria-hidden', 'false');
         this.isOpen = true;
         this.input.focus();
 
@@ -98,19 +99,20 @@ class AIAssistantPanel {
 
     closePanel() {
         this.panel.classList.remove('open');
+        this.panel.setAttribute('aria-hidden', 'true');
         this.isOpen = false;
     }
 
     updateContext() {
-        // Simple context scraping based on URL and page content
         const path = window.location.pathname;
         let contextText = "Viewing ";
         let actions = [];
 
         // Determine context and actions
         if (path.includes('schedule')) {
-            const dateElement = document.querySelector('.date-header, h1');
-            const dateStr = dateElement ? dateElement.innerText : 'current view';
+            // Extract date from URL path (e.g. /schedule/daily/2026-02-21)
+            const dateMatch = path.match(/\/(\d{4}-\d{2}-\d{2})/);
+            const dateStr = dateMatch ? dateMatch[1] : 'current view';
             contextText += `Schedule for ${dateStr}`;
 
             actions.push({
@@ -233,6 +235,11 @@ class AIAssistantPanel {
             // Add Assistant Response
             this.addMessage('assistant', data.response);
 
+            // Render confirmation buttons if the action requires it
+            if (data.requires_confirmation && data.confirmation_data) {
+                this.addConfirmationButtons(data.confirmation_data);
+            }
+
             // Update History
             this.conversationHistory.push({ role: 'user', content: text });
             this.conversationHistory.push({ role: 'assistant', content: data.response });
@@ -244,6 +251,68 @@ class AIAssistantPanel {
         } finally {
             this.isProcessing = false;
         }
+    }
+
+    addConfirmationButtons(confirmationData) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'ai-confirmation';
+        wrapper.innerHTML = `
+            <div class="ai-confirmation-text">${this.formatText(confirmationData.action || 'Proceed with this action?')}</div>
+            <div class="ai-confirmation-actions">
+                <button class="ai-confirm-btn confirm" data-action="confirm">Confirm</button>
+                <button class="ai-confirm-btn cancel" data-action="cancel">Cancel</button>
+            </div>
+        `;
+
+        wrapper.querySelector('[data-action="confirm"]').addEventListener('click', () => {
+            this.confirmAction(confirmationData, wrapper);
+        });
+        wrapper.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+            this.cancelAction(wrapper);
+        });
+
+        this.messagesContainer.appendChild(wrapper);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    async confirmAction(confirmationData, buttonWrapper) {
+        // Disable buttons to prevent double-click
+        buttonWrapper.querySelectorAll('button').forEach(btn => { btn.disabled = true; });
+
+        const loadingId = this.addLoadingIndicator();
+        try {
+            const response = await fetch('/api/ai/confirm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.getCsrfToken()
+                },
+                body: JSON.stringify({ confirmation_data: confirmationData })
+            });
+
+            this.removeMessage(loadingId);
+            buttonWrapper.remove();
+
+            if (!response.ok) {
+                throw new Error('Confirmation request failed');
+            }
+
+            const data = await response.json();
+            this.addMessage('assistant', data.response);
+            this.conversationHistory.push({ role: 'assistant', content: data.response });
+
+        } catch (error) {
+            this.removeMessage(loadingId);
+            buttonWrapper.remove();
+            this.addMessage('assistant', "Failed to execute action. Please try again.");
+            console.error('AI Confirm Error:', error);
+        }
+    }
+
+    cancelAction(buttonWrapper) {
+        buttonWrapper.remove();
+        this.addMessage('assistant', 'Action cancelled.');
+        this.conversationHistory.push({ role: 'assistant', content: 'Action cancelled.' });
     }
 
     addMessage(role, text) {

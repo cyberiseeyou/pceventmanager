@@ -1,0 +1,132 @@
+/* Sidebar Navigation */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 260px;
+    height: 100vh;
+    background: #fff;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    transition: left 0.3s ease;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.open {
+    left: 0;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-close:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 8px 12px 24px;
+    overflow-y: auto;
+}
+
+.sidebar-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9ca3af;
+    padding: 16px 12px 6px;
+    margin-top: 4px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: #374151;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 450;
+    transition: background 0.15s, color 0.15s;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+}
+
+.sidebar-item .material-symbols-outlined {
+    font-size: 20px;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.sidebar-item:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+.sidebar-item:hover .material-symbols-outlined {
+    color: #374151;
+}
+
+.sidebar-item.active {
+    background: #eff6ff;
+    color: #0071ce;
+    font-weight: 500;
+}
+
+.sidebar-item.active .material-symbols-outlined {
+    color: #0071ce;
+}
+
+/* Desktop: sidebar is a slide-out panel toggled by hamburger, same as mobile */
+@media (min-width: 1200px) {
+    .sidebar {
+        width: 260px;
+    }
+}

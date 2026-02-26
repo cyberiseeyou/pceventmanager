@@ -21,6 +21,17 @@ function escapeHtml(text) {
     return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
+/**
+ * Convert a string to Title Case for consistent name display
+ *
+ * @param {string|null|undefined} text - Raw text to convert
+ * @returns {string} Title-cased string, or empty string if input is null/undefined
+ */
+function toTitleCase(text) {
+    if (text == null) return '';
+    return String(text).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // Initialize import/export functionality if on dashboard
     initializeImportExport();

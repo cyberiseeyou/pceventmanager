@@ -91,7 +91,7 @@
                                                data-crossmark="{{ emp.crossmark_id }}"
                                                data-rep-id="{{ emp.rep_id }}">
                                     </td>
-                                    <td><strong>{{ emp.name }}</strong></td>
+                                    <td><strong>{{ emp.name|title }}</strong></td>
                                     <td>{{ emp.mv_retail_number }}</td>
                                     <td>{{ emp.crossmark_id }}</td>
                                     <td>{{ emp.available_hours }}</td>
@@ -145,7 +145,7 @@
                                 <tbody>
                                     {% for dup in duplicates %}
                                     <tr>
-                                        <td>{{ dup.name }}</td>
+                                        <td>{{ dup.name|title }}</td>
                                         <td>{{ dup.mv_retail_number }}</td>
                                         <td class="text-muted">{{ dup.reason }}</td>
                                     </tr>

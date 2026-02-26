@@ -1,134 +1,141 @@
 # Phase 2: Security & Performance Review
 
-## Security Findings (21 total)
+## Security Findings
 
-Full report: `docs/SECURITY_AUDIT_UI_UX.md` (783 lines)
+### Critical
 
-### Critical (3)
+**SEC-CRT-01: Fix Wizard Routes Missing Authentication (CVSS 9.1)**
+- CWE-306 / OWASP A01:2021 — Broken Access Control
+- File: `app/routes/dashboard.py` lines 1028-1195
+- Four Fix Wizard routes (`fix_wizard`, `fix_wizard_issues`, `fix_wizard_apply`, `fix_wizard_skip`) lack `@require_authentication()`. POST endpoints can modify/delete schedules without auth.
+- Systemic: The entire dashboard blueprint appears to lack auth decorators.
+- Fix: Add `@require_authentication()` to all Fix Wizard routes, or apply `@dashboard_bp.before_request`.
 
-| ID | Finding | CVSS | CWE | Impact |
-|----|---------|------|-----|--------|
-| SEC-C1 | **XSS via 161 inline onclick handlers** with Jinja2 template variable interpolation. Escape strategy (`\|replace("'", "\\'")`) is insufficient against payloads with double-quotes, HTML entities, or attribute-closing sequences. | 8.1 | CWE-79 | Full XSS if attacker controls event data (e.g., via API sync) |
-| SEC-C2 | **XSS via 195 innerHTML assignments** without consistent sanitization. `escapeHtml()` exists in 13 files but is not used consistently. Many innerHTML assignments inject server/API data directly. | 7.5 | CWE-79 | Secondary XSS through re-injection |
-| SEC-C3 | **Plaintext credentials in `.env.test`** -- contains Redis password (`Redneck2013`), settings encryption key, and Walmart user ID. File is untracked but not in `.gitignore`. | 7.5 | CWE-798 | Credential exposure |
+**SEC-CRT-02: AI `_confirmed` Flag Bypass via LLM Injection (CVSS 8.6)**
+- CWE-807 / OWASP A01:2021 — Reliance on Untrusted Inputs in Security Decision
+- File: `app/services/ai_assistant.py` lines 534-543; `app/services/ai_tools.py` 12+ locations
+- `_confirmed` flag lives inside `args` dict, which is LLM-generated. Prompt injection can set `_confirmed: true` to bypass confirmation on destructive ops (remove_schedule, bulk_reschedule, swap_schedules, etc.).
+- Fix: Strip `_confirmed` from args; pass `confirmed` as separate server-side parameter.
 
-### High (6)
+**SEC-CRT-03: `CONDITION_CANCELED` String-as-Iterable in `.in_()` (CVSS 7.5)**
+- CWE-704 / OWASP A04:2021 — Incorrect Type Conversion
+- File: `app/services/ai_tools.py` line 4030
+- `CONDITION_CANCELED` is a string `'Canceled'`, not a tuple. `.in_()` iterates characters → `IN ('C','a','n','c','e','l','e','d')`. Canceled events are never actually filtered, producing incorrect schedule improvement suggestions.
+- Fix: Use `INACTIVE_CONDITIONS` tuple instead.
 
-| ID | Finding | File | Impact |
-|----|---------|------|--------|
-| SEC-H1 | **Security headers never applied** -- `SECURITY_HEADERS` dict defined in `config.py` (HSTS, X-Content-Type-Options, X-Frame-Options, CSP) but NO `after_request` hook in `__init__.py` to apply them | `config.py`, `__init__.py` | All security headers missing from responses |
-| SEC-H2 | **CSP allows `unsafe-inline`** -- Even if headers were applied, the CSP policy (`script-src 'self' 'unsafe-inline'`) permits all inline script execution, negating XSS protection | `config.py:159` | CSP provides no XSS protection |
-| SEC-H3 | **Broken CSRF in ai-assistant.js** -- Reads token from `data-csrf` attribute that doesn't exist on any DOM element. AI assistant API calls have zero CSRF protection. | `ai-assistant.js` | CSRF bypass for AI features |
-| SEC-H4 | **CSRF cookie without Secure flag** -- `httponly=False` (intentional for JS access) but `secure` defaults to `False` | `__init__.py:323` | CSRF token exposed over HTTP |
-| SEC-H5 | **External CDN resources without SRI** -- Bootstrap, Font Awesome loaded from CDN without integrity checks on some pages | Dashboard templates | Supply chain attack vector |
-| SEC-H6 | **Dual CSRF header names** -- `csrf_helper.js` uses `X-CSRF-Token`, `api-client.js` uses `X-CSRFToken`. Server must accept both or one silently fails. | `csrf_helper.js`, `api-client.js` | Silent CSRF validation failure |
+**SEC-CRT-04: Fix Wizard `apply_fix` Accepts Arbitrary Targets Without Validation (CVSS 8.1)**
+- CWE-20 / OWASP A03:2021 — Improper Input Validation
+- File: `app/routes/dashboard.py` lines 1109-1155; `app/services/fix_wizard.py` lines 666-693
+- `action_type` and `target` dict passed through from JSON body without validation. Combined with CRT-01, allows unauthenticated modification of any schedule.
+- Fix: Allowlist `action_type` values, validate `target` fields per action type.
 
-### Medium (8)
+### High
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| SEC-M1 | `document.write()` XSS (12 hits) | DOM manipulation vulnerability |
-| SEC-M2 | Raw fetch() without timeout on 3 highest-traffic pages | Indefinite request hang |
-| SEC-M3 | ES module race condition -- globals may be undefined | Silent functionality failure |
-| SEC-M4 | Keyboard shortcuts fire during text input (no input focus check) | Unintended actions during typing |
-| SEC-M5 | Clickjacking potential -- X-Frame-Options defined but not applied | Page embeddable in iframe |
-| SEC-M6 | Open redirect risk in login flow | Redirect to attacker-controlled URL |
-| SEC-M7 | External image/resource loads without validation | Information leakage |
-| SEC-M8 | Weak default SECRET_KEY in development | Session forgery in dev |
+**SEC-HGH-01: Auto-Scheduler Routes Missing Authentication (CVSS 7.5)**
+- File: `app/routes/auto_scheduler.py`
+- Many state-changing routes lack `@require_authentication()`: `POST /auto-schedule/run`, `POST /auto-schedule/approve`, `DELETE /auto-schedule/api/pending/by-ref/<ref>`, etc.
+- Fix: Apply `@auto_scheduler_bp.before_request` guard.
 
-### Low (4)
+**SEC-HGH-02: `completion_notes` Stored Without Sanitization — Stored XSS Risk (CVSS 7.2)**
+- CWE-79 / OWASP A03:2021
+- File: `app/services/ai_tools.py` line 3885
+- New `completion_notes` field accepts arbitrary text from LLM args. If rendered with `|safe`, creates stored XSS.
+- Fix: Sanitize, limit length (500 chars), ensure template auto-escaping.
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| SEC-L1 | Session heartbeat without rate limiting | DoS amplification |
-| SEC-L2 | jQuery 3.6.0 known vulnerabilities | Known CVEs |
-| SEC-L3 | Auto-refresh without user control | UX/data loss |
-| SEC-L4 | Single `\|safe` filter in `modal_base.html` | Contained XSS risk |
+**SEC-HGH-03: Production Database (`scheduler.db`) in Uncommitted Changes (CVSS 6.5)**
+- CWE-200 / OWASP A01:2021
+- File: `instance/scheduler.db` (changed from 1.4MB to 2.8MB)
+- Contains employee schedules, names, time-off records. Should never be committed.
+- Fix: Discard with `git checkout -- instance/scheduler.db`.
 
-### Positive Security Observations
-- Jinja2 auto-escaping enabled (no `{% autoescape false %}`)
-- No `eval()` or string-based `setTimeout()`
-- No `postMessage` handlers or prototype pollution patterns
-- `ai-chat.js` correctly implements HTML escaping before markdown rendering
-- `validation-engine.js` well-structured with no innerHTML usage
-- Session management includes activity tracking, heartbeat, and timeout
-- SRI hashes present on `daily_validation.html` CDN resources
+**SEC-HGH-04: Savepoint-Based Dry Run May Leak Side Effects (CVSS 6.8)**
+- CWE-662
+- File: `app/services/ai_tools.py` lines 3755-3792 (`_tool_compare_schedulers`)
+- Runs schedulers inside SQLAlchemy savepoints then rolls back. SQLite savepoints may not isolate correctly; autoflush before rollback could persist partial state.
+- Fix: Use separate session or `dry_run=True` flag.
+
+**SEC-HGH-05: Fix Wizard `_apply_reschedule` Accepts Arbitrary Datetime (CVSS 6.5)**
+- CWE-20
+- File: `app/services/fix_wizard.py` lines 764-783
+- `new_datetime` set directly without validating event period, past dates, or business hours.
+- Fix: Validate against event period and `date.today()`.
+
+### Medium
+
+**SEC-MED-01**: CSRF protection gap on dashboard POST endpoints (CVSS 5.4)
+**SEC-MED-02**: Supervisor event approval bypasses period validation (CVSS 5.3)
+**SEC-MED-03**: `_apply_reassign` TOCTOU race — no re-validation before commit (CVSS 5.0)
+**SEC-MED-04**: AI confirmation data round-trips through browser unverified (CVSS 5.3)
+**SEC-MED-05**: Raw exception messages exposed in API responses (CVSS 4.3)
+**SEC-MED-06**: CDN SRI hash potentially incorrect in fix_wizard.html (CVSS 4.0)
+
+### Low
+
+**SEC-LOW-01**: `showError` defined twice in fix-wizard.js (dead code)
+**SEC-LOW-02**: `_parse_direction` defaults to 1.5x multiplier on unknown input
+**SEC-LOW-03**: Migration missing `server_default` that model defines
 
 ---
 
-## Performance Findings (23 total)
+## Performance Findings
 
-Full report: `.full-review/02-performance-scalability.md`
+### Critical
 
-### Critical (4)
+**PERF-CRT-01: N+1 Query in `_load_existing_schedules` — O(S) Individual Queries**
+- File: `app/services/cpsat_scheduler.py` lines 456-480
+- Per-schedule `Event.query.filter_by(project_ref_num=...).first()` inside loop. 200 schedules = 200 round-trips (~400ms).
+- Fix: Pre-load all events into lookup dict with single query.
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| PERF-C1 | **8+ render-blocking CSS files** delivered individually with no bundling/minification (114KB base CSS). Adds 400-800ms to FCP. | +400-800ms FCP |
-| PERF-C2 | **ES module/global script race condition** -- `type="module"` deferred by spec but consumed by sync `<script>` tags, creating silent failures | Silent functionality breakdown |
-| PERF-C3 | **`* { transition: all 0.3s }` wildcard rule** in `daily_validation.html` -- animates every CSS property change on every element. Dashboard has setInterval(1s) timer causing continuous reflows. | Continuous layout thrashing |
-| PERF-C4 | **45 `location.reload()` calls** as primary state update mechanism. Each reload re-downloads 633KB JS + 299KB CSS. | Full re-download after every action |
+**PERF-CRT-02: Redundant Indicator BoolVars Across CP-SAT Constraints — 50K-100K Variables**
+- File: `app/services/cpsat_scheduler.py` lines 944-1000
+- `_add_weekly_hours_cap` creates O(E x D x W) BoolVars per employee. Same pattern in 6+ constraint methods creates identical (event, emp, day) indicators independently.
+- With 15 employees, 3 weeks, 80 events: ~18K vars per constraint method, 50K-100K total.
+- Fix: Create shared indicator variables once in `_build_model()`, reuse across all constraints.
 
-### High (9)
+**PERF-CRT-03: O(N*M) ML Affinity Scoring — 5-15 Seconds with ML Enabled**
+- File: `app/services/cpsat_scheduler.py` lines 184-218
+- `_get_ml_affinity_scores()` calls `adapter.rank_employees()` per event, each extracting features from DB. 80 events x 15 employees = 80 external calls.
+- Fix: Batch feature extraction and vectorized scoring.
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| PERF-H1 | 633KB unminified JS across 37 files, no bundling | +1-2s load on 3G |
-| PERF-H2 | 299KB unminified CSS across 23 files, no bundling | +500ms load |
-| PERF-H3 | ~188KB (5,480 lines) uncacheable inline JS in templates | No browser caching |
-| PERF-H4 | ~98KB (2,958 lines) uncacheable inline CSS in templates | No browser caching |
-| PERF-H5 | `daily-view.js` is 160KB single file -- no code splitting | Long parse/compile |
-| PERF-H6 | Dashboard pages load Bootstrap 4.6 + Font Awesome (~100KB extra CSS) | Redundant framework download |
-| PERF-H7 | No cache busting mechanism -- `url_for('static')` with no hash/version | Stale assets after deploy |
-| PERF-H8 | 14+ JS + 8+ CSS = 22+ HTTP requests per page before page-specific assets | Connection saturation |
-| PERF-H9 | CacheManager exists but is never used in any page/component | Missed optimization |
+### High
 
-### Medium (6)
+**PERF-HGH-01**: O(N^2) post-solve cross-run conflict check (`_post_solve_review`)
+**PERF-HGH-02**: `get_models()` called inside approval loop (auto_scheduler.py line 860)
+**PERF-HGH-03**: Unbounded `.query.all()` loads entire tables (time-off, exceptions, locked days)
+**PERF-HGH-04**: N+1 event type resolution in `_post_solve_review` (~80 individual queries)
+**PERF-HGH-05**: Fix Wizard `_options_for_reassign` creates ConstraintValidator per issue
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| PERF-M1 | Google Fonts loaded without `display=swap` for icon font | FOIT for icons |
-| PERF-M2 | No `<link rel="preconnect">` for Google Fonts CDN | Extra DNS/TLS time |
-| PERF-M3 | No lazy loading for below-fold content | Unnecessary initial work |
-| PERF-M4 | Large DOM on dashboard pages (hundreds of nodes from inline templates) | Slow selectors |
-| PERF-M5 | `daily_validation.html` 1s setInterval timer + wildcard transition = continuous reflow | CPU burn |
-| PERF-M6 | No `async`/`defer` on sync script tags | Parser blocking |
+### Medium
 
-### Low (4)
+**PERF-MED-01**: Database refresh schedule preservation queries inside loop
+**PERF-MED-02**: Database refresh restoration loop queries per item
+**PERF-MED-03**: AI tools `_find_employee_fuzzy` loads all employees per call
+**PERF-MED-04**: `_valid_days_for_event` called 8+ times per event (not memoized)
+**PERF-MED-05**: Fix Wizard generates all issues upfront (no pagination)
+**PERF-MED-06**: AI Tools module 4,344 lines — 40 schemas rebuilt per request
+**PERF-MED-07**: `_compute_eligibility` nested O(E x M) loop
+**PERF-MED-08**: Fix Wizard re-renders entire DOM on each issue transition
 
-| ID | Finding | Impact |
-|----|---------|--------|
-| PERF-L1 | Print schedule generates full HTML doc via template literal | Uncacheable print view |
-| PERF-L2 | Responsive breakpoints duplicated in style.css + responsive.css | Extra CSS weight |
-| PERF-L3 | `formatTime()` duplicated in 5 files instead of shared utility | Code bloat |
-| PERF-L4 | No HTTP/2 push or resource hints | Missed optimization |
+### Low
 
-### Key Performance Metrics
+**PERF-LOW-01**: `to_local_time` regex not pre-compiled
+**PERF-LOW-02**: `ConstraintModifier.__init__` calls `get_models()`/`get_db()` per instantiation
+**PERF-LOW-03**: New Schedule model columns lack database indexes
+**PERF-LOW-04**: Approval workflow commits per-schedule instead of batch
 
-| Metric | Value |
-|--------|-------|
-| Total unminified JS | 633KB across 37 files |
-| Total unminified CSS | 299KB across 23 files |
-| Uncacheable inline JS | ~188KB (5,480 lines) |
-| Uncacheable inline CSS | ~98KB (2,958 lines) |
-| location.reload() calls | 45 across 20 files |
-| Largest single JS file | daily-view.js at 160KB |
-| Largest template | approved_events.html at 73KB |
-| Base page HTTP requests | 22+ before page-specific assets |
+### Concurrency
+
+**PERF-CONC-01**: CP-SAT `num_workers=4` may starve request threads under gunicorn
+**PERF-CONC-02**: `ConstraintModifier.clear_all_preferences()` no transaction safety
 
 ---
 
 ## Critical Issues for Phase 3 Context
 
-### Testing implications
-1. **SEC-C1 & SEC-C2**: XSS vulnerabilities need security test cases -- test that event names with special characters are properly escaped
-2. **SEC-H1**: Need test to verify security headers are present on responses
-3. **SEC-H3**: Need test for AI assistant CSRF token retrieval
-4. **PERF-C2**: Need test for module loading race condition
-5. **PERF-C4**: Test that DOM updates work correctly without full page reload
-
-### Documentation implications
-1. **SEC-C3**: Document `.env.test` handling and credential management
-2. **SEC-H6**: Document canonical CSRF header name
-3. **PERF-C1**: Document build pipeline requirements
-4. **PERF-H7**: Document cache busting strategy
+Testing requirements driven by Phase 2:
+1. **Authentication tests**: Verify unauthenticated requests to Fix Wizard and auto-scheduler return 401/302
+2. **CSRF tests**: Verify POST requests without CSRF tokens are rejected
+3. **Input validation tests**: Test Fix Wizard with invalid action_type, non-existent schedule_id, past datetime, XSS payloads
+4. **AI confirmation bypass test**: Verify `_confirmed: true` in LLM-generated args is stripped
+5. **`.in_()` bug test**: Unit test `_tool_suggest_schedule_improvement` with canceled events
+6. **N+1 regression tests**: Measure query count for CP-SAT data loading

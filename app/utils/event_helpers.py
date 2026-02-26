@@ -15,34 +15,66 @@ from datetime import datetime, date
 from app.constants import INACTIVE_CONDITIONS
 
 
+def get_walmart_event_id(event) -> Optional[str]:
+    """
+    Get the Walmart EDR event ID for an event, preferring the explicit
+    walmart_event_id field over extracting from project_name.
+
+    Use this when you need the ID for Walmart API calls (EDR, SalesTool, etc.).
+    The walmart_event_id field handles cases where MVRetail/Crossmark has a
+    different (e.g. truncated) event number than Walmart.
+
+    Args:
+        event: Event model instance
+
+    Returns:
+        str: Walmart event ID or None if not determinable
+    """
+    if not event:
+        return None
+
+    # Prefer explicit walmart_event_id (set manually or via enrichment)
+    walmart_id = getattr(event, 'walmart_event_id', None)
+    if walmart_id:
+        return str(walmart_id).strip()
+
+    # Fall back to extracting from project_name
+    project_name = getattr(event, 'project_name', None)
+    return extract_event_number(project_name)
+
+
 def extract_event_number(project_name):
     """
-    Extract the first 6 digits from a Core event's project name.
+    Extract the event number (5-7 digits) from a Core event's project name.
 
     This event number is used as the EDR ID in Walmart's RetailLink system.
+    Event numbers are typically 6 digits but can be 5 or 7.
 
     Args:
         project_name (str): Event project name (e.g., "606034-JJSF-Super Pretzel King Size")
 
     Returns:
-        str: 6-digit event number or None if not found
+        str: Event number (5-7 digits) or None if not found
 
     Examples:
         >>> extract_event_number("606034-JJSF-Super Pretzel King Size")
         '606034'
+        >>> extract_event_number("62072-LKD-MMCL-CF-MMCalzone")
+        '62072'
         >>> extract_event_number("Invalid-Event-Name")
         None
     """
     if not project_name:
         return None
 
-    # Look for 6-digit numbers at the start of the project name
-    match = re.match(r'^(\d{6})', project_name)
+    # Look for 5-7 digit numbers at the start of the project name
+    match = re.match(r'^(\d{5,7})', project_name)
     if match:
         return match.group(1)
 
-    # If no match at start, look for any 6-digit sequence
-    match = re.search(r'(\d{6})', project_name)
+    # Fallback: look for 5-7 digit sequence followed by a hyphen
+    # (avoids matching long reference numbers in parentheses like 260115541996)
+    match = re.search(r'(?<!\d)(\d{5,7})(?=-)', project_name)
     if match:
         return match.group(1)
 

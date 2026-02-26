@@ -354,8 +354,8 @@
         <div class="run-row" data-run-id="{{ run.id }}">
             <div class="run-row-header" data-action="toggle-run" data-run-id="{{ run.id }}">
                 <div class="run-datetime">
-                    <span class="run-date">{{ run.started_at.strftime('%B %d, %Y') }}</span>
-                    <span class="run-time">{{ run.started_at.strftime('%I:%M %p') }}
+                    <span class="run-date">{{ run.started_at|localtime('%B %d, %Y') }}</span>
+                    <span class="run-time">{{ run.started_at|localtime('%I:%M %p') }}
                         {% if run.approved_at %}<span class="approved-badge">✓ Approved</span>{% endif %}
                         {% if run.solver_type == 'cpsat' %}
                         <span class="solver-badge solver-badge--cpsat">CP-SAT</span>
@@ -487,7 +487,7 @@
                                     <tr>
                                         <td>${escapeHtml(event.event_name)}</td>
                                         <td><span class="type-badge type-${escapeHtml(event.event_type)}">${escapeHtml(event.event_type)}</span></td>
-                                        <td>${escapeHtml(event.employee_name)}</td>
+                                        <td>${escapeHtml(toTitleCase(event.employee_name))}</td>
                                         <td>${escapeHtml(event.scheduled_time) || 'N/A'}</td>
                                         <td>${escapeHtml(event.start_date)} to ${escapeHtml(event.due_date)}</td>
                                         <td class="status-${escapeHtml(event.status)}">${event.status === 'scheduled' ? 'Scheduled' : 'Failed'}</td>

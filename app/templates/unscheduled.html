@@ -18,6 +18,20 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/unscheduled.css') }}">
+<style>
+    .bulk-toolbar {
+        position: sticky; top: 0; z-index: 100;
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
+        color: white; padding: 10px 20px; border-radius: 8px;
+        margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .bulk-toolbar-inner {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .bulk-toolbar #bulk-count { font-weight: 600; font-size: 14px; }
+    .bulk-toolbar .btn { border: 1px solid rgba(255,255,255,0.3); }
+    .event-card.selected { outline: 2px solid #3b82f6; outline-offset: -2px; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -30,28 +44,45 @@
 <div class="condition-tabs">
     <a href="{{ url_for('main.unscheduled_events', condition='all') }}"
         class="tab-btn {% if condition == 'all' or not condition %}active{% endif %}">
-        📋 All
+        All <span class="tab-count">{{ condition_counts.all }}</span>
     </a>
     <a href="{{ url_for('main.unscheduled_events', condition='scheduled') }}"
         class="tab-btn {% if condition == 'scheduled' %}active{% endif %}">
-        📅 Scheduled
+        Scheduled <span class="tab-count">{{ condition_counts.scheduled }}</span>
     </a>
     <a href="{{ url_for('main.unscheduled_events', condition='unstaffed') }}"
         class="tab-btn {% if condition == 'unstaffed' %}active{% endif %}">
-        ⚠️ Unscheduled
+        Unscheduled <span class="tab-count">{{ condition_counts.unstaffed }}</span>
     </a>
     <a href="{{ url_for('main.unscheduled_events', condition='submitted') }}"
         class="tab-btn {% if condition == 'submitted' %}active{% endif %}">
-        ✅ Submitted
+        Submitted <span class="tab-count">{{ condition_counts.submitted }}</span>
     </a>
     <a href="{{ url_for('main.unscheduled_events', condition='paused') }}"
         class="tab-btn {% if condition == 'paused' %}active{% endif %}">
-        ⏸️ Paused
+        Paused <span class="tab-count">{{ condition_counts.paused }}</span>
     </a>
     <a href="{{ url_for('main.unscheduled_events', condition='reissued') }}"
         class="tab-btn {% if condition == 'reissued' %}active{% endif %}">
-        🔄 Reissued
+        Reissued <span class="tab-count">{{ condition_counts.reissued }}</span>
     </a>
+    <a href="{{ url_for('main.unscheduled_events', condition='cannot_complete') }}"
+        class="tab-btn {% if condition == 'cannot_complete' %}active{% endif %}">
+        Cannot Complete <span class="tab-count">{{ condition_counts.cannot_complete }}</span>
+    </a>
+</div>
+
+<!-- Time scope toggle -->
+<div style="display: flex; justify-content: flex-end; margin-bottom: var(--spacing-sm);">
+    {% if show_past %}
+    <a href="{{ url_for('main.unscheduled_events', condition=condition) }}" class="btn btn-sm btn-outline" style="font-size: 12px; padding: 4px 12px; border-radius: 6px; text-decoration: none; color: #6b7280; border: 1px solid #d1d5db;">
+        Hide Past Events
+    </a>
+    {% else %}
+    <a href="{{ url_for('main.unscheduled_events', condition=condition, show_past='1') }}" class="btn btn-sm btn-outline" style="font-size: 12px; padding: 4px 12px; border-radius: 6px; text-decoration: none; color: #6b7280; border: 1px solid #d1d5db;">
+        Show Past Events
+    </a>
+    {% endif %}
 </div>
 
 <!-- Smart Search and Filter -->
@@ -76,6 +107,14 @@
                     UPPERCASE = Employee • Numbers = Event #
                 </div>
             </div>
+            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">From</label>
+                <input type="date" name="date_from" id="date-range-from" class="mini-filter" style="width: 145px;"
+                    value="{{ request.args.get('date_from', '') }}" data-action="auto-submit-form">
+                <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">To</label>
+                <input type="date" name="date_to" id="date-range-to" class="mini-filter" style="width: 145px;"
+                    value="{{ request.args.get('date_to', '') }}" data-action="auto-submit-form">
+            </div>
             <select name="event_type" class="mini-filter" data-action="auto-submit-form">
                 <option value="">All Types</option>
                 {% for event_type in event_types %}
@@ -84,27 +123,41 @@
                 </option>
                 {% endfor %}
             </select>
+            <select name="sort_by" class="mini-filter" data-action="auto-submit-form">
+                <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Sort: Date</option>
+                <option value="due_date" {% if sort_by == 'due_date' %}selected{% endif %}>Sort: Due Date</option>
+                <option value="event_type" {% if sort_by == 'event_type' %}selected{% endif %}>Sort: Event Type</option>
+            </select>
             <button type="submit" class="btn btn-primary">Search</button>
-            {% if request.args.get('search') or selected_event_type %}
+            {% if request.args.get('search') or selected_event_type or request.args.get('date_from') or request.args.get('date_to') %}
             <a href="{{ url_for('main.unscheduled_events', condition=condition, date_filter=date_filter if date_filter else '') }}"
                 class="btn btn-outline">Clear</a>
             {% endif %}
-            <a href="{{ url_for('api.export_events', condition=condition, event_type=selected_event_type, date_filter=date_filter if date_filter else '', search=request.args.get('search', '')) }}"
+            <a href="{{ url_for('api.export_events', condition=condition, event_type=selected_event_type, date_filter=date_filter if date_filter else '', search=request.args.get('search', ''), date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"
                 class="btn btn-secondary" title="Export filtered events to CSV">
                 📥 Export CSV
+            </a>
+            <a href="{{ url_for('api.export_corporate_report', date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"
+                class="btn btn-outline" title="Generate formatted corporate report for selected date range">
+                📊 Corporate Report
             </a>
         </form>
     </div>
 </div>
 
 <!-- Active Filters Display -->
-{% if request.args.get('search') or date_filter or selected_event_type %}
+{% if request.args.get('search') or date_filter or selected_event_type or request.args.get('date_from') or request.args.get('date_to') %}
 <div class="events-stats"
     style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #3b82f6;">
     <strong>🔍 Active Filters:</strong>
     {% if request.args.get('search') %}
     <span style="background: white; padding: 4px 12px; border-radius: 12px; margin-left: 8px; display: inline-block;">
         Search: <strong>{{ request.args.get('search') }}</strong>
+    </span>
+    {% endif %}
+    {% if request.args.get('date_from') or request.args.get('date_to') %}
+    <span style="background: white; padding: 4px 12px; border-radius: 12px; margin-left: 8px; display: inline-block;">
+        Date Range: <strong>{{ request.args.get('date_from', '...') }} to {{ request.args.get('date_to', '...') }}</strong>
     </span>
     {% endif %}
     {% if date_filter %}
@@ -134,14 +187,33 @@
 {% endif %}
 {% endwith %}
 
+<!-- Bulk Action Toolbar (hidden until selections made) -->
+<div id="bulk-toolbar" class="bulk-toolbar" style="display: none;">
+    <div class="bulk-toolbar-inner">
+        <span id="bulk-count">0 selected</span>
+        <button type="button" class="btn btn-danger btn-sm" data-action="bulk-unschedule">Bulk Unschedule</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="bulk-deselect">Deselect All</button>
+    </div>
+</div>
+
 <!-- Events Display -->
 {% if events %}
 <div class="events-grid">
+    <div style="margin-bottom: 8px; padding: 4px 8px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #6b7280; font-weight: 500;">
+            <input type="checkbox" id="select-all-events" style="width: 16px; height: 16px; accent-color: #3b82f6;">
+            Select All ({{ events|length }})
+        </label>
+    </div>
     {% for event in events %}
-    <div class="event-card">
-        <div class="event-number"
-            style="font-size: var(--font-size-small); color: var(--text-muted); margin-bottom: 4px;">
-            📋 Event #{{ event.project_ref_num }}
+    <div class="event-card" data-event-id="{{ event.id }}" data-event-condition="{{ event.condition|lower }}">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <input type="checkbox" class="event-select-cb" data-event-id="{{ event.id }}"
+                style="width: 16px; height: 16px; margin-top: 2px; accent-color: #3b82f6; flex-shrink: 0; cursor: pointer;">
+            <div class="event-number"
+                style="font-size: var(--font-size-small); color: var(--text-muted); margin-bottom: 4px;">
+                📋 Event #{{ event.project_ref_num }}
+            </div>
         </div>
         <div class="event-card-header">
             <h3 class="event-title">{{ event.project_name }}</h3>
@@ -149,12 +221,13 @@
                 <span class="event-type-badge event-type-{{ event.event_type.lower().replace(' ', '-') }}">
                     {{ event.event_type }}
                 </span>
-                <span class="event-condition status-{{ event.condition|lower }}">
+                <span class="event-condition status-{{ event.condition|lower|replace(' ', '-') }}">
                     {% if event.condition == 'Submitted' %}🟢 SUBMITTED
                     {% elif event.condition == 'Scheduled' %}🟡 SCHEDULED
                     {% elif event.condition == 'Unstaffed' %}🔴 UNSCHEDULED
                     {% elif event.condition == 'Paused' %}⏸️ PAUSED
                     {% elif event.condition == 'Reissued' %}🔄 REISSUED
+                    {% elif event.condition == 'Cannot Complete' %}🚫 CANNOT COMPLETE
                     {% else %}{{ event.condition }}{% endif %}
                 </span>
                 {% if condition != 'all' and event.priority %}
@@ -183,7 +256,7 @@
                 {% for schedule in event.schedule_info %}
                 <div class="schedule-item">
                     <span>👤</span>
-                    <span class="schedule-employee">{{ schedule.employee_name }}</span>
+                    <span class="schedule-employee">{{ schedule.employee_name|title }}</span>
                     <span style="color: var(--text-muted);">•</span>
                     <span>📅</span>
                     <span class="schedule-time">{{ schedule.schedule_datetime.strftime('%m/%d/%Y') }}</span>
@@ -200,13 +273,21 @@
             <div class="event-actions">
                 {# Use event's actual condition, not page filter #}
                 {% set event_status = event.condition|lower if event.condition else 'unstaffed' %}
-                {% if event_status == 'scheduled' or event_status == 'reissued' %}
+                {% if event_status == 'cannot complete' %}
+                <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
+                    Schedule Manually
+                </a>
+                {% elif event_status == 'scheduled' or event_status == 'reissued' %}
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
                     Reschedule Event
                 </a>
                 <button data-action="confirm-unschedule" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
                     class="btn btn-danger btn-sm">
                     Unschedule
+                </button>
+                <button data-action="mark-cannot-complete" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
+                    class="btn btn-outline btn-sm" title="Mark as Cannot Complete">
+                    🚫 Skip
                 </button>
                 {% elif event_status == 'submitted' %}
                 <a href="{{ url_for('scheduling.schedule_event', event_id=event.id) }}" class="btn btn-primary btn-sm">
@@ -220,6 +301,10 @@
                 <button data-action="auto-schedule" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
                     class="btn btn-info btn-sm">
                     Auto Schedule
+                </button>
+                <button data-action="mark-cannot-complete" data-event-id="{{ event.id }}" data-event-name="{{ event.project_name }}"
+                    class="btn btn-outline btn-sm" title="Mark as Cannot Complete">
+                    🚫 Skip
                 </button>
                 {% endif %}
             </div>
@@ -255,6 +340,29 @@
             <button type="button" class="btn btn-secondary" data-action="close-validation-modal">Cancel Export</button>
             <button type="button" class="btn btn-primary" data-action="proceed-with-valid-export"
                 id="export-valid-btn">Export Valid Events Only</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cannot Complete Reason Modal -->
+<div class="modal-backdrop" id="cannot-complete-modal" style="display: none;">
+    <div class="action-modal" style="max-width: 420px;">
+        <button class="modal-close" data-action="close-cannot-complete-modal">&times;</button>
+        <h3>Mark as Cannot Complete</h3>
+        <p id="cannot-complete-event-name" style="color: #6b7280; margin-bottom: 12px;"></p>
+        <div class="form-group">
+            <label for="cannot-complete-reason" style="font-weight: 600;">Reason:</label>
+            <select id="cannot-complete-reason" class="mini-filter" style="width: 100%; padding: 8px;">
+                <option value="Insufficient Staff">Insufficient Staff</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Product Unavailable">Product Unavailable</option>
+                <option value="Store Issue">Store Issue</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" data-action="close-cannot-complete-modal">Cancel</button>
+            <button type="button" class="btn btn-danger" data-action="confirm-cannot-complete">Mark Cannot Complete</button>
         </div>
     </div>
 </div>
@@ -366,6 +474,104 @@
             });
     }
 
+    // --- Cannot Complete ---
+    var cannotCompleteEventId = null;
+
+    function showCannotCompleteModal(eventId, eventName) {
+        cannotCompleteEventId = eventId;
+        document.getElementById('cannot-complete-event-name').textContent = eventName;
+        document.getElementById('cannot-complete-reason').value = 'Insufficient Staff';
+        document.getElementById('cannot-complete-modal').style.display = '';
+    }
+
+    function submitCannotComplete() {
+        if (!cannotCompleteEventId) return;
+        var reason = document.getElementById('cannot-complete-reason').value;
+        fetch('/api/events/' + cannotCompleteEventId + '/cannot-complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: reason })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(function(err) { alert('Error: ' + err); });
+    }
+
+    // --- Bulk Selection ---
+    var bulkToolbar = document.getElementById('bulk-toolbar');
+    var bulkCount = document.getElementById('bulk-count');
+    var selectAllCb = document.getElementById('select-all-events');
+
+    function getSelectedIds() {
+        return Array.from(document.querySelectorAll('.event-select-cb:checked')).map(function(cb) {
+            return parseInt(cb.dataset.eventId);
+        });
+    }
+
+    function updateBulkToolbar() {
+        var selected = getSelectedIds();
+        if (selected.length > 0) {
+            bulkToolbar.style.display = '';
+            bulkCount.textContent = selected.length + ' selected';
+        } else {
+            bulkToolbar.style.display = 'none';
+        }
+        // Update select-all state
+        var allCbs = document.querySelectorAll('.event-select-cb');
+        if (selectAllCb && allCbs.length > 0) {
+            selectAllCb.checked = selected.length === allCbs.length;
+            selectAllCb.indeterminate = selected.length > 0 && selected.length < allCbs.length;
+        }
+    }
+
+    if (selectAllCb) {
+        selectAllCb.addEventListener('change', function() {
+            var checked = selectAllCb.checked;
+            document.querySelectorAll('.event-select-cb').forEach(function(cb) {
+                cb.checked = checked;
+                cb.closest('.event-card').classList.toggle('selected', checked);
+            });
+            updateBulkToolbar();
+        });
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('event-select-cb')) {
+            e.target.closest('.event-card').classList.toggle('selected', e.target.checked);
+            updateBulkToolbar();
+        }
+    });
+
+    function bulkUnschedule() {
+        var ids = getSelectedIds();
+        if (ids.length === 0) return;
+        if (!confirm('Unschedule ' + ids.length + ' selected event(s)?\n\nThis will remove all schedule assignments for these events.')) return;
+
+        fetch('/api/bulk-unschedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_ids: ids })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var msg = data.unscheduled_count + ' event(s) unscheduled.';
+                if (data.error_count > 0) msg += ' ' + data.error_count + ' failed.';
+                alert(msg);
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(function(err) { alert('Error: ' + err); });
+    }
+
     // Delegated click handler for data-action buttons
     document.addEventListener('click', function(e) {
         var target = e.target.closest('[data-action]');
@@ -386,6 +592,27 @@
                 break;
             case 'close-reschedule-modal':
                 closeModal('reschedule-modal');
+                break;
+            case 'bulk-unschedule':
+                bulkUnschedule();
+                break;
+            case 'mark-cannot-complete':
+                showCannotCompleteModal(parseInt(target.dataset.eventId), target.dataset.eventName);
+                break;
+            case 'close-cannot-complete-modal':
+                document.getElementById('cannot-complete-modal').style.display = 'none';
+                cannotCompleteEventId = null;
+                break;
+            case 'confirm-cannot-complete':
+                submitCannotComplete();
+                break;
+            case 'bulk-deselect':
+                document.querySelectorAll('.event-select-cb').forEach(function(cb) {
+                    cb.checked = false;
+                    cb.closest('.event-card').classList.remove('selected');
+                });
+                if (selectAllCb) selectAllCb.checked = false;
+                updateBulkToolbar();
                 break;
         }
     });

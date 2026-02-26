@@ -28,6 +28,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/form-validation.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/notification-modal.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/sidebar.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 
@@ -47,7 +48,7 @@
                 <div class="header-spacer"></div>
             </div>
             <nav class="header-nav">
-                <!-- Mobile Hamburger Menu Button -->
+                <!-- Sidebar Toggle Button -->
                 <button class="hamburger-menu" id="hamburgerBtn" aria-label="Toggle navigation menu"
                     aria-expanded="false">
                     <span class="hamburger-line"></span>
@@ -55,114 +56,7 @@
                     <span class="hamburger-line"></span>
                 </button>
 
-                <!-- Navigation Links (Desktop & Mobile) -->
-                <div class="nav-links" id="navLinks">
-                    <!-- Mobile Close Button -->
-                    <button class="nav-close" id="navCloseBtn" aria-label="Close navigation menu">
-                        <span class="material-symbols-outlined">close</span>
-                    </button>
-
-                    <!-- Home Link (redirects to root which goes to today's daily view) -->
-                    <a href="{{ url_for('main.index') }}"
-                        class="nav-link {% if request.endpoint == 'main.daily_schedule_view' or request.endpoint == 'main.index' %}active{% endif %}"
-                        aria-label="Go to home page">
-                        <span class="nav-icon"><span class="material-symbols-outlined">home</span></span>
-                        <span class="nav-text">Home</span>
-                    </a>
-
-                    <!-- Scheduling Dropdown -->
-                    <div class="nav-dropdown">
-                        <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
-                            aria-label="Scheduling menu">
-                            <span class="nav-icon"><span class="material-symbols-outlined">calendar_month</span></span>
-                            <span class="nav-text">Scheduling</span>
-                            <span class="nav-arrow">▼</span>
-                        </button>
-                        <div class="nav-dropdown-menu" hidden>
-                            <a href="{{ url_for('main.unscheduled_events') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}">
-                                Events
-                            </a>
-                            <a href="{{ url_for('main.unreported_events') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'main.unreported_events' %}active{% endif %}">
-                                Unreported Events
-                            </a>
-                            <a href="{{ url_for('main.calendar_view') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'main.calendar_view' %}active{% endif %}">
-                                Calendar
-                            </a>
-                            <a href="{{ url_for('auto_scheduler.index') }}"
-                                class="nav-dropdown-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') %}active{% endif %}">
-                                Auto-Scheduler
-                            </a>
-                            <a href="{{ url_for('admin.schedule_verification') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'admin.schedule_verification' %}active{% endif %}">
-                                Schedule Verification
-                            </a>
-                            <a href="{{ url_for('dashboard.weekly_validation') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
-                                Weekly Validation
-                            </a>
-                            <a href="{{ url_for('dashboard.approved_events') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'dashboard.approved_events' %}active{% endif %}">
-                                Left in Approved
-                            </a>
-                            <div class="nav-dropdown-divider"></div>
-                            <a href="{{ url_for('inventory.index') }}"
-                                class="nav-dropdown-item {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}">
-                                Demo Supplies
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Team Dropdown -->
-                    <div class="nav-dropdown">
-                        <button class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false"
-                            aria-label="Team menu">
-                            <span class="nav-icon"><span class="material-symbols-outlined">group</span></span>
-                            <span class="nav-text">Team</span>
-                            <span class="nav-arrow">▼</span>
-                        </button>
-                        <div class="nav-dropdown-menu" hidden>
-                            <a href="{{ url_for('employees.employees') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'employees.employees' %}active{% endif %}">
-                                Employees
-                            </a>
-                            <a href="{{ url_for('employees.time_off_requests') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'employees.time_off_requests' %}active{% endif %}">
-                                Time Off Requests
-                            </a>
-                            <a href="{{ url_for('main.attendance_calendar') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'main.attendance_calendar' %}active{% endif %}">
-                                Attendance
-                            </a>
-                            <a href="{{ url_for('admin.employee_analytics') }}"
-                                class="nav-dropdown-item {% if request.endpoint == 'admin.employee_analytics' %}active{% endif %}">
-                                Analytics
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Printing Link -->
-                    <a href="{{ url_for('printing.printing_home') }}"
-                        class="nav-link {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}"
-                        aria-label="Go to printing page">
-                        <span class="nav-icon"><span class="material-symbols-outlined">print</span></span>
-                        <span class="nav-text">Printing</span>
-                    </a>
-                </div>
-
                 <div class="nav-user-section">
-                    <button id="refreshDatabaseBtn" class="refresh-database-btn"
-                        title="Refresh database from Crossmark API" aria-label="Refresh database">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                        <span class="btn-text">Refresh Database</span>
-                    </button>
                     <button id="aiPanelToggle" class="notifications-btn" title="AI Assistant (Ctrl+K)"
                         aria-label="AI Assistant" style="margin-right: var(--spacing-sm);">
                         <span class="nav-icon"><span class="material-symbols-outlined">auto_awesome</span></span>
@@ -199,19 +93,6 @@
                                 <span class="dropdown-icon"><span class="material-symbols-outlined">help</span></span>
                                 Help
                             </a>
-                            <a href="{{ url_for('admin.settings_page') }}" class="dropdown-item">
-                                <span class="dropdown-icon"><span class="material-symbols-outlined">settings</span></span>
-                                Settings
-                            </a>
-                            <a href="{{ url_for('admin.event_times_page') }}" class="dropdown-item">
-                                <span class="dropdown-icon"><span class="material-symbols-outlined">schedule</span></span>
-                                Event Time Settings
-                            </a>
-                            <a href="{{ url_for('rotations.index') }}"
-                               class="dropdown-item {% if request.endpoint and request.endpoint.startswith('rotations.') %}active{% endif %}">
-                                <span class="dropdown-icon"><span class="material-symbols-outlined">sync</span></span>
-                                Rotation Management
-                            </a>
                             <div class="dropdown-divider"></div>
                             <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
                                 <span class="dropdown-icon"><span class="material-symbols-outlined">logout</span></span>
@@ -223,6 +104,9 @@
             </nav>
         </div>
     </header>
+
+    <!-- Hidden Refresh Database trigger (used by sidebar button) -->
+    <button id="refreshDatabaseBtn" style="display: none;" aria-hidden="true"></button>
 
     <!-- Database Refresh Modal -->
     <div id="refreshDatabaseModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="refreshModalTitle">
@@ -283,6 +167,129 @@
             </div>
         </div>
     </div>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+        <div class="sidebar-header">
+            <span class="sidebar-title">Navigation</span>
+            <button class="sidebar-close" id="sidebarCloseBtn" aria-label="Close navigation">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <!-- Dashboard -->
+            <a href="{{ url_for('dashboard.command_center') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.command_center' or request.endpoint == 'main.index' %}active{% endif %}">
+                <span class="material-symbols-outlined">dashboard</span>
+                <span>Dashboard</span>
+            </a>
+
+            <!-- Schedule Group -->
+            <div class="sidebar-group-label">Schedule</div>
+            <a href="/schedule/daily/{{ today_date }}"
+                class="sidebar-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}">
+                <span class="material-symbols-outlined">today</span>
+                <span>Daily View</span>
+            </a>
+            <a href="{{ url_for('main.calendar_view') }}"
+                class="sidebar-item {% if request.endpoint == 'main.calendar_view' %}active{% endif %}">
+                <span class="material-symbols-outlined">calendar_month</span>
+                <span>Calendar</span>
+            </a>
+            <a href="{{ url_for('auto_scheduler.index') }}"
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') %}active{% endif %}">
+                <span class="material-symbols-outlined">smart_toy</span>
+                <span>Auto-Scheduler</span>
+            </a>
+
+            <!-- Events Group -->
+            <div class="sidebar-group-label">Events</div>
+            <a href="{{ url_for('main.unscheduled_events') }}"
+                class="sidebar-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}">
+                <span class="material-symbols-outlined">list_alt</span>
+                <span>All Events</span>
+            </a>
+            <a href="{{ url_for('main.unreported_events') }}"
+                class="sidebar-item {% if request.endpoint == 'main.unreported_events' %}active{% endif %}">
+                <span class="material-symbols-outlined">report</span>
+                <span>Unreported Events</span>
+            </a>
+            <a href="{{ url_for('dashboard.approved_events') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.approved_events' %}active{% endif %}">
+                <span class="material-symbols-outlined">fact_check</span>
+                <span>Left in Approved</span>
+            </a>
+
+            <!-- Team Group -->
+            <div class="sidebar-group-label">Team</div>
+            <a href="{{ url_for('employees.employees') }}"
+                class="sidebar-item {% if request.endpoint == 'employees.employees' %}active{% endif %}">
+                <span class="material-symbols-outlined">group</span>
+                <span>Employees</span>
+            </a>
+            <a href="{{ url_for('main.attendance_calendar') }}"
+                class="sidebar-item {% if request.endpoint == 'main.attendance_calendar' %}active{% endif %}">
+                <span class="material-symbols-outlined">how_to_reg</span>
+                <span>Attendance</span>
+            </a>
+            <a href="{{ url_for('employees.time_off_requests') }}"
+                class="sidebar-item {% if request.endpoint == 'employees.time_off_requests' %}active{% endif %}">
+                <span class="material-symbols-outlined">event_busy</span>
+                <span>Availability</span>
+            </a>
+            <a href="{{ url_for('admin.employee_analytics') }}"
+                class="sidebar-item {% if request.endpoint == 'admin.employee_analytics' %}active{% endif %}">
+                <span class="material-symbols-outlined">analytics</span>
+                <span>Analytics</span>
+            </a>
+
+            <!-- Tools Group -->
+            <div class="sidebar-group-label">Tools</div>
+            <a href="{{ url_for('printing.printing_home') }}"
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}">
+                <span class="material-symbols-outlined">print</span>
+                <span>Printing</span>
+            </a>
+            <a href="{{ url_for('dashboard.weekly_validation') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
+                <span class="material-symbols-outlined">verified</span>
+                <span>Weekly Validation</span>
+            </a>
+            <a href="{{ url_for('dashboard.scan_out_checklist') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.scan_out_checklist' %}active{% endif %}">
+                <span class="material-symbols-outlined">checklist</span>
+                <span>Scan-Out Checklist</span>
+            </a>
+            <a href="{{ url_for('inventory.index') }}"
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span>Demo Supplies</span>
+            </a>
+
+            <!-- Admin Group -->
+            <div class="sidebar-group-label">Admin</div>
+            <a href="{{ url_for('admin.settings_page') }}"
+                class="sidebar-item {% if request.endpoint == 'admin.settings_page' %}active{% endif %}">
+                <span class="material-symbols-outlined">settings</span>
+                <span>Settings</span>
+            </a>
+            <a href="{{ url_for('admin.event_times_page') }}"
+                class="sidebar-item {% if request.endpoint == 'admin.event_times_page' %}active{% endif %}">
+                <span class="material-symbols-outlined">schedule</span>
+                <span>Event Time Settings</span>
+            </a>
+            <a href="{{ url_for('rotations.index') }}"
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('rotations.') %}active{% endif %}">
+                <span class="material-symbols-outlined">sync</span>
+                <span>Rotations</span>
+            </a>
+            <button class="sidebar-item" id="sidebarRefreshBtn" type="button">
+                <span class="material-symbols-outlined">database</span>
+                <span>Refresh Database</span>
+            </button>
+        </nav>
+    </aside>
 
     <!-- Main Content -->
     <div class="container">
@@ -403,8 +410,7 @@
     <!-- AI Assistant Panel -->
     {% include 'components/ai_panel.html' %}
 
-    <!-- Floating Schedule Verification Widget -->
-    {% include 'components/floating_verification_widget.html' %}
+    <!-- Floating verification widget removed - use Weekly Validation in sidebar instead -->
     <!-- Session Timeout Warning Modal -->
     <div id="sessionTimeoutModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="sessionTimeoutTitle"
         style="display: none;">

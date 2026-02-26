@@ -15,18 +15,15 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/')
 @require_authentication()
 def index():
-    """Redirect to daily schedule view for today"""
-    from datetime import date
-    today = date.today()
-    return redirect(url_for('main.daily_schedule_view', date=today.strftime('%Y-%m-%d')))
+    """Redirect to dashboard command center"""
+    return redirect(url_for('dashboard.command_center'))
 
 
 @main_bp.route('/dashboard')
 @require_authentication()
 def dashboard():
-    """Redirect to today's daily schedule view"""
-    today = date.today()
-    return redirect(url_for('main.daily_schedule_view', date=today.strftime('%Y-%m-%d')))
+    """Redirect to dashboard command center"""
+    return redirect(url_for('dashboard.command_center'))
 
 
 @main_bp.route('/events')
@@ -44,6 +41,10 @@ def unscheduled_events():
     event_type_filter = request.args.get('event_type', '')
     date_filter = request.args.get('date_filter', '')  # New: today, tomorrow, week, etc.
     search_query = request.args.get('search', '').strip()  # Smart search query
+    date_from_str = request.args.get('date_from', '').strip()  # Date range picker
+    date_to_str = request.args.get('date_to', '').strip()
+    show_past = request.args.get('show_past', '0') == '1'  # Default: hide past events
+    sort_by = request.args.get('sort_by', 'date')  # date, due_date, event_type, employee
 
     # Map condition display names
     condition_display_map = {
@@ -52,7 +53,8 @@ def unscheduled_events():
         'scheduled': 'Scheduled',
         'submitted': 'Submitted',
         'paused': 'Paused',
-        'reissued': 'Reissued'
+        'reissued': 'Reissued',
+        'cannot_complete': 'Cannot Complete'
     }
 
     # Build query based on condition
@@ -74,6 +76,8 @@ def unscheduled_events():
     elif condition_filter == 'reissued':
         # Reissued condition events
         query = Event.query.filter_by(condition='Reissued')
+    elif condition_filter == 'cannot_complete':
+        query = Event.query.filter_by(condition='Cannot Complete')
     else:
         # Default to all events
         query = Event.query
@@ -101,6 +105,25 @@ def unscheduled_events():
             Event.start_datetime >= datetime.combine(today, datetime.min.time()),
             Event.start_datetime <= datetime.combine(week_from_now, datetime.max.time())
         )
+
+    # Apply date range picker filter (overrides date_filter presets when set)
+    if date_from_str:
+        try:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            query = query.filter(Event.start_datetime >= datetime.combine(date_from, datetime.min.time()))
+        except ValueError:
+            pass
+    if date_to_str:
+        try:
+            date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            query = query.filter(Event.start_datetime <= datetime.combine(date_to, datetime.max.time()))
+        except ValueError:
+            pass
+
+    # Default: filter to current/upcoming events (due date >= today)
+    # unless user explicitly set date filters, search query, or toggled show_past
+    if not show_past and not date_filter and not date_from_str and not date_to_str and not search_query:
+        query = query.filter(Event.due_datetime >= datetime.combine(today, datetime.min.time()))
 
     # Apply intelligent search if specified
     if search_query:
@@ -259,29 +282,34 @@ def unscheduled_events():
         if search_conditions:
             query = query.filter(and_(*search_conditions))
 
-    # Order results
-    # For scheduled events, sort by scheduled date; for unscheduled, sort by start date
+    # Order results based on sort_by parameter
     Schedule = models['Schedule']
-    
+
     # Use a subquery to get the minimum (earliest) schedule datetime for each event
-    # This handles events with multiple schedules
     min_schedule_subquery = db.session.query(
         Schedule.event_ref_num,
         db.func.min(Schedule.schedule_datetime).label('min_schedule_datetime')
     ).group_by(Schedule.event_ref_num).subquery()
-    
+
     # Left join with the subquery to include events without schedules
-    events = query.outerjoin(
+    query = query.outerjoin(
         min_schedule_subquery,
         Event.project_ref_num == min_schedule_subquery.c.event_ref_num
-    ).order_by(
-        # Primary sort: scheduled datetime (NULLs last for unscheduled events)
-        db.func.coalesce(min_schedule_subquery.c.min_schedule_datetime, Event.start_datetime).asc(),
-        # Secondary sort: start datetime
-        Event.start_datetime.asc(),
-        # Tertiary sort: due datetime
-        Event.due_datetime.asc()
-    ).all()
+    )
+
+    if sort_by == 'due_date':
+        query = query.order_by(Event.due_datetime.asc(), Event.start_datetime.asc())
+    elif sort_by == 'event_type':
+        query = query.order_by(Event.event_type.asc(), Event.start_datetime.asc())
+    else:
+        # Default: sort by scheduled/start date
+        query = query.order_by(
+            db.func.coalesce(min_schedule_subquery.c.min_schedule_datetime, Event.start_datetime).asc(),
+            Event.start_datetime.asc(),
+            Event.due_datetime.asc()
+        )
+
+    events = query.all()
 
     # Calculate priority for each event (for visual coding)
     # Also fetch schedule/employee info for scheduled events
@@ -291,8 +319,9 @@ def unscheduled_events():
     today = date.today()
     events_with_priority = []
     for event in events:
-        days_remaining = (event.due_datetime.date() - today).days
-        if days_remaining <= 1:
+        # due_datetime means work must be done BEFORE that day, so subtract 1
+        days_remaining = (event.due_datetime.date() - today).days - 1
+        if days_remaining <= 0:
             priority = 'critical'
             priority_color = 'red'
         elif days_remaining <= 7:
@@ -333,6 +362,17 @@ def unscheduled_events():
     event_types = db.session.query(Event.event_type).distinct().order_by(Event.event_type).all()
     event_types = [et[0] for et in event_types]
 
+    # Get condition counts for tab badges
+    condition_counts = {
+        'all': Event.query.count(),
+        'unstaffed': Event.query.filter_by(condition='Unstaffed').count(),
+        'scheduled': Event.query.filter_by(condition='Scheduled').count(),
+        'submitted': Event.query.filter_by(condition='Submitted').count(),
+        'paused': Event.query.filter_by(condition='Paused').count(),
+        'reissued': Event.query.filter_by(condition='Reissued').count(),
+        'cannot_complete': Event.query.filter_by(condition='Cannot Complete').count(),
+    }
+
     # Map date filter display names
     date_filter_display = {
         'today': "Today's",
@@ -347,6 +387,9 @@ def unscheduled_events():
                          selected_event_type=event_type_filter,
                          condition=condition_filter,
                          condition_display=condition_display_map.get(condition_filter, 'Unscheduled'),
+                         condition_counts=condition_counts,
+                         show_past=show_past,
+                         sort_by=sort_by,
                          date_filter=date_filter,
                          date_filter_display=date_filter_display.get(date_filter, 'All'))
 
@@ -474,6 +517,14 @@ def calendar_view():
             event_counts_by_date[date_str][event.event_type] += 1
         else:
             event_counts_by_date[date_str]['Other'] += 1
+
+    # Add consolidated Juicer count for calendar badge display
+    for date_str, counts in event_counts_by_date.items():
+        counts['Juicer'] = (
+            counts.get('Juicer Production', 0) +
+            counts.get('Juicer Survey', 0) +
+            counts.get('Juicer Deep Clean', 0)
+        )
 
     # Get unscheduled events by date for warning indicators
     unscheduled_by_date = {}

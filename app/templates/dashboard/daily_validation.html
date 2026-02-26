@@ -1238,9 +1238,9 @@
                                 {% for detail in issue.details %}
                                 <li>
                                     {% if detail.employee_name %}
-                                        {{ detail.employee_name }} - {{ detail.reason or 'No reason provided' }}
+                                        {{ detail.employee_name|title }} - {{ detail.reason or 'No reason provided' }}
                                     {% elif detail.rotation_type %}
-                                        {{ detail.rotation_type }}: {{ detail.employee_name }} ({{ detail.reason or 'Time off' }})
+                                        {{ detail.rotation_type }}: {{ detail.employee_name|title }} ({{ detail.reason or 'Time off' }})
                                     {% endif %}
                                 </li>
                                 {% endfor %}
@@ -1275,7 +1275,7 @@
                         <div class="employee-avatar">
                             {{ juicer_rotation.employee_name[0] if juicer_rotation.employee_name else '?' }}
                         </div>
-                        <span>{{ juicer_rotation.employee_name }}</span>
+                        <span>{{ juicer_rotation.employee_name|title }}</span>
                         <span class="rotation-badge {% if juicer_rotation.is_exception %}badge-exception{% else %}badge-normal{% endif %}">
                             {% if juicer_rotation.is_exception %}
                                 <i class="fas fa-exclamation-circle"></i> Exception
@@ -1301,7 +1301,7 @@
                         <div class="employee-avatar">
                             {{ primary_lead_rotation.employee_name[0] if primary_lead_rotation.employee_name else '?' }}
                         </div>
-                        <span>{{ primary_lead_rotation.employee_name }}</span>
+                        <span>{{ primary_lead_rotation.employee_name|title }}</span>
                         <span class="rotation-badge {% if primary_lead_rotation.is_exception %}badge-exception{% else %}badge-normal{% endif %}">
                             {% if primary_lead_rotation.is_exception %}
                                 <i class="fas fa-exclamation-circle"></i> Exception
