@@ -21,6 +21,7 @@ Usage:
     html_report = generator.generate_html_report(report_data)
 """
 
+import logging
 import requests
 import json
 import datetime
@@ -33,6 +34,16 @@ import platform
 
 # Import database manager for caching
 from .db_manager import EDRDatabaseManager
+
+# Import Playwright-based auth (graceful fallback if not installed)
+try:
+    from .playwright_auth import PlaywrightWalmartAuth
+    _playwright_available = True
+except ImportError:
+    _playwright_available = False
+    PlaywrightWalmartAuth = None
+
+logger = logging.getLogger(__name__)
 
 
 class EDRReportGenerator:
@@ -58,6 +69,9 @@ class EDRReportGenerator:
         self.mfa_credential_id = ""
         self.last_error = None  # Stores detail from the most recent failure
 
+        # Playwright auth delegate (created lazily in step1)
+        self._pw_auth = None
+
         # Event report table headers from the JavaScript component
         self.report_headers = [
             "Item Number", "Primary Item Number", "Description", "Vendor", "Category"
@@ -70,25 +84,6 @@ class EDRReportGenerator:
         self.enable_caching = enable_caching
         self.cache_max_age_hours = cache_max_age_hours
         self.db = EDRDatabaseManager(db_path) if enable_caching else None
-
-    def _get_initial_cookies(self) -> Dict[str, str]:
-        """Return initial cookies required for authentication."""
-        return {
-            'vtc': 'Q0JqQVX0STHy6sao9qdhNw',
-            '_pxvid': '3c803a96-548a-11f0-84bf-e045250e632c',
-            '_ga': 'GA1.2.103605184.1751648140',
-            'QuantumMetricUserID': '23bc666aa80d92de6f4ffa5b79ff9fdc',
-            'pxcts': 'd0d1b4d9-65f2-11f0-a59e-62912b00fffc',
-            'rl_access_attempt': '0',
-            'rlLoginInfo': '',
-            'bstc': 'ZpNiPcM5OgU516Fy1nOhHw',
-            'rl_show_login_form': 'N',
-            'TS0111a950': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
-            'TS01b1e5a6': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
-            'mp_c586ded18141faef3e556292ef2810bc_mixpanel': '%7B%22distinct_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%2C%22%24device_id%22%3A%20%221981deb804c5f0-08ebcf61e7361f-26011151-e12d0-1981deb804d22c4%22%2C%22%24initial_referrer%22%3A%20%22https%3A%2F%2Fretaillink.login.wal-mart.com%2F%22%2C%22%24initial_referring_domain%22%3A%20%22retaillink.login.wal-mart.com%22%2C%22%24user_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%7D',
-            'TS04fe286f027': '08a6069d6cab2000cf0b847458906d222e70afa03939fa0de76da5c00884f260a79443300cc5407408d2c3bf9e113000b642cbc898d0534c0c86a20a3d11bab7101afcd84708efbc3e17c493bcf63e44a30e69658f98e8ce282590fbc1283275',
-            '_px3': '85d2f0646ea75d99a2faac1898a7785dc1c8c7807e2612e865c5b74b4059d5fb:UHj6hAC9RHoxLnDq2rdjE+HkchqIMD2wKeYTOfHkRyo03uaqeN4xA4DX8dbN5RrJrX+uLLB/HTtX12k0ymeoSg==:1000:9TQQXsEtZxJ8rnnXulfuBg/dxB30NwnoogsLoiaQFk/xQECXPbbFYCno02+QFD40nnBos0iUVfyD2CpgeCV+cIFLDpCggGG0LVI2Q5S4hDYjVHb0fhh7UQ2cqGLr55bijg0Ix75CQdsdWi+gc34m88u66pDWGpB13rAKmim6yJo7/mxA32DYqKWBKbTwG/HvVDaGQCGDa+Iog+lfBNePx/WdAInb6LQ00IZGqYrdrE0='
-        }
 
     def _get_standard_headers(self, content_type: Optional[str] = None, referer: Optional[str] = None) -> Dict[str, str]:
         """Return standard headers for API requests."""
@@ -116,14 +111,34 @@ class EDRReportGenerator:
         return headers
 
     def step1_submit_password(self) -> bool:
-        """Step 1: Submit username and password."""
+        """Step 1: Submit username and password.
+
+        Delegates to Playwright for PerimeterX-protected login.
+        Falls back to raw requests if Playwright is not installed.
+        """
+        self.last_error = None
+
+        if _playwright_available:
+            logger.info("Using Playwright for Walmart login (PerimeterX bypass)")
+            self._pw_auth = PlaywrightWalmartAuth(
+                self.username, self.password, self.mfa_credential_id
+            )
+            result = self._pw_auth.step1_submit_password()
+            if not result:
+                self.last_error = self._pw_auth.last_error
+            return result
+
+        # Fallback: raw requests (may fail with PerimeterX 412)
+        logger.warning("Playwright not available — falling back to raw requests (may be blocked by PerimeterX)")
+        return self._step1_requests_fallback()
+
+    def _step1_requests_fallback(self) -> bool:
+        """Legacy step1 using requests.Session (may be blocked by PerimeterX)."""
         login_url = "https://retaillink.login.wal-mart.com/api/login"
         self.last_error = None
 
-        # First, visit the login page to get fresh cookies
-        print("➡️ Step 1a: Visiting login page to obtain fresh cookies...")
         try:
-            login_page_response = self.session.get(
+            self.session.get(
                 'https://retaillink.login.wal-mart.com/login',
                 headers={
                     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
@@ -131,37 +146,17 @@ class EDRReportGenerator:
                 },
                 timeout=15
             )
-            print(f"   Login page status: {login_page_response.status_code}")
-            print(f"   Cookies received: {len(self.session.cookies)} cookies")
         except Exception as e:
-            print(f"⚠️ Could not pre-fetch login page: {e}")
-            print("   Continuing anyway...")
+            logger.warning(f"Could not pre-fetch login page: {e}")
 
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'priority': 'u=1, i',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
-
+        headers = self._get_standard_headers(content_type='application/json')
+        headers['origin'] = 'https://retaillink.login.wal-mart.com'
+        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
         payload = {"username": self.username, "password": self.password, "language": "en"}
 
-        print("➡️ Step 1b: Submitting username and password...")
         try:
             response = self.session.post(login_url, headers=headers, json=payload, timeout=15)
-            print(f"   Response status: {response.status_code}")
-            print(f"   Response body preview: {response.text[:200] if response.text else 'empty'}")
             response.raise_for_status()
-            print("✅ Password accepted. MFA required.")
             return True
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
@@ -169,52 +164,36 @@ class EDRReportGenerator:
             if hasattr(e, 'response') and e.response is not None:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"Walmart login returned HTTP {status}: {body}" if body else f"Walmart login returned HTTP {status}"
-            print(f"❌ Step 1 failed with HTTP error: {e}")
-            print(f"   Status code: {status}")
-            print(f"   Response body: {body}")
-            return False
-        except requests.exceptions.ConnectionError:
-            self.last_error = "Could not connect to Walmart login service. The service may be down."
-            print(f"❌ Step 1 failed: connection error")
-            return False
-        except requests.exceptions.Timeout:
-            self.last_error = "Walmart login service timed out. Please try again."
-            print(f"❌ Step 1 failed: timeout")
             return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"Walmart login request failed: {e}"
-            print(f"❌ Step 1 failed: {e}")
             return False
 
     def step2_request_mfa_code(self) -> bool:
-        """Step 2: Request MFA code to be sent to user's device."""
+        """Step 2: Request MFA code. Delegates to Playwright if active."""
+        self.last_error = None
+
+        if self._pw_auth:
+            result = self._pw_auth.step2_request_mfa_code()
+            if not result:
+                self.last_error = self._pw_auth.last_error
+            return result
+
+        # Fallback: raw requests
+        return self._step2_requests_fallback()
+
+    def _step2_requests_fallback(self) -> bool:
+        """Legacy step2 using requests.Session."""
         send_code_url = "https://retaillink.login.wal-mart.com/api/mfa/sendCode"
         self.last_error = None
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
+        headers = self._get_standard_headers(content_type='application/json')
+        headers['origin'] = 'https://retaillink.login.wal-mart.com'
+        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
         payload = {"type": "SMS_OTP", "credid": self.mfa_credential_id}
 
-        print("➡️ Step 2: Requesting MFA code...")
-        print(f"🔍 DEBUG: MFA Credential ID = {self.mfa_credential_id}")
-        print(f"🔍 DEBUG: Payload = {payload}")
         try:
             response = self.session.post(send_code_url, headers=headers, json=payload, timeout=15)
-            print(f"🔍 DEBUG: Response status = {response.status_code}")
-            print(f"🔍 DEBUG: Response body = {response.text[:500] if response.text else 'empty'}")
             response.raise_for_status()
-            print("✅ MFA code sent successfully. Check your device.")
             return True
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
@@ -222,39 +201,39 @@ class EDRReportGenerator:
             if hasattr(e, 'response') and e.response is not None:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"MFA request returned HTTP {status}: {body}" if body else f"MFA request returned HTTP {status}"
-            print(f"❌ Step 2 failed: {e}")
-            print(f"🔍 DEBUG: Error response body = {body}")
-            return False
-        except requests.exceptions.ConnectionError:
-            self.last_error = "Could not connect to Walmart MFA service. The service may be down."
-            print("❌ Step 2 failed: connection error")
-            return False
-        except requests.exceptions.Timeout:
-            self.last_error = "Walmart MFA service timed out. Please try again."
-            print("❌ Step 2 failed: timeout")
             return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"MFA request failed: {e}"
-            print(f"❌ Step 2 failed: {e}")
             return False
 
     def step3_validate_mfa_code(self, code: str) -> bool:
-        """Step 3: Validate the MFA code entered by user."""
+        """Step 3: Validate MFA code. If Playwright, transfers cookies to session."""
+        self.last_error = None
+
+        if self._pw_auth:
+            result = self._pw_auth.step3_validate_mfa_code(code)
+            if not result:
+                self.last_error = self._pw_auth.last_error
+                return False
+
+            # Transfer cookies from Playwright browser to requests.Session
+            logger.info("Transferring Playwright cookies to requests.Session")
+            self._pw_auth.inject_cookies_into_session(self.session)
+            logger.info(f"Transferred {len(self._pw_auth.cookies)} cookies to session")
+
+            # Clear Playwright reference (browser already closed by step3)
+            self._pw_auth = None
+            return True
+
+        # Fallback: raw requests
+        return self._step3_requests_fallback(code)
+
+    def _step3_requests_fallback(self, code: str) -> bool:
+        """Legacy step3 using requests.Session."""
         validate_url = "https://retaillink.login.wal-mart.com/api/mfa/validateCode"
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
+        headers = self._get_standard_headers(content_type='application/json')
+        headers['origin'] = 'https://retaillink.login.wal-mart.com'
+        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
         payload = {
             "type": "SMS_OTP",
             "credid": self.mfa_credential_id,
@@ -262,14 +241,12 @@ class EDRReportGenerator:
             "failureCount": 0
         }
 
-        print("➡️ Step 3: Validating MFA code...")
         try:
             response = self.session.post(validate_url, headers=headers, json=payload)
             response.raise_for_status()
-            print("✅ MFA authentication complete!")
             return True
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Step 3 failed. The code may have been incorrect.")
+        except requests.exceptions.RequestException:
+            self.last_error = "MFA validation failed. The code may have been incorrect."
             return False
 
     def step4_register_page_access(self) -> bool:
