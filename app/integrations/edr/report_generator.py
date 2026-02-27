@@ -165,6 +165,12 @@ class EDRReportGenerator:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"Walmart login returned HTTP {status}: {body}" if body else f"Walmart login returned HTTP {status}"
             return False
+        except requests.exceptions.ConnectionError:
+            self.last_error = "Could not connect to Walmart login service. The service may be down."
+            return False
+        except requests.exceptions.Timeout:
+            self.last_error = "Walmart login service timed out. Please try again."
+            return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"Walmart login request failed: {e}"
             return False
@@ -201,6 +207,12 @@ class EDRReportGenerator:
             if hasattr(e, 'response') and e.response is not None:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"MFA request returned HTTP {status}: {body}" if body else f"MFA request returned HTTP {status}"
+            return False
+        except requests.exceptions.ConnectionError:
+            self.last_error = "Could not connect to Walmart MFA service. The service may be down."
+            return False
+        except requests.exceptions.Timeout:
+            self.last_error = "Walmart MFA service timed out. Please try again."
             return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"MFA request failed: {e}"

@@ -182,6 +182,21 @@ class TestEDRReportGeneratorIntegration:
             assert result is False
             assert gen.last_error == "HTTP 412: PerimeterX blocked"
 
+    def test_step2_delegates_to_pw_auth(self):
+        """step2_request_mfa_code delegates to PlaywrightWalmartAuth when active."""
+        from app.integrations.edr.report_generator import EDRReportGenerator
+        from unittest.mock import MagicMock
+
+        gen = EDRReportGenerator()
+        mock_pw = MagicMock()
+        mock_pw.step2_request_mfa_code.return_value = True
+        gen._pw_auth = mock_pw
+
+        result = gen.step2_request_mfa_code()
+
+        assert result is True
+        mock_pw.step2_request_mfa_code.assert_called_once()
+
     def test_step3_transfers_cookies_to_session(self):
         """step3 extracts cookies from Playwright and injects into requests.Session."""
         from app.integrations.edr.report_generator import EDRReportGenerator
