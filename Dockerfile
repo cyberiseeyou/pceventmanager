@@ -29,11 +29,29 @@ FROM python:3.11-slim
 # Set build arguments
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install runtime dependencies
+# Install runtime dependencies + Playwright/Chromium system libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     libpq5 \
     curl \
+    # Chromium dependencies for Playwright
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -50,6 +68,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     FLASK_ENV=production
+
+# Install Playwright Chromium browser to a shared location
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN /opt/venv/bin/playwright install chromium && \
+    chmod -R 755 /opt/playwright-browsers
 
 # Copy application code
 COPY --chown=scheduler:scheduler . /app
