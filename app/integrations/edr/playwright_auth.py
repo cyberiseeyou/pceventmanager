@@ -50,7 +50,7 @@ def _run_async(coro):
     logger.debug("Existing event loop detected; running async code in thread pool")
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(asyncio.run, coro)
-        return future.result()
+        return future.result(timeout=120)
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +137,8 @@ class PlaywrightWalmartAuth:
 
     def cleanup(self) -> None:
         """Force-close the browser if still open. Safe to call multiple times."""
+        if not self._browser and not self._playwright:
+            return
         _run_async(self._async_cleanup())
 
     # ------------------------------------------------------------------
