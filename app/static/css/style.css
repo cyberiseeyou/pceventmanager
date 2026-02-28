@@ -910,6 +910,18 @@ input:focus {
     color: white;
 }
 
+/* Reissued Event Badge */
+.badge-reissued {
+    display: inline-block;
+    background: #DBEAFE;
+    color: #1E40AF;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-bold);
+    white-space: nowrap;
+}
+
 /* Flash Messages */
 .flash-messages {
     margin-bottom: var(--spacing-lg);

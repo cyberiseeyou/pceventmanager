@@ -71,6 +71,9 @@ def create_event_model(db):
         billing_only = db.Column(db.Boolean, nullable=False, default=False)
         walmart_items = db.Column(db.Text, nullable=True)  # JSON array of items
 
+        # Reissue tracking
+        is_reissued = db.Column(db.Boolean, nullable=False, default=False)
+
         __table_args__ = (
             # Index for filtering scheduled/unscheduled events
             db.Index('idx_events_scheduled', 'is_scheduled', 'condition'),

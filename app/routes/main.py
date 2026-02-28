@@ -628,7 +628,8 @@ def calendar_day_view(date):
             'store_name': event.store_name,
             'estimated_time': event.estimated_time,
             'start_date': event.start_datetime.strftime('%m/%d/%Y'),
-            'due_date': event.due_datetime.strftime('%m/%d/%Y')
+            'due_date': event.due_datetime.strftime('%m/%d/%Y'),
+            'is_reissued': getattr(event, 'is_reissued', False),
         }
 
         # For Core events, check if there's a paired Supervisor event

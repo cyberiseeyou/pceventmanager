@@ -931,6 +931,26 @@
 }
 
 /**
+ * Reissued Event Badge
+ * Blue badge to indicate an event has been reissued
+ */
+.badge-reissued {
+  background: #DBEAFE;
+  color: #1E40AF;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.badge-reissued .material-symbols-outlined {
+  font-size: 11px;
+}
+
+/**
  * Core Event Badge
  * Bright, eye-catching badge to identify Core events by their time slot
  */

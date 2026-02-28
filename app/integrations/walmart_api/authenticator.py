@@ -1,12 +1,25 @@
 """
 EDR Authentication Module
 Handles Walmart Retail Link authentication and session management
+
+Bot Detection Mitigations:
+- No stale hardcoded cookies - visits login page fresh to get real ones
+- Consistent Chrome version across all requests
+- Human-like delays between authentication steps
+- Detailed response logging to diagnose bot blocks
 """
 import requests
 import json
+import time
 import urllib.parse
 import logging
 from typing import Dict, Optional, Any
+
+# Consistent browser version used across ALL requests
+# Keep this in sync with routes.py _fetch_approved_events_with_session headers
+CHROME_VERSION = '131'
+USER_AGENT = f'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME_VERSION}.0.0.0 Safari/537.36'
+SEC_CH_UA = f'"Google Chrome";v="{CHROME_VERSION}", "Chromium";v="{CHROME_VERSION}", "Not_A Brand";v="24"'
 
 
 class EDRAuthenticator:
@@ -21,32 +34,35 @@ class EDRAuthenticator:
         self.mfa_credential_id = mfa_credential_id
         self.logger = logging.getLogger(__name__)
 
-    def _get_initial_cookies(self) -> Dict[str, str]:
-        """Return initial cookies required for authentication"""
+    def _get_login_headers(self) -> Dict[str, str]:
+        """Return headers for login domain requests (retaillink.login.wal-mart.com)"""
         return {
-            'vtc': 'Q0JqQVX0STHy6sao9qdhNw',
-            '_pxvid': '3c803a96-548a-11f0-84bf-e045250e632c',
-            '_ga': 'GA1.2.103605184.1751648140',
-            'QuantumMetricUserID': '23bc666aa80d92de6f4ffa5b79ff9fdc',
-            'pxcts': 'd0d1b4d9-65f2-11f0-a59e-62912b00fffc',
-            'rl_access_attempt': '0',
-            'rlLoginInfo': '',
-            'bstc': 'ZpNiPcM5OgU516Fy1nOhHw',
-            'rl_show_login_form': 'N',
-        }
-
-    def _get_standard_headers(self, content_type: Optional[str] = None, referer: Optional[str] = None) -> Dict[str, str]:
-        """Return standard headers for API requests"""
-        headers = {
-            'accept': 'application/json, text/plain, */*',
+            'accept': '*/*',
             'accept-language': 'en-US,en;q=0.9',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'content-type': 'application/json',
+            'origin': 'https://retaillink.login.wal-mart.com',
+            'referer': 'https://retaillink.login.wal-mart.com/login',
+            'sec-ch-ua': SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+            'user-agent': USER_AGENT,
+        }
+
+    def _get_standard_headers(self, content_type: Optional[str] = None, referer: Optional[str] = None) -> Dict[str, str]:
+        """Return standard headers for API requests on retaillink2 domain"""
+        headers = {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.9',
+            'sec-ch-ua': SEC_CH_UA,
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': USER_AGENT,
         }
 
         if content_type:
@@ -60,86 +76,135 @@ class EDRAuthenticator:
 
         return headers
 
+    def _log_response_diagnostic(self, step_name: str, response: requests.Response):
+        """Log detailed response info for diagnosing bot detection blocks"""
+        self.logger.info(
+            f"[{step_name}] status={response.status_code}, "
+            f"url={response.url}, "
+            f"content-type={response.headers.get('content-type', 'N/A')}, "
+            f"body_preview={response.text[:300] if response.text else 'empty'}"
+        )
+
+        # Check for common bot detection indicators
+        body_lower = response.text.lower() if response.text else ''
+        ct = response.headers.get('content-type', '').lower()
+
+        if response.status_code == 403:
+            self.logger.warning(f"[{step_name}] GOT 403 FORBIDDEN - likely bot detection block")
+
+        if response.status_code == 429:
+            retry_after = response.headers.get('Retry-After', 'not set')
+            self.logger.warning(f"[{step_name}] GOT 429 RATE LIMITED - Retry-After: {retry_after}")
+
+        if 'captcha' in body_lower or 'challenge' in body_lower or 'perimeterx' in body_lower:
+            self.logger.warning(f"[{step_name}] BOT DETECTION: Response contains captcha/challenge content")
+
+        if 'text/html' in ct and response.status_code == 200 and 'json' in (response.request.headers.get('accept', '')):
+            self.logger.warning(f"[{step_name}] SUSPICIOUS: Expected JSON but got HTML - possible redirect to captcha page")
+
+        # Log cookies received
+        new_cookies = [c.name for c in response.cookies]
+        if new_cookies:
+            self.logger.info(f"[{step_name}] New cookies set: {new_cookies}")
+
+        # Log if redirected
+        if response.history:
+            chain = ' -> '.join(str(r.status_code) + ' ' + r.url for r in response.history)
+            self.logger.info(f"[{step_name}] Redirect chain: {chain} -> {response.status_code} {response.url}")
+
+    def _human_delay(self, min_seconds: float = 1.0, max_seconds: float = 2.5):
+        """Add a human-like delay between requests"""
+        import random
+        delay = random.uniform(min_seconds, max_seconds)
+        self.logger.debug(f"Waiting {delay:.1f}s between requests")
+        time.sleep(delay)
+
     def step1_submit_password(self) -> bool:
-        """Submit username and password"""
-        login_url = "https://retaillink.login.wal-mart.com/api/login"
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'priority': 'u=1, i',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
+        """Submit username and password.
 
-        # Clear all existing cookies and set initial cookies
+        First visits the login page to acquire fresh cookies (PerimeterX, etc.)
+        instead of using stale hardcoded ones that trigger bot detection.
+        """
+        # Step 1a: Visit login page to get fresh cookies from Walmart's bot detection system
         self.session.cookies.clear()
-        for name, value in self._get_initial_cookies().items():
-            self.session.cookies.set(name, value)
+        self.logger.info("[Step 1a] Visiting login page to acquire fresh cookies...")
+        try:
+            page_response = self.session.get(
+                'https://retaillink.login.wal-mart.com/login',
+                headers={
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'accept-language': 'en-US,en;q=0.9',
+                    'sec-ch-ua': SEC_CH_UA,
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'none',
+                    'sec-fetch-user': '?1',
+                    'upgrade-insecure-requests': '1',
+                    'user-agent': USER_AGENT,
+                },
+                timeout=15,
+            )
+            self._log_response_diagnostic("Step 1a - Login Page", page_response)
+            cookie_names = [c.name for c in self.session.cookies]
+            self.logger.info(f"[Step 1a] Acquired {len(cookie_names)} cookies: {cookie_names}")
+        except Exception as e:
+            self.logger.warning(f"[Step 1a] Could not pre-fetch login page: {e} - continuing anyway")
 
+        self._human_delay(1.5, 3.0)
+
+        # Step 1b: Submit credentials
+        login_url = "https://retaillink.login.wal-mart.com/api/login"
+        headers = self._get_login_headers()
         payload = {"username": self.username, "password": self.password, "language": "en"}
 
+        self.logger.info("[Step 1b] Submitting password...")
         try:
-            response = self.session.post(login_url, headers=headers, json=payload)
+            response = self.session.post(login_url, headers=headers, json=payload, timeout=15)
+            self._log_response_diagnostic("Step 1b - Password", response)
             response.raise_for_status()
-            self.logger.info("Password accepted")
+            self.logger.info("[Step 1b] Password accepted")
             return True
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"[Step 1b] Password submission failed: HTTP {e.response.status_code if e.response else 'N/A'}")
+            if e.response is not None:
+                self._log_response_diagnostic("Step 1b - FAILED", e.response)
+            return False
         except Exception as e:
-            self.logger.error(f"Password submission failed: {str(e)}")
+            self.logger.error(f"[Step 1b] Password submission failed: {str(e)}")
             return False
 
     def step2_request_mfa_code(self) -> bool:
         """Request MFA code"""
+        self._human_delay(1.0, 2.0)
+
         send_code_url = "https://retaillink.login.wal-mart.com/api/mfa/sendCode"
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
+        headers = self._get_login_headers()
         payload = {"type": "SMS_OTP", "credid": self.mfa_credential_id}
 
+        self.logger.info("[Step 2] Requesting MFA code...")
         try:
-            response = self.session.post(send_code_url, headers=headers, json=payload)
+            response = self.session.post(send_code_url, headers=headers, json=payload, timeout=15)
+            self._log_response_diagnostic("Step 2 - MFA Request", response)
             response.raise_for_status()
-            self.logger.info("MFA code sent successfully")
+            self.logger.info("[Step 2] MFA code sent successfully")
             return True
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"[Step 2] MFA code request failed: HTTP {e.response.status_code if e.response else 'N/A'}")
+            if e.response is not None:
+                self._log_response_diagnostic("Step 2 - FAILED", e.response)
+            return False
         except Exception as e:
-            self.logger.error(f"MFA code request failed: {str(e)}")
+            self.logger.error(f"[Step 2] MFA code request failed: {str(e)}")
             return False
 
     def step3_validate_mfa_code(self, code: str) -> bool:
         """Validate MFA code"""
+        self._human_delay(0.5, 1.5)
+
         validate_url = "https://retaillink.login.wal-mart.com/api/mfa/validateCode"
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink.login.wal-mart.com',
-            'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        }
+        headers = self._get_login_headers()
         payload = {
             "type": "SMS_OTP",
             "credid": self.mfa_credential_id,
@@ -147,38 +212,81 @@ class EDRAuthenticator:
             "failureCount": 0
         }
 
+        self.logger.info("[Step 3] Validating MFA code...")
         try:
-            response = self.session.post(validate_url, headers=headers, json=payload)
+            response = self.session.post(validate_url, headers=headers, json=payload, timeout=15)
+            self._log_response_diagnostic("Step 3 - MFA Validate", response)
             response.raise_for_status()
-            self.logger.info("MFA code validated successfully")
+            self.logger.info("[Step 3] MFA code validated successfully")
             return True
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"[Step 3] MFA validation failed: HTTP {e.response.status_code if e.response else 'N/A'}")
+            if e.response is not None:
+                self._log_response_diagnostic("Step 3 - FAILED", e.response)
+            return False
         except Exception as e:
-            self.logger.error(f"MFA validation failed: {str(e)}")
+            self.logger.error(f"[Step 3] MFA validation failed: {str(e)}")
             return False
 
     def step4_register_page_access(self):
         """Register page access"""
+        self._human_delay(1.0, 2.0)
+
         url = "https://retaillink2.wal-mart.com/rl_portal_services/api/Site/InsertRlPageDetails"
         params = {'pageId': '6', 'pageSubId': 'w6040', 'pageSubDesc': 'Event Management System'}
+        headers = self._get_standard_headers(referer='https://retaillink2.wal-mart.com/rl_portal/')
+
+        self.logger.info("[Step 4] Registering page access...")
         try:
-            self.session.get(url, params=params, timeout=10)
-        except:
-            pass
+            response = self.session.get(url, headers=headers, params=params, timeout=10)
+            self._log_response_diagnostic("Step 4 - Page Register", response)
+        except Exception as e:
+            self.logger.warning(f"[Step 4] Page registration failed (non-critical): {e}")
 
     def step5_navigate_to_event_management(self):
         """Navigate to Event Management"""
+        self._human_delay(1.0, 2.0)
+
+        nav_headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+            'sec-ch-ua': SEC_CH_UA,
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-site',
+            'upgrade-insecure-requests': '1',
+            'user-agent': USER_AGENT,
+        }
+
+        self.logger.info("[Step 5] Navigating to Event Management...")
         try:
-            self.session.get("https://retaillink2.wal-mart.com/rl_portal/", timeout=10)
-            self.session.get(f"{self.base_url}/", timeout=10)
-        except:
-            pass
+            response = self.session.get("https://retaillink2.wal-mart.com/rl_portal/", headers=nav_headers, timeout=10)
+            self._log_response_diagnostic("Step 5a - Portal", response)
+        except Exception as e:
+            self.logger.warning(f"[Step 5a] Portal navigation failed (non-critical): {e}")
+
+        self._human_delay(1.0, 2.0)
+
+        try:
+            response = self.session.get(f"{self.base_url}/", headers=nav_headers, timeout=10)
+            self._log_response_diagnostic("Step 5b - Event Management", response)
+        except Exception as e:
+            self.logger.warning(f"[Step 5b] Event Management navigation failed (non-critical): {e}")
 
     def step6_authenticate_event_management(self) -> bool:
         """Get auth token from Event Management API"""
-        auth_url = f"{self.base_url}/api/authenticate"
+        self._human_delay(1.0, 2.0)
 
+        auth_url = f"{self.base_url}/api/authenticate"
+        headers = self._get_standard_headers(referer=f"{self.base_url}/")
+
+        self.logger.info("[Step 6] Authenticating with Event Management API...")
         try:
-            response = self.session.get(auth_url, timeout=10)
+            response = self.session.get(auth_url, headers=headers, timeout=10)
+            self._log_response_diagnostic("Step 6 - Auth Token", response)
+
             if response.status_code == 200:
                 # Extract auth token from cookies
                 for cookie in self.session.cookies:
@@ -188,13 +296,19 @@ class EDRAuthenticator:
                             token_data = json.loads(cookie_data)
                             self.auth_token = token_data.get('token')
                             if self.auth_token:
-                                self.logger.info("Authentication successful")
+                                self.logger.info("[Step 6] Auth token extracted successfully")
                                 return True
-                        except:
-                            pass
+                        except json.JSONDecodeError as e:
+                            self.logger.error(f"[Step 6] Failed to parse auth-token cookie as JSON: {e}")
+                            self.logger.error(f"[Step 6] Cookie value: {cookie_data[:200]}")
+
+                self.logger.error("[Step 6] No auth-token cookie found. Available cookies: "
+                                  f"{[c.name for c in self.session.cookies]}")
+            else:
+                self.logger.error(f"[Step 6] Authentication failed with status {response.status_code}")
             return False
         except Exception as e:
-            self.logger.error(f"Event Management auth failed: {str(e)}")
+            self.logger.error(f"[Step 6] Event Management auth failed: {str(e)}")
             return False
 
     def authenticate(self, mfa_code: str) -> bool:
@@ -232,6 +346,7 @@ class EDRAuthenticator:
         self.logger.info(f"Retrieving EDR report for event {event_id}...")
         try:
             response = self.session.get(url, headers=headers, timeout=30)
+            self._log_response_diagnostic(f"EDR Report {event_id}", response)
             response.raise_for_status()
 
             report_data = response.json()
@@ -281,6 +396,7 @@ class EDRAuthenticator:
 
         try:
             response = self.session.post(url, headers=headers, json=payload, timeout=60)
+            self._log_response_diagnostic("Approved Events", response)
             response.raise_for_status()
 
             all_events = response.json()
@@ -334,6 +450,7 @@ class EDRAuthenticator:
 
         try:
             response = self.session.post(url, headers=headers, json=payload, timeout=30)
+            self._log_response_diagnostic(f"Roll Event {event_id}", response)
             response.raise_for_status()
 
             result = response.json() if response.text else {}

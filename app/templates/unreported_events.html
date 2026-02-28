@@ -113,6 +113,17 @@
         color: #616161;
     }
 
+    .badge-reissued {
+        display: inline-block;
+        background: #DBEAFE;
+        color: #1E40AF;
+        padding: 2px 8px;
+        border-radius: var(--border-radius-sm);
+        font-size: 11px;
+        font-weight: var(--font-weight-medium);
+        margin-top: 2px;
+    }
+
     .days-overdue {
         display: inline-block;
         padding: 4px 12px;
@@ -449,6 +460,9 @@
                 <span class="event-type event-type-{{ item.event.event_type.lower().replace(' ', '-') }}">
                     {{ item.event.event_type }}
                 </span>
+                {% if item.event.is_reissued %}
+                <span class="badge-reissued">🔄 REISSUED</span>
+                {% endif %}
             </td>
             <td>
                 <strong>{{ item.employee.name|title }}</strong>
