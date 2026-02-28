@@ -2394,13 +2394,89 @@
     }
 
     function authenticateWalmartEDR(callback) {
-        // Main entry point - start the MFA request flow
-        requestAndAuthenticateMFA(callback);
+        // First check if we're already authenticated
+        fetch('/printing/edr/check-auth')
+            .then(r => r.json())
+            .then(data => {
+                if (data.authenticated) {
+                    edrAuthenticated = true;
+                    if (callback) callback();
+                } else {
+                    // Go directly to manual login — automated login is blocked by PerimeterX
+                    showManualLoginFlow(callback);
+                }
+            })
+            .catch(() => {
+                showManualLoginFlow(callback);
+            });
+    }
+
+    // Poll for cookie import completion (used by manual login flow)
+    let _cookieImportPollTimer = null;
+
+    function showManualLoginFlow(callback) {
+        hideLoading();
+
+        // Open Walmart login in a new tab
+        window.open('https://retaillink.login.wal-mart.com/login', '_blank');
+
+        alert(
+            'Walmart Login Required\n\n' +
+            'Steps to authenticate:\n\n' +
+            '1. A Walmart Retail Link login tab has been opened\n' +
+            '2. Log in with your credentials and complete MFA\n' +
+            '3. Click the "EDR Cookie Helper" Chrome extension icon\n' +
+            '4. Click "Send Cookies to Event Manager"\n' +
+            '5. Return here - paperwork generation starts automatically\n\n' +
+            'First time? Install the extension:\n' +
+            '  chrome://extensions > Developer Mode ON > Load Unpacked >\n' +
+            '  Select: app/static/edr-cookie-helper folder'
+        );
+
+        // Start polling for cookie import completion
+        showLoading('Waiting for Walmart login...\n\nLog into Retail Link, then use the EDR Cookie Helper extension to send cookies.');
+
+        let pollCount = 0;
+        const maxPolls = 120; // 10 minutes at 5s intervals
+
+        _cookieImportPollTimer = setInterval(() => {
+            pollCount++;
+            if (pollCount > maxPolls) {
+                clearInterval(_cookieImportPollTimer);
+                hideLoading();
+                alert('Login timed out after 10 minutes. Please try again.');
+                return;
+            }
+
+            // Check if cookies were imported
+            fetch('/printing/edr/check-auth')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.authenticated) {
+                        clearInterval(_cookieImportPollTimer);
+                        edrAuthenticated = true;
+                        hideLoading();
+
+                        const loadingDiv = document.getElementById('loading');
+                        const loadingMsg = document.getElementById('loading-message');
+                        if (loadingMsg) {
+                            loadingMsg.innerHTML = 'Authentication successful!\n\nStarting paperwork generation...';
+                        }
+                        if (loadingDiv) loadingDiv.style.display = 'flex';
+
+                        setTimeout(() => {
+                            hideLoading();
+                            if (callback) callback();
+                        }, 1000);
+                    }
+                })
+                .catch(() => {}); // Silently ignore poll errors
+        }, 5000);
     }
 
     function requestAndAuthenticateMFA(callback) {
         // Step 1: Request MFA code
-        showLoading('📱 Requesting MFA code...\n\nPlease wait while we send a verification code to your phone.');
+        showLoading('Requesting MFA code...\n\nPlease wait while we send a verification code to your phone.');
 
         fetch('/printing/edr/request-mfa', {
             method: 'POST'
@@ -2415,7 +2491,13 @@
                 hideLoading();
 
                 if (!data.success) {
-                    alert('EDR Authentication Error\n\n' + (data.error || 'Failed to request MFA code') + '\n\nCheck Settings page for Walmart credentials.');
+                    const errorMsg = data.error || 'Failed to request MFA code';
+                    // Check if this is a PerimeterX block (HTTP 412)
+                    if (errorMsg.includes('HTTP 412') || errorMsg.includes('PerimeterX') || errorMsg.includes('PX99')) {
+                        showManualLoginFlow(callback);
+                        return;
+                    }
+                    alert('EDR Authentication Error\n\n' + errorMsg + '\n\nCheck Settings page for Walmart credentials.');
                     return;
                 }
 

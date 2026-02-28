@@ -1350,6 +1350,124 @@ def edr_authenticate():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@printing_bp.route('/edr/check-auth')
+@require_authentication()
+def edr_check_auth():
+    """Check if EDR authentication is active (has valid auth_token)."""
+    if edr_authenticator and edr_authenticator.auth_token:
+        return jsonify({'authenticated': True})
+    return jsonify({'authenticated': False})
+
+
+@printing_bp.route('/edr/import-cookies', methods=['POST'])
+@require_authentication()
+def edr_import_cookies():
+    """
+    Import Walmart session cookies from the user's browser (via Chrome extension).
+    This bypasses PerimeterX bot detection by using cookies from a real browser session.
+    After import, runs steps 4-6 to complete authentication.
+    """
+    global edr_authenticator, mfa_request_timestamp
+
+    logger.info("EDR cookie import received")
+
+    if not edr_available:
+        return jsonify({'success': False, 'error': 'EDR modules not available'}), 500
+
+    try:
+        data = request.get_json()
+        cookies = data.get('cookies', [])
+
+        if not cookies:
+            return jsonify({'success': False, 'error': 'No cookies provided'}), 400
+
+        # Create a fresh authenticator with credentials
+        SystemSetting = current_app.config.get('SystemSetting')
+        if SystemSetting:
+            username = SystemSetting.get_setting('edr_username') or current_app.config.get('WALMART_EDR_USERNAME')
+            password = SystemSetting.get_setting('edr_password') or current_app.config.get('WALMART_EDR_PASSWORD')
+            mfa_credential_id = SystemSetting.get_setting('edr_mfa_credential_id') or current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+        else:
+            username = current_app.config.get('WALMART_EDR_USERNAME')
+            password = current_app.config.get('WALMART_EDR_PASSWORD')
+            mfa_credential_id = current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
+
+        edr_authenticator = EDRReportGenerator()
+        edr_authenticator.username = username or ''
+        edr_authenticator.password = password or ''
+        edr_authenticator.mfa_credential_id = mfa_credential_id or ''
+
+        # Inject cookies into the session
+        cookie_count = 0
+        for cookie in cookies:
+            name = cookie.get('name', '')
+            value = cookie.get('value', '')
+            if name and value:
+                edr_authenticator.session.cookies.set(
+                    name, value,
+                    domain=cookie.get('domain', '.wal-mart.com'),
+                    path=cookie.get('path', '/'),
+                )
+                cookie_count += 1
+
+        logger.info(f"Imported {cookie_count} cookies into EDR session")
+
+        # Run steps 4-6 to complete authentication
+        logger.info("Running post-login steps (4-6) with imported cookies")
+
+        edr_authenticator.step4_register_page_access()
+        edr_authenticator.step5_navigate_to_event_management()
+
+        if not edr_authenticator.step6_authenticate_event_management():
+            logger.warning("Step 6 failed with imported cookies - cookies may be invalid or expired")
+            return jsonify({
+                'success': False,
+                'error': 'Cookie import succeeded but authentication failed. Please log in again at Walmart Retail Link and re-send cookies.'
+            }), 400
+
+        if not edr_authenticator.auth_token:
+            logger.error("Step 6 returned success but auth_token is empty")
+            return jsonify({
+                'success': False,
+                'error': 'Authentication succeeded but token extraction failed. Please try again.'
+            }), 400
+
+        logger.info(f"Cookie import auth complete, auth_token length: {len(edr_authenticator.auth_token)}")
+        mfa_request_timestamp = None
+
+        # Opportunistic enrichment
+        try:
+            from app.models import get_models as _get_models
+            _models = _get_models()
+            _SystemSetting = _models.get('SystemSetting')
+            club = _SystemSetting.get_setting('store_number') if _SystemSetting else None
+            if club and edr_authenticator.session and edr_authenticator.auth_token:
+                from app.integrations.walmart_api.routes import _fetch_all_events_with_session
+                from app.services.walmart_event_enrichment import WalmartEventEnrichmentService
+                today = date.today()
+                start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+                end_date = (today + timedelta(days=120)).strftime('%Y-%m-%d')
+                all_events = _fetch_all_events_with_session(
+                    edr_authenticator.session, edr_authenticator.auth_token,
+                    club_numbers=[club], start_date=start_date, end_date=end_date
+                )
+                if all_events:
+                    svc = WalmartEventEnrichmentService()
+                    result = svc.enrich_events_from_walmart_data(all_events)
+                    logger.info(f"Opportunistic enrichment after cookie import: {result}")
+        except Exception as enrich_err:
+            logger.error(f"Opportunistic enrichment failed (non-blocking): {enrich_err}")
+
+        return jsonify({
+            'success': True,
+            'message': f'{cookie_count} cookies imported, authentication complete.'
+        })
+
+    except Exception as e:
+        logger.error(f"Cookie import failed: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @printing_bp.route('/edr/batch-download', methods=['POST'])
 @require_authentication()
 def edr_batch_download():
@@ -1719,123 +1837,25 @@ def get_bakery_prep_list():
         }), 401
 
     try:
-        # Calculate date range: tomorrow to 2 weeks out
-        tomorrow = (datetime.now() + timedelta(days=1)).date()
-        two_weeks_out = (datetime.now() + timedelta(days=14)).date()
+        from app.services.bakery_prep_service import fetch_bakery_prep_items
 
-        # Store number from settings or default
         SystemSetting = current_app.config.get('SystemSetting')
-        store_number = "8135"  # Default store number
+        store_number = "8135"
         if SystemSetting:
             store_number = SystemSetting.get_setting('store_number') or store_number
 
-        # Build API request
-        api_url = "https://retaillink2.wal-mart.com/EventManagement/api/browse-event/browse-data"
-
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'origin': 'https://retaillink2.wal-mart.com',
-            'referer': 'https://retaillink2.wal-mart.com/EventManagement/browse-event',
-            'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
-        }
-
-        # All event types (1-57)
-        all_event_types = list(range(1, 58))
-
-        payload = {
-            "itemNbr": None,
-            "vendorNbr": None,
-            "startDate": tomorrow.strftime('%Y-%m-%d'),
-            "endDate": two_weeks_out.strftime('%Y-%m-%d'),
-            "billType": None,
-            "eventType": all_event_types,
-            "userId": None,
-            "primItem": None,
-            "storeNbr": store_number,
-            "deptNbr": None
-        }
-
-        logger.info(f"Fetching bakery prep events from {tomorrow} to {two_weeks_out} for store {store_number}")
-
-        # Use the authenticated session from edr_authenticator
-        response = edr_authenticator.session.post(api_url, headers=headers, json=payload, timeout=30)
-
-        logger.info(f"API response status: {response.status_code}")
-        logger.info(f"API response headers: {dict(response.headers)}")
-
-        if response.status_code == 404:
-            logger.error(f"API endpoint not found. Response: {response.text[:500]}")
-            return jsonify({
-                'success': False,
-                'error': 'Walmart API endpoint not found. The session may have expired - please re-authenticate.'
-            }), 404
-
-        if response.status_code != 200:
-            logger.error(f"API request failed with status {response.status_code}. Response: {response.text[:500]}")
-            return jsonify({
-                'success': False,
-                'error': f'Walmart API returned status {response.status_code}. Try re-authenticating.'
-            }), 500
-
-        # Try to parse JSON, handle non-JSON responses
-        try:
-            data = response.json()
-        except Exception as json_err:
-            logger.error(f"Failed to parse JSON response: {json_err}. Response text: {response.text[:500]}")
-            return jsonify({
-                'success': False,
-                'error': 'Invalid response from Walmart API. Session may have expired - please re-authenticate.'
-            }), 500
-
-        # Handle both response formats: list directly or {'data': [...]}
-        if isinstance(data, list):
-            events = data
-        elif isinstance(data, dict):
-            events = data.get('data', [])
-        else:
-            events = []
-
-        logger.info(f"Retrieved {len(events)} events from API")
-
-        # Keep ONLY deptNbr 77 and 37 (bakery departments)
-        filtered_events = [
-            event for event in events
-            if event.get('deptNbr') in [77, 37, '77', '37']
-        ]
-
-        logger.info(f"After filtering to bakery dept 77 and 37: {len(filtered_events)} events")
-
-        # Extract required fields and sort by date
-        prep_items = []
-        for event in filtered_events:
-            item = {
-                'eventId': event.get('eventId') or event.get('EventId') or 'N/A',
-                'eventDate': event.get('eventDate') or event.get('EventDate') or 'N/A',
-                'itemDesc': event.get('itemDesc') or event.get('ItemDesc') or 'N/A',
-                'itemNbr': event.get('itemNbr') or event.get('ItemNbr') or 'N/A'
-            }
-            prep_items.append(item)
-
-        # Sort by eventDate
-        prep_items.sort(key=lambda x: x['eventDate'] if x['eventDate'] != 'N/A' else '9999-99-99')
+        result = fetch_bakery_prep_items(edr_authenticator.session, store_number)
+        prep_items = result['items']
+        date_range = result['date_range']
 
         # Check if plain text format requested (for printing)
         output_format = request.args.get('format', 'json')
 
         if output_format == 'text':
-            # Generate plain text output - each field on its own line
             lines = []
-            lines.append(f"BAKERY PREP LIST")
+            lines.append("BAKERY PREP LIST")
             lines.append(f"Generated: {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
-            lines.append(f"Date Range: {tomorrow.strftime('%B %d')} - {two_weeks_out.strftime('%B %d, %Y')}")
+            lines.append(f"Date Range: {date_range['formatted']}")
             lines.append(f"Store: {store_number}")
             lines.append("=" * 50)
             lines.append("")
@@ -1855,16 +1875,15 @@ def get_bakery_prep_list():
         # Return JSON format
         return jsonify({
             'success': True,
-            'dateRange': {
-                'start': tomorrow.strftime('%Y-%m-%d'),
-                'end': two_weeks_out.strftime('%Y-%m-%d'),
-                'formatted': f"{tomorrow.strftime('%B %d')} - {two_weeks_out.strftime('%B %d, %Y')}"
-            },
+            'dateRange': date_range,
             'store': store_number,
             'totalItems': len(prep_items),
             'items': prep_items
         })
 
+    except RuntimeError as e:
+        logger.error(f"Bakery prep API error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
     except requests.exceptions.Timeout:
         logger.error("Walmart API request timed out")
         return jsonify({'success': False, 'error': 'Request timed out. Please try again.'}), 504

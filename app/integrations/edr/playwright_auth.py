@@ -24,9 +24,96 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Stealth init script — injected before any page JS runs.
+# Replaces the broken playwright_stealth package with targeted patches for
+# PerimeterX detection vectors.
+# ---------------------------------------------------------------------------
+
+_STEALTH_JS = """
+// 1. navigator.webdriver → false (not undefined)
+Object.defineProperty(navigator, 'webdriver', {get: () => false});
+
+// 2. navigator.languages — the playwright_stealth override was broken
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+
+// 3. navigator.platform — must match the User-Agent (Windows)
+Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
+
+// 4. navigator.plugins — headless has 0, real Chrome has several
+Object.defineProperty(navigator, 'plugins', {
+    get: () => {
+        const makePlugin = (name, desc, filename, mimeType) => {
+            const mt = {type: mimeType, suffixes: '', description: desc, enabledPlugin: null};
+            const p = {name, description: desc, filename, length: 1, 0: mt, item: i => mt, namedItem: n => mt};
+            mt.enabledPlugin = p;
+            return p;
+        };
+        const plugins = [
+            makePlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'),
+            makePlugin('Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
+            makePlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'),
+            makePlugin('Native Client', '', 'internal-nacl-plugin', 'application/x-nacl'),
+        ];
+        plugins.item = i => plugins[i];
+        plugins.namedItem = n => plugins.find(p => p.name === n);
+        plugins.refresh = () => {};
+        return plugins;
+    }
+});
+
+// 5. navigator.mimeTypes
+Object.defineProperty(navigator, 'mimeTypes', {
+    get: () => {
+        const mimes = [
+            {type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format'},
+            {type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format'},
+        ];
+        mimes.item = i => mimes[i];
+        mimes.namedItem = n => mimes.find(m => m.type === n);
+        return mimes;
+    }
+});
+
+// 6. window.chrome — give it a realistic shape
+if (!window.chrome) { window.chrome = {}; }
+if (!window.chrome.runtime) {
+    window.chrome.runtime = {
+        connect: () => {},
+        sendMessage: () => {},
+        onMessage: {addListener: () => {}, removeListener: () => {}},
+        id: undefined,
+    };
+}
+
+// 7. Permissions.query — real Chrome returns 'denied' for notifications by default
+const origQuery = window.Permissions?.prototype?.query;
+if (origQuery) {
+    window.Permissions.prototype.query = function(params) {
+        if (params?.name === 'notifications') {
+            return Promise.resolve({state: Notification.permission});
+        }
+        return origQuery.call(this, params);
+    };
+}
+
+// 8. WebGL vendor/renderer — mask SwiftShader (headless giveaway)
+const getParamOrig = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function(param) {
+    // UNMASKED_VENDOR_WEBGL
+    if (param === 0x9245) return 'Google Inc. (NVIDIA)';
+    // UNMASKED_RENDERER_WEBGL
+    if (param === 0x9246) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+    return getParamOrig.call(this, param);
+};
+
+// 9. Remove Playwright/CDP artifacts
+delete window.__playwright;
+delete window.__pw_manual;
+"""
 
 # ---------------------------------------------------------------------------
 # Async helper — runs a coroutine from synchronous code
@@ -154,16 +241,24 @@ class PlaywrightWalmartAuth:
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-infobars",
+                "--window-size=1920,1080",
             ],
         )
         self._context = await self._browser.new_context(
             user_agent=self.USER_AGENT,
             viewport={"width": 1920, "height": 1080},
             locale="en-US",
+            timezone_id="America/New_York",
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+            },
         )
+        # Inject stealth patches before any page JS runs
+        await self._context.add_init_script(_STEALTH_JS)
         self._page = await self._context.new_page()
-        await stealth_async(self._page)
-        logger.debug("Stealth patches applied to page")
+        logger.debug("Stealth patches applied via init script")
 
     async def _async_step1(self) -> bool:
         """Async implementation of step1_submit_password."""
@@ -174,9 +269,17 @@ class PlaywrightWalmartAuth:
             logger.info("Navigating to Walmart login page")
             await self._page.goto(self.LOGIN_URL, wait_until="networkidle")
 
-            # Give PX sensor time to fingerprint the browser
-            logger.debug("Waiting 2s for PX sensor fingerprinting")
-            await self._page.wait_for_timeout(2000)
+            # Give PX sensor time to fingerprint the browser — 5s allows the
+            # sensor script to complete its full fingerprint collection cycle.
+            logger.debug("Waiting for PX sensor fingerprinting")
+            await self._page.wait_for_timeout(3000)
+
+            # Simulate minimal human-like interaction so PX behavioral analysis
+            # sees mouse movement before the login request.
+            await self._page.mouse.move(960, 400)
+            await self._page.wait_for_timeout(500)
+            await self._page.mouse.move(800, 350)
+            await self._page.wait_for_timeout(1500)
 
             # Execute the login fetch from the page's JS context so that
             # all cookies (including _px3) are sent automatically.
