@@ -24,6 +24,9 @@ Usage:
 import requests
 import json
 import datetime
+import time
+import random
+import logging
 from typing import Dict, List, Optional, Tuple, Any, Union
 import urllib.parse
 import tempfile
@@ -70,37 +73,30 @@ class EDRReportGenerator:
         self.cache_max_age_hours = cache_max_age_hours
         self.db = EDRDatabaseManager(db_path) if enable_caching else None
 
-    def _get_initial_cookies(self) -> Dict[str, str]:
-        """Return initial cookies required for authentication."""
-        return {
-            'vtc': 'Q0JqQVX0STHy6sao9qdhNw',
-            '_pxvid': '3c803a96-548a-11f0-84bf-e045250e632c',
-            '_ga': 'GA1.2.103605184.1751648140',
-            'QuantumMetricUserID': '23bc666aa80d92de6f4ffa5b79ff9fdc',
-            'pxcts': 'd0d1b4d9-65f2-11f0-a59e-62912b00fffc',
-            'rl_access_attempt': '0',
-            'rlLoginInfo': '',
-            'bstc': 'ZpNiPcM5OgU516Fy1nOhHw',
-            'rl_show_login_form': 'N',
-            'TS0111a950': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
-            'TS01b1e5a6': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
-            'mp_c586ded18141faef3e556292ef2810bc_mixpanel': '%7B%22distinct_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%2C%22%24device_id%22%3A%20%221981deb804c5f0-08ebcf61e7361f-26011151-e12d0-1981deb804d22c4%22%2C%22%24initial_referrer%22%3A%20%22https%3A%2F%2Fretaillink.login.wal-mart.com%2F%22%2C%22%24initial_referring_domain%22%3A%20%22retaillink.login.wal-mart.com%22%2C%22%24user_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%7D',
-            'TS04fe286f027': '08a6069d6cab2000cf0b847458906d222e70afa03939fa0de76da5c00884f260a79443300cc5407408d2c3bf9e113000b642cbc898d0534c0c86a20a3d11bab7101afcd84708efbc3e17c493bcf63e44a30e69658f98e8ce282590fbc1283275',
-            '_px3': '85d2f0646ea75d99a2faac1898a7785dc1c8c7807e2612e865c5b74b4059d5fb:UHj6hAC9RHoxLnDq2rdjE+HkchqIMD2wKeYTOfHkRyo03uaqeN4xA4DX8dbN5RrJrX+uLLB/HTtX12k0ymeoSg==:1000:9TQQXsEtZxJ8rnnXulfuBg/dxB30NwnoogsLoiaQFk/xQECXPbbFYCno02+QFD40nnBos0iUVfyD2CpgeCV+cIFLDpCggGG0LVI2Q5S4hDYjVHb0fhh7UQ2cqGLr55bijg0Ix75CQdsdWi+gc34m88u66pDWGpB13rAKmim6yJo7/mxA32DYqKWBKbTwG/HvVDaGQCGDa+Iog+lfBNePx/WdAInb6LQ00IZGqYrdrE0='
-        }
+    # Consistent browser version - keep in sync with authenticator.py
+    CHROME_VERSION = '131'
+    USER_AGENT = f'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME_VERSION}.0.0.0 Safari/537.36'
+    SEC_CH_UA = f'"Google Chrome";v="{CHROME_VERSION}", "Chromium";v="{CHROME_VERSION}", "Not_A Brand";v="24"'
+
+    logger = logging.getLogger(__name__)
+
+    def _human_delay(self, min_seconds: float = 1.0, max_seconds: float = 2.5):
+        """Add a human-like delay between requests"""
+        delay = random.uniform(min_seconds, max_seconds)
+        time.sleep(delay)
 
     def _get_standard_headers(self, content_type: Optional[str] = None, referer: Optional[str] = None) -> Dict[str, str]:
         """Return standard headers for API requests."""
         headers = {
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua': self.SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+            'user-agent': self.USER_AGENT,
         }
         
         if content_type:
@@ -115,24 +111,45 @@ class EDRReportGenerator:
         return headers
 
     def step1_submit_password(self) -> bool:
-        """Step 1: Submit username and password."""
+        """Step 1: Submit username and password.
+
+        Visits login page first to acquire fresh cookies from PerimeterX/HUMAN
+        bot detection. Stale hardcoded cookies were triggering bot blocks.
+        """
         login_url = "https://retaillink.login.wal-mart.com/api/login"
 
-        # First, visit the login page to get fresh cookies
+        # Clear stale cookies and visit login page to get fresh ones
+        self.session.cookies.clear()
+        self.logger.info("[Step 1a] Visiting login page to acquire fresh cookies...")
         print("➡️ Step 1a: Visiting login page to obtain fresh cookies...")
         try:
             login_page_response = self.session.get(
                 'https://retaillink.login.wal-mart.com/login',
                 headers={
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                }
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'accept-language': 'en-US,en;q=0.9',
+                    'sec-ch-ua': self.SEC_CH_UA,
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'none',
+                    'sec-fetch-user': '?1',
+                    'upgrade-insecure-requests': '1',
+                    'user-agent': self.USER_AGENT,
+                },
+                timeout=15,
             )
+            cookie_names = [c.name for c in self.session.cookies]
             print(f"   Login page status: {login_page_response.status_code}")
-            print(f"   Cookies received: {len(self.session.cookies)} cookies")
+            print(f"   Cookies received: {len(cookie_names)} cookies: {cookie_names}")
+            self.logger.info(f"[Step 1a] Login page status={login_page_response.status_code}, cookies={cookie_names}")
         except Exception as e:
             print(f"⚠️ Could not pre-fetch login page: {e}")
+            self.logger.warning(f"[Step 1a] Could not pre-fetch login page: {e}")
             print("   Continuing anyway...")
+
+        self._human_delay(1.5, 3.0)
 
         headers = {
             'accept': '*/*',
@@ -141,13 +158,13 @@ class EDRReportGenerator:
             'origin': 'https://retaillink.login.wal-mart.com',
             'priority': 'u=1, i',
             'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua': self.SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'user-agent': self.USER_AGENT,
         }
 
         payload = {"username": self.username, "password": self.password, "language": "en"}
@@ -172,6 +189,7 @@ class EDRReportGenerator:
 
     def step2_request_mfa_code(self) -> bool:
         """Step 2: Request MFA code to be sent to user's device."""
+        self._human_delay(1.0, 2.0)
         send_code_url = "https://retaillink.login.wal-mart.com/api/mfa/sendCode"
         headers = {
             'accept': '*/*',
@@ -179,13 +197,13 @@ class EDRReportGenerator:
             'content-type': 'application/json',
             'origin': 'https://retaillink.login.wal-mart.com',
             'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua': self.SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'user-agent': self.USER_AGENT,
         }
         payload = {"type": "SMS_OTP", "credid": self.mfa_credential_id}
 
@@ -207,6 +225,7 @@ class EDRReportGenerator:
 
     def step3_validate_mfa_code(self, code: str) -> bool:
         """Step 3: Validate the MFA code entered by user."""
+        self._human_delay(0.5, 1.5)
         validate_url = "https://retaillink.login.wal-mart.com/api/mfa/validateCode"
         headers = {
             'accept': '*/*',
@@ -214,13 +233,13 @@ class EDRReportGenerator:
             'content-type': 'application/json',
             'origin': 'https://retaillink.login.wal-mart.com',
             'referer': 'https://retaillink.login.wal-mart.com/login',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua': self.SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'user-agent': self.USER_AGENT,
         }
         payload = {
             "type": "SMS_OTP",
@@ -241,6 +260,7 @@ class EDRReportGenerator:
 
     def step4_register_page_access(self) -> bool:
         """Step 4: Register page access to Event Management System."""
+        self._human_delay(1.0, 2.0)
         url = "https://retaillink2.wal-mart.com/rl_portal_services/api/Site/InsertRlPageDetails"
         params = {
             'pageId': '6',
@@ -266,19 +286,20 @@ class EDRReportGenerator:
 
     def step5_navigate_to_event_management(self) -> bool:
         """Step 5: Navigate to Event Management system."""
+        self._human_delay(1.0, 2.0)
         # Navigate to portal first
         portal_url = "https://retaillink2.wal-mart.com/rl_portal/"
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'en-US,en;q=0.9',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua': self.SEC_CH_UA,
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
             'sec-fetch-site': 'same-site',
             'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'user-agent': self.USER_AGENT,
         }
         
         print("➡️ Step 5: Navigating to Event Management...")
@@ -290,6 +311,7 @@ class EDRReportGenerator:
                 return False
                 
             # Then Event Management
+            self._human_delay(1.0, 2.0)
             event_mgmt_url = f"{self.base_url}/"
             response = self.session.get(event_mgmt_url, headers=headers)
             if response.status_code == 200:
@@ -304,6 +326,7 @@ class EDRReportGenerator:
 
     def step6_authenticate_event_management(self) -> bool:
         """Step 6: Authenticate with Event Management API and extract auth token."""
+        self._human_delay(1.0, 2.0)
         auth_url = f"{self.base_url}/api/authenticate"
         headers = self._get_standard_headers(referer=f"{self.base_url}/")
 
@@ -1103,7 +1126,7 @@ class EDRReportGenerator:
         """
         url = f"{self.base_url}/event-detail-report?_rsc=h0aj8"
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'User-Agent': self.USER_AGENT,
             'Referer': f"{self.base_url}/create-event"
         }
         
