@@ -21,7 +21,6 @@ Usage:
     html_report = generator.generate_html_report(report_data)
 """
 
-import logging
 import requests
 import json
 import datetime
@@ -34,16 +33,6 @@ import platform
 
 # Import database manager for caching
 from .db_manager import EDRDatabaseManager
-
-# Import Playwright-based auth (graceful fallback if not installed)
-try:
-    from .playwright_auth import PlaywrightWalmartAuth
-    _playwright_available = True
-except ImportError:
-    _playwright_available = False
-    PlaywrightWalmartAuth = None
-
-logger = logging.getLogger(__name__)
 
 
 class EDRReportGenerator:
@@ -69,9 +58,6 @@ class EDRReportGenerator:
         self.mfa_credential_id = ""
         self.last_error = None  # Stores detail from the most recent failure
 
-        # Playwright auth delegate (created lazily in step1)
-        self._pw_auth = None
-
         # Event report table headers from the JavaScript component
         self.report_headers = [
             "Item Number", "Primary Item Number", "Description", "Vendor", "Category"
@@ -84,6 +70,25 @@ class EDRReportGenerator:
         self.enable_caching = enable_caching
         self.cache_max_age_hours = cache_max_age_hours
         self.db = EDRDatabaseManager(db_path) if enable_caching else None
+
+    def _get_initial_cookies(self) -> Dict[str, str]:
+        """Return initial cookies required for authentication."""
+        return {
+            'vtc': 'Q0JqQVX0STHy6sao9qdhNw',
+            '_pxvid': '3c803a96-548a-11f0-84bf-e045250e632c',
+            '_ga': 'GA1.2.103605184.1751648140',
+            'QuantumMetricUserID': '23bc666aa80d92de6f4ffa5b79ff9fdc',
+            'pxcts': 'd0d1b4d9-65f2-11f0-a59e-62912b00fffc',
+            'rl_access_attempt': '0',
+            'rlLoginInfo': '',
+            'bstc': 'ZpNiPcM5OgU516Fy1nOhHw',
+            'rl_show_login_form': 'N',
+            'TS0111a950': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
+            'TS01b1e5a6': '0164c7ecbba28bf006381fcf7bc3c3fbc81a9b73705f5cedd649131a664e0cc5179472f6c66a7cee46d5fc6556faef1eb07fb3b8db',
+            'mp_c586ded18141faef3e556292ef2810bc_mixpanel': '%7B%22distinct_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%2C%22%24device_id%22%3A%20%221981deb804c5f0-08ebcf61e7361f-26011151-e12d0-1981deb804d22c4%22%2C%22%24initial_referrer%22%3A%20%22https%3A%2F%2Fretaillink.login.wal-mart.com%2F%22%2C%22%24initial_referring_domain%22%3A%20%22retaillink.login.wal-mart.com%22%2C%22%24user_id%22%3A%20%22d2fr4w2%20%20%20%20%20%22%7D',
+            'TS04fe286f027': '08a6069d6cab2000cf0b847458906d222e70afa03939fa0de76da5c00884f260a79443300cc5407408d2c3bf9e113000b642cbc898d0534c0c86a20a3d11bab7101afcd84708efbc3e17c493bcf63e44a30e69658f98e8ce282590fbc1283275',
+            '_px3': '85d2f0646ea75d99a2faac1898a7785dc1c8c7807e2612e865c5b74b4059d5fb:UHj6hAC9RHoxLnDq2rdjE+HkchqIMD2wKeYTOfHkRyo03uaqeN4xA4DX8dbN5RrJrX+uLLB/HTtX12k0ymeoSg==:1000:9TQQXsEtZxJ8rnnXulfuBg/dxB30NwnoogsLoiaQFk/xQECXPbbFYCno02+QFD40nnBos0iUVfyD2CpgeCV+cIFLDpCggGG0LVI2Q5S4hDYjVHb0fhh7UQ2cqGLr55bijg0Ix75CQdsdWi+gc34m88u66pDWGpB13rAKmim6yJo7/mxA32DYqKWBKbTwG/HvVDaGQCGDa+Iog+lfBNePx/WdAInb6LQ00IZGqYrdrE0='
+        }
 
     def _get_standard_headers(self, content_type: Optional[str] = None, referer: Optional[str] = None) -> Dict[str, str]:
         """Return standard headers for API requests."""
@@ -111,34 +116,14 @@ class EDRReportGenerator:
         return headers
 
     def step1_submit_password(self) -> bool:
-        """Step 1: Submit username and password.
-
-        Delegates to Playwright for PerimeterX-protected login.
-        Falls back to raw requests if Playwright is not installed.
-        """
-        self.last_error = None
-
-        if _playwright_available:
-            logger.info("Using Playwright for Walmart login (PerimeterX bypass)")
-            self._pw_auth = PlaywrightWalmartAuth(
-                self.username, self.password, self.mfa_credential_id
-            )
-            result = self._pw_auth.step1_submit_password()
-            if not result:
-                self.last_error = self._pw_auth.last_error
-            return result
-
-        # Fallback: raw requests (may fail with PerimeterX 412)
-        logger.warning("Playwright not available — falling back to raw requests (may be blocked by PerimeterX)")
-        return self._step1_requests_fallback()
-
-    def _step1_requests_fallback(self) -> bool:
-        """Legacy step1 using requests.Session (may be blocked by PerimeterX)."""
+        """Step 1: Submit username and password."""
         login_url = "https://retaillink.login.wal-mart.com/api/login"
         self.last_error = None
 
+        # First, visit the login page to get fresh cookies
+        print("➡️ Step 1a: Visiting login page to obtain fresh cookies...")
         try:
-            self.session.get(
+            login_page_response = self.session.get(
                 'https://retaillink.login.wal-mart.com/login',
                 headers={
                     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
@@ -146,17 +131,37 @@ class EDRReportGenerator:
                 },
                 timeout=15
             )
+            print(f"   Login page status: {login_page_response.status_code}")
+            print(f"   Cookies received: {len(self.session.cookies)} cookies")
         except Exception as e:
-            logger.warning(f"Could not pre-fetch login page: {e}")
+            print(f"⚠️ Could not pre-fetch login page: {e}")
+            print("   Continuing anyway...")
 
-        headers = self._get_standard_headers(content_type='application/json')
-        headers['origin'] = 'https://retaillink.login.wal-mart.com'
-        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://retaillink.login.wal-mart.com',
+            'priority': 'u=1, i',
+            'referer': 'https://retaillink.login.wal-mart.com/login',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        }
+
         payload = {"username": self.username, "password": self.password, "language": "en"}
 
+        print("➡️ Step 1b: Submitting username and password...")
         try:
             response = self.session.post(login_url, headers=headers, json=payload, timeout=15)
+            print(f"   Response status: {response.status_code}")
+            print(f"   Response body preview: {response.text[:200] if response.text else 'empty'}")
             response.raise_for_status()
+            print("✅ Password accepted. MFA required.")
             return True
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
@@ -164,42 +169,52 @@ class EDRReportGenerator:
             if hasattr(e, 'response') and e.response is not None:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"Walmart login returned HTTP {status}: {body}" if body else f"Walmart login returned HTTP {status}"
+            print(f"❌ Step 1 failed with HTTP error: {e}")
+            print(f"   Status code: {status}")
+            print(f"   Response body: {body}")
             return False
         except requests.exceptions.ConnectionError:
             self.last_error = "Could not connect to Walmart login service. The service may be down."
+            print(f"❌ Step 1 failed: connection error")
             return False
         except requests.exceptions.Timeout:
             self.last_error = "Walmart login service timed out. Please try again."
+            print(f"❌ Step 1 failed: timeout")
             return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"Walmart login request failed: {e}"
+            print(f"❌ Step 1 failed: {e}")
             return False
 
     def step2_request_mfa_code(self) -> bool:
-        """Step 2: Request MFA code. Delegates to Playwright if active."""
-        self.last_error = None
-
-        if self._pw_auth:
-            result = self._pw_auth.step2_request_mfa_code()
-            if not result:
-                self.last_error = self._pw_auth.last_error
-            return result
-
-        # Fallback: raw requests
-        return self._step2_requests_fallback()
-
-    def _step2_requests_fallback(self) -> bool:
-        """Legacy step2 using requests.Session."""
+        """Step 2: Request MFA code to be sent to user's device."""
         send_code_url = "https://retaillink.login.wal-mart.com/api/mfa/sendCode"
         self.last_error = None
-        headers = self._get_standard_headers(content_type='application/json')
-        headers['origin'] = 'https://retaillink.login.wal-mart.com'
-        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://retaillink.login.wal-mart.com',
+            'referer': 'https://retaillink.login.wal-mart.com/login',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        }
         payload = {"type": "SMS_OTP", "credid": self.mfa_credential_id}
 
+        print("➡️ Step 2: Requesting MFA code...")
+        print(f"🔍 DEBUG: MFA Credential ID = {self.mfa_credential_id}")
+        print(f"🔍 DEBUG: Payload = {payload}")
         try:
             response = self.session.post(send_code_url, headers=headers, json=payload, timeout=15)
+            print(f"🔍 DEBUG: Response status = {response.status_code}")
+            print(f"🔍 DEBUG: Response body = {response.text[:500] if response.text else 'empty'}")
             response.raise_for_status()
+            print("✅ MFA code sent successfully. Check your device.")
             return True
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if hasattr(e, 'response') and e.response is not None else 'unknown'
@@ -207,45 +222,39 @@ class EDRReportGenerator:
             if hasattr(e, 'response') and e.response is not None:
                 body = e.response.text[:300] if e.response.text else ''
             self.last_error = f"MFA request returned HTTP {status}: {body}" if body else f"MFA request returned HTTP {status}"
+            print(f"❌ Step 2 failed: {e}")
+            print(f"🔍 DEBUG: Error response body = {body}")
             return False
         except requests.exceptions.ConnectionError:
             self.last_error = "Could not connect to Walmart MFA service. The service may be down."
+            print("❌ Step 2 failed: connection error")
             return False
         except requests.exceptions.Timeout:
             self.last_error = "Walmart MFA service timed out. Please try again."
+            print("❌ Step 2 failed: timeout")
             return False
         except requests.exceptions.RequestException as e:
             self.last_error = f"MFA request failed: {e}"
+            print(f"❌ Step 2 failed: {e}")
             return False
 
     def step3_validate_mfa_code(self, code: str) -> bool:
-        """Step 3: Validate MFA code. If Playwright, transfers cookies to session."""
-        self.last_error = None
-
-        if self._pw_auth:
-            result = self._pw_auth.step3_validate_mfa_code(code)
-            if not result:
-                self.last_error = self._pw_auth.last_error
-                return False
-
-            # Transfer cookies from Playwright browser to requests.Session
-            logger.info("Transferring Playwright cookies to requests.Session")
-            self._pw_auth.inject_cookies_into_session(self.session)
-            logger.info(f"Transferred {len(self._pw_auth.cookies)} cookies to session")
-
-            # Clear Playwright reference (browser already closed by step3)
-            self._pw_auth = None
-            return True
-
-        # Fallback: raw requests
-        return self._step3_requests_fallback(code)
-
-    def _step3_requests_fallback(self, code: str) -> bool:
-        """Legacy step3 using requests.Session."""
+        """Step 3: Validate the MFA code entered by user."""
         validate_url = "https://retaillink.login.wal-mart.com/api/mfa/validateCode"
-        headers = self._get_standard_headers(content_type='application/json')
-        headers['origin'] = 'https://retaillink.login.wal-mart.com'
-        headers['referer'] = 'https://retaillink.login.wal-mart.com/login'
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://retaillink.login.wal-mart.com',
+            'referer': 'https://retaillink.login.wal-mart.com/login',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        }
         payload = {
             "type": "SMS_OTP",
             "credid": self.mfa_credential_id,
@@ -253,12 +262,14 @@ class EDRReportGenerator:
             "failureCount": 0
         }
 
+        print("➡️ Step 3: Validating MFA code...")
         try:
             response = self.session.post(validate_url, headers=headers, json=payload)
             response.raise_for_status()
+            print("✅ MFA authentication complete!")
             return True
-        except requests.exceptions.RequestException:
-            self.last_error = "MFA validation failed. The code may have been incorrect."
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Step 3 failed. The code may have been incorrect.")
             return False
 
     def step4_register_page_access(self) -> bool:
@@ -273,17 +284,17 @@ class EDRReportGenerator:
         headers = self._get_standard_headers(referer='https://retaillink2.wal-mart.com/rl_portal/')
         headers['priority'] = 'u=1, i'
         
-        logger.info("Step 4: Registering page access")
+        print("➡️ Step 4: Registering page access...")
         try:
             response = self.session.get(url, headers=headers, params=params)
             if response.status_code == 200:
-                logger.info("Page access registered")
+                print("✅ Page access registered")
                 return True
             else:
-                logger.warning(f"Page registration status: {response.status_code}")
+                print(f"⚠️ Page registration status: {response.status_code}")
                 return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"Page registration failed: {e}")
+            print(f"❌ Page registration failed: {e}")
             return False
 
     def step5_navigate_to_event_management(self) -> bool:
@@ -303,25 +314,25 @@ class EDRReportGenerator:
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
         }
         
-        logger.info("Step 5: Navigating to Event Management")
+        print("➡️ Step 5: Navigating to Event Management...")
         try:
             # First portal
             response = self.session.get(portal_url, headers=headers)
             if response.status_code != 200:
-                logger.error(f"Portal access failed: {response.status_code}")
+                print(f"❌ Portal access failed: {response.status_code}")
                 return False
-
+                
             # Then Event Management
             event_mgmt_url = f"{self.base_url}/"
             response = self.session.get(event_mgmt_url, headers=headers)
             if response.status_code == 200:
-                logger.info("Event Management navigation successful")
+                print("✅ Event Management navigation successful")
                 return True
             else:
-                logger.error(f"Event Management access failed: {response.status_code}")
+                print(f"❌ Event Management access failed: {response.status_code}")
                 return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"Navigation failed: {e}")
+            print(f"❌ Navigation failed: {e}")
             return False
 
     def step6_authenticate_event_management(self) -> bool:
@@ -329,85 +340,85 @@ class EDRReportGenerator:
         auth_url = f"{self.base_url}/api/authenticate"
         headers = self._get_standard_headers(referer=f"{self.base_url}/")
 
-        logger.info("Step 6: Authenticating with Event Management API")
+        print("➡️ Step 6: Authenticating with Event Management API...")
         try:
             response = self.session.get(auth_url, headers=headers)
-            logger.debug(f"Response status: {response.status_code}")
-
+            print(f"   Response status: {response.status_code}")
+            
             if response.status_code == 200:
-                logger.info("Event Management authentication successful")
+                print("✅ Event Management authentication successful!")
 
                 # Debug: Log all cookies to see what's available
-                logger.debug(f"Available cookies ({len(self.session.cookies)} total):")
+                print(f"   Available cookies ({len(self.session.cookies)} total):")
                 for cookie in self.session.cookies:
                     # Show first 30 chars of value for debugging
                     value_preview = cookie.value[:30] + "..." if len(cookie.value) > 30 else cookie.value
-                    logger.debug(f"  {cookie.name}: {value_preview}")
+                    print(f"      - {cookie.name}: {value_preview}")
 
                 # Try multiple possible cookie names for auth token
                 token_cookie_names = ['auth-token', 'authToken', 'token', 'auth_token', 'Authorization', 'jwt']
-
+                
                 for cookie in self.session.cookies:
                     if cookie.name in token_cookie_names and cookie.value:
-                        logger.debug(f"Found token cookie: {cookie.name}")
+                        print(f"   Found token cookie: {cookie.name}")
                         # Parse the URL-encoded cookie value
                         cookie_data = urllib.parse.unquote(cookie.value)
-
+                        
                         # Try parsing as JSON first
                         try:
                             token_obj = json.loads(cookie_data)
                             if isinstance(token_obj, dict):
                                 # Look for token in various fields
-                                self.auth_token = (token_obj.get('token') or
+                                self.auth_token = (token_obj.get('token') or 
                                                    token_obj.get('access_token') or
                                                    token_obj.get('accessToken') or
                                                    token_obj.get('jwt'))
                             elif isinstance(token_obj, str):
                                 self.auth_token = token_obj
-
+                                
                             if self.auth_token:
-                                logger.info(f"Auth token extracted from cookie: {self.auth_token[:50]}...")
+                                print(f"🔑 Auth token extracted from cookie: {self.auth_token[:50]}...")
                                 return True
                         except json.JSONDecodeError:
                             # Cookie value might be the token itself
                             if len(cookie_data) > 20:  # Tokens are typically long
                                 self.auth_token = cookie_data
-                                logger.info(f"Auth token extracted (raw cookie value): {self.auth_token[:50]}...")
+                                print(f"🔑 Auth token extracted (raw cookie value): {self.auth_token[:50]}...")
                                 return True
 
                 # If no token cookie found, try to extract from response body
-                logger.debug("Checking response body for token")
+                print("   Checking response body for token...")
                 try:
                     response_text = response.text[:500]
-                    logger.debug(f"Response preview: {response_text}")
-
+                    print(f"   Response preview: {response_text}")
+                    
                     auth_data = response.json()
-                    logger.debug(f"Response JSON keys: {list(auth_data.keys()) if isinstance(auth_data, dict) else 'not a dict'}")
-
+                    print(f"   Response JSON keys: {list(auth_data.keys()) if isinstance(auth_data, dict) else 'not a dict'}")
+                    
                     # Look for token in various response fields
                     if isinstance(auth_data, dict):
-                        self.auth_token = (auth_data.get('token') or
+                        self.auth_token = (auth_data.get('token') or 
                                            auth_data.get('access_token') or
                                            auth_data.get('accessToken') or
                                            auth_data.get('jwt') or
                                            auth_data.get('data', {}).get('token') if isinstance(auth_data.get('data'), dict) else None)
-
+                        
                         if self.auth_token:
-                            logger.info(f"Auth token extracted from response: {self.auth_token[:50]}...")
+                            print(f"🔑 Auth token extracted from response: {self.auth_token[:50]}...")
                             return True
                 except (json.JSONDecodeError, ValueError) as e:
-                    logger.debug(f"Could not parse response as JSON: {e}")
+                    print(f"   Could not parse response as JSON: {e}")
                     pass
 
-                logger.warning("auth-token not found in cookies or response")
-                logger.warning("This may indicate Walmart changed their authentication flow")
+                print("⚠️ auth-token not found in cookies or response")
+                print("   This may indicate Walmart changed their authentication flow")
                 return False
             else:
-                logger.error(f"Authentication failed: {response.status_code}")
-                logger.debug(f"Response: {response.text[:300]}")
+                print(f"❌ Authentication failed: {response.status_code}")
+                print(f"   Response: {response.text[:300]}")
                 return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"Authentication API call failed: {e}")
+            print(f"❌ Authentication API call failed: {e}")
             return False
             return False
 
@@ -420,7 +431,7 @@ class EDRReportGenerator:
 
         Returns True if successful, False otherwise.
         """
-        logger.info("Starting Retail Link authentication")
+        print("🔐 Starting Retail Link authentication...")
 
         # Step 1: Submit password
         if not self.step1_submit_password():
@@ -432,28 +443,28 @@ class EDRReportGenerator:
 
         # Step 3: Get MFA code from user or parameter
         if mfa_code is None:
-            mfa_code = input("Please enter the MFA code you received: ").strip()
+            mfa_code = input("📱 Please enter the MFA code you received: ").strip()
         else:
-            logger.info(f"Using provided MFA code: {mfa_code[:2]}****")
+            print(f"📱 Using provided MFA code: {mfa_code[:2]}****")
             mfa_code = mfa_code.strip()
 
         if not self.step3_validate_mfa_code(mfa_code):
             return False
-
+        
         # Step 4: Register page access
         if not self.step4_register_page_access():
-            logger.warning("Page registration failed, continuing...")
-
+            print("⚠️ Page registration failed, continuing...")
+        
         # Step 5: Navigate to Event Management
         if not self.step5_navigate_to_event_management():
-            logger.warning("Navigation failed, continuing...")
-
+            print("⚠️ Navigation failed, continuing...")
+        
         # Step 6: Authenticate and get token
         if not self.step6_authenticate_event_management():
-            logger.error("Could not obtain auth token")
+            print("❌ Could not obtain auth token")
             return False
-
-        logger.info("Full authentication completed successfully")
+        
+        print("✅ Full authentication completed successfully!")
         return True
 
     def browse_events(self, start_date: Optional[str] = None, end_date: Optional[str] = None, 
@@ -512,22 +523,22 @@ class EDRReportGenerator:
             "deptNbr": None
         }
         
-        logger.info(f"Browsing events from {start_date} to {end_date} for store {store_number}")
+        print(f"🔍 Browsing events from {start_date} to {end_date} for store {store_number}...")
         try:
             response = self.session.post(url, headers=headers, json=payload)
             response.raise_for_status()
 
             events_data = response.json()
-            logger.info(f"Found {len(events_data)} event items")
+            print(f"✅ Found {len(events_data)} event items")
 
             # Cache the data if caching is enabled
             if self.enable_caching and self.db and events_data:
                 stored_count = self.db.store_events(events_data, store_number, start_date, end_date)
-                logger.info(f"Cached {stored_count} event items to database")
+                print(f"💾 Cached {stored_count} event items to database")
 
             return events_data
         except requests.exceptions.RequestException as e:
-            logger.error(f"Event browsing failed: {e}")
+            print(f"❌ Event browsing failed: {e}")
             return []
 
     def browse_events_with_cache(self, start_date: Optional[str] = None, end_date: Optional[str] = None,
@@ -565,21 +576,21 @@ class EDRReportGenerator:
             is_fresh = self.db.is_cache_fresh(store_number, start_date, end_date, self.cache_max_age_hours)
 
             if is_fresh:
-                logger.info(f"Using cached data (less than {self.cache_max_age_hours} hours old)")
+                print(f"📦 Using cached data (less than {self.cache_max_age_hours} hours old)")
                 cached_events = self.db.get_events_by_date_range(start_date, end_date, store_number, self.cache_max_age_hours)
                 if cached_events:
-                    logger.info(f"Retrieved {len(cached_events)} event items from cache")
+                    print(f"✅ Retrieved {len(cached_events)} event items from cache")
                     return cached_events
 
         # Cache miss or force refresh - fetch from API
         if force_refresh:
-            logger.info("Force refresh requested - fetching from API")
+            print("🔄 Force refresh requested - fetching from API")
         else:
-            logger.warning("Cache miss or stale - fetching from API")
+            print("⚠️ Cache miss or stale - fetching from API")
 
         # Ensure authentication
         if not self.auth_token:
-            logger.error("Not authenticated - cannot fetch from API")
+            print("❌ Not authenticated - cannot fetch from API")
             return []
 
         return self.browse_events(start_date, end_date, store_number, event_types)
@@ -595,15 +606,15 @@ class EDRReportGenerator:
             List of event item dictionaries (one event can have multiple items)
         """
         if not self.enable_caching or not self.db:
-            logger.warning("Caching is disabled")
+            print("⚠️ Caching is disabled")
             return []
 
         event_items = self.db.get_event_by_id(event_id, self.cache_max_age_hours)
 
         if event_items:
-            logger.info(f"Found {len(event_items)} items for event {event_id} in cache")
+            print(f"✅ Found {len(event_items)} items for event {event_id} in cache")
         else:
-            logger.warning(f"Event {event_id} not found in cache or cache is stale")
+            print(f"⚠️ Event {event_id} not found in cache or cache is stale")
 
         return event_items
 
@@ -632,57 +643,57 @@ class EDRReportGenerator:
             List of event item dictionaries, or empty list if failed
         """
         if not self.enable_caching or not self.db:
-            logger.error("Caching is not enabled - cannot use smart fetch")
+            print("❌ Caching is not enabled - cannot use smart fetch")
             return []
 
-        logger.debug(f"Smart fetch for event {event_id}")
+        print(f"🔍 Smart fetch for event {event_id}...")
 
         # Step 1: Try cache first
         event_items = self.get_event_from_cache(event_id)
 
         if event_items:
-            logger.info(f"Using cached data for event {event_id}")
+            print(f"✅ Using cached data for event {event_id}")
             return event_items
 
         # Step 2: Cache miss - need to fetch from API
-        logger.warning(f"Event {event_id} not in cache - will fetch from API")
+        print(f"⚠️ Event {event_id} not in cache - will fetch from API")
 
         # Check if we need authentication
         if not self.auth_token:
             if not auto_authenticate:
-                logger.error("Not authenticated and auto_authenticate=False")
+                print("❌ Not authenticated and auto_authenticate=False")
                 return []
 
             if not mfa_code:
-                logger.error("Not authenticated and no MFA code provided")
-                logger.info("Provide mfa_code parameter to enable automatic authentication")
+                print("❌ Not authenticated and no MFA code provided")
+                print("💡 Provide mfa_code parameter to enable automatic authentication")
                 return []
 
-            logger.info("Authenticating to fetch missing data")
+            print("🔐 Authenticating to fetch missing data...")
             auth_success = self.authenticate(mfa_code=mfa_code)
 
             if not auth_success:
-                logger.error("Authentication failed - cannot fetch data")
+                print("❌ Authentication failed - cannot fetch data")
                 return []
 
         # Step 3: Fetch bulk data using browse_events()
-        logger.info("Fetching bulk event data from API")
+        print("📥 Fetching bulk event data from API...")
         events_data = self.browse_events()  # Uses default date range (±30 days)
 
         if not events_data:
-            logger.error("No events data returned from API")
+            print("❌ No events data returned from API")
             return []
 
-        logger.info(f"Fetched and cached {len(events_data)} event items")
+        print(f"✅ Fetched and cached {len(events_data)} event items")
 
         # Step 4: Get the specific event from cache (now it should be there)
         event_items = self.get_event_from_cache(event_id)
 
         if event_items:
-            logger.info(f"Event {event_id} now available in cache with {len(event_items)} items")
+            print(f"✅ Event {event_id} now available in cache with {len(event_items)} items")
             return event_items
         else:
-            logger.warning(f"Event {event_id} still not in cache after fetch - may be outside date range")
+            print(f"⚠️ Event {event_id} still not in cache after fetch - may be outside date range")
             return []
 
     def refresh_cache(self, start_date: Optional[str] = None, end_date: Optional[str] = None,
@@ -698,10 +709,10 @@ class EDRReportGenerator:
         Returns:
             True if refresh was successful, False otherwise
         """
-        logger.info("Refreshing cache from API")
+        print("🔄 Refreshing cache from API...")
 
         if not self.auth_token:
-            logger.error("Not authenticated - cannot refresh cache")
+            print("❌ Not authenticated - cannot refresh cache")
             return False
 
         events_data = self.browse_events(start_date, end_date, store_number)
@@ -733,11 +744,11 @@ class EDRReportGenerator:
             Tuple of (events_deleted, metadata_records_deleted)
         """
         if not self.enable_caching or not self.db:
-            logger.warning("Caching is disabled")
+            print("⚠️ Caching is disabled")
             return (0, 0)
 
         events_deleted, metadata_deleted = self.db.clear_old_cache(max_age_days)
-        logger.info(f"Cleared {events_deleted} old event records and {metadata_deleted} metadata records")
+        print(f"🗑️ Cleared {events_deleted} old event records and {metadata_deleted} metadata records")
         return (events_deleted, metadata_deleted)
 
     def convert_cached_items_to_edr_format(self, cached_items: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -805,7 +816,7 @@ class EDRReportGenerator:
         event_items = self.get_event_from_cache(event_id)
 
         if not event_items:
-            logger.error(f"Cannot generate report - event {event_id} not found in cache")
+            print(f"❌ Cannot generate report - event {event_id} not found in cache")
             return ""
 
         # Get current date and time for the report header
@@ -1104,16 +1115,16 @@ class EDRReportGenerator:
         url = f"{self.base_url}/api/edrReport?id={event_id}"
         headers = self._get_standard_headers(referer=f"{self.base_url}/browse-event")
         
-        logger.info(f"Retrieving EDR report for event {event_id}")
+        print(f"📄 Retrieving EDR report for event {event_id}...")
         try:
             response = self.session.get(url, headers=headers)
             response.raise_for_status()
-
+            
             report_data = response.json()
-            logger.info("EDR report retrieved successfully")
+            print(f"✅ EDR report retrieved successfully")
             return report_data
         except requests.exceptions.RequestException as e:
-            logger.error(f"EDR report retrieval failed: {e}")
+            print(f"❌ EDR report retrieval failed: {e}")
             return {}
 
     def get_event_detail_report_page(self) -> str:
@@ -1129,14 +1140,14 @@ class EDRReportGenerator:
             'Referer': f"{self.base_url}/create-event"
         }
         
-        logger.info("Retrieving event detail report page")
+        print("📋 Retrieving event detail report page...")
         try:
             response = self.session.get(url, headers=headers)
             response.raise_for_status()
-            logger.info("Event detail report page retrieved")
+            print("✅ Event detail report page retrieved")
             return response.text
         except requests.exceptions.RequestException as e:
-            logger.error(f"Event detail report page retrieval failed: {e}")
+            print(f"❌ Event detail report page retrieval failed: {e}")
             return ""
 
     def generate_html_report(self, edr_data: Dict[str, Any]) -> str:
@@ -1475,7 +1486,7 @@ class EDRReportGenerator:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        logger.info(f"Report saved to: {filename}")
+        print(f"💾 Report saved to: {filename}")
         return filename
 
     def print_html_report(self, html_content: str, temp_filename: Optional[str] = None) -> bool:
@@ -1500,15 +1511,15 @@ class EDRReportGenerator:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
-            logger.info("Printing report to default printer")
-            logger.debug(f"Temporary file: {temp_path}")
-
+            print(f"🖨️ Printing report to default printer...")
+            print(f"📁 Temporary file: {temp_path}")
+            
             # Platform-specific printing
             system = platform.system().lower()
-
+            
             if system == "windows":
                 # Try multiple Windows printing methods
-                result = (self._print_on_windows_simple(temp_path) or
+                result = (self._print_on_windows_simple(temp_path) or 
                          self._print_on_windows_advanced(temp_path) or
                          self._print_on_windows_fallback(temp_path))
             elif system == "darwin":  # macOS
@@ -1516,117 +1527,117 @@ class EDRReportGenerator:
             elif system == "linux":
                 result = self._print_on_linux(temp_path)
             else:
-                logger.error(f"Unsupported operating system: {system}")
+                print(f"❌ Unsupported operating system: {system}")
                 return False
-
+            
             if result:
-                logger.info("Print job sent successfully to default printer")
-
+                print("✅ Print job sent successfully to default printer")
+                
                 # Clean up temporary file after a longer delay to ensure printing completes
                 try:
                     import time
-                    logger.info("Waiting for print job to complete")
+                    print("⏳ Waiting for print job to complete...")
                     time.sleep(5)  # Give printer more time to read the file
                     os.remove(temp_path)
-                    logger.info("Temporary file cleaned up")
+                    print("🗑️ Temporary file cleaned up")
                 except OSError as e:
-                    logger.warning(f"Could not remove temporary file: {temp_path} - {e}")
-
+                    print(f"⚠️ Could not remove temporary file: {temp_path} - {e}")
+                
                 return True
             else:
-                logger.error("Failed to send print job")
-                logger.info(f"Report file remains at: {temp_path}")
-                logger.info("Cleaning up temporary file")
+                print("❌ Failed to send print job")
+                print(f"📁 Report file remains at: {temp_path}")
+                print("🗑️ Cleaning up temporary file...")
                 try:
                     os.remove(temp_path)
-                    logger.info("Temporary file cleaned up")
+                    print("✅ Temporary file cleaned up")
                 except OSError:
                     pass
                 return False
-
+                
         except Exception as e:
-            logger.error(f"Print operation failed: {e}")
+            print(f"❌ Print operation failed: {e}")
             return False
 
     def _print_on_windows_simple(self, file_path: str) -> bool:
         """Simple Windows printing using start command with /wait to prevent popups."""
         try:
-            logger.info("Method 1: Using Windows start command with print verb")
+            print("🖨️ Method 1: Using Windows start command with print verb...")
             abs_path = os.path.abspath(file_path)
-
+            
             # Use /wait to prevent browser from staying open, /min to minimize
             result = subprocess.run([
                 "cmd", "/c", "start", "/wait", "/min", "", "/print", abs_path
             ], capture_output=True, text=True, timeout=15)
-
+            
             success = result.returncode == 0
             if success:
-                logger.info("Print command successful")
+                print("✅ Print command successful")
             else:
-                logger.warning(f"Print command failed with code: {result.returncode}")
-
+                print(f"⚠️ Print command failed with code: {result.returncode}")
+                
             return success
-
+            
         except subprocess.TimeoutExpired:
-            logger.warning("Print command timed out")
+            print("⚠️ Print command timed out")
             return False
         except Exception as e:
-            logger.warning(f"Simple print method failed: {e}")
+            print(f"⚠️ Simple print method failed: {e}")
             return False
 
     def _print_on_windows_advanced(self, file_path: str) -> bool:
         """Advanced Windows printing using PowerShell with better control."""
         try:
-            logger.info("Method 2: Using PowerShell with hidden window")
+            print("🖨️ Method 2: Using PowerShell with hidden window...")
             abs_path = os.path.abspath(file_path)
-
+            
             # Use PowerShell with WindowStyle Hidden to prevent popup
             ps_cmd = f'Start-Process -FilePath "{abs_path}" -Verb Print -WindowStyle Hidden -Wait'
-
+            
             result = subprocess.run([
                 "powershell.exe", "-WindowStyle", "Hidden", "-Command", ps_cmd
             ], capture_output=True, text=True, timeout=15)
-
+            
             success = result.returncode == 0
             if success:
-                logger.info("PowerShell print command successful")
+                print("✅ PowerShell print command successful")
             else:
-                logger.warning(f"PowerShell print failed with code: {result.returncode}")
-
+                print(f"⚠️ PowerShell print failed with code: {result.returncode}")
+                
             return success
-
+            
         except subprocess.TimeoutExpired:
-            logger.warning("PowerShell print command timed out")
+            print("⚠️ PowerShell print command timed out")
             return False
         except Exception as e:
-            logger.warning(f"Advanced print method failed: {e}")
+            print(f"⚠️ Advanced print method failed: {e}")
             return False
 
     def _print_on_windows_fallback(self, file_path: str) -> bool:
         """Fallback Windows printing - use print command directly."""
         try:
-            logger.info("Method 3: Using Windows print command")
+            print("🖨️ Method 3: Using Windows print command...")
             abs_path = os.path.abspath(file_path)
-
+            
             # Try using the print command directly
             result = subprocess.run([
                 "print", abs_path
             ], capture_output=True, text=True, timeout=10)
-
+            
             if result.returncode == 0:
-                logger.info("Direct print command successful")
+                print("✅ Direct print command successful")
                 return True
             else:
-                logger.warning(f"Direct print failed with code: {result.returncode}")
-                logger.error("All automatic printing methods failed")
-                logger.info(f"Report saved at: {abs_path}")
-                logger.info("You can manually print this file if needed")
+                print(f"⚠️ Direct print failed with code: {result.returncode}")
+                print("❌ All automatic printing methods failed")
+                print(f"📁 Report saved at: {abs_path}")
+                print("💡 You can manually print this file if needed")
                 return False
-
+                
         except Exception as e:
-            logger.warning(f"Fallback print method failed: {e}")
-            logger.error("All automatic printing methods failed")
-            logger.info(f"Report saved at: {file_path}")
+            print(f"⚠️ Fallback print method failed: {e}")
+            print("❌ All automatic printing methods failed")
+            print(f"📁 Report saved at: {file_path}")
             return False
 
     def _print_on_macos(self, file_path: str) -> bool:
@@ -1666,10 +1677,10 @@ class EDRReportGenerator:
             return False
             
         except subprocess.TimeoutExpired:
-            logger.warning("Print operation timed out")
+            print("⚠️ Print operation timed out")
             return False
         except Exception as e:
-            logger.warning(f"macOS print method failed: {e}")
+            print(f"⚠️ macOS print method failed: {e}")
             return False
 
     def _print_on_linux(self, file_path: str) -> bool:
@@ -1699,10 +1710,10 @@ class EDRReportGenerator:
             return result.returncode == 0
             
         except subprocess.TimeoutExpired:
-            logger.warning("Print operation timed out")
+            print("⚠️ Print operation timed out")
             return False
         except Exception as e:
-            logger.warning(f"Linux print method failed: {e}")
+            print(f"⚠️ Linux print method failed: {e}")
             return False
 
     def generate_and_print_edr_report(self, event_id: str, save_copy: bool = True) -> bool:
@@ -1717,48 +1728,48 @@ class EDRReportGenerator:
             True if the entire process was successful, False otherwise
         """
         if not self.auth_token:
-            logger.error("Must authenticate first before generating reports")
+            print("❌ Must authenticate first before generating reports")
             return False
-
-        logger.info(f"Starting EDR report generation and printing for event {event_id}")
-
+        
+        print(f"📋 Starting EDR report generation and printing for event {event_id}...")
+        
         # Step 1: Get EDR data
-        logger.info("Retrieving EDR data")
+        print("📄 Retrieving EDR data...")
         edr_data = self.get_edr_report(event_id)
         if not edr_data:
-            logger.error("Failed to retrieve EDR data")
+            print("❌ Failed to retrieve EDR data")
             return False
-
+        
         # Step 2: Generate HTML report
-        logger.info("Generating HTML report")
+        print("🔧 Generating HTML report...")
         html_report = self.generate_html_report(edr_data)
         if not html_report:
-            logger.error("Failed to generate HTML report")
+            print("❌ Failed to generate HTML report")
             return False
-
+        
         # Step 3: Save permanent copy if requested
         saved_file = None
         if save_copy:
-            logger.info("Saving permanent copy")
+            print("💾 Saving permanent copy...")
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             saved_file = self.save_html_report(
-                html_report,
+                html_report, 
                 f"edr_report_{event_id}_{timestamp}.html"
             )
-
+        
         # Step 4: Print the report
-        logger.info("Sending to printer")
+        print("🖨️ Sending to printer...")
         print_success = self.print_html_report(html_report)
-
+        
         if print_success:
-            logger.info("EDR report generated and printed successfully")
+            print("✅ EDR report generated and printed successfully!")
             if saved_file:
-                logger.info(f"Permanent copy saved as: {saved_file}")
+                print(f"📁 Permanent copy saved as: {saved_file}")
             return True
         else:
-            logger.error("Report generated but printing failed")
+            print("❌ Report generated but printing failed")
             if saved_file:
-                logger.info(f"Report still saved as: {saved_file}")
+                print(f"📁 Report still saved as: {saved_file}")
             return False
 
 
@@ -1767,24 +1778,24 @@ if __name__ == "__main__":
     # Automated usage - no user interaction
     generator = EDRReportGenerator()
     
-    logger.info("Running in automated mode - no user interaction")
-    logger.warning("MFA authentication will fail in automated mode")
-    logger.info("This script is designed for use after manual authentication")
-
+    print("🤖 Running in automated mode - no user interaction")
+    print("⚠️ Note: MFA authentication will fail in automated mode")
+    print("📋 This script is designed for use after manual authentication")
+    
     # For automated usage, assume authentication is already handled
     # or use this for testing the report generation parts only
-
+    
     # Example of automated report generation (would need pre-authenticated session)
     # event_id = "606034"  # Default event ID for testing
-    #
+    # 
     # if generator.auth_token:  # Only if already authenticated
-    #     logger.info(f"Generating and printing EDR report for event {event_id}...")
+    #     print(f"🖨️ Generating and printing EDR report for event {event_id}...")
     #     success = generator.generate_and_print_edr_report(event_id, save_copy=True)
     #     if success:
-    #         logger.info("EDR report generated, saved, and sent to printer!")
+    #         print("✅ EDR report generated, saved, and sent to printer!")
     #     else:
-    #         logger.error("Failed to complete the automated process")
+    #         print("❌ Failed to complete the automated process")
     # else:
-    #     logger.error("No authentication token available for automated operation")
-
-    logger.info("For automated usage, integrate this class into your workflow after authentication")
+    #     print("❌ No authentication token available for automated operation")
+    
+    print("� For automated usage, integrate this class into your workflow after authentication")

@@ -13,10 +13,6 @@ python-decouple==3.8
 requests==2.32.3
 urllib3==2.2.1
 
-# Browser Automation (for Walmart PerimeterX bypass)
-playwright==1.50.0
-playwright-stealth==1.0.6
-
 # PDF Generation
 PyPDF2==3.0.1
 reportlab==4.2.5

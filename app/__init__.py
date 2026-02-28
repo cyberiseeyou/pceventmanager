@@ -266,11 +266,6 @@ def register_blueprints(app, db, models):
     if 'auth.start_loading_refresh' in app.view_functions:
         csrf.exempt(app.view_functions['auth.start_loading_refresh'])
 
-    # EDR cookie import - called from Chrome extension (cross-origin, no CSRF token available)
-    # Protected by session authentication
-    if 'printing.edr_import_cookies' in app.view_functions:
-        csrf.exempt(app.view_functions['printing.edr_import_cookies'])
-
 
 def setup_background_tasks(app):
     """Setup background tasks and schedulers."""
