@@ -17,6 +17,13 @@ depends_on = None
 
 
 def upgrade():
+    # Check if table already exists before creating
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    if 'event_type_overrides' in inspector.get_table_names():
+        return
+
     # Create event_type_overrides table
     op.create_table('event_type_overrides',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),

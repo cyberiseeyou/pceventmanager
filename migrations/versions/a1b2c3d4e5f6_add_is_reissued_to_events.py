@@ -26,14 +26,10 @@ def upgrade():
 
     if 'is_reissued' not in existing_columns:
         with op.batch_alter_table('events', schema=None, recreate='never') as batch_op:
-            batch_op.add_column(sa.Column('is_reissued', sa.Boolean(), nullable=True, server_default=sa.text('0')))
+            batch_op.add_column(sa.Column('is_reissued', sa.Boolean(), nullable=False, server_default=sa.text('0')))
 
-        # Set all existing rows to False
-        op.execute("UPDATE events SET is_reissued = 0 WHERE is_reissued IS NULL")
-
-        # Now make it non-nullable
-        with op.batch_alter_table('events', schema=None, recreate='never') as batch_op:
-            batch_op.alter_column('is_reissued', nullable=False, server_default=sa.text('0'))
+    # Backfill any NULLs
+    op.execute("UPDATE events SET is_reissued = 0 WHERE is_reissued IS NULL")
 
 
 def downgrade():
