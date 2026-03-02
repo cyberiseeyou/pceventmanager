@@ -1215,14 +1215,14 @@ def edr_request_mfa():
         edr_authenticator.password = password
         edr_authenticator.mfa_credential_id = mfa_credential_id
 
-        # Step 1: Submit password
-        if not edr_authenticator.step1_submit_password():
+        # Step 1: Submit password (Chrome Remote Debugging bypasses PerimeterX)
+        if not edr_authenticator.chrome_step1_submit_password():
             detail = edr_authenticator.last_error or 'Failed to submit password'
             logger.error(f"EDR step1 failed: {detail}")
             return jsonify({'success': False, 'error': f'Walmart login failed: {detail}'}), 400
 
         # Step 2: Request MFA code
-        if not edr_authenticator.step2_request_mfa_code():
+        if not edr_authenticator.chrome_step2_request_mfa_code():
             detail = edr_authenticator.last_error or 'Failed to request MFA code'
             logger.error(f"EDR step2 failed: {detail}")
             return jsonify({'success': False, 'error': f'MFA request failed: {detail}'}), 400
@@ -1283,8 +1283,8 @@ def edr_authenticate():
                 }), 400
             logger.info(f"MFA code submitted {elapsed:.0f} seconds after request (within {MFA_CODE_EXPIRY_SECONDS}s limit)")
 
-        # Step 3: Validate MFA code
-        if not edr_authenticator.step3_validate_mfa_code(mfa_code):
+        # Step 3: Validate MFA code (Chrome extracts cookies and injects into session)
+        if not edr_authenticator.chrome_step3_validate_mfa_code(mfa_code):
             return jsonify({
                 'success': False,
                 'error': 'Invalid MFA code. Please try again or request a new code.',
