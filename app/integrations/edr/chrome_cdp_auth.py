@@ -11,6 +11,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from typing import Dict, List, Optional
 
@@ -34,6 +35,11 @@ class ChromeEDRAuthenticator:
         self._tab = None
         self._cookies: List[Dict] = []
         self.last_error: Optional[str] = None
+
+    def __del__(self):
+        """Safety net: clean up Chrome if instance is garbage-collected."""
+        if self._chrome_process is not None:
+            self.cleanup()
 
     def _find_chrome_binary(self) -> Optional[str]:
         """Search for Chrome/Chromium binary in PATH.
@@ -207,7 +213,11 @@ class ChromeEDRAuthenticator:
             Parsed dict from the JSON string, or an error dict on failure.
         """
         try:
-            cdp_result = self._tab.Runtime.evaluate(expression=js_expression)
+            cdp_result = self._tab.Runtime.evaluate(
+                expression=js_expression,
+                awaitPromise=True,
+                returnByValue=True,
+            )
             result_obj = cdp_result.get('result', {})
             value = result_obj.get('value')
             if value is None:
@@ -293,9 +303,16 @@ class ChromeEDRAuthenticator:
         Returns:
             True if login API returned status 'ok', False otherwise.
         """
+        self.last_error = None
         try:
+            # Wait for page load via event, not tab.wait() which blocks on tab stop
+            load_event = threading.Event()
+            self._tab.Page.loadEventFired = lambda **kwargs: load_event.set()
             self._tab.Page.navigate(url='https://retaillink.login.wal-mart.com/login')
-            self._tab.wait(timeout=15)
+            if not load_event.wait(timeout=15):
+                self.last_error = "Login page load timed out after 15 seconds"
+                logger.error(self.last_error)
+                return False
             self._human_delay(2, 4)
 
             js = (
@@ -331,6 +348,7 @@ class ChromeEDRAuthenticator:
         Returns:
             True if MFA send-code API returned status 'ok', False otherwise.
         """
+        self.last_error = None
         try:
             self._human_delay(1, 2)
 
@@ -368,6 +386,7 @@ class ChromeEDRAuthenticator:
         Returns:
             True if MFA validation API returned status 'ok', False otherwise.
         """
+        self.last_error = None
         try:
             self._human_delay(0.5, 1.5)
 

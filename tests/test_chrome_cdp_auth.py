@@ -74,11 +74,13 @@ class TestLoginFlow:
         auth._tab = mock_tab
         return auth, mock_tab
 
+    @patch('app.integrations.edr.chrome_cdp_auth.threading.Event')
     @patch('app.integrations.edr.chrome_cdp_auth.time.sleep')
-    def test_step1_navigates_and_submits_credentials(self, mock_sleep):
+    def test_step1_navigates_and_submits_credentials(self, mock_sleep, MockEvent):
+        mock_event = MockEvent.return_value
+        mock_event.wait.return_value = True  # Simulate page load completed
         auth, mock_tab = self._make_auth_with_mock_tab()
         mock_tab.Page.navigate.return_value = None
-        mock_tab.wait.return_value = None
         mock_tab.Runtime.evaluate.return_value = {
             'result': {'type': 'string', 'value': '{"status":"ok","data":{}}'}
         }
@@ -87,11 +89,13 @@ class TestLoginFlow:
         mock_tab.Page.navigate.assert_called_once()
         mock_tab.Runtime.evaluate.assert_called_once()
 
+    @patch('app.integrations.edr.chrome_cdp_auth.threading.Event')
     @patch('app.integrations.edr.chrome_cdp_auth.time.sleep')
-    def test_step1_fails_on_error_response(self, mock_sleep):
+    def test_step1_fails_on_error_response(self, mock_sleep, MockEvent):
+        mock_event = MockEvent.return_value
+        mock_event.wait.return_value = True  # Simulate page load completed
         auth, mock_tab = self._make_auth_with_mock_tab()
         mock_tab.Page.navigate.return_value = None
-        mock_tab.wait.return_value = None
         mock_tab.Runtime.evaluate.return_value = {
             'result': {'type': 'string', 'value': '{"status":"error","message":"Invalid credentials"}'}
         }

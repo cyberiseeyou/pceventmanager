@@ -1209,6 +1209,9 @@ def edr_request_mfa():
                 'error': 'Walmart credentials not configured in settings. Please configure them on the Settings page.'
             }), 400
 
+        # Clean up any prior Chrome session before creating a new instance
+        if edr_authenticator and hasattr(edr_authenticator, '_chrome_auth') and edr_authenticator._chrome_auth:
+            edr_authenticator._chrome_auth.cleanup()
         # Create new EDRReportGenerator instance (NOT EDRAuthenticator)
         edr_authenticator = EDRReportGenerator()
         edr_authenticator.username = username
@@ -1239,6 +1242,10 @@ def edr_request_mfa():
 
     except Exception as e:
         logger.error(f"MFA request failed: {str(e)}")
+        # Clean up Chrome if it was launched before the exception
+        if edr_authenticator and hasattr(edr_authenticator, '_chrome_auth') and edr_authenticator._chrome_auth:
+            edr_authenticator._chrome_auth.cleanup()
+            edr_authenticator._chrome_auth = None
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
