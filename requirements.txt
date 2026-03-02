@@ -12,6 +12,7 @@ python-decouple==3.8
 # HTTP Client
 requests==2.32.3
 urllib3==2.2.1
+pychrome>=0.2.4
 
 # PDF Generation
 PyPDF2==3.0.1
