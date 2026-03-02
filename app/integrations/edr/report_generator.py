@@ -60,6 +60,7 @@ class EDRReportGenerator:
         self.password = ""
         self.mfa_credential_id = ""
         self.last_error = None  # Stores detail from the most recent failure
+        self._chrome_auth = None  # ChromeEDRAuthenticator instance (lazy-loaded)
 
         # Event report table headers from the JavaScript component
         self.report_headers = [
@@ -289,6 +290,74 @@ class EDRReportGenerator:
         except requests.exceptions.RequestException as e:
             print(f"❌ Step 3 failed. The code may have been incorrect.")
             return False
+
+    # ── Chrome Remote Debugging variants (bypass PerimeterX) ────────
+
+    def chrome_step1_submit_password(self) -> bool:
+        """Step 1 via Chrome Remote Debugging (bypasses PerimeterX).
+        Falls back to requests on failure."""
+        try:
+            from .chrome_cdp_auth import ChromeEDRAuthenticator
+            self._chrome_auth = ChromeEDRAuthenticator()
+        except Exception as e:
+            self.logger.warning(f"Chrome auth unavailable ({e}), falling back to requests")
+            return self.step1_submit_password()
+
+        if not self._chrome_auth.launch_chrome():
+            self.last_error = self._chrome_auth.last_error
+            self.logger.warning(f"Chrome launch failed: {self.last_error}, falling back to requests")
+            self._chrome_auth = None
+            return self.step1_submit_password()
+
+        if not self._chrome_auth.connect():
+            self.last_error = self._chrome_auth.last_error
+            self.logger.warning(f"CDP connect failed: {self.last_error}, falling back to requests")
+            self._chrome_auth.cleanup()
+            self._chrome_auth = None
+            return self.step1_submit_password()
+
+        if not self._chrome_auth.step1_submit_credentials(self.username, self.password):
+            self.last_error = self._chrome_auth.last_error
+            self._chrome_auth.cleanup()
+            self._chrome_auth = None
+            return False
+
+        return True
+
+    def chrome_step2_request_mfa_code(self) -> bool:
+        """Step 2 via Chrome Remote Debugging."""
+        if not self._chrome_auth:
+            self.logger.warning("No Chrome auth session, falling back to requests")
+            return self.step2_request_mfa_code()
+
+        if not self._chrome_auth.step2_request_mfa(self.mfa_credential_id):
+            self.last_error = self._chrome_auth.last_error
+            return False
+        return True
+
+    def chrome_step3_validate_mfa_code(self, code: str) -> bool:
+        """Step 3 via Chrome. Extracts cookies, injects into self.session, closes Chrome."""
+        if not self._chrome_auth:
+            self.logger.warning("No Chrome auth session, falling back to requests")
+            return self.step3_validate_mfa_code(code)
+
+        if not self._chrome_auth.step3_validate_mfa(self.mfa_credential_id, code):
+            self.last_error = self._chrome_auth.last_error
+            return False
+
+        cookies = self._chrome_auth.extract_cookies()
+        if not cookies:
+            self.last_error = "No Walmart cookies found in Chrome after MFA validation"
+            self._chrome_auth.cleanup()
+            self._chrome_auth = None
+            return False
+
+        count = self._chrome_auth.inject_cookies_into_session(self.session)
+        self.logger.info(f"Injected {count} cookies from Chrome into requests.Session")
+
+        self._chrome_auth.cleanup()
+        self._chrome_auth = None
+        return True
 
     def step4_register_page_access(self) -> bool:
         """Step 4: Register page access to Event Management System."""

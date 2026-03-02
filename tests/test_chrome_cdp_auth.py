@@ -168,3 +168,66 @@ class TestCookieExtraction:
         auth._tab = None
         cookies = auth.extract_cookies()
         assert cookies == []
+
+
+class TestReportGeneratorIntegration:
+    @patch('app.integrations.edr.report_generator.EDRReportGenerator.step1_submit_password')
+    @patch('app.integrations.edr.chrome_cdp_auth.ChromeEDRAuthenticator')
+    def test_chrome_step1_delegates_to_authenticator(self, MockAuth, mock_fallback):
+        from app.integrations.edr.report_generator import EDRReportGenerator
+        mock_instance = MockAuth.return_value
+        mock_instance.launch_chrome.return_value = True
+        mock_instance.connect.return_value = True
+        mock_instance.step1_submit_credentials.return_value = True
+        mock_instance.last_error = None
+
+        gen = EDRReportGenerator()
+        gen.username = 'testuser'
+        gen.password = 'testpass'
+        result = gen.chrome_step1_submit_password()
+
+        assert result is True
+        mock_instance.launch_chrome.assert_called_once()
+        mock_instance.connect.assert_called_once()
+        mock_instance.step1_submit_credentials.assert_called_once_with('testuser', 'testpass')
+        mock_fallback.assert_not_called()
+
+    @patch('app.integrations.edr.report_generator.EDRReportGenerator.step1_submit_password')
+    @patch('app.integrations.edr.chrome_cdp_auth.ChromeEDRAuthenticator')
+    def test_chrome_step1_falls_back_on_launch_failure(self, MockAuth, mock_fallback):
+        from app.integrations.edr.report_generator import EDRReportGenerator
+        mock_instance = MockAuth.return_value
+        mock_instance.launch_chrome.return_value = False
+        mock_instance.last_error = "Chrome not found"
+        mock_fallback.return_value = True
+
+        gen = EDRReportGenerator()
+        gen.username = 'testuser'
+        gen.password = 'testpass'
+        result = gen.chrome_step1_submit_password()
+
+        assert result is True
+        mock_fallback.assert_called_once()
+
+    @patch('app.integrations.edr.chrome_cdp_auth.ChromeEDRAuthenticator')
+    def test_chrome_step3_extracts_and_injects_cookies(self, MockAuth):
+        from app.integrations.edr.report_generator import EDRReportGenerator
+        mock_instance = MockAuth.return_value
+        mock_instance.step3_validate_mfa.return_value = True
+        mock_instance.extract_cookies.return_value = [
+            {'name': '_px3', 'value': 'abc', 'domain': '.wal-mart.com', 'path': '/', 'secure': True}
+        ]
+        mock_instance.inject_cookies_into_session.return_value = 1
+        mock_instance.last_error = None
+
+        gen = EDRReportGenerator()
+        gen.mfa_credential_id = 'cred-123'
+        gen._chrome_auth = mock_instance
+
+        result = gen.chrome_step3_validate_mfa_code('123456')
+
+        assert result is True
+        mock_instance.step3_validate_mfa.assert_called_once_with('cred-123', '123456')
+        mock_instance.extract_cookies.assert_called_once()
+        mock_instance.inject_cookies_into_session.assert_called_once_with(gen.session)
+        mock_instance.cleanup.assert_called_once()
