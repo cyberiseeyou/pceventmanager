@@ -125,3 +125,46 @@ class TestLoginFlow:
         }
         result = auth.step3_validate_mfa('cred-id-123', '000000')
         assert result is False
+
+
+class TestCookieExtraction:
+    def test_extract_cookies_returns_walmart_cookies(self):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        mock_tab = MagicMock()
+        auth._tab = mock_tab
+        mock_tab.Network.getCookies.return_value = {
+            'cookies': [
+                {'name': '_px3', 'value': 'abc123', 'domain': '.wal-mart.com', 'path': '/', 'secure': True},
+                {'name': 'session', 'value': 'xyz', 'domain': 'retaillink.login.wal-mart.com', 'path': '/', 'secure': True},
+                {'name': 'unrelated', 'value': 'foo', 'domain': '.google.com', 'path': '/', 'secure': False},
+            ]
+        }
+        cookies = auth.extract_cookies()
+        assert len(cookies) == 2
+        names = [c['name'] for c in cookies]
+        assert '_px3' in names
+        assert 'session' in names
+        assert 'unrelated' not in names
+
+    def test_inject_cookies_into_session(self):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        import requests
+        auth = ChromeEDRAuthenticator()
+        auth._cookies = [
+            {'name': '_px3', 'value': 'abc123', 'domain': '.wal-mart.com', 'path': '/', 'secure': True},
+            {'name': 'sid', 'value': 'xyz789', 'domain': 'retaillink.login.wal-mart.com', 'path': '/', 'secure': True},
+        ]
+        session = requests.Session()
+        count = auth.inject_cookies_into_session(session)
+        assert count == 2
+        cookie_names = [c.name for c in session.cookies]
+        assert '_px3' in cookie_names
+        assert 'sid' in cookie_names
+
+    def test_extract_cookies_empty_when_no_tab(self):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        auth._tab = None
+        cookies = auth.extract_cookies()
+        assert cookies == []

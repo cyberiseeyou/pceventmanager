@@ -222,6 +222,65 @@ class ChromeEDRAuthenticator:
         """Sleep for a random duration between min and max seconds."""
         time.sleep(random.uniform(min_seconds, max_seconds))
 
+    # ── Cookie extraction and injection ─────────────────────────────────
+
+    def extract_cookies(self) -> List[Dict]:
+        """Extract Walmart-related cookies from Chrome via CDP.
+
+        Calls Network.getCookies to get all cookies from the browser,
+        filters to only those with 'wal-mart.com' in the domain, and
+        stores them in self._cookies.
+
+        Returns:
+            List of cookie dicts filtered to Walmart domains.
+            Returns empty list if no tab is connected or on error.
+        """
+        if not self._tab:
+            logger.warning("Cannot extract cookies: no CDP tab connected")
+            return []
+
+        try:
+            result = self._tab.Network.getCookies()
+            all_cookies = result.get('cookies', [])
+            filtered = [c for c in all_cookies if 'wal-mart.com' in c.get('domain', '')]
+            self._cookies = filtered
+
+            cookie_names = [c['name'] for c in filtered]
+            logger.info(
+                f"Extracted {len(filtered)} Walmart cookies from {len(all_cookies)} total: {cookie_names}"
+            )
+            return self._cookies
+        except Exception as e:
+            logger.error(f"Failed to extract cookies: {e}")
+            return []
+
+    def inject_cookies_into_session(self, session) -> int:
+        """Inject stored Walmart cookies into a requests.Session.
+
+        Args:
+            session: A requests.Session instance to inject cookies into.
+
+        Returns:
+            Number of cookies injected. Returns 0 if no cookies are stored.
+        """
+        if not self._cookies:
+            logger.warning("No cookies to inject (call extract_cookies first)")
+            return 0
+
+        count = 0
+        for cookie in self._cookies:
+            session.cookies.set(
+                cookie['name'],
+                cookie['value'],
+                domain=cookie.get('domain', ''),
+                path=cookie.get('path', '/'),
+                secure=cookie.get('secure', False),
+            )
+            count += 1
+
+        logger.info(f"Injected {count} cookies into requests session")
+        return count
+
     # ── 3-step login flow ─────────────────────────────────────────────
 
     def step1_submit_credentials(self, username: str, password: str) -> bool:
