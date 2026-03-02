@@ -4,8 +4,10 @@ Chrome Remote Debugging authenticator for Walmart Retail Link.
 Launches a real Chrome browser with --remote-debugging-port, connects via CDP
 (pychrome), and drives the login flow. PerimeterX sees a normal browser session.
 """
+import json
 import logging
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -189,3 +191,147 @@ class ChromeEDRAuthenticator:
             except OSError as e:
                 logger.warning(f"Could not remove temp profile: {e}")
             self._temp_profile_dir = None
+
+    # ── Login flow helpers ────────────────────────────────────────────
+
+    def _evaluate_fetch(self, js_expression: str) -> dict:
+        """Execute a JS fetch expression via CDP and return parsed JSON result.
+
+        Calls Runtime.evaluate on the given expression, extracts the string
+        value from the CDP result, and parses it as JSON.
+
+        Args:
+            js_expression: JavaScript expression that resolves to a JSON string.
+
+        Returns:
+            Parsed dict from the JSON string, or an error dict on failure.
+        """
+        try:
+            cdp_result = self._tab.Runtime.evaluate(expression=js_expression)
+            result_obj = cdp_result.get('result', {})
+            value = result_obj.get('value')
+            if value is None:
+                return {'status': 'error', 'message': 'No value in CDP result'}
+            return json.loads(value)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            return {'status': 'error', 'message': f'Failed to parse CDP result: {e}'}
+        except Exception as e:
+            return {'status': 'error', 'message': f'CDP evaluate failed: {e}'}
+
+    def _human_delay(self, min_seconds: float, max_seconds: float) -> None:
+        """Sleep for a random duration between min and max seconds."""
+        time.sleep(random.uniform(min_seconds, max_seconds))
+
+    # ── 3-step login flow ─────────────────────────────────────────────
+
+    def step1_submit_credentials(self, username: str, password: str) -> bool:
+        """Step 1: Navigate to login page and submit credentials.
+
+        Args:
+            username: Walmart Retail Link username.
+            password: Walmart Retail Link password.
+
+        Returns:
+            True if login API returned status 'ok', False otherwise.
+        """
+        try:
+            self._tab.Page.navigate(url='https://retaillink.login.wal-mart.com/login')
+            self._tab.wait(timeout=15)
+            self._human_delay(2, 4)
+
+            js = (
+                "fetch('/api/login', {"
+                "method: 'POST', "
+                "headers: {'Content-Type': 'application/json'}, "
+                f"body: JSON.stringify({{username: {json.dumps(username)}, password: {json.dumps(password)}, language: 'en'}})"
+                "})"
+                ".then(r => r.ok ? r.json().then(d => JSON.stringify({status: 'ok', data: d})) "
+                "                : r.text().then(t => JSON.stringify({status: 'error', message: 'HTTP ' + r.status + ': ' + t.substring(0, 200)})))"
+                ".catch(e => JSON.stringify({status: 'error', message: e.message}))"
+            )
+
+            result = self._evaluate_fetch(js)
+            if result.get('status') == 'ok':
+                logger.info("Step 1: Credentials submitted successfully")
+                return True
+            else:
+                self.last_error = f"Step 1 failed: {result.get('message', 'Unknown error')}"
+                logger.warning(self.last_error)
+                return False
+        except Exception as e:
+            self.last_error = f"Step 1 exception: {e}"
+            logger.error(self.last_error)
+            return False
+
+    def step2_request_mfa(self, mfa_credential_id: str) -> bool:
+        """Step 2: Request an MFA code via SMS.
+
+        Args:
+            mfa_credential_id: The credential ID for MFA (from step 1 response).
+
+        Returns:
+            True if MFA send-code API returned status 'ok', False otherwise.
+        """
+        try:
+            self._human_delay(1, 2)
+
+            js = (
+                "fetch('/api/mfa/sendCode', {"
+                "method: 'POST', "
+                "headers: {'Content-Type': 'application/json'}, "
+                f"body: JSON.stringify({{type: 'SMS_OTP', credid: {json.dumps(mfa_credential_id)}}})"
+                "})"
+                ".then(r => r.ok ? r.json().then(d => JSON.stringify({status: 'ok', data: d})) "
+                "                : r.text().then(t => JSON.stringify({status: 'error', message: 'HTTP ' + r.status + ': ' + t.substring(0, 200)})))"
+                ".catch(e => JSON.stringify({status: 'error', message: e.message}))"
+            )
+
+            result = self._evaluate_fetch(js)
+            if result.get('status') == 'ok':
+                logger.info("Step 2: MFA code requested successfully")
+                return True
+            else:
+                self.last_error = f"Step 2 failed: {result.get('message', 'Unknown error')}"
+                logger.warning(self.last_error)
+                return False
+        except Exception as e:
+            self.last_error = f"Step 2 exception: {e}"
+            logger.error(self.last_error)
+            return False
+
+    def step3_validate_mfa(self, mfa_credential_id: str, code: str) -> bool:
+        """Step 3: Validate the MFA code.
+
+        Args:
+            mfa_credential_id: The credential ID for MFA.
+            code: The MFA code received via SMS.
+
+        Returns:
+            True if MFA validation API returned status 'ok', False otherwise.
+        """
+        try:
+            self._human_delay(0.5, 1.5)
+
+            js = (
+                "fetch('/api/mfa/validateCode', {"
+                "method: 'POST', "
+                "headers: {'Content-Type': 'application/json'}, "
+                f"body: JSON.stringify({{type: 'SMS_OTP', credid: {json.dumps(mfa_credential_id)}, code: {json.dumps(code)}, failureCount: 0}})"
+                "})"
+                ".then(r => r.ok ? r.json().then(d => JSON.stringify({status: 'ok', data: d})) "
+                "                : r.text().then(t => JSON.stringify({status: 'error', message: 'HTTP ' + r.status + ': ' + t.substring(0, 200)})))"
+                ".catch(e => JSON.stringify({status: 'error', message: e.message}))"
+            )
+
+            result = self._evaluate_fetch(js)
+            if result.get('status') == 'ok':
+                logger.info("Step 3: MFA validated successfully")
+                return True
+            else:
+                self.last_error = f"Step 3 failed: {result.get('message', 'Unknown error')}"
+                logger.warning(self.last_error)
+                return False
+        except Exception as e:
+            self.last_error = f"Step 3 exception: {e}"
+            logger.error(self.last_error)
+            return False
