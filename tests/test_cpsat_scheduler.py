@@ -701,3 +701,223 @@ class TestApprovalRescheduledEvents:
         assert len(old_date_scheds) == 0, (
             f"Old schedule at {old_date.date()} should have been deleted"
         )
+
+
+# ---------------------------------------------------------------------------
+# Due date priority pass
+# ---------------------------------------------------------------------------
+
+class TestDueDatePriorityPass:
+    """Test the _due_date_priority_pass pre-pass that swaps posted schedules
+    to prioritize earlier due dates of the same event type."""
+
+    def test_earlier_due_date_swaps_later(self, db_session, models):
+        """Core event due sooner takes the slot of a Core event due later."""
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+
+        Schedule = models['Schedule']
+
+        # Create an employee
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Create a "Scheduled" event with later due date and a posted schedule
+        later_event = _make_event(
+            models, db_session, 500001, 'Core',
+            condition='Scheduled', start_days=1, due_days=20,
+        )
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        # The posted schedule is on a date within the unscheduled event's window
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=500001,
+            employee_id='emp1',
+            schedule_datetime=sched_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Create an unscheduled event with earlier due date, same type (Core)
+        earlier_event = _make_event(
+            models, db_session, 500002, 'Core',
+            condition='Unstaffed', start_days=1, due_days=10,
+        )
+        earlier_event.is_scheduled = False
+        db_session.commit()
+
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(
+            run_type='manual', status='running', solver_type='cpsat',
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        swaps = engine._due_date_priority_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps == 1, f"Expected 1 swap, got {swaps}"
+
+        # Check that a PendingSchedule was created for the earlier event
+        PendingSchedule = models['PendingSchedule']
+        pending = db_session.query(PendingSchedule).filter_by(
+            scheduler_run_id=run.id,
+        ).all()
+        assert len(pending) == 1
+        assert pending[0].event_ref_num == 500002
+        assert pending[0].employee_id == 'emp1'
+        assert pending[0].is_swap is True
+        assert pending[0].bumped_event_ref_num == 500001
+        assert pending[0].swap_reason == 'Due date priority swap'
+        assert pending[0].bumped_posted_schedule_id == sched.id
+
+    def test_no_swap_when_types_differ(self, db_session, models):
+        """Digitals event should NOT swap with a Core event slot."""
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+
+        Schedule = models['Schedule']
+
+        emp = _make_employee(
+            models, db_session, 'emp1', 'Alice',
+            job_title='Lead Event Specialist',
+        )
+
+        # Scheduled Core event with posted schedule (later due date)
+        later_event = _make_event(
+            models, db_session, 510001, 'Core',
+            condition='Scheduled', start_days=1, due_days=20,
+        )
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=510001,
+            employee_id='emp1',
+            schedule_datetime=sched_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Unscheduled Digitals event with earlier due date — different type
+        earlier_event = _make_event(
+            models, db_session, 510002, 'Digitals',
+            condition='Unstaffed', start_days=1, due_days=10,
+        )
+        earlier_event.is_scheduled = False
+        db_session.commit()
+
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(
+            run_type='manual', status='running', solver_type='cpsat',
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        swaps = engine._due_date_priority_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps == 0, f"Expected 0 swaps across types, got {swaps}"
+
+    def test_no_swap_when_date_outside_event_range(self, db_session, models):
+        """Don't swap if scheduled date is past unscheduled event's due_date."""
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+
+        Schedule = models['Schedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Scheduled Core event with later due date
+        later_event = _make_event(
+            models, db_session, 520001, 'Core',
+            condition='Scheduled', start_days=1, due_days=30,
+        )
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        # Posted schedule is far in the future (day 15)
+        sched_date = _future(15)
+        sched = Schedule(
+            event_ref_num=520001,
+            employee_id='emp1',
+            schedule_datetime=sched_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Unscheduled Core event due much sooner — schedule date is PAST its due
+        earlier_event = _make_event(
+            models, db_session, 520002, 'Core',
+            condition='Unstaffed', start_days=1, due_days=7,
+        )
+        earlier_event.is_scheduled = False
+        db_session.commit()
+
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(
+            run_type='manual', status='running', solver_type='cpsat',
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        swaps = engine._due_date_priority_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps == 0, (
+            f"Expected 0 swaps (schedule date outside event range), got {swaps}"
+        )
+
+    def test_employee_eligibility_respected(self, db_session, models):
+        """Don't swap if employee isn't eligible for the unscheduled event type."""
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+
+        Schedule = models['Schedule']
+
+        # Employee is a regular Event Specialist — not qualified for Juicer
+        emp = _make_employee(
+            models, db_session, 'emp1', 'Alice',
+            job_title='Event Specialist',
+        )
+
+        # Scheduled Juicer Production event (somehow assigned to emp1 — legacy data)
+        later_event = _make_event(
+            models, db_session, 530001, 'Juicer Production',
+            name='111111-JUICER-PRODUCTION-SPCLTY',
+            condition='Scheduled', start_days=1, due_days=20,
+            estimated_time=540,
+        )
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=530001,
+            employee_id='emp1',
+            schedule_datetime=sched_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Unscheduled Juicer Production event with earlier due date
+        earlier_event = _make_event(
+            models, db_session, 530002, 'Juicer Production',
+            name='222222-JUICER-PRODUCTION-SPCLTY',
+            condition='Unstaffed', start_days=1, due_days=10,
+            estimated_time=540,
+        )
+        earlier_event.is_scheduled = False
+        db_session.commit()
+
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(
+            run_type='manual', status='running', solver_type='cpsat',
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        swaps = engine._due_date_priority_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps == 0, (
+            f"Expected 0 swaps (employee not juicer-qualified), got {swaps}"
+        )

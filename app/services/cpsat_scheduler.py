@@ -2294,6 +2294,207 @@ class CPSATSchedulingEngine:
         return ps
 
     # ------------------------------------------------------------------
+    # Pre-pass: due date priority swaps
+    # ------------------------------------------------------------------
+
+    def _due_date_priority_pass(self, run, db_session):
+        """Pre-pass: swap posted schedules to prioritize earlier due dates.
+
+        For each event type, find posted schedules holding later-due-date events
+        and swap them for unscheduled events with earlier due dates.
+
+        Only swaps same-type events. Keeps employee, date, time, and block unchanged.
+
+        Returns:
+            int: number of swaps performed
+        """
+        today = date.today()
+        swap_count = 0
+
+        # --- Load overrides (same pattern as _load_data) ---
+        overrides = {}
+        if self.EventTypeOverride:
+            for ov in self.EventTypeOverride.query.all():
+                overrides[ov.project_ref_num] = ov.override_event_type
+
+        skip_refs = set()
+        if self.EventSchedulingOverride:
+            for ov in self.EventSchedulingOverride.query.filter_by(
+                allow_auto_schedule=False,
+            ).all():
+                skip_refs.add(ov.event_ref_num)
+
+        # --- Load locked days and holidays ---
+        locked_dates = set()
+        if self.LockedDay:
+            for ld in self.LockedDay.query.all():
+                locked_dates.add(ld.locked_date)
+
+        holiday_dates = set()
+        if self.CompanyHoliday:
+            try:
+                holiday_dates = set(
+                    self.CompanyHoliday.get_holidays_in_range(
+                        today, today + timedelta(days=365),
+                    )
+                )
+            except Exception:
+                pass
+
+        blocked_dates = locked_dates | holiday_dates
+
+        def _effective_type(event):
+            """Get effective type, checking EventTypeOverride."""
+            ov = overrides.get(event.project_ref_num)
+            return ov if ov else event.event_type
+
+        def _is_employee_eligible(employee, event_type):
+            """Check whether employee is eligible for the given event type."""
+            if event_type in JUICER_EVENT_TYPES:
+                return (
+                    employee.job_title in JUICER_TITLES
+                    or getattr(employee, 'juicer_trained', False)
+                )
+            if event_type in LEAD_ONLY_EVENT_TYPES:
+                return employee.job_title in LEAD_TITLES
+            # Core and other general types: any active employee
+            return True
+
+        # --- 1. Load posted schedules, group by event type ---
+        all_schedules = self.Schedule.query.all()
+        # Build a map: event_ref_num -> Event for quick lookup
+        scheduled_event_refs = {s.event_ref_num for s in all_schedules}
+        scheduled_events_raw = self.Event.query.filter(
+            self.Event.project_ref_num.in_(scheduled_event_refs),
+        ).all() if scheduled_event_refs else []
+        event_map = {e.project_ref_num: e for e in scheduled_events_raw}
+
+        # Employee lookup
+        employees_raw = self.Employee.query.filter(
+            self.Employee.is_active == True,
+        ).all()
+        employee_map = {e.id: e for e in employees_raw}
+
+        # Group schedules by effective event type
+        posted_by_type = defaultdict(list)
+        for sched in all_schedules:
+            event = event_map.get(sched.event_ref_num)
+            if not event:
+                continue
+            if event.project_ref_num in skip_refs:
+                continue
+            etype = _effective_type(event)
+            # Skip Supervisor events — they're paired with Core
+            if etype == 'Supervisor':
+                continue
+            posted_by_type[etype].append((sched, event))
+
+        # --- 2. Load unscheduled events sorted by due_datetime asc ---
+        unscheduled_events = self.Event.query.filter(
+            self.Event.is_scheduled == False,
+            ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
+            self.Event.due_datetime > today,
+        ).order_by(self.Event.due_datetime.asc()).all()
+
+        # Group unscheduled by type
+        unsched_by_type = defaultdict(list)
+        for evt in unscheduled_events:
+            if evt.project_ref_num in skip_refs:
+                continue
+            etype = _effective_type(evt)
+            if etype == 'Supervisor':
+                continue
+            unsched_by_type[etype].append(evt)
+
+        # --- 3. For each event type, attempt swaps ---
+        for etype, posted_list in posted_by_type.items():
+            unsched_list = unsched_by_type.get(etype, [])
+            if not unsched_list:
+                continue
+
+            # Sort posted schedules by event due_datetime descending (latest first)
+            posted_list.sort(
+                key=lambda pair: pair[1].due_datetime,
+                reverse=True,
+            )
+
+            # Track which posted schedules have already been swapped
+            used_sched_ids = set()
+
+            for unsched_event in unsched_list:
+                # Already swapped in this pass
+                if getattr(unsched_event, '_swapped', False):
+                    continue
+
+                unsched_due = unsched_event.due_datetime
+                unsched_start = unsched_event.start_datetime
+
+                for sched, posted_event in posted_list:
+                    if sched.id in used_sched_ids:
+                        continue
+
+                    # Posted event must have LATER due date than unscheduled
+                    if posted_event.due_datetime <= unsched_due:
+                        continue
+
+                    # Scheduled date must be within unscheduled event's
+                    # [start_datetime, due_datetime) range
+                    if not sched.schedule_datetime:
+                        continue
+                    sched_date = (
+                        sched.schedule_datetime.date()
+                        if isinstance(sched.schedule_datetime, datetime)
+                        else sched.schedule_datetime
+                    )
+
+                    unsched_start_date = (
+                        unsched_start.date()
+                        if isinstance(unsched_start, datetime)
+                        else unsched_start
+                    )
+                    unsched_due_date = (
+                        unsched_due.date()
+                        if isinstance(unsched_due, datetime)
+                        else unsched_due
+                    )
+
+                    if sched_date < unsched_start_date or sched_date >= unsched_due_date:
+                        continue
+
+                    # Date must not be locked or a holiday
+                    if sched_date in blocked_dates:
+                        continue
+
+                    # Employee must be eligible for the unscheduled event type
+                    employee = employee_map.get(sched.employee_id)
+                    if not employee:
+                        continue
+                    if not _is_employee_eligible(employee, etype):
+                        continue
+
+                    # --- Create PendingSchedule swap record ---
+                    ps = self._create_pending_schedule(
+                        run, unsched_event, sched.employee_id,
+                        sched.schedule_datetime,
+                        is_swap=True,
+                        bumped_event_ref_num=posted_event.project_ref_num,
+                        swap_reason='Due date priority swap',
+                        shift_block=getattr(sched, 'shift_block', None),
+                    )
+                    if ps:
+                        ps.bumped_posted_schedule_id = sched.id
+
+                    used_sched_ids.add(sched.id)
+                    unsched_event._swapped = True
+                    swap_count += 1
+                    break  # Move to next unscheduled event
+
+        logger.info(
+            f"Due date priority pass: {swap_count} swaps performed"
+        )
+        return swap_count
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
