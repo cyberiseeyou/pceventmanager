@@ -229,7 +229,6 @@ class CPSATSchedulingEngine:
         today = date.today()
         buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
         earliest = today + timedelta(days=buffer_days)
-        horizon_end = today + timedelta(weeks=3)
 
         # --- Employees ---
         employees = self.Employee.query.filter(
@@ -243,12 +242,11 @@ class CPSATSchedulingEngine:
         self.employee_ids = list(self.employees.keys())
 
         # --- Events to schedule ---
-        # Only unscheduled, active events within the scheduling horizon
+        # All unscheduled, active, non-expired events (no horizon limit)
         all_events = self.Event.query.filter(
             self.Event.is_scheduled == False,
             ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
             self.Event.due_datetime > earliest,
-            self.Event.start_datetime <= horizon_end,
         ).all()
 
         # Apply EventTypeOverride
@@ -265,6 +263,11 @@ class CPSATSchedulingEngine:
 
         self.events = []
         self.supervisor_events = []
+        # Track which events are bumpable (already-scheduled, can be displaced)
+        self.bumpable_event_ids = set()
+        # Map bumpable event_ref -> list of posted Schedule records
+        self.bumpable_schedule_map = {}
+
         for e in all_events:
             if e.project_ref_num in skip_refs:
                 continue
@@ -280,6 +283,42 @@ class CPSATSchedulingEngine:
             else:
                 self.events.append(e)
 
+        # --- Bumpable events: already-scheduled events that can be displaced ---
+        # Load "Scheduled" condition events that have posted schedules on
+        # non-locked, non-holiday valid days.  These are included in the model
+        # so the solver can displace them for higher-priority events.
+        new_event_refs = {e.project_ref_num for e in self.events + self.supervisor_events}
+        bumpable_events_raw = self.Event.query.filter(
+            self.Event.condition == 'Scheduled',
+            ~self.Event.project_ref_num.in_(new_event_refs) if new_event_refs else True,
+            self.Event.due_datetime > today,
+        ).all()
+
+        for e in bumpable_events_raw:
+            if e.project_ref_num in skip_refs:
+                continue
+            # Must have at least one posted schedule
+            schedules = self.Schedule.query.filter_by(
+                event_ref_num=e.project_ref_num
+            ).all()
+            if not schedules:
+                continue
+
+            # Apply type override
+            if e.project_ref_num in overrides:
+                e._override_event_type = overrides[e.project_ref_num]
+            else:
+                e._override_event_type = None
+            etype = e._override_event_type or e.event_type
+
+            # Skip Supervisor events from bumping (they're paired with Core)
+            if etype == 'Supervisor':
+                continue
+
+            self.bumpable_event_ids.add(e.id)
+            self.bumpable_schedule_map[e.project_ref_num] = schedules
+            self.events.append(e)
+
         # Index supervisor events by 6-digit event number for pairing
         self.supervisor_by_number = {}
         for sup in self.supervisor_events:
@@ -288,6 +327,13 @@ class CPSATSchedulingEngine:
                 self.supervisor_by_number[num] = sup
 
         # --- Valid days per event ---
+        # Derive horizon from the latest event due date
+        all_loaded = self.events + self.supervisor_events
+        if all_loaded:
+            horizon_end = max(e.due_datetime.date() if hasattr(e.due_datetime, 'date') else e.due_datetime for e in all_loaded)
+        else:
+            horizon_end = earliest
+
         self.all_days = []
         d = earliest
         while d <= horizon_end:
@@ -511,9 +557,17 @@ class CPSATSchedulingEngine:
     def _compute_existing_core_counts(self):
         """Pre-compute existing event counts per employee per day/week.
 
-        Tracks Core counts (for H11/H12), Juicer counts (for H22/H23),
-        and total estimated minutes (for H24 weekly hours cap).
+        Tracks Core counts (for H11/H12), Juicer Production counts (for
+        H22/H23), and total estimated minutes (for H24 weekly hours cap).
+
+        Excludes bumpable events since those are modeled as decision variables.
         """
+        JUICER_PROD_TYPES = {'Juicer Production', 'Juicer'}
+
+        # Collect bumpable event refs so we can exclude them from fixed counts
+        bumpable_refs = {e.project_ref_num for e in self.events
+                         if e.id in self.bumpable_event_ids}
+
         self.existing_core_count_by_emp_day = defaultdict(int)   # (emp_id, date) -> int
         self.existing_core_count_by_emp_week = defaultdict(int)  # (emp_id, week_idx) -> int
         self.existing_juicer_count_by_emp_day = defaultdict(int)
@@ -529,9 +583,13 @@ class CPSATSchedulingEngine:
         week_start = first - timedelta(days=days_since_sunday)
 
         for (emp_id, day), entries in self.existing_by_emp_day.items():
-            core_count = sum(1 for e in entries if e['event_type'] == 'Core')
-            juicer_count = sum(1 for e in entries if e['event_type'] in JUICER_EVENT_TYPES)
-            total_minutes = sum(e.get('estimated_time', 60) for e in entries)
+            # Exclude bumpable events — they're in the model as variables
+            fixed_entries = [e for e in entries
+                            if e['event_ref'] not in bumpable_refs]
+
+            core_count = sum(1 for e in fixed_entries if e['event_type'] == 'Core')
+            juicer_count = sum(1 for e in fixed_entries if e['event_type'] in JUICER_PROD_TYPES)
+            total_minutes = sum(e.get('estimated_time', 60) for e in fixed_entries)
 
             if core_count > 0:
                 self.existing_core_count_by_emp_day[(emp_id, day)] = core_count
@@ -632,7 +690,12 @@ class CPSATSchedulingEngine:
         }
 
     def _valid_days_for_event(self, event):
-        """Return list of valid days for a specific event."""
+        """Return list of valid days for a specific event.
+
+        Bumpable events also include their currently-scheduled date(s) even
+        if those fall within the scheduling buffer window, since the solver
+        needs to be able to "keep" the existing assignment.
+        """
         today = date.today()
         buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
         earliest = today + timedelta(days=buffer_days)
@@ -645,7 +708,18 @@ class CPSATSchedulingEngine:
             e_due = e_due.date()
 
         start = max(e_start, earliest)
-        return [d for d in self.valid_days if start <= d < e_due]
+        valid = [d for d in self.valid_days if start <= d < e_due]
+
+        # For bumpable events, ensure their currently-scheduled date is valid
+        if event.id in self.bumpable_event_ids:
+            schedules = self.bumpable_schedule_map.get(event.project_ref_num, [])
+            for s in schedules:
+                sd = s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime) else s.schedule_datetime
+                if sd in self.valid_days and sd not in valid and sd >= today:
+                    valid.append(sd)
+            valid.sort()
+
+        return valid
 
     # ------------------------------------------------------------------
     # Model building
@@ -817,17 +891,17 @@ class CPSATSchedulingEngine:
                               if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
         self._add_mutual_exclusion_per_day(model, juicer_prod_events, core_events)
 
-        # H22: Max 1 Juicer event per employee per day
-        juicer_all_events = [e for e in self.events
-                             if self._get_event_type(e) in JUICER_EVENT_TYPES]
+        # H22: Max 1 Juicer Production per employee per day
+        juicer_prod_events = [e for e in self.events
+                              if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
         self._add_emp_day_limits(
-            model, juicer_all_events, 1,
+            model, juicer_prod_events, 1,
             existing_counts=self.existing_juicer_count_by_emp_day,
         )
 
-        # H23: Max 5 Juicer events per employee per week (HARD — was soft S10)
+        # H23: Max 5 Juicer Production per employee per week (HARD — was soft S10)
         self._add_emp_week_limits(
-            model, juicer_all_events, MAX_JUICER_PRODUCTION_PER_WEEK,
+            model, juicer_prod_events, MAX_JUICER_PRODUCTION_PER_WEEK,
             existing_counts=self.existing_juicer_count_by_emp_week,
         )
 
@@ -847,6 +921,9 @@ class CPSATSchedulingEngine:
 
         # H18: Support event requires base event (same day, same employee)
         self._add_support_requires_base(model)
+
+        # H25: Juicer events must be assigned to rotation employee
+        self._add_juicer_rotation_constraint(model)
 
         # H20: Full-day event exclusivity
         self._add_full_day_exclusivity(model)
@@ -1094,16 +1171,28 @@ class CPSATSchedulingEngine:
     def _add_support_requires_base(self, model):
         """H18: Support events (Freeosk, Digital, etc.) require a base event
         (Core or Juicer) on the same day for the same employee.
-        Exception: Club Supervisor is exempt."""
+        Exception: Club Supervisor is exempt.
+
+        Base events can come from either the solver's unscheduled events OR
+        from already-posted schedules (existing_by_emp_day).
+        """
         support_types = {'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refresh',
                          'Digital Teardown'}
         base_types = {'Core', 'Juicer', 'Juicer Production'}
 
         support_events = [e for e in self.events if self._get_event_type(e) in support_types]
+        if not support_events:
+            return
+
         base_events = [e for e in self.events if self._get_event_type(e) in base_types]
 
-        if not support_events or not base_events:
-            return
+        # Pre-compute which (emp_id, date) pairs already have a posted base event
+        existing_base = set()
+        for (emp_id, day), entries in self.existing_by_emp_day.items():
+            for entry in entries:
+                if entry['event_type'] in base_types:
+                    existing_base.add((emp_id, day))
+                    break
 
         for emp_id in self.employee_ids:
             emp = self.employees[emp_id]
@@ -1111,6 +1200,11 @@ class CPSATSchedulingEngine:
                 continue  # Exempt
 
             for d in self.valid_days:
+                # If this employee already has a posted base event on this day,
+                # no constraint needed — support events are always allowed
+                if (emp_id, d) in existing_base:
+                    continue
+
                 # Indicators for support events assigned to emp on d
                 sup_inds = []
                 for event in support_events:
@@ -1159,6 +1253,47 @@ class CPSATSchedulingEngine:
                 has_base = model.NewBoolVar(f'has_base_{emp_id}_{d}')
                 model.AddMaxEquality(has_base, base_inds)
                 model.AddImplication(has_support, has_base)
+
+    def _add_juicer_rotation_constraint(self, model):
+        """H25: Juicer events must be assigned to the rotation employee for that day.
+
+        If the rotation employee is available and eligible, force the assignment.
+        Falls back to any eligible employee only when the rotation employee is
+        unavailable or not eligible.
+        """
+        juicer_types = {'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
+        juicer_events = [e for e in self.events
+                         if self._get_event_type(e) in juicer_types]
+
+        for event in juicer_events:
+            eid = event.id
+            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                continue
+
+            valid_days = self._valid_days_for_event(event)
+            for d in valid_days:
+                if (eid, d) not in self.v_assign_day:
+                    continue
+
+                primary, backup = self._get_rotation_employee(d, 'juicer')
+                if not primary:
+                    continue
+
+                # If primary is eligible and available on this day, force assignment
+                if ((eid, primary) in self.v_assign_emp
+                        and (primary, d) not in self.unavailable):
+                    # If event is scheduled on this day, it must go to primary
+                    model.AddImplication(
+                        self.v_assign_day[(eid, d)],
+                        self.v_assign_emp[(eid, primary)]
+                    )
+                elif (backup and (eid, backup) in self.v_assign_emp
+                      and (backup, d) not in self.unavailable):
+                    # Primary unavailable — force backup if available
+                    model.AddImplication(
+                        self.v_assign_day[(eid, d)],
+                        self.v_assign_emp[(eid, backup)]
+                    )
 
     def _add_full_day_exclusivity(self, model):
         """H20: Full-day events (>= 480 min) block Core/Juicer on same day."""
@@ -1254,6 +1389,9 @@ class CPSATSchedulingEngine:
         today = date.today()
 
         # S1: Maximize events scheduled (penalty for unscheduled)
+        # Bumpable events get a reduced bonus — only WEIGHT_BUMP (200) instead
+        # of WEIGHT_UNSCHEDULED (1000).  This ensures new higher-priority events
+        # will outweigh keeping existing lower-priority schedules.
         for event in self.events:
             eid = event.id
             if eid not in self.v_scheduled:
@@ -1261,12 +1399,18 @@ class CPSATSchedulingEngine:
             svar = self.v_scheduled[eid]
             if isinstance(svar, int):
                 continue
-            # Reward scheduling
-            terms.append(svar * self._get_effective_weight(WEIGHT_UNSCHEDULED, 'WEIGHT_UNSCHEDULED'))
+            if eid in self.bumpable_event_ids:
+                # Bumpable: reduced bonus so solver can displace for higher-priority
+                terms.append(svar * self._get_effective_weight(WEIGHT_BUMP, 'WEIGHT_BUMP'))
+            else:
+                # New event: full scheduling reward
+                terms.append(svar * self._get_effective_weight(WEIGHT_UNSCHEDULED, 'WEIGHT_UNSCHEDULED'))
 
-        # S2: Due date urgency bonus
+        # S2: Due date urgency bonus (only for new events, not bumpable)
         for event in self.events:
             eid = event.id
+            if eid in self.bumpable_event_ids:
+                continue  # No urgency bonus for already-scheduled events
             if eid not in self.v_scheduled:
                 continue
             svar = self.v_scheduled[eid]
@@ -1306,7 +1450,7 @@ class CPSATSchedulingEngine:
                 continue
 
             rot_type = None
-            if etype in ('Juicer', 'Juicer Production'):
+            if etype in JUICER_EVENT_TYPES:
                 rot_type = 'juicer'
             elif etype == 'Core':
                 rot_type = 'primary_lead'
@@ -1625,18 +1769,121 @@ class CPSATSchedulingEngine:
     # ------------------------------------------------------------------
 
     def _extract_solution(self, solver, run):
-        """Extract solved assignments and create PendingSchedule records."""
+        """Extract solved assignments and create PendingSchedule records.
+
+        For bumpable events:
+        - If kept with same assignment → skip (no pending record needed)
+        - If solver chose not to schedule → bumped, log it
+        - If solver reassigned to different day/employee → swap record
+
+        For new events that displaced a bumpable event, mark as is_swap with
+        the bumped event's ref and posted schedule ID.
+        """
         scheduled_count = 0
         failed_count = 0
         swap_count = 0
+
+        # First pass: identify bumped events (bumpable events the solver un-scheduled)
+        # and collect assignments for cross-referencing
+        bumped_slots = {}  # (emp_id, date) -> bumped event info
+        new_assignments = []  # list of (event, assigned_emp, assigned_day, ...) for new events
 
         for event in self.events:
             eid = event.id
             etype = self._get_event_type(event)
 
             svar = self.v_scheduled.get(eid)
+
+            # Bumpable events that the solver un-scheduled
+            if eid in self.bumpable_event_ids:
+                if svar is None or isinstance(svar, int) or solver.Value(svar) == 0:
+                    # This bumpable event was displaced — track its original slot
+                    for s in self.bumpable_schedule_map.get(event.project_ref_num, []):
+                        sd = s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime) else s.schedule_datetime
+                        bumped_slots[(s.employee_id, sd)] = {
+                            'event_ref': event.project_ref_num,
+                            'schedule_id': s.id,
+                            'event': event,
+                        }
+                    logger.info(
+                        f"CP-SAT bump: {event.project_name} ({etype}) displaced"
+                    )
+                    continue  # Don't create a failure record for intentional bumps
+
+                # Check if bumpable event was kept with same assignment
+                assigned_day = None
+                for d in self._valid_days_for_event(event):
+                    if (eid, d) in self.v_assign_day and solver.Value(self.v_assign_day[(eid, d)]):
+                        assigned_day = d
+                        break
+                assigned_emp = None
+                for emp_id in self.eligible_employees.get(eid, set()):
+                    if (eid, emp_id) in self.v_assign_emp and solver.Value(self.v_assign_emp[(eid, emp_id)]):
+                        assigned_emp = emp_id
+                        break
+
+                if assigned_day and assigned_emp:
+                    # Check if this matches an existing posted schedule
+                    kept = False
+                    for s in self.bumpable_schedule_map.get(event.project_ref_num, []):
+                        sd = s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime) else s.schedule_datetime
+                        if sd == assigned_day and s.employee_id == assigned_emp:
+                            kept = True
+                            break
+
+                    if kept:
+                        # Same assignment — no action needed, skip
+                        continue
+                    else:
+                        # Reassigned — solver moved this event to a new day/employee.
+                        # This is NOT a swap (no other event is being bumped), just
+                        # a reschedule of the same event.
+                        assigned_block = None
+                        if etype == 'Core':
+                            for b in range(1, NUM_CORE_BLOCKS + 1):
+                                if (eid, b) in self.v_assign_block and solver.Value(self.v_assign_block[(eid, b)]):
+                                    assigned_block = b
+                                    break
+                        schedule_time_val = self._get_schedule_time(event, etype, assigned_block)
+                        schedule_dt = datetime.combine(assigned_day, schedule_time_val)
+
+                        # Find the posted schedule being replaced
+                        posted_id = None
+                        for s in self.bumpable_schedule_map.get(event.project_ref_num, []):
+                            posted_id = s.id
+                            break
+
+                        ps = self._create_pending_schedule(
+                            run, event, assigned_emp, schedule_dt,
+                            is_swap=False,
+                            bumped_event_ref_num=None,
+                            swap_reason='Solver rescheduled',
+                            shift_block=assigned_block,
+                        )
+                        # Track which posted schedule is being replaced
+                        if posted_id and ps:
+                            ps.bumped_posted_schedule_id = posted_id
+
+                        logger.info(
+                            f"CP-SAT reschedule: {event.project_name} ({etype}) "
+                            f"moved to {assigned_emp} on {assigned_day}"
+                        )
+                        scheduled_count += 1
+                        continue
+
+                # Shouldn't reach here, but handle gracefully
+                continue
+
+        # Second pass: process new (non-bumpable) events
+        for event in self.events:
+            eid = event.id
+            etype = self._get_event_type(event)
+
+            if eid in self.bumpable_event_ids:
+                continue  # Already handled above
+
+            svar = self.v_scheduled.get(eid)
             if svar is None or isinstance(svar, int):
-                # Event couldn't be scheduled (no valid days/employees)
                 self._create_pending_failure(run, event, "No valid days or eligible employees")
                 failed_count += 1
                 continue
@@ -1675,22 +1922,31 @@ class CPSATSchedulingEngine:
                         break
 
             # Determine schedule time
-            schedule_time = self._get_schedule_time(event, etype, assigned_block)
-            schedule_dt = datetime.combine(assigned_day, schedule_time)
+            schedule_time_val = self._get_schedule_time(event, etype, assigned_block)
+            schedule_dt = datetime.combine(assigned_day, schedule_time_val)
 
-            # Check if this bumps an existing schedule
+            # Check if this new event displaced a bumpable event
             is_swap = False
             bumped_ref = None
             bumped_posted_id = None
-            for existing in self.existing_schedules:
-                if existing['event_ref'] == event.project_ref_num:
-                    if existing['date'] != assigned_day or existing['employee_id'] != assigned_emp:
-                        is_swap = True
-                        bumped_ref = existing['event_ref']
-                        break
-
-            if is_swap:
+            bump_info = bumped_slots.get((assigned_emp, assigned_day))
+            if bump_info:
+                is_swap = True
+                bumped_ref = bump_info['event_ref']
+                bumped_posted_id = bump_info['schedule_id']
                 swap_count += 1
+                logger.info(
+                    f"CP-SAT bump: {event.project_name} ({etype}) takes slot from "
+                    f"event ref {bumped_ref} on {assigned_day}"
+                )
+
+            # NOTE: Removed old-style self-reassignment detection that incorrectly
+            # set bumped_ref to the event's own ref when it found the same event
+            # in existing_schedules on a different day/employee.  Non-bumpable
+            # events in the second pass are new events; if they happen to share a
+            # ref with an existing schedule, that is handled by the bumpable
+            # first-pass logic, not here.  Setting bumped_ref = own ref created
+            # a "self-bump" that inflated swap counts and confused the UI.
 
             self._create_pending_schedule(
                 run, event, assigned_emp, schedule_dt,
@@ -1698,6 +1954,16 @@ class CPSATSchedulingEngine:
                 bumped_event_ref_num=bumped_ref,
                 shift_block=assigned_block,
             )
+            # Store bumped_posted_schedule_id if available
+            if bumped_posted_id:
+                # Get the last pending schedule we just created
+                ps = self.PendingSchedule.query.filter_by(
+                    scheduler_run_id=run.id,
+                    event_ref_num=event.project_ref_num,
+                ).order_by(self.PendingSchedule.id.desc()).first()
+                if ps:
+                    ps.bumped_posted_schedule_id = bumped_posted_id
+
             scheduled_count += 1
 
             # Handle paired Supervisor event
@@ -1962,7 +2228,7 @@ class CPSATSchedulingEngine:
 
             # Check rotation match
             rot_type = None
-            if etype in ('Juicer', 'Juicer Production'):
+            if etype in JUICER_EVENT_TYPES:
                 rot_type = 'juicer'
             elif etype == 'Core':
                 rot_type = 'primary_lead'
@@ -2066,8 +2332,10 @@ class CPSATSchedulingEngine:
             paired_sup = len(self.core_sup_pairs)
             paired_survey = len(self.juicer_prod_survey_pairs)
 
+            bumpable_count = len(self.bumpable_event_ids)
             logger.info(
-                f"CP-SAT Scheduler: {total_events} events to schedule, "
+                f"CP-SAT Scheduler: {total_events} events to schedule "
+                f"({bumpable_count} bumpable), "
                 f"{len(self.employee_ids)} employees, "
                 f"{len(self.valid_days)} valid days, "
                 f"{paired_sup} Core-Supervisor pairs, "

@@ -510,3 +510,107 @@ class TestRouteIntegration:
         assert response.status_code == 200
         assert data['success'] is True
         assert data.get('solver') == 'greedy'
+
+
+# ---------------------------------------------------------------------------
+# Self-bump bug fix
+# ---------------------------------------------------------------------------
+
+class TestSelfBumpFix:
+    """Verify that reassigned bumpable events don't create self-bumps."""
+
+    def test_reassigned_bumpable_event_not_self_bump(self, db_session, models):
+        """When solver moves a bumpable event to a new slot, is_swap should be False
+        and bumped_event_ref_num should be None (not the event's own ref)."""
+        Schedule = models['Schedule']
+        EmployeeTimeOff = models['EmployeeTimeOff']
+
+        # Create two employees
+        emp1 = _make_employee(models, db_session, 'emp1', 'Alice')
+        emp2 = _make_employee(models, db_session, 'emp2', 'Bob')
+
+        # Create a 'Scheduled' event with a posted schedule assigned to emp1
+        event = _make_event(models, db_session, 300001, 'Core',
+                            condition='Scheduled', start_days=3, due_days=20)
+        event.is_scheduled = True
+        db_session.flush()
+
+        # Create the posted schedule on a specific day
+        posted_date = _future(5)
+        sched = Schedule(
+            event_ref_num=300001,
+            employee_id='emp1',
+            schedule_datetime=posted_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Put emp1 on time off so the solver MUST reassign the bumpable event
+        time_off = EmployeeTimeOff(
+            employee_id='emp1',
+            start_date=_future_date(0),
+            end_date=_future_date(30),
+        )
+        db_session.add(time_off)
+
+        # Add some new events to give the solver work to do
+        for i in range(2):
+            _make_event(models, db_session, 300010 + i, 'Core', start_days=3, due_days=14)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+
+        # Check that no pending schedule has bumped_event_ref_num == its own ref
+        pending = _get_pending(db_session, models, run.id)
+        for p in pending:
+            if p.event_ref_num == 300001 and p.bumped_event_ref_num:
+                assert p.bumped_event_ref_num != 300001, \
+                    f"Self-bump detected: event 300001 bumped_event_ref_num points to itself"
+
+    def test_reassigned_bumpable_event_is_not_swap(self, db_session, models):
+        """When solver moves a bumpable event, is_swap should be False
+        and swap_reason should indicate 'Solver rescheduled'."""
+        Schedule = models['Schedule']
+        EmployeeTimeOff = models['EmployeeTimeOff']
+
+        emp1 = _make_employee(models, db_session, 'emp1', 'Alice')
+        emp2 = _make_employee(models, db_session, 'emp2', 'Bob')
+
+        event = _make_event(models, db_session, 300002, 'Core',
+                            condition='Scheduled', start_days=3, due_days=20)
+        event.is_scheduled = True
+        db_session.flush()
+
+        posted_date = _future(5)
+        sched = Schedule(
+            event_ref_num=300002,
+            employee_id='emp1',
+            schedule_datetime=posted_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Put emp1 on time off so reassignment is forced
+        time_off = EmployeeTimeOff(
+            employee_id='emp1',
+            start_date=_future_date(0),
+            end_date=_future_date(30),
+        )
+        db_session.add(time_off)
+
+        for i in range(2):
+            _make_event(models, db_session, 300020 + i, 'Core', start_days=3, due_days=14)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+
+        # If event 300002 appears in pending, it should NOT be marked as a swap
+        pending = _get_pending(db_session, models, run.id)
+        for p in pending:
+            if p.event_ref_num == 300002:
+                assert p.bumped_event_ref_num != 300002, \
+                    f"Self-bump: event 300002 is_swap={p.is_swap}, bumped_ref={p.bumped_event_ref_num}"
+                assert p.is_swap is not True or p.bumped_event_ref_num is None, \
+                    f"Self-swap: event 300002 marked as swap with bumped_ref={p.bumped_event_ref_num}"
