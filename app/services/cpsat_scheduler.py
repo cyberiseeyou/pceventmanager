@@ -1786,7 +1786,7 @@ class CPSATSchedulingEngine:
         # First pass: identify bumped events (bumpable events the solver un-scheduled)
         # and collect assignments for cross-referencing
         bumped_slots = {}  # (emp_id, date) -> bumped event info
-        new_assignments = []  # list of (event, assigned_emp, assigned_day, ...) for new events
+
 
         for event in self.events:
             eid = event.id
@@ -1948,21 +1948,15 @@ class CPSATSchedulingEngine:
             # first-pass logic, not here.  Setting bumped_ref = own ref created
             # a "self-bump" that inflated swap counts and confused the UI.
 
-            self._create_pending_schedule(
+            ps = self._create_pending_schedule(
                 run, event, assigned_emp, schedule_dt,
                 is_swap=is_swap,
                 bumped_event_ref_num=bumped_ref,
                 shift_block=assigned_block,
             )
             # Store bumped_posted_schedule_id if available
-            if bumped_posted_id:
-                # Get the last pending schedule we just created
-                ps = self.PendingSchedule.query.filter_by(
-                    scheduler_run_id=run.id,
-                    event_ref_num=event.project_ref_num,
-                ).order_by(self.PendingSchedule.id.desc()).first()
-                if ps:
-                    ps.bumped_posted_schedule_id = bumped_posted_id
+            if bumped_posted_id and ps:
+                ps.bumped_posted_schedule_id = bumped_posted_id
 
             scheduled_count += 1
 
