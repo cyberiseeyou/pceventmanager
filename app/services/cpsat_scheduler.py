@@ -2495,6 +2495,242 @@ class CPSATSchedulingEngine:
         return swap_count
 
     # ------------------------------------------------------------------
+    # Post-pass: due date verification (after solver)
+    # ------------------------------------------------------------------
+
+    def _due_date_verification_pass(self, run, db_session):
+        """Post-pass: verify due-date ordering and fix remaining violations.
+
+        Checks combined posted schedules + pending results. If a later-due-date
+        event occupies a posted slot that an unscheduled/failed earlier-due-date
+        event of the same type could use, swap them.
+
+        Returns:
+            int: number of additional swaps performed
+        """
+        today = date.today()
+        swap_count = 0
+
+        # --- Load overrides (same pattern as _due_date_priority_pass) ---
+        overrides = {}
+        if self.EventTypeOverride:
+            for ov in self.EventTypeOverride.query.all():
+                overrides[ov.project_ref_num] = ov.override_event_type
+
+        skip_refs = set()
+        if self.EventSchedulingOverride:
+            for ov in self.EventSchedulingOverride.query.filter_by(
+                allow_auto_schedule=False,
+            ).all():
+                skip_refs.add(ov.event_ref_num)
+
+        # --- Load locked days and holidays ---
+        locked_dates = set()
+        if self.LockedDay:
+            for ld in self.LockedDay.query.all():
+                locked_dates.add(ld.locked_date)
+
+        holiday_dates = set()
+        if self.CompanyHoliday:
+            try:
+                holiday_dates = set(
+                    self.CompanyHoliday.get_holidays_in_range(
+                        today, today + timedelta(days=365),
+                    )
+                )
+            except Exception:
+                pass
+
+        blocked_dates = locked_dates | holiday_dates
+
+        def _effective_type(event):
+            """Get effective type, checking EventTypeOverride."""
+            ov = overrides.get(event.project_ref_num)
+            return ov if ov else event.event_type
+
+        def _is_employee_eligible(employee, event_type):
+            """Check whether employee is eligible for the given event type."""
+            if event_type in JUICER_EVENT_TYPES:
+                return (
+                    employee.job_title in JUICER_TITLES
+                    or getattr(employee, 'juicer_trained', False)
+                )
+            if event_type in LEAD_ONLY_EVENT_TYPES:
+                return employee.job_title in LEAD_TITLES
+            # Core and other general types: any active employee
+            return True
+
+        # --- 1. Find events that failed in this run ---
+        failed_pending = db_session.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.failure_reason.isnot(None),
+        ).all()
+        failed_refs = {fp.event_ref_num for fp in failed_pending}
+
+        # --- 2. Find all event refs in this run ---
+        run_refs = {ps.event_ref_num for ps in
+                    db_session.query(self.PendingSchedule).filter_by(
+                        scheduler_run_id=run.id).all()}
+
+        # --- 3. Find already-displaced posted schedule refs to exclude ---
+        displaced_refs = set()
+        for ps in db_session.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.is_swap == True,
+            self.PendingSchedule.bumped_event_ref_num.isnot(None),
+        ).all():
+            displaced_refs.add(ps.bumped_event_ref_num)
+
+        # --- 4. Candidate events: failed or not in run at all ---
+        candidate_events = self.Event.query.filter(
+            self.Event.is_scheduled == False,
+            ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
+            self.Event.due_datetime > today,
+        ).order_by(self.Event.due_datetime.asc()).all()
+
+        # Filter to only events that failed or weren't handled by the run
+        candidates = []
+        for evt in candidate_events:
+            if evt.project_ref_num in skip_refs:
+                continue
+            etype = _effective_type(evt)
+            if etype == 'Supervisor':
+                continue
+            if evt.project_ref_num in failed_refs or evt.project_ref_num not in run_refs:
+                candidates.append(evt)
+
+        # Group candidates by type
+        cand_by_type = defaultdict(list)
+        for evt in candidates:
+            etype = _effective_type(evt)
+            cand_by_type[etype].append(evt)
+
+        # --- 5. Load posted schedules, excluding displaced ones ---
+        all_schedules = self.Schedule.query.all()
+        scheduled_event_refs = {s.event_ref_num for s in all_schedules}
+        scheduled_events_raw = self.Event.query.filter(
+            self.Event.project_ref_num.in_(scheduled_event_refs),
+        ).all() if scheduled_event_refs else []
+        event_map = {e.project_ref_num: e for e in scheduled_events_raw}
+
+        # Employee lookup
+        employees_raw = self.Employee.query.filter(
+            self.Employee.is_active == True,
+        ).all()
+        employee_map = {e.id: e for e in employees_raw}
+
+        # Group posted schedules by effective event type, excluding displaced
+        posted_by_type = defaultdict(list)
+        for sched in all_schedules:
+            event = event_map.get(sched.event_ref_num)
+            if not event:
+                continue
+            if event.project_ref_num in skip_refs:
+                continue
+            if event.project_ref_num in displaced_refs:
+                continue
+            etype = _effective_type(event)
+            if etype == 'Supervisor':
+                continue
+            posted_by_type[etype].append((sched, event))
+
+        # --- 6. For each event type, attempt swaps ---
+        for etype, posted_list in posted_by_type.items():
+            cand_list = cand_by_type.get(etype, [])
+            if not cand_list:
+                continue
+
+            # Sort posted schedules by event due_datetime descending (latest first)
+            posted_list.sort(
+                key=lambda pair: pair[1].due_datetime,
+                reverse=True,
+            )
+
+            # Track which posted schedules have already been swapped
+            used_sched_ids = set()
+
+            for candidate in cand_list:
+                if getattr(candidate, '_swapped', False):
+                    continue
+
+                cand_due = candidate.due_datetime
+                cand_start = candidate.start_datetime
+
+                for sched, posted_event in posted_list:
+                    if sched.id in used_sched_ids:
+                        continue
+
+                    # Posted event must have LATER due date than candidate
+                    if posted_event.due_datetime <= cand_due:
+                        continue
+
+                    # Scheduled date must be within candidate's
+                    # [start_datetime, due_datetime) range
+                    if not sched.schedule_datetime:
+                        continue
+                    sched_date = (
+                        sched.schedule_datetime.date()
+                        if isinstance(sched.schedule_datetime, datetime)
+                        else sched.schedule_datetime
+                    )
+
+                    cand_start_date = (
+                        cand_start.date()
+                        if isinstance(cand_start, datetime)
+                        else cand_start
+                    )
+                    cand_due_date = (
+                        cand_due.date()
+                        if isinstance(cand_due, datetime)
+                        else cand_due
+                    )
+
+                    if sched_date < cand_start_date or sched_date >= cand_due_date:
+                        continue
+
+                    # Date must not be locked or a holiday
+                    if sched_date in blocked_dates:
+                        continue
+
+                    # Employee must be eligible for the candidate event type
+                    employee = employee_map.get(sched.employee_id)
+                    if not employee:
+                        continue
+                    if not _is_employee_eligible(employee, etype):
+                        continue
+
+                    # --- Delete failure record if it exists ---
+                    fail_record = db_session.query(self.PendingSchedule).filter(
+                        self.PendingSchedule.scheduler_run_id == run.id,
+                        self.PendingSchedule.event_ref_num == candidate.project_ref_num,
+                        self.PendingSchedule.failure_reason.isnot(None),
+                    ).first()
+                    if fail_record:
+                        db_session.delete(fail_record)
+
+                    # --- Create PendingSchedule swap record ---
+                    ps = self._create_pending_schedule(
+                        run, candidate, sched.employee_id,
+                        sched.schedule_datetime,
+                        is_swap=True,
+                        bumped_event_ref_num=posted_event.project_ref_num,
+                        swap_reason='Due date priority verification swap',
+                        shift_block=getattr(sched, 'shift_block', None),
+                    )
+                    if ps:
+                        ps.bumped_posted_schedule_id = sched.id
+
+                    used_sched_ids.add(sched.id)
+                    candidate._swapped = True
+                    swap_count += 1
+                    break  # Move to next candidate
+
+        logger.info(
+            f"Due date verification pass: {swap_count} swaps performed"
+        )
+        return swap_count
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 

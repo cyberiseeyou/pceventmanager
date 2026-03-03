@@ -921,3 +921,177 @@ class TestDueDatePriorityPass:
         assert swaps == 0, (
             f"Expected 0 swaps (employee not juicer-qualified), got {swaps}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Due date verification pass (post-solver)
+# ---------------------------------------------------------------------------
+
+class TestDueDateVerificationPass:
+    """Test the post-pass that verifies due-date ordering after solver runs."""
+
+    def test_post_pass_catches_remaining_violation(self, db_session, models):
+        """If solver failed to schedule an earlier-due event while a later-due event
+        of same type is in a posted schedule, post-pass should swap them."""
+        Schedule = models['Schedule']
+        PendingSchedule = models['PendingSchedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Posted schedule with later due date (not touched by solver)
+        later_event = _make_event(models, db_session, 600001, 'Core',
+                                  condition='Scheduled', start_days=3, due_days=30)
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=600001, employee_id='emp1',
+            schedule_datetime=sched_date, shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Solver failed to schedule this earlier-due event
+        earlier_event = _make_event(models, db_session, 600002, 'Core',
+                                    start_days=3, due_days=10)
+        db_session.commit()
+
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(run_type='manual', status='running', solver_type='cpsat')
+        db_session.add(run)
+        db_session.flush()
+
+        # Simulate: solver created a failure record for earlier_event
+        fail_ps = PendingSchedule(
+            scheduler_run_id=run.id,
+            event_ref_num=600002,
+            failure_reason='Solver could not schedule within constraints',
+            status='proposed',
+        )
+        db_session.add(fail_ps)
+        db_session.flush()
+
+        swaps = engine._due_date_verification_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps >= 1
+        # The earlier event should now have a swap pending
+        pending = _get_pending(db_session, models, run.id)
+        swap_pending = [p for p in pending
+                        if p.event_ref_num == 600002 and p.is_swap]
+        assert len(swap_pending) == 1
+        assert swap_pending[0].bumped_event_ref_num == 600001
+
+    def test_post_pass_deletes_failure_record(self, db_session, models):
+        """When a swap is created, the failure PendingSchedule record should be deleted."""
+        Schedule = models['Schedule']
+        PendingSchedule = models['PendingSchedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        later_event = _make_event(models, db_session, 610001, 'Core',
+                                  condition='Scheduled', start_days=3, due_days=30)
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=610001, employee_id='emp1',
+            schedule_datetime=sched_date, shift_block=1,
+        )
+        db_session.add(sched)
+
+        earlier_event = _make_event(models, db_session, 610002, 'Core',
+                                    start_days=3, due_days=10)
+        db_session.commit()
+
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(run_type='manual', status='running', solver_type='cpsat')
+        db_session.add(run)
+        db_session.flush()
+
+        fail_ps = PendingSchedule(
+            scheduler_run_id=run.id,
+            event_ref_num=610002,
+            failure_reason='Solver could not schedule within constraints',
+            status='proposed',
+        )
+        db_session.add(fail_ps)
+        db_session.flush()
+
+        swaps = engine._due_date_verification_pass(run, db_session)
+        db_session.flush()
+
+        assert swaps >= 1
+        # The failure record should have been deleted
+        fail_records = db_session.query(PendingSchedule).filter(
+            PendingSchedule.scheduler_run_id == run.id,
+            PendingSchedule.event_ref_num == 610002,
+            PendingSchedule.failure_reason.isnot(None),
+        ).all()
+        assert len(fail_records) == 0, "Failure record should have been deleted after swap"
+
+    def test_post_pass_skips_already_displaced_schedules(self, db_session, models):
+        """Posted schedules already displaced by prior passes should be excluded."""
+        Schedule = models['Schedule']
+        PendingSchedule = models['PendingSchedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Posted schedule with later due date
+        later_event = _make_event(models, db_session, 620001, 'Core',
+                                  condition='Scheduled', start_days=3, due_days=30)
+        later_event.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=620001, employee_id='emp1',
+            schedule_datetime=sched_date, shift_block=1,
+        )
+        db_session.add(sched)
+
+        earlier_event = _make_event(models, db_session, 620002, 'Core',
+                                    start_days=3, due_days=10)
+        db_session.commit()
+
+        # Another event that already took 620001's slot in the pre-pass
+        other_event = _make_event(models, db_session, 620003, 'Core',
+                                  start_days=3, due_days=8)
+        db_session.commit()
+
+        from app.services.cpsat_scheduler import CPSATSchedulingEngine
+        engine = CPSATSchedulingEngine(db_session, models)
+        run = engine.SchedulerRunHistory(run_type='manual', status='running', solver_type='cpsat')
+        db_session.add(run)
+        db_session.flush()
+
+        # Simulate: 620001 was already displaced by a prior swap in this run
+        prior_swap = PendingSchedule(
+            scheduler_run_id=run.id,
+            event_ref_num=620003,
+            employee_id='emp1',
+            schedule_datetime=sched_date,
+            status='proposed',
+            is_swap=True,
+            bumped_event_ref_num=620001,
+        )
+        db_session.add(prior_swap)
+
+        # Failure record for earlier_event
+        fail_ps = PendingSchedule(
+            scheduler_run_id=run.id,
+            event_ref_num=620002,
+            failure_reason='Solver could not schedule within constraints',
+            status='proposed',
+        )
+        db_session.add(fail_ps)
+        db_session.flush()
+
+        swaps = engine._due_date_verification_pass(run, db_session)
+        db_session.flush()
+
+        # Should NOT swap because the posted schedule 620001 was already displaced
+        assert swaps == 0, f"Expected 0 swaps (schedule already displaced), got {swaps}"
