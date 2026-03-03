@@ -681,6 +681,29 @@ def approve_schedule():
             'error': f'Failed to process bumped events: {str(bump_error)}'
         }), 500
 
+    # Handle rescheduled events (bumped_posted_schedule_id set, no bumped_event_ref_num)
+    # These are events the solver moved to a different slot — delete the old posted schedule
+    try:
+        rescheduled = [ps for ps in pending_schedules
+                       if ps.bumped_posted_schedule_id and not ps.bumped_event_ref_num]
+        if rescheduled:
+            current_app.logger.info(f"Processing {len(rescheduled)} rescheduled events")
+            for ps in rescheduled:
+                old_sched = db.session.query(models['Schedule']).get(ps.bumped_posted_schedule_id)
+                if old_sched:
+                    current_app.logger.info(
+                        f"  Deleting old schedule {old_sched.id} for rescheduled event {ps.event_ref_num}"
+                    )
+                    db.session.delete(old_sched)
+            db.session.flush()
+    except Exception as resched_error:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to process rescheduled events: {resched_error}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Failed to process rescheduled events: {str(resched_error)}'
+        }), 500
+
     api_submitted = 0
     api_failed = 0
     failed_details = []

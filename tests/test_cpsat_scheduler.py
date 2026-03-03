@@ -614,3 +614,90 @@ class TestSelfBumpFix:
                     f"Self-bump: event 300002 is_swap={p.is_swap}, bumped_ref={p.bumped_event_ref_num}"
                 assert p.is_swap is not True or p.bumped_event_ref_num is None, \
                     f"Self-swap: event 300002 marked as swap with bumped_ref={p.bumped_event_ref_num}"
+
+
+# ---------------------------------------------------------------------------
+# Approval handling for rescheduled events (bumped_posted_schedule_id)
+# ---------------------------------------------------------------------------
+
+class TestApprovalRescheduledEvents:
+    """Verify approval correctly handles rescheduled events with bumped_posted_schedule_id."""
+
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_approval_deletes_old_schedule_for_rescheduled_event(self, mock_auth, client, db_session, models):
+        """When approving a rescheduled event (bumped_posted_schedule_id set, no bumped_event_ref_num),
+        the old posted schedule should be deleted and the new one created."""
+        import json
+
+        Schedule = models['Schedule']
+        PendingSchedule = models['PendingSchedule']
+        SchedulerRunHistory = models['SchedulerRunHistory']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+        event = _make_event(models, db_session, 400001, 'Core',
+                            condition='Scheduled', start_days=0, due_days=20)
+        event.is_scheduled = True
+        db_session.flush()
+
+        # Old posted schedule
+        old_date = _future(5)
+        old_sched = Schedule(
+            event_ref_num=400001,
+            employee_id='emp1',
+            schedule_datetime=old_date,
+            shift_block=1,
+        )
+        db_session.add(old_sched)
+        db_session.flush()
+        old_sched_id = old_sched.id
+
+        # Create run + pending schedule (rescheduled, not a bump)
+        run = SchedulerRunHistory(run_type='manual', status='completed', solver_type='cpsat')
+        db_session.add(run)
+        db_session.flush()
+
+        new_date = _future(7)
+        ps = PendingSchedule(
+            scheduler_run_id=run.id,
+            event_ref_num=400001,
+            employee_id='emp1',
+            schedule_datetime=new_date,
+            schedule_time=new_date.time(),
+            status='proposed',
+            is_swap=False,
+            bumped_event_ref_num=None,
+            bumped_posted_schedule_id=old_sched_id,
+        )
+        db_session.add(ps)
+        db_session.commit()
+
+        # Approve
+        response = client.post(
+            '/auto-schedule/approve',
+            data=json.dumps({'run_id': run.id}),
+            content_type='application/json',
+        )
+        assert response.status_code == 200
+
+        # Close and reopen session to see committed state from the route
+        db_session.close()
+
+        # Verify: only one schedule exists for this event, and it's at the NEW date
+        all_scheds = db_session.query(Schedule).filter_by(event_ref_num=400001).all()
+        assert len(all_scheds) == 1, f"Expected 1 schedule, found {len(all_scheds)}"
+
+        # The remaining schedule should be at the new date, not the old date
+        remaining = all_scheds[0]
+        assert remaining.schedule_datetime.date() == new_date.date(), (
+            f"Schedule should be at new date {new_date.date()}, "
+            f"got {remaining.schedule_datetime.date()}"
+        )
+
+        # Old date schedule should not exist
+        old_date_scheds = db_session.query(Schedule).filter(
+            Schedule.event_ref_num == 400001,
+            Schedule.schedule_datetime < new_date,
+        ).all()
+        assert len(old_date_scheds) == 0, (
+            f"Old schedule at {old_date.date()} should have been deleted"
+        )
