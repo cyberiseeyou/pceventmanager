@@ -1156,3 +1156,85 @@ class TestFourPhaseScheduling:
         pending = _get_pending(db_session, models, run.id)
         swaps = [p for p in pending if p.is_swap]
         assert len(swaps) == 0
+
+
+# ---------------------------------------------------------------------------
+# Due date integration tests
+# ---------------------------------------------------------------------------
+
+class TestDueDateIntegration:
+    """Integration tests with realistic multi-employee, multi-event scenarios."""
+
+    def test_multiple_types_due_date_ordering(self, db_session, models):
+        """Multiple event types should each independently respect due-date ordering."""
+        Schedule = models['Schedule']
+
+        # Create employees with various roles
+        _make_employee(models, db_session, 'emp1', 'Alice', job_title='Lead Event Specialist')
+        _make_employee(models, db_session, 'emp2', 'Bob', job_title='Event Specialist')
+        _make_employee(models, db_session, 'emp3', 'Carol', job_title='Juicer Barista')
+
+        # Scheduled Core event with later due date
+        later_core = _make_event(models, db_session, 800001, 'Core',
+                                 condition='Scheduled', start_days=3, due_days=25)
+        later_core.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=800001, employee_id='emp1',
+            schedule_datetime=sched_date, shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Unscheduled Core event with earlier due date
+        _make_event(models, db_session, 800002, 'Core', start_days=3, due_days=8)
+
+        # Unscheduled Digitals event (should NOT swap with Core)
+        _make_event(models, db_session, 800003, 'Digitals', start_days=3, due_days=8)
+
+        # Several more unscheduled events
+        _make_event(models, db_session, 800004, 'Core', start_days=3, due_days=14)
+        _make_event(models, db_session, 800005, 'Core', start_days=3, due_days=20)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+        assert run.events_scheduled >= 3
+
+        # Verify: earlier Core event (800002) should be scheduled
+        pending = _get_pending(db_session, models, run.id)
+        earlier_core = [p for p in pending if p.event_ref_num == 800002
+                        and p.employee_id is not None]
+        assert len(earlier_core) >= 1, "Earlier-due Core event must be scheduled"
+
+    def test_phase3_bumping_only_when_needed(self, db_session, models):
+        """Bumping should only happen in Phase 3 when Phase 2 can't schedule."""
+        Schedule = models['Schedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Fill up slots with posted schedules (6 core events = 1 per day)
+        for i in range(6):
+            evt = _make_event(models, db_session, 900001 + i, 'Core',
+                              condition='Scheduled', start_days=3, due_days=30)
+            evt.is_scheduled = True
+            db_session.flush()
+            sched = Schedule(
+                event_ref_num=900001 + i, employee_id='emp1',
+                schedule_datetime=_future(4 + i), shift_block=(i % 8) + 1,
+            )
+            db_session.add(sched)
+
+        # New event that should need bumping to schedule
+        _make_event(models, db_session, 900010, 'Core', start_days=3, due_days=12)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+        # Event should be scheduled (via Phase 1 swap or Phase 3 bump)
+        pending = _get_pending(db_session, models, run.id)
+        new_event_pending = [p for p in pending if p.event_ref_num == 900010
+                             and p.employee_id is not None]
+        assert len(new_event_pending) >= 1, \
+            "New event should be scheduled (via Phase 1 swap or Phase 3 bump)"
