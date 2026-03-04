@@ -73,6 +73,17 @@ LEAD_ONLY_EVENT_TYPES = {'Freeosk', 'Digitals', 'Digital Setup', 'Digital Refres
                          'Digital Teardown', 'Other'}
 SUPERVISOR_PREFERRED_TYPES = {'Supervisor', 'Digitals', 'Freeosk',
                               'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
+# Subset of Juicer types that count toward H22/H23 daily/weekly production limits
+JUICER_PRODUCTION_TYPES = {'Juicer Production', 'Juicer'}
+
+# Swap reason constants
+SWAP_REASON_DUE_DATE = 'Due date priority swap'
+SWAP_REASON_VERIFICATION = 'Due date priority verification swap'
+SWAP_REASON_RESCHEDULED = 'Solver rescheduled'
+SWAP_REASON_SOLVER = 'CP-SAT solver reassignment'
+
+# Maximum horizon for solver (prevents unbounded search space with far-future events)
+MAX_HORIZON_WEEKS = 8
 
 
 class CPSATSchedulingEngine:
@@ -330,10 +341,15 @@ class CPSATSchedulingEngine:
                 self.supervisor_by_number[num] = sup
 
         # --- Valid days per event ---
-        # Derive horizon from the latest event due date
+        # Derive horizon from the latest event due date, capped to prevent
+        # unbounded solver search space with far-future events.
+        max_horizon = earliest + timedelta(weeks=MAX_HORIZON_WEEKS)
         all_loaded = self.events + self.supervisor_events
         if all_loaded:
-            horizon_end = max(e.due_datetime.date() if hasattr(e.due_datetime, 'date') else e.due_datetime for e in all_loaded)
+            derived = max(e.due_datetime.date() if hasattr(e.due_datetime, 'date') else e.due_datetime for e in all_loaded)
+            horizon_end = min(derived, max_horizon)
+            if derived > max_horizon:
+                logger.info(f"Horizon capped at {max_horizon} (derived: {derived})")
         else:
             horizon_end = earliest
 
@@ -565,8 +581,6 @@ class CPSATSchedulingEngine:
 
         Excludes bumpable events since those are modeled as decision variables.
         """
-        JUICER_PROD_TYPES = {'Juicer Production', 'Juicer'}
-
         # Collect bumpable event refs so we can exclude them from fixed counts
         bumpable_refs = {e.project_ref_num for e in self.events
                          if e.id in self.bumpable_event_ids}
@@ -591,7 +605,7 @@ class CPSATSchedulingEngine:
                             if e['event_ref'] not in bumpable_refs]
 
             core_count = sum(1 for e in fixed_entries if e['event_type'] == 'Core')
-            juicer_count = sum(1 for e in fixed_entries if e['event_type'] in JUICER_PROD_TYPES)
+            juicer_count = sum(1 for e in fixed_entries if e['event_type'] in JUICER_PRODUCTION_TYPES)
             total_minutes = sum(e.get('estimated_time', 60) for e in fixed_entries)
 
             if core_count > 0:
@@ -891,12 +905,12 @@ class CPSATSchedulingEngine:
 
         # H13: Juicer-Core mutual exclusion (same day, same employee)
         juicer_prod_events = [e for e in self.events
-                              if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
+                              if self._get_event_type(e) in JUICER_PRODUCTION_TYPES]
         self._add_mutual_exclusion_per_day(model, juicer_prod_events, core_events)
 
         # H22: Max 1 Juicer Production per employee per day
         juicer_prod_events = [e for e in self.events
-                              if self._get_event_type(e) in ('Juicer Production', 'Juicer')]
+                              if self._get_event_type(e) in JUICER_PRODUCTION_TYPES]
         self._add_emp_day_limits(
             model, juicer_prod_events, 1,
             existing_counts=self.existing_juicer_count_by_emp_day,
@@ -1788,8 +1802,7 @@ class CPSATSchedulingEngine:
 
         # First pass: identify bumped events (bumpable events the solver un-scheduled)
         # and collect assignments for cross-referencing
-        bumped_slots = {}  # (emp_id, date) -> bumped event info
-
+        bumped_slots = {}  # (emp_id, date) -> list of bumped event info
 
         for event in self.events:
             eid = event.id
@@ -1803,11 +1816,14 @@ class CPSATSchedulingEngine:
                     # This bumpable event was displaced — track its original slot
                     for s in self.bumpable_schedule_map.get(event.project_ref_num, []):
                         sd = s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime) else s.schedule_datetime
-                        bumped_slots[(s.employee_id, sd)] = {
+                        key = (s.employee_id, sd)
+                        if key not in bumped_slots:
+                            bumped_slots[key] = []
+                        bumped_slots[key].append({
                             'event_ref': event.project_ref_num,
                             'schedule_id': s.id,
                             'event': event,
-                        }
+                        })
                     logger.info(
                         f"CP-SAT bump: {event.project_name} ({etype}) displaced"
                     )
@@ -1860,8 +1876,7 @@ class CPSATSchedulingEngine:
                             run, event, assigned_emp, schedule_dt,
                             is_swap=False,
                             bumped_event_ref_num=None,
-                            swap_reason='Solver rescheduled',
-                            shift_block=assigned_block,
+                            swap_reason=SWAP_REASON_RESCHEDULED,
                         )
                         # Track which posted schedule is being replaced
                         if posted_id and ps:
@@ -1932,8 +1947,9 @@ class CPSATSchedulingEngine:
             is_swap = False
             bumped_ref = None
             bumped_posted_id = None
-            bump_info = bumped_slots.get((assigned_emp, assigned_day))
-            if bump_info:
+            bump_list = bumped_slots.get((assigned_emp, assigned_day))
+            if bump_list:
+                bump_info = bump_list[0]
                 is_swap = True
                 bumped_ref = bump_info['event_ref']
                 bumped_posted_id = bump_info['schedule_id']
@@ -1955,7 +1971,6 @@ class CPSATSchedulingEngine:
                 run, event, assigned_emp, schedule_dt,
                 is_swap=is_swap,
                 bumped_event_ref_num=bumped_ref,
-                shift_block=assigned_block,
             )
             # Store bumped_posted_schedule_id if available
             if bumped_posted_id and ps:
@@ -2266,7 +2281,7 @@ class CPSATSchedulingEngine:
 
     def _create_pending_schedule(self, run, event, employee_id, schedule_dt,
                                   is_swap=False, bumped_event_ref_num=None,
-                                  swap_reason=None, shift_block=None):
+                                  swap_reason=None):
         """Create a PendingSchedule record."""
         ps = self.PendingSchedule(
             scheduler_run_id=run.id,
@@ -2277,7 +2292,7 @@ class CPSATSchedulingEngine:
             status='proposed',
             is_swap=is_swap,
             bumped_event_ref_num=bumped_event_ref_num,
-            swap_reason=swap_reason or ('CP-SAT solver reassignment' if is_swap else None),
+            swap_reason=swap_reason or (SWAP_REASON_SOLVER if is_swap else None),
         )
         self.db.add(ps)
         return ps
@@ -2297,24 +2312,18 @@ class CPSATSchedulingEngine:
         return ps
 
     # ------------------------------------------------------------------
-    # Pre-pass: due date priority swaps
+    # Due-date swap helpers
     # ------------------------------------------------------------------
 
-    def _due_date_priority_pass(self, run, db_session):
-        """Pre-pass: swap posted schedules to prioritize earlier due dates.
-
-        For each event type, find posted schedules holding later-due-date events
-        and swap them for unscheduled events with earlier due dates.
-
-        Only swaps same-type events. Keeps employee, date, time, and block unchanged.
+    def _load_swap_context(self):
+        """Load shared context for due-date swap passes.
 
         Returns:
-            int: number of swaps performed
+            tuple: (overrides, skip_refs, blocked_dates, employee_map,
+                    effective_type_fn, is_eligible_fn)
         """
         today = date.today()
-        swap_count = 0
 
-        # --- Load overrides (same pattern as _load_data) ---
         overrides = {}
         if self.EventTypeOverride:
             for ov in self.EventTypeOverride.query.all():
@@ -2327,7 +2336,6 @@ class CPSATSchedulingEngine:
             ).all():
                 skip_refs.add(ov.event_ref_num)
 
-        # --- Load locked days and holidays ---
         locked_dates = set()
         if self.LockedDay:
             for ld in self.LockedDay.query.all():
@@ -2346,13 +2354,16 @@ class CPSATSchedulingEngine:
 
         blocked_dates = locked_dates | holiday_dates
 
-        def _effective_type(event):
-            """Get effective type, checking EventTypeOverride."""
+        employees_raw = self.Employee.query.filter(
+            self.Employee.is_active == True,
+        ).all()
+        employee_map = {e.id: e for e in employees_raw}
+
+        def effective_type(event):
             ov = overrides.get(event.project_ref_num)
             return ov if ov else event.event_type
 
-        def _is_employee_eligible(employee, event_type):
-            """Check whether employee is eligible for the given event type."""
+        def is_eligible(employee, event_type):
             if event_type in JUICER_EVENT_TYPES:
                 return (
                     employee.job_title in JUICER_TITLES
@@ -2360,25 +2371,32 @@ class CPSATSchedulingEngine:
                 )
             if event_type in LEAD_ONLY_EVENT_TYPES:
                 return employee.job_title in LEAD_TITLES
-            # Core and other general types: any active employee
             return True
 
-        # --- 1. Load posted schedules, group by event type ---
-        all_schedules = self.Schedule.query.all()
-        # Build a map: event_ref_num -> Event for quick lookup
+        return (overrides, skip_refs, blocked_dates, employee_map,
+                effective_type, is_eligible)
+
+    def _load_posted_schedules(self, skip_refs, effective_type_fn, exclude_refs=None):
+        """Load posted schedules grouped by effective event type.
+
+        Args:
+            skip_refs: Event ref nums to skip
+            effective_type_fn: Function to get effective event type
+            exclude_refs: Optional set of event refs to exclude (displaced)
+
+        Returns:
+            tuple: (posted_by_type dict, event_map dict)
+        """
+        today = date.today()
+        all_schedules = self.Schedule.query.filter(
+            self.Schedule.schedule_datetime >= today,
+        ).all()
         scheduled_event_refs = {s.event_ref_num for s in all_schedules}
         scheduled_events_raw = self.Event.query.filter(
             self.Event.project_ref_num.in_(scheduled_event_refs),
         ).all() if scheduled_event_refs else []
         event_map = {e.project_ref_num: e for e in scheduled_events_raw}
 
-        # Employee lookup
-        employees_raw = self.Employee.query.filter(
-            self.Employee.is_active == True,
-        ).all()
-        employee_map = {e.id: e for e in employees_raw}
-
-        # Group schedules by effective event type
         posted_by_type = defaultdict(list)
         for sched in all_schedules:
             event = event_map.get(sched.event_ref_num)
@@ -2386,11 +2404,39 @@ class CPSATSchedulingEngine:
                 continue
             if event.project_ref_num in skip_refs:
                 continue
-            etype = _effective_type(event)
-            # Skip Supervisor events — they're paired with Core
+            if exclude_refs and event.project_ref_num in exclude_refs:
+                continue
+            etype = effective_type_fn(event)
             if etype == 'Supervisor':
                 continue
             posted_by_type[etype].append((sched, event))
+
+        return posted_by_type, event_map
+
+    # ------------------------------------------------------------------
+    # Pre-pass: due date priority swaps
+    # ------------------------------------------------------------------
+
+    def _due_date_priority_pass(self, run, db_session):
+        """Pre-pass: swap posted schedules to prioritize earlier due dates.
+
+        For each event type, find posted schedules holding later-due-date events
+        and swap them for unscheduled events with earlier due dates.
+
+        Only swaps same-type events. Keeps employee, date, time, and block unchanged.
+
+        Returns:
+            int: number of swaps performed
+        """
+        today = date.today()
+        swap_count = 0
+
+        (overrides, skip_refs, blocked_dates, employee_map,
+         _effective_type, _is_employee_eligible) = self._load_swap_context()
+
+        # --- 1. Load posted schedules, group by event type ---
+        posted_by_type, event_map = self._load_posted_schedules(
+            skip_refs, _effective_type)
 
         # --- 2. Load unscheduled events sorted by due_datetime asc ---
         unscheduled_events = self.Event.query.filter(
@@ -2410,6 +2456,7 @@ class CPSATSchedulingEngine:
             unsched_by_type[etype].append(evt)
 
         # --- 3. For each event type, attempt swaps ---
+        swapped_refs = set()
         for etype, posted_list in posted_by_type.items():
             unsched_list = unsched_by_type.get(etype, [])
             if not unsched_list:
@@ -2426,7 +2473,7 @@ class CPSATSchedulingEngine:
 
             for unsched_event in unsched_list:
                 # Already swapped in this pass
-                if getattr(unsched_event, '_swapped', False):
+                if unsched_event.project_ref_num in swapped_refs:
                     continue
 
                 unsched_due = unsched_event.due_datetime
@@ -2481,14 +2528,13 @@ class CPSATSchedulingEngine:
                         sched.schedule_datetime,
                         is_swap=True,
                         bumped_event_ref_num=posted_event.project_ref_num,
-                        swap_reason='Due date priority swap',
-                        shift_block=getattr(sched, 'shift_block', None),
+                        swap_reason=SWAP_REASON_DUE_DATE,
                     )
                     if ps:
                         ps.bumped_posted_schedule_id = sched.id
 
                     used_sched_ids.add(sched.id)
-                    unsched_event._swapped = True
+                    swapped_refs.add(unsched_event.project_ref_num)
                     swap_count += 1
                     break  # Move to next unscheduled event
 
@@ -2514,54 +2560,8 @@ class CPSATSchedulingEngine:
         today = date.today()
         swap_count = 0
 
-        # --- Load overrides (same pattern as _due_date_priority_pass) ---
-        overrides = {}
-        if self.EventTypeOverride:
-            for ov in self.EventTypeOverride.query.all():
-                overrides[ov.project_ref_num] = ov.override_event_type
-
-        skip_refs = set()
-        if self.EventSchedulingOverride:
-            for ov in self.EventSchedulingOverride.query.filter_by(
-                allow_auto_schedule=False,
-            ).all():
-                skip_refs.add(ov.event_ref_num)
-
-        # --- Load locked days and holidays ---
-        locked_dates = set()
-        if self.LockedDay:
-            for ld in self.LockedDay.query.all():
-                locked_dates.add(ld.locked_date)
-
-        holiday_dates = set()
-        if self.CompanyHoliday:
-            try:
-                holiday_dates = set(
-                    self.CompanyHoliday.get_holidays_in_range(
-                        today, today + timedelta(days=365),
-                    )
-                )
-            except Exception:
-                pass
-
-        blocked_dates = locked_dates | holiday_dates
-
-        def _effective_type(event):
-            """Get effective type, checking EventTypeOverride."""
-            ov = overrides.get(event.project_ref_num)
-            return ov if ov else event.event_type
-
-        def _is_employee_eligible(employee, event_type):
-            """Check whether employee is eligible for the given event type."""
-            if event_type in JUICER_EVENT_TYPES:
-                return (
-                    employee.job_title in JUICER_TITLES
-                    or getattr(employee, 'juicer_trained', False)
-                )
-            if event_type in LEAD_ONLY_EVENT_TYPES:
-                return employee.job_title in LEAD_TITLES
-            # Core and other general types: any active employee
-            return True
+        (overrides, skip_refs, blocked_dates, employee_map,
+         _effective_type, _is_employee_eligible) = self._load_swap_context()
 
         # --- 1. Find events that failed in this run ---
         failed_pending = db_session.query(self.PendingSchedule).filter(
@@ -2609,35 +2609,11 @@ class CPSATSchedulingEngine:
             cand_by_type[etype].append(evt)
 
         # --- 5. Load posted schedules, excluding displaced ones ---
-        all_schedules = self.Schedule.query.all()
-        scheduled_event_refs = {s.event_ref_num for s in all_schedules}
-        scheduled_events_raw = self.Event.query.filter(
-            self.Event.project_ref_num.in_(scheduled_event_refs),
-        ).all() if scheduled_event_refs else []
-        event_map = {e.project_ref_num: e for e in scheduled_events_raw}
-
-        # Employee lookup
-        employees_raw = self.Employee.query.filter(
-            self.Employee.is_active == True,
-        ).all()
-        employee_map = {e.id: e for e in employees_raw}
-
-        # Group posted schedules by effective event type, excluding displaced
-        posted_by_type = defaultdict(list)
-        for sched in all_schedules:
-            event = event_map.get(sched.event_ref_num)
-            if not event:
-                continue
-            if event.project_ref_num in skip_refs:
-                continue
-            if event.project_ref_num in displaced_refs:
-                continue
-            etype = _effective_type(event)
-            if etype == 'Supervisor':
-                continue
-            posted_by_type[etype].append((sched, event))
+        posted_by_type, event_map = self._load_posted_schedules(
+            skip_refs, _effective_type, exclude_refs=displaced_refs)
 
         # --- 6. For each event type, attempt swaps ---
+        swapped_refs = set()
         for etype, posted_list in posted_by_type.items():
             cand_list = cand_by_type.get(etype, [])
             if not cand_list:
@@ -2653,7 +2629,7 @@ class CPSATSchedulingEngine:
             used_sched_ids = set()
 
             for candidate in cand_list:
-                if getattr(candidate, '_swapped', False):
+                if candidate.project_ref_num in swapped_refs:
                     continue
 
                 cand_due = candidate.due_datetime
@@ -2717,14 +2693,13 @@ class CPSATSchedulingEngine:
                         sched.schedule_datetime,
                         is_swap=True,
                         bumped_event_ref_num=posted_event.project_ref_num,
-                        swap_reason='Due date priority verification swap',
-                        shift_block=getattr(sched, 'shift_block', None),
+                        swap_reason=SWAP_REASON_VERIFICATION,
                     )
                     if ps:
                         ps.bumped_posted_schedule_id = sched.id
 
                     used_sched_ids.add(sched.id)
-                    candidate._swapped = True
+                    swapped_refs.add(candidate.project_ref_num)
                     swap_count += 1
                     break  # Move to next candidate
 
@@ -2900,7 +2875,7 @@ class CPSATSchedulingEngine:
             # === Finalize ===
             run.status = 'completed'
             run.completed_at = datetime.utcnow()
-            run.total_events_processed = phase2_events + phase1_swaps
+            run.total_events_processed = phase2_events + phase1_swaps + phase4_swaps
             run.events_scheduled = total_scheduled
             run.events_failed = total_failed
             run.events_requiring_swaps = total_swaps
