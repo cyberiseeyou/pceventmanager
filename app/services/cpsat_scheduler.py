@@ -284,40 +284,43 @@ class CPSATSchedulingEngine:
                 self.events.append(e)
 
         # --- Bumpable events: already-scheduled events that can be displaced ---
-        # Load "Scheduled" condition events that have posted schedules on
-        # non-locked, non-holiday valid days.  These are included in the model
-        # so the solver can displace them for higher-priority events.
-        new_event_refs = {e.project_ref_num for e in self.events + self.supervisor_events}
-        bumpable_events_raw = self.Event.query.filter(
-            self.Event.condition == 'Scheduled',
-            ~self.Event.project_ref_num.in_(new_event_refs) if new_event_refs else True,
-            self.Event.due_datetime > today,
-        ).all()
-
-        for e in bumpable_events_raw:
-            if e.project_ref_num in skip_refs:
-                continue
-            # Must have at least one posted schedule
-            schedules = self.Schedule.query.filter_by(
-                event_ref_num=e.project_ref_num
+        if getattr(self, 'allow_bumping', True):
+            # Load "Scheduled" condition events that have posted schedules on
+            # non-locked, non-holiday valid days.  These are included in the model
+            # so the solver can displace them for higher-priority events.
+            new_event_refs = {e.project_ref_num for e in self.events + self.supervisor_events}
+            bumpable_events_raw = self.Event.query.filter(
+                self.Event.condition == 'Scheduled',
+                ~self.Event.project_ref_num.in_(new_event_refs) if new_event_refs else True,
+                self.Event.due_datetime > today,
             ).all()
-            if not schedules:
-                continue
 
-            # Apply type override
-            if e.project_ref_num in overrides:
-                e._override_event_type = overrides[e.project_ref_num]
-            else:
-                e._override_event_type = None
-            etype = e._override_event_type or e.event_type
+            for e in bumpable_events_raw:
+                if e.project_ref_num in skip_refs:
+                    continue
+                # Must have at least one posted schedule
+                schedules = self.Schedule.query.filter_by(
+                    event_ref_num=e.project_ref_num
+                ).all()
+                if not schedules:
+                    continue
 
-            # Skip Supervisor events from bumping (they're paired with Core)
-            if etype == 'Supervisor':
-                continue
+                # Apply type override
+                if e.project_ref_num in overrides:
+                    e._override_event_type = overrides[e.project_ref_num]
+                else:
+                    e._override_event_type = None
+                etype = e._override_event_type or e.event_type
 
-            self.bumpable_event_ids.add(e.id)
-            self.bumpable_schedule_map[e.project_ref_num] = schedules
-            self.events.append(e)
+                # Skip Supervisor events from bumping (they're paired with Core)
+                if etype == 'Supervisor':
+                    continue
+
+                self.bumpable_event_ids.add(e.id)
+                self.bumpable_schedule_map[e.project_ref_num] = schedules
+                self.events.append(e)
+        else:
+            logger.info("Bumping disabled — skipping bumpable event loading")
 
         # Index supervisor events by 6-digit event number for pairing
         self.supervisor_by_number = {}
@@ -2736,112 +2739,180 @@ class CPSATSchedulingEngine:
 
     def run_auto_scheduler(self, run_type='manual', time_limit_seconds=60):
         """
-        Run the CP-SAT auto-scheduler.
+        Run the CP-SAT auto-scheduler in 4 phases:
 
-        Args:
-            run_type: 'manual' or 'automatic'
-            time_limit_seconds: Maximum solver time (default 60s)
-
-        Returns:
-            SchedulerRunHistory record with results
+        Phase 1: Due-date priority pre-pass (swap posted schedules)
+        Phase 2: Solver without bumping (schedule into empty slots)
+        Phase 3: Solver with bumping (only for Phase 2 failures)
+        Phase 4: Due-date verification post-pass
         """
-        # Create run history record
         run = self.SchedulerRunHistory(
-            run_type=run_type,
-            status='running',
-            solver_type='cpsat',
+            run_type=run_type, status='running', solver_type='cpsat',
         )
         self.db.add(run)
         self.db.flush()
 
+        total_scheduled = 0
+        total_failed = 0
+        total_swaps = 0
+
         try:
-            logger.info("CP-SAT Scheduler: Loading data...")
+            # === PHASE 1: Due-date priority pre-pass ===
+            logger.info("=== PHASE 1: Due-date priority pre-pass ===")
+            phase1_swaps = self._due_date_priority_pass(run, self.db)
+            total_swaps += phase1_swaps
+            total_scheduled += phase1_swaps
+            self.db.flush()
+
+            # === PHASE 2: Solver WITHOUT bumping ===
+            logger.info("=== PHASE 2: Solver (no bumping) ===")
+            self.allow_bumping = False
             self._load_data()
 
-            total_events = len(self.events)
-            # Count paired events that will also be scheduled
-            paired_sup = len(self.core_sup_pairs)
-            paired_survey = len(self.juicer_prod_survey_pairs)
+            # Exclude events already handled in Phase 1
+            phase1_refs = set()
+            for ps in self.db.query(self.PendingSchedule).filter(
+                self.PendingSchedule.scheduler_run_id == run.id,
+                self.PendingSchedule.employee_id.isnot(None),
+            ).all():
+                phase1_refs.add(ps.event_ref_num)
 
-            bumpable_count = len(self.bumpable_event_ids)
-            logger.info(
-                f"CP-SAT Scheduler: {total_events} events to schedule "
-                f"({bumpable_count} bumpable), "
-                f"{len(self.employee_ids)} employees, "
-                f"{len(self.valid_days)} valid days, "
-                f"{paired_sup} Core-Supervisor pairs, "
-                f"{paired_survey} Juicer Prod-Survey pairs"
-            )
+            if phase1_refs:
+                self.events = [e for e in self.events
+                               if e.project_ref_num not in phase1_refs]
+                self._compute_pairings()
+                self._compute_eligibility()
+                self._compute_product_groups()
 
-            if total_events == 0:
-                run.status = 'completed'
-                run.completed_at = datetime.utcnow()
-                run.total_events_processed = 0
-                run.events_scheduled = 0
-                run.events_failed = 0
-                run.events_requiring_swaps = 0
-                self.db.commit()
-                return run
+            phase2_events = len(self.events)
+            scheduled_2 = 0
+            failed_2 = 0
 
-            logger.info("CP-SAT Scheduler: Building model...")
-            model = self._build_model()
-
-            logger.info(f"CP-SAT Scheduler: Solving (time limit: {time_limit_seconds}s)...")
-            solver, status = self._solve(model, time_limit_seconds)
-
-            if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-                quality = "optimal" if status == cp_model.OPTIMAL else "feasible"
-                logger.info(
-                    f"CP-SAT Scheduler: Solution found ({quality}), "
-                    f"objective={solver.ObjectiveValue():.0f}"
-                )
-
-                scheduled, failed, swaps = self._extract_solution(solver, run)
-
-                # Post-solve explainability logging
-                self._log_solution_explanations(solver)
-
-                # Post-solve validation: catch any remaining double-bookings
-                removed = self._post_solve_review(run)
-                if removed > 0:
-                    scheduled -= removed
-                    failed += removed
-                    logger.info(f"CP-SAT post-review: removed {removed} duplicate/excess assignments")
-
-                run.status = 'completed'
-                run.completed_at = datetime.utcnow()
-                run.total_events_processed = total_events + paired_sup + paired_survey
-                run.events_scheduled = scheduled
-                run.events_failed = failed
-                run.events_requiring_swaps = swaps
-                self.db.commit()
-
-                logger.info(
-                    f"CP-SAT Scheduler: Done. Scheduled={scheduled}, "
-                    f"Failed={failed}, Swaps={swaps}"
-                )
-
-            elif status == cp_model.INFEASIBLE:
-                logger.warning("CP-SAT Scheduler: Model is infeasible — no valid solution exists")
-                run.status = 'failed'
-                run.completed_at = datetime.utcnow()
-                run.error_message = 'CP-SAT solver found the model infeasible. Constraints may be too restrictive.'
-                run.total_events_processed = total_events
-                run.events_scheduled = 0
-                run.events_failed = total_events
-                run.events_requiring_swaps = 0
-                self.db.commit()
-
+            if phase2_events == 0:
+                logger.info("Phase 2: No events to schedule")
             else:
-                logger.warning(f"CP-SAT Scheduler: Solver returned status {status}")
-                run.status = 'failed'
-                run.completed_at = datetime.utcnow()
-                run.error_message = f'CP-SAT solver did not find a solution (status: {status})'
-                run.total_events_processed = total_events
-                run.events_scheduled = 0
-                run.events_failed = total_events
-                run.events_requiring_swaps = 0
-                self.db.commit()
+                # Log stats
+                paired_sup = len(self.core_sup_pairs)
+                paired_survey = len(getattr(self, 'juicer_prod_survey_pairs', {}))
+                bumpable_count = len(self.bumpable_event_ids)
+                logger.info(
+                    f"CP-SAT Scheduler: {phase2_events} events to schedule "
+                    f"({bumpable_count} bumpable), "
+                    f"{len(self.employee_ids)} employees, "
+                    f"{len(self.valid_days)} valid days, "
+                    f"{paired_sup} Core-Supervisor pairs, "
+                    f"{paired_survey} Juicer Prod-Survey pairs"
+                )
+
+                model = self._build_model()
+                solver, status = self._solve(model, time_limit_seconds)
+
+                if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                    scheduled_2, failed_2, swaps_2 = self._extract_solution(solver, run)
+                    self._log_solution_explanations(solver)
+                    removed = self._post_solve_review(run)
+                    if removed > 0:
+                        scheduled_2 -= removed
+                        failed_2 += removed
+                    total_swaps += swaps_2
+                else:
+                    logger.warning(f"Phase 2 solver status: {status}")
+                    failed_2 = phase2_events
+
+            total_scheduled += scheduled_2
+            total_failed += failed_2
+            self.db.flush()
+
+            # === PHASE 3: Solver WITH bumping (only for Phase 2 failures) ===
+            scheduled_3 = 0
+            if failed_2 > 0:
+                logger.info(f"=== PHASE 3: Solver (with bumping) for {failed_2} failed events ===")
+
+                # Collect failed event refs from Phase 2
+                failed_refs = set()
+                for ps in self.db.query(self.PendingSchedule).filter(
+                    self.PendingSchedule.scheduler_run_id == run.id,
+                    self.PendingSchedule.failure_reason.isnot(None),
+                ).all():
+                    failed_refs.add(ps.event_ref_num)
+
+                if failed_refs:
+                    self.allow_bumping = True
+                    self._load_data()
+
+                    # Filter to only failed events + bumpable targets
+                    self.events = [e for e in self.events
+                                   if e.project_ref_num in failed_refs
+                                   or e.id in self.bumpable_event_ids]
+                    self._compute_pairings()
+                    self._compute_eligibility()
+                    self._compute_product_groups()
+
+                    # Determine which failed events are actually retryable
+                    retryable_refs = {e.project_ref_num for e in self.events
+                                      if e.id not in self.bumpable_event_ids}
+                    phase3_new = len(retryable_refs)
+
+                    if phase3_new > 0:
+                        # Only delete failure records for events we'll actually retry
+                        self.db.query(self.PendingSchedule).filter(
+                            self.PendingSchedule.scheduler_run_id == run.id,
+                            self.PendingSchedule.failure_reason.isnot(None),
+                            self.PendingSchedule.event_ref_num.in_(retryable_refs),
+                        ).delete(synchronize_session='fetch')
+                        self.db.flush()
+
+                        bumpable_count = len(self.bumpable_event_ids)
+                        logger.info(
+                            f"Phase 3: {phase3_new} events to retry "
+                            f"({bumpable_count} bumpable targets)"
+                        )
+
+                        model = self._build_model()
+                        solver, status = self._solve(model, time_limit_seconds)
+
+                        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                            scheduled_3, failed_3, swaps_3 = self._extract_solution(solver, run)
+                            self._log_solution_explanations(solver)
+                            removed = self._post_solve_review(run)
+                            if removed > 0:
+                                scheduled_3 -= removed
+                                failed_3 += removed
+                            total_scheduled += scheduled_3
+                            total_failed = total_failed - len(retryable_refs) + failed_3
+                            total_swaps += swaps_3
+                        else:
+                            logger.warning(f"Phase 3 solver status: {status}")
+                    else:
+                        logger.info("Phase 3: No events to retry")
+            else:
+                logger.info("=== PHASE 3: Skipped (no Phase 2 failures) ===")
+
+            self.db.flush()
+
+            # === PHASE 4: Due-date verification post-pass ===
+            logger.info("=== PHASE 4: Due-date verification post-pass ===")
+            phase4_swaps = self._due_date_verification_pass(run, self.db)
+            total_swaps += phase4_swaps
+            total_scheduled += phase4_swaps
+            total_failed = max(0, total_failed - phase4_swaps)
+
+            # === Finalize ===
+            run.status = 'completed'
+            run.completed_at = datetime.utcnow()
+            run.total_events_processed = phase2_events + phase1_swaps
+            run.events_scheduled = total_scheduled
+            run.events_failed = total_failed
+            run.events_requiring_swaps = total_swaps
+            self.db.commit()
+
+            logger.info(
+                f"CP-SAT Scheduler: Done. "
+                f"Phase1Swaps={phase1_swaps}, Phase2={scheduled_2}/{failed_2}, "
+                f"Phase3={'skipped' if failed_2 == 0 else scheduled_3}, "
+                f"Phase4Swaps={phase4_swaps}, "
+                f"Total: Scheduled={total_scheduled}, Failed={total_failed}, Swaps={total_swaps}"
+            )
 
         except Exception as e:
             logger.exception(f"CP-SAT Scheduler: Error - {e}")

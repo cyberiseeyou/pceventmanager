@@ -1095,3 +1095,64 @@ class TestDueDateVerificationPass:
 
         # Should NOT swap because the posted schedule 620001 was already displaced
         assert swaps == 0, f"Expected 0 swaps (schedule already displaced), got {swaps}"
+
+
+# ---------------------------------------------------------------------------
+# 4-Phase Scheduling Flow
+# ---------------------------------------------------------------------------
+
+class TestFourPhaseScheduling:
+    """Test the complete 4-phase scheduling flow."""
+
+    def test_full_flow_prioritizes_earlier_due_date(self, db_session, models):
+        """End-to-end: earlier-due-date event should be scheduled even when
+        a later-due-date event already occupies the only viable slot."""
+        Schedule = models['Schedule']
+
+        emp = _make_employee(models, db_session, 'emp1', 'Alice')
+
+        # Later-due Core event already scheduled
+        later = _make_event(models, db_session, 700001, 'Core',
+                            condition='Scheduled', start_days=3, due_days=30)
+        later.is_scheduled = True
+        db_session.flush()
+
+        sched_date = _future(5)
+        sched = Schedule(
+            event_ref_num=700001, employee_id='emp1',
+            schedule_datetime=sched_date, shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Earlier-due Core event -- unscheduled, valid for same date
+        earlier = _make_event(models, db_session, 700002, 'Core',
+                              start_days=3, due_days=10)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+
+        # Earlier event should be scheduled (via pre-pass swap or solver)
+        pending = _get_pending(db_session, models, run.id)
+        earlier_pending = [p for p in pending if p.event_ref_num == 700002
+                           and p.employee_id is not None]
+        assert len(earlier_pending) >= 1, "Earlier-due event should be scheduled"
+
+    def test_no_bumping_phase_schedules_into_empty_slots(self, db_session, models):
+        """Phase 2 should schedule events into empty slots without bumping."""
+        _make_employee(models, db_session, 'emp1', 'Alice')
+        _make_employee(models, db_session, 'emp2', 'Bob')
+
+        # Two events, plenty of open slots
+        _make_event(models, db_session, 700010, 'Core', start_days=3, due_days=14)
+        _make_event(models, db_session, 700011, 'Core', start_days=3, due_days=14)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        assert run.status == 'completed'
+        assert run.events_scheduled >= 2
+
+        # No swaps should be needed (no posted schedules to swap with)
+        pending = _get_pending(db_session, models, run.id)
+        swaps = [p for p in pending if p.is_swap]
+        assert len(swaps) == 0
