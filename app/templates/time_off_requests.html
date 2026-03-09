@@ -226,6 +226,31 @@
             grid-template-columns: 1fr;
         }
     }
+
+    @media (max-width: 480px) {
+        .page-header { margin-bottom: 16px; padding-bottom: 12px; }
+        .page-title { font-size: 1.5rem; }
+        .condition-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; white-space: nowrap; }
+        .condition-tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { min-height: 44px; padding: 10px 16px; white-space: nowrap; }
+        .controls-section { gap: 10px; }
+        .filter-section { flex-direction: column; align-items: stretch; }
+        .filter-section label { margin-bottom: 4px; }
+        .filter-section select { min-height: 44px; }
+        #add-request-btn { min-height: 44px; width: 100%; }
+        .time-off-request-card { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; }
+        .time-off-actions { width: 100%; }
+        .time-off-actions .btn-delete { min-height: 44px; width: 100%; text-align: center; }
+        .modal-container { width: 95% !important; max-width: calc(100vw - 16px); }
+        .modal-body { padding: 16px; }
+        .form-group input, .form-group select, .form-group textarea { min-height: 44px; }
+        .modal-footer { flex-direction: column; }
+        .modal-footer .btn { min-height: 44px; width: 100%; text-align: center; }
+    }
+    @media (max-width: 380px) {
+        .page-title { font-size: 1.25rem; }
+        .time-off-request-card { padding: 10px; }
+    }
 </style>
 {% endblock %}
 

@@ -457,6 +457,23 @@
             grid-column: span 1;
         }
     }
+
+    @media (max-width: 480px) {
+        .event-times-container { padding: 12px; }
+        .page-header h2 { font-size: 1.3rem; }
+        .settings-section { padding: 14px; }
+        .settings-section h3 { font-size: 1.1rem; }
+        .info-box { padding: 10px; font-size: 0.85em; }
+        .event-card, .slot-card, .block-card { padding: 12px; }
+        .time-field input { min-height: 44px; padding: 10px; }
+        .section-actions { flex-direction: column; align-items: stretch; }
+        .section-actions .btn { min-height: 44px; text-align: center; }
+        .page-actions .btn { min-height: 44px; }
+    }
+    @media (max-width: 380px) {
+        .event-times-container { padding: 8px; }
+        .settings-section { padding: 10px; }
+    }
 </style>
 
 <script>

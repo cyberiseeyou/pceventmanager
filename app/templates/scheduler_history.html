@@ -292,6 +292,26 @@
         }
     }
 
+    @media (max-width: 480px) {
+        .history-container { padding: 12px; }
+        .history-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .history-header h1 { font-size: 1.3rem; }
+        .history-back-btn { min-height: 44px; display: flex; align-items: center; }
+        .run-row-header { padding: 12px; }
+        .run-type-counts { gap: 4px; }
+        .type-badge { font-size: 0.7rem; padding: 2px 8px; }
+        .filter-controls { flex-direction: column; gap: 8px; }
+        .filter-buttons { flex-wrap: wrap; width: 100%; }
+        .filter-btn { min-height: 44px; flex: 1; text-align: center; }
+        .export-btn { min-height: 44px; justify-content: center; width: 100%; }
+        .events-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .run-details { padding: 12px; }
+    }
+    @media (max-width: 380px) {
+        .history-container { padding: 8px; }
+        .history-header h1 { font-size: 1.1rem; }
+    }
+
     .solver-badge {
         display: inline-flex;
         align-items: center;

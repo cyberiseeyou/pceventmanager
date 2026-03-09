@@ -327,6 +327,24 @@
             grid-template-columns: 1fr;
         }
     }
+
+    @media (max-width: 480px) {
+        .verification-container { padding: 12px; }
+        .verification-header h1 { font-size: 1.3rem; }
+        .verification-controls { padding: 16px; }
+        .form-input { min-height: 44px; }
+        .btn-verify { min-height: 44px; width: 100%; }
+        .verification-results { padding: 16px; }
+        .status-summary { flex-direction: column; text-align: center; padding: 16px; gap: 10px; }
+        .status-icon { font-size: 36px; }
+        .status-content h2 { font-size: 18px; }
+        .issue-card { padding: 12px; }
+        .issue-header { gap: 8px; }
+    }
+    @media (max-width: 380px) {
+        .verification-container { padding: 8px; }
+        .verification-controls { padding: 12px; }
+    }
 </style>
 {% endblock %}
 
