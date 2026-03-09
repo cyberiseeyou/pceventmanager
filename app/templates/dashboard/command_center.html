@@ -510,28 +510,356 @@
     .cc-item.priority-normal { border-left: 3px solid #0071ce; }
     .cc-item.priority-low { border-left: 3px solid #9ca3af; }
 
-    /* Responsive */
+    /* Setup Checklist */
+    /* Subsection divider */
+    .cc-subsection {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .cc-subsection-label {
+        font-size: 12px;
+        color: #6b7280;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    /* Setup Checklist */
+    .setup-checklist {
+        background: #fffbeb;
+        border: 1px solid #fbbf24;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .setup-checklist h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        color: #92400e;
+    }
+
+    .setup-checklist-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .setup-step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: white;
+        border-radius: 8px;
+        text-decoration: none;
+        min-height: 48px;
+    }
+
+    .setup-step-done {
+        border: 1px solid #d1fae5;
+    }
+
+    .setup-step-pending {
+        border: 1px solid #fed7aa;
+    }
+
+    .setup-step-check {
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .setup-step-content {
+        flex: 1;
+    }
+
+    .setup-step-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .setup-step-done .setup-step-name {
+        color: #065f46;
+    }
+
+    .setup-step-desc {
+        font-size: 12px;
+        color: #6b7280;
+        margin-left: 6px;
+    }
+
+    .setup-step-action {
+        font-size: 12px;
+        font-weight: 600;
+        color: #ea580c;
+        white-space: nowrap;
+    }
+
+    /* Responsive - Tablet */
     @media (max-width: 768px) {
         .command-center {
             padding: 16px;
         }
 
+        .cc-header h1 {
+            font-size: 22px;
+        }
+
         .deadline-banner {
             flex-direction: column;
             text-align: center;
-            gap: 16px;
+            gap: 12px;
+            padding: 16px 20px;
+        }
+
+        .deadline-banner .info {
+            flex-direction: column;
+            gap: 8px;
         }
 
         .deadline-banner .countdown {
             text-align: center;
         }
 
+        .deadline-banner .countdown .time {
+            font-size: 32px;
+        }
+
+        .deadline-banner .text h2 {
+            font-size: 17px;
+        }
+
         .quick-stats {
             grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            padding: 14px 10px;
+        }
+
+        .stat-card .number {
+            font-size: 28px;
+        }
+
+        .quick-actions {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .outlook-days {
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .outlook-day {
+            padding: 8px 4px;
+        }
+
+        .outlook-day .day-num {
+            font-size: 16px;
         }
 
         .rotation-cards {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .cc-section-header {
+            padding: 12px 16px;
+        }
+
+        .cc-section-body {
+            padding: 12px 16px;
+        }
+
+        /* Touch target fixes */
+        .cc-item .action-btn {
+            padding: 10px 14px;
+            font-size: 13px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .task-checkbox {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+        }
+
+        .refresh-btn {
+            min-height: 44px;
+            padding: 10px 16px;
+        }
+    }
+
+    /* Responsive - Mobile */
+    @media (max-width: 480px) {
+        .command-center {
+            padding: 12px;
+        }
+
+        .cc-header {
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .cc-header h1 {
+            font-size: 20px;
+            gap: 8px;
+        }
+
+        .cc-header .date-info {
+            font-size: 14px;
+        }
+
+        .deadline-banner .countdown .time {
+            font-size: 28px;
+        }
+
+        .deadline-banner .text h2 {
+            font-size: 16px;
+        }
+
+        .deadline-banner .info i {
+            font-size: 24px;
+        }
+
+        .quick-stats {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stat-card .number {
+            font-size: 24px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+        }
+
+        .quick-actions {
             grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .quick-action-card {
+            padding: 14px;
+            min-height: 48px;
+        }
+
+        .outlook-days {
+            grid-template-columns: repeat(7, 1fr);
+            gap: 3px;
+        }
+
+        .outlook-day {
+            padding: 6px 2px;
+        }
+
+        .outlook-day .day-name {
+            font-size: 10px;
+            letter-spacing: 0;
+        }
+
+        .outlook-day .day-num {
+            font-size: 14px;
+            margin: 2px 0;
+        }
+
+        .outlook-day .day-stats {
+            font-size: 10px;
+        }
+
+        .cc-item {
+            padding: 10px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .cc-item .badge {
+            font-size: 10px;
+            padding: 3px 8px;
+        }
+
+        .cc-item .meta {
+            font-size: 12px;
+        }
+
+        .rotation-cards {
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .rotation-card {
+            padding: 12px 8px;
+        }
+
+        .rotation-card .role {
+            font-size: 11px;
+        }
+
+        .rotation-card .name {
+            font-size: 14px;
+        }
+
+        .weekly-outlook {
+            padding: 14px;
+        }
+
+        .weekly-outlook h3 {
+            font-size: 15px;
+        }
+
+        .empty-state {
+            padding: 20px;
+        }
+    }
+
+    /* 5th stat card: center when odd child on 2-column grid */
+    @media (max-width: 768px) {
+        .quick-stats {
+            justify-items: center;
+        }
+
+        .stat-card:last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+            max-width: 50%;
+        }
+    }
+
+    /* Budget Android (360px) */
+    @media (max-width: 380px) {
+        .command-center {
+            padding: 10px;
+        }
+
+        .quick-stats {
+            gap: 6px;
+        }
+
+        .stat-card {
+            padding: 10px 6px;
+        }
+
+        .stat-card .number {
+            font-size: 22px;
+        }
+
+        .stat-card .label {
+            font-size: 11px;
+        }
+
+        .cc-header h1 {
+            font-size: 18px;
+        }
+
+        .deadline-banner .text h2 {
+            font-size: 15px;
+            word-break: break-word;
         }
     }
 </style>
@@ -617,21 +945,21 @@
 
     <!-- Setup Checklist (shown only when incomplete) -->
     {% if data.setup_status and not data.setup_status.all_done %}
-    <div style="background: #fffbeb; border: 1px solid #fbbf24; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 12px; font-size: 16px; color: #92400e;">
-            <i class="fas fa-clipboard-list" style="margin-right: 6px;"></i>
+    <div class="setup-checklist">
+        <h3>
+            <i class="fas fa-clipboard-list"></i>
             Setup Checklist ({{ data.setup_status.completed }}/{{ data.setup_status.total }})
         </h3>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="setup-checklist-items">
             {% for step in data.setup_status.steps %}
-            <a href="{{ step.url }}" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: white; border-radius: 8px; text-decoration: none; border: 1px solid {{ '#d1fae5' if step.done else '#fed7aa' }};">
-                <span style="font-size: 18px;">{{ '&#9745;' if step.done else '&#9744;' }}</span>
-                <span style="flex: 1;">
-                    <span style="font-weight: 600; color: {{ '#065f46' if step.done else '#1f2937' }};">{{ step.name }}</span>
-                    <span style="font-size: 12px; color: #6b7280; margin-left: 6px;">{{ step.description }}</span>
+            <a href="{{ step.url }}" class="setup-step {{ 'setup-step-done' if step.done else 'setup-step-pending' }}">
+                <span class="setup-step-check">{{ '☑' if step.done else '☐' }}</span>
+                <span class="setup-step-content">
+                    <span class="setup-step-name">{{ step.name }}</span>
+                    <span class="setup-step-desc">{{ step.description }}</span>
                 </span>
                 {% if not step.done %}
-                <span style="font-size: 12px; font-weight: 600; color: #ea580c;">Set up</span>
+                <span class="setup-step-action">Set up</span>
                 {% endif %}
             </a>
             {% endfor %}
@@ -835,8 +1163,8 @@
                     {% endif %}
 
                     {% if data.employee_issues.out_this_week %}
-                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">UPCOMING THIS WEEK</div>
+                    <div class="cc-subsection">
+                        <div class="cc-subsection-label">UPCOMING THIS WEEK</div>
                         {% for emp in data.employee_issues.out_this_week %}
                         <div class="cc-item">
                             <div class="icon info">

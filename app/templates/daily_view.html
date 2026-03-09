@@ -157,6 +157,40 @@
   .daily-tab-panel.active {
     display: block;
   }
+
+  /* Mobile: compact tabs */
+  @media (max-width: 480px) {
+    .daily-tabs {
+      gap: 2px;
+      padding: 3px;
+    }
+
+    .daily-tab {
+      padding: 8px 8px;
+      font-size: 13px;
+      gap: 4px;
+    }
+
+    .daily-tab .material-symbols-outlined {
+      font-size: 16px;
+    }
+
+    .summary-bar {
+      padding: 8px 12px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .daily-tab {
+      padding: 8px 6px;
+      font-size: 12px;
+      gap: 3px;
+    }
+
+    .daily-tab .material-symbols-outlined {
+      font-size: 15px;
+    }
+  }
 </style>
 {% endblock %}
 
