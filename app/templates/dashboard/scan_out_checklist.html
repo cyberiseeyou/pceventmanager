@@ -126,6 +126,56 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Mobile (480px) */
+    @media (max-width: 480px) {
+        .scanout-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+        }
+        .scanout-header h1 { font-size: 20px; }
+        .nav-btns {
+            flex-wrap: wrap;
+            gap: 6px;
+            width: 100%;
+        }
+        .nav-btns a, .nav-btns button {
+            padding: 8px 12px;
+            font-size: 13px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .progress-bar {
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px 16px;
+        }
+        .progress-bar .progress-text { white-space: normal; text-align: center; }
+
+        /* Table: horizontal scroll wrapper + compact cells */
+        .checklist-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .checklist-table thead, .checklist-table tbody { min-width: 500px; }
+        .checklist-table thead th { padding: 8px 10px; font-size: 11px; }
+        .checklist-table tbody td { padding: 8px 10px; font-size: 13px; }
+        .check-cell { width: 40px; }
+        .check-cell input[type="checkbox"] { width: 24px; height: 24px; }
+
+        /* Sync modal */
+        .sync-overlay .sync-card { padding: 20px; }
+        .sync-overlay .sync-card .btn-row { flex-direction: column; }
+        .sync-overlay .sync-card .btn-row button { width: 100%; min-height: 44px; }
+    }
+
+    /* Budget Android (380px) */
+    @media (max-width: 380px) {
+        .scanout-header { padding: 12px; }
+        .scanout-header h1 { font-size: 18px; }
+        .nav-btns a, .nav-btns button { padding: 6px 10px; font-size: 12px; }
+        .progress-bar { padding: 10px 12px; }
+    }
 </style>
 {% endblock %}
 
