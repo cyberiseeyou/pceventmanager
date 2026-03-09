@@ -10,6 +10,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#2E4C73">
+    <meta name="apple-mobile-web-app-title" content="PC Events">
+    <meta name="description" content="Product Connections Event Scheduler - Sam's Club Store #8135">
     <title>{% block title %}Product Connections - Scheduler{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
@@ -29,6 +32,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/notification-modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/sidebar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/bottom-nav.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 
@@ -318,7 +322,40 @@
         </main>
     </div>
 
-    <!-- Footer -->
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav" id="bottomNav" aria-label="Mobile navigation">
+        <a href="/schedule/daily/{{ today_date }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
+            data-nav="today">
+            <span class="material-symbols-outlined">today</span>
+            <span class="bottom-nav-label">Today</span>
+        </a>
+        <a href="{{ url_for('main.unscheduled_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+            data-nav="events">
+            <span class="material-symbols-outlined">list_alt</span>
+            <span class="bottom-nav-label">Events</span>
+        </a>
+        <a href="{{ url_for('dashboard.command_center') }}"
+            class="bottom-nav-item {% if request.endpoint == 'dashboard.command_center' or request.endpoint == 'main.index' %}active{% endif %}"
+            data-nav="dashboard">
+            <span class="material-symbols-outlined">dashboard</span>
+            <span class="bottom-nav-label">Dashboard</span>
+        </a>
+        <a href="{{ url_for('employees.employees') }}"
+            class="bottom-nav-item {% if request.endpoint == 'employees.employees' %}active{% endif %}"
+            data-nav="team">
+            <span class="material-symbols-outlined">group</span>
+            <span class="bottom-nav-label">Team</span>
+        </a>
+        <button class="bottom-nav-item" id="bottomNavMore" data-nav="more" aria-label="More options"
+            aria-expanded="false">
+            <span class="material-symbols-outlined">more_horiz</span>
+            <span class="bottom-nav-label">More</span>
+        </button>
+    </nav>
+
+    <!-- Footer (hidden on mobile when bottom nav is visible) -->
     <footer class="footer">
         <div class="container">
             <p>&copy; {{ now().year if now is defined else 2026 }} Product Connections. All rights reserved.</p>
@@ -624,6 +661,19 @@
 
     <!-- Notification Modal Component (for same-week schedule changes) -->
     <script src="{{ url_for('static', filename='js/components/notification-modal.js') }}"></script>
+
+    <!-- Bottom Nav "More" button - opens sidebar on mobile -->
+    <script>
+        (function() {
+            const moreBtn = document.getElementById('bottomNavMore');
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+            if (moreBtn && hamburgerBtn) {
+                moreBtn.addEventListener('click', function() {
+                    hamburgerBtn.click();
+                });
+            }
+        })();
+    </script>
 
     <!-- Quick Note Widget -->
     {% include 'components/quick_note_widget.html' %}

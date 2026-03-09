@@ -303,7 +303,12 @@ table {
 
     .nav-arrow {
         margin-left: auto;
-        padding: 4px;
+        padding: 10px;
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .nav-dropdown {
@@ -412,8 +417,9 @@ table {
 
     /* Calendar-specific responsive adjustments */
     .calendar-day {
-        min-height: 100px;
-        padding: 4px;
+        min-height: 80px;
+        padding: 6px;
+        min-width: 44px;
     }
 
     .day-number {
@@ -571,7 +577,88 @@ table {
     }
 }
 
+/* ==========================================================================
+   Budget Android breakpoint (max-width: 380px)
+   Targets ~360px wide budget phones (Samsung Galaxy A series, Moto G, etc.)
+   ========================================================================== */
+@media (max-width: 380px) {
+    :root {
+        --font-size-h1: 1.5rem;
+        --font-size-h2: 1.25rem;
+        --font-size-h3: 1.1rem;
+        --font-size-body: 0.9rem;
+        --font-size-small: 0.8rem;
+    }
+
+    .container {
+        padding: 10px;
+        padding-left: calc(10px + var(--safe-area-left));
+        padding-right: calc(10px + var(--safe-area-right));
+    }
+
+    .main-content {
+        padding: var(--spacing-sm);
+    }
+
+    .header-title {
+        font-size: 1rem;
+    }
+
+    .header-logo {
+        height: 32px;
+    }
+
+    /* Compact header on very small screens */
+    .header-content {
+        padding: 0 var(--spacing-sm);
+        gap: 2px;
+    }
+
+    /* Tables: more compact */
+    th, td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.8rem;
+    }
+
+    /* Buttons: full width on tiny screens */
+    .btn {
+        padding: 10px 12px;
+        font-size: 14px;
+        width: 100%;
+    }
+
+    /* Form inputs: slightly tighter but still touch-friendly */
+    .form-control,
+    input[type="date"],
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    select {
+        padding: 10px;
+        font-size: 16px; /* Keep 16px to prevent iOS zoom */
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+    }
+
+    /* User name: even shorter truncation */
+    .user-name {
+        max-width: 60px;
+    }
+
+    /* Sidebar: slightly narrower */
+    .sidebar {
+        width: 240px;
+    }
+}
+
 /* Prevent horizontal scroll */
+html,
 body {
     overflow-x: hidden;
 }
@@ -779,8 +866,8 @@ body {
 
     .hamburger-menu {
         padding: 6px;
-        min-height: 36px;
-        min-width: 36px;
+        min-height: 44px;
+        min-width: 44px;
     }
 
     .hamburger-line {
