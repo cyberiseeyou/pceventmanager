@@ -166,7 +166,9 @@ class ProductionConfig(Config):
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-            "img-src 'self' data:;"
+            "img-src 'self' data:; "
+            "worker-src 'self'; "
+            "manifest-src 'self';"
         )
     }
 

@@ -13,6 +13,8 @@
     <meta name="theme-color" content="#2E4C73">
     <meta name="apple-mobile-web-app-title" content="PC Events">
     <meta name="description" content="Product Connections Event Scheduler - Sam's Club Store #8135">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/pwa-icon-192.png') }}">
     <title>{% block title %}Product Connections - Scheduler{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
@@ -37,6 +39,10 @@
 </head>
 
 <body>
+    <!-- Offline status banner -->
+    <div id="offline-banner" class="offline-banner" role="alert" aria-live="polite" hidden>
+        You are currently offline. Some features may be unavailable.
+    </div>
     <a href="#main-content" class="skip-to-content">Skip to main content</a>
     <!-- Header -->
     <header class="header">
@@ -679,6 +685,39 @@
     {% include 'components/quick_note_widget.html' %}
 
     {% block scripts %}{% endblock %}
+
+    <!-- PWA Service Worker Registration & Offline Detection -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((reg) => {
+                        setInterval(() => reg.update(), 60 * 60 * 1000);
+                    })
+                    .catch((err) => console.warn('SW registration failed:', err));
+            });
+        }
+
+        // Offline/Online detection
+        (function() {
+            const banner = document.getElementById('offline-banner');
+            if (!banner) return;
+
+            function updateStatus() {
+                if (navigator.onLine) {
+                    banner.hidden = true;
+                    document.body.classList.remove('is-offline');
+                } else {
+                    banner.hidden = false;
+                    document.body.classList.add('is-offline');
+                }
+            }
+
+            window.addEventListener('online', updateStatus);
+            window.addEventListener('offline', updateStatus);
+            updateStatus();
+        })();
+    </script>
 </body>
 
 </html>

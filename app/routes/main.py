@@ -2,7 +2,7 @@
 Main application routes blueprint
 Handles dashboard, events list, and calendar views
 """
-from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for, send_from_directory
 from sqlalchemy import or_
 from app.routes.auth import require_authentication
 from app.models import init_models
@@ -10,6 +10,30 @@ from datetime import datetime, date, timedelta
 
 # Create blueprint
 main_bp = Blueprint('main', __name__)
+
+
+@main_bp.route('/service-worker.js')
+def service_worker():
+    """Serve service worker from root for maximum scope."""
+    return send_from_directory(
+        current_app.static_folder, 'service-worker.js',
+        mimetype='application/javascript'
+    )
+
+
+@main_bp.route('/manifest.json')
+def manifest():
+    """Serve PWA manifest from root."""
+    return send_from_directory(
+        current_app.static_folder, 'manifest.json',
+        mimetype='application/manifest+json'
+    )
+
+
+@main_bp.route('/offline')
+def offline():
+    """Offline fallback page for PWA."""
+    return render_template('offline.html')
 
 
 @main_bp.route('/')

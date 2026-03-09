@@ -5,6 +5,38 @@
  */
 
 /* ==========================================================================
+   PWA Offline Banner
+   ========================================================================== */
+.offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    background: var(--color-warning, #FF8C00);
+    color: #fff;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: transform 0.3s ease;
+}
+
+.offline-banner[hidden] {
+    display: block;
+    transform: translateY(-100%);
+}
+
+.offline-banner:not([hidden]) {
+    transform: translateY(0);
+}
+
+/* Push body content down when offline banner is visible */
+body.is-offline {
+    padding-top: calc(var(--safe-area-top) + 2.25rem);
+}
+
+/* ==========================================================================
    Safe Area Insets for Notched Devices (iPhone X+, etc.)
    ========================================================================== */
 :root {
