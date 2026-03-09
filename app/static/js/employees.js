@@ -836,27 +836,51 @@ document.addEventListener('click', function(e) {
 
 async function deleteEmployee(employeeId) {
     try {
-        const response = await fetch('/api/employees');
-        const employees = await response.json();
-        const employee = employees.find(emp => emp.id === employeeId);
-        const employeeName = employee ? employee.name : employeeId;
-
-        if (!confirm(`Are you sure you want to permanently DELETE ${employeeName}?\n\nThis action cannot be undone.`)) {
-            return;
-        }
-
-        const deleteResponse = await fetch(`/api/employees/${employeeId}`, {
+        // Step 1: Send DELETE without confirm to preview future events
+        const previewResponse = await fetch(`/api/employees/${employeeId}`, {
             method: 'DELETE',
             headers: {
                 'X-CSRFToken': getCsrfToken()
             }
         });
 
-        const data = await deleteResponse.json();
+        const data = await previewResponse.json();
 
         if (data.error) {
             showFlashMessage(`Error: ${data.error}`, 'error');
+            return;
+        }
+
+        // Step 2: If future events exist, show confirmation with event list
+        if (data.status === 'confirm_required') {
+            const eventList = data.future_events.map(e =>
+                `  - ${e.date} ${e.time}: ${e.event_name} (${e.event_type})`
+            ).join('\n');
+
+            const confirmMsg = `${data.message}\n\nThe following events will be unscheduled:\n${eventList}\n\nPast schedule records will be preserved.\n\nProceed with deletion?`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            // Step 3: Send confirmed DELETE
+            const confirmResponse = await fetch(`/api/employees/${employeeId}?confirm=true`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+
+            const confirmData = await confirmResponse.json();
+
+            if (confirmData.error) {
+                showFlashMessage(`Error: ${confirmData.error}`, 'error');
+            } else {
+                showFlashMessage(confirmData.message, 'success');
+                loadEmployees();
+            }
         } else {
+            // No future events — employee was deleted directly
             showFlashMessage(data.message, 'success');
             loadEmployees();
         }

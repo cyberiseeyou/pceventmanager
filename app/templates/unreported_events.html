@@ -465,7 +465,7 @@
                 {% endif %}
             </td>
             <td>
-                <strong>{{ item.employee.name|title }}</strong>
+                <strong>{{ (item.employee.name if item.employee else item.schedule.employee_name or 'Unknown')|title }}</strong>
             </td>
             <td>
                 <div><span class="date-label">Date:</span> {{ item.schedule_date.strftime('%m/%d/%Y') }}</div>
@@ -488,15 +488,15 @@
                 <div class="action-buttons">
                     <button class="btn-reissue" data-schedule-id="{{ item.schedule.id }}"
                         data-event-name="{{ item.event.project_name|escape }}"
-                        data-event-type="{{ item.event.event_type }}" data-employee-id="{{ item.employee.id }}"
-                        data-employee-name="{{ item.employee.name|escape }}"
+                        data-event-type="{{ item.event.event_type }}" data-employee-id="{{ item.employee.id if item.employee else '' }}"
+                        data-employee-name="{{ (item.employee.name if item.employee else item.schedule.employee_name or 'Unknown')|escape }}"
                         data-schedule-date="{{ item.schedule_date.strftime('%Y-%m-%d') }}"
                         data-schedule-time="{{ item.schedule.schedule_datetime.strftime('%H:%M') }}">
                         Reissue
                     </button>
                     <button class="btn-unschedule" data-schedule-id="{{ item.schedule.id }}"
                         data-event-name="{{ item.event.project_name|escape }}"
-                        data-employee-name="{{ item.employee.name|escape }}" data-action="unschedule-event">
+                        data-employee-name="{{ (item.employee.name if item.employee else item.schedule.employee_name or 'Unknown')|escape }}" data-action="unschedule-event">
                         Unschedule
                     </button>
                 </div>

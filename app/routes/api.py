@@ -662,15 +662,23 @@ def unschedule_event_quick(schedule_id):
     # is tied to the employee's day, not to specific events/schedules
     has_attendance = False
 
-    # CHECK LOCKED DAYS: Cannot unschedule from a locked day
+    # Check for bypass_lock flag (used by Call-Off Wizard for attendance call-offs)
+    data = request.get_json(silent=True) or {}
+    bypass_lock = data.get('bypass_lock', False)
+    force_override_lock = data.get('force_override_lock', False)
+
+    # CHECK LOCKED DAYS: Cannot unschedule from a locked day (unless bypassed/overridden)
     LockedDay = current_app.config.get('LockedDay')
-    if LockedDay:
+    if LockedDay and not bypass_lock and not force_override_lock:
         schedule_date = schedule.schedule_datetime.date()
         locked_info = LockedDay.get_locked_day(schedule_date)
         if locked_info:
             reason = locked_info.reason or 'No reason provided'
             return jsonify({
-                'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}).',
+                'locked_day_override': True,
+                'locked_date': schedule_date.isoformat(),
+                'locked_reason': reason
             }), 409
 
     # Store employee and event info for logging before deletion
@@ -1515,16 +1523,20 @@ def reschedule():
         parsed_time = datetime.strptime(new_time, '%H:%M').time()
         new_datetime = datetime.combine(parsed_date, parsed_time)
 
-        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day
+        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day (unless overridden)
+        force_override_lock = data.get('force_override_lock', False)
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not force_override_lock:
             # Check if current schedule date is locked
             old_date = schedule.schedule_datetime.date()
             old_locked_info = LockedDay.get_locked_day(old_date)
             if old_locked_info:
                 reason = old_locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': old_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
             # Check if new date is locked
@@ -1532,7 +1544,10 @@ def reschedule():
             if new_locked_info:
                 reason = new_locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot reschedule: target date {parsed_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot reschedule: target date {parsed_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': parsed_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
         # CRITICAL VALIDATION: Ensure new datetime is within event period
@@ -1637,6 +1652,8 @@ def reschedule():
             with db.session.begin_nested():
                 # Update CORE event schedule
                 schedule.employee_id = new_employee_id
+                new_emp = Employee.query.get(new_employee_id)
+                schedule.employee_name = new_emp.name if new_emp else None
                 schedule.schedule_datetime = new_datetime
 
                 # Clear shift block so it gets reassigned during paperwork generation
@@ -1836,6 +1853,7 @@ def reschedule():
                                     supervisor_schedule = Schedule(
                                         event_ref_num=supervisor_event.project_ref_num,
                                         employee_id=supervisor_employee.id,
+                                        employee_name=supervisor_employee.name,
                                         schedule_datetime=supervisor_new_datetime
                                     )
                                     db.session.add(supervisor_schedule)
@@ -1964,16 +1982,23 @@ def reschedule_event_with_validation(schedule_id):
         except ValueError as e:
             return jsonify({'error': f'Invalid date or time format: {str(e)}'}), 400
 
-        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day
+        # Check for bypass_lock / force_override_lock flags
+        bypass_lock = data.get('bypass_lock', False)
+        force_override_lock = data.get('force_override_lock', False)
+
+        # CHECK LOCKED DAYS: Cannot reschedule from or to a locked day (unless bypassed/overridden)
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not bypass_lock and not force_override_lock:
             # Check if current schedule date is locked
             old_date = schedule.schedule_datetime.date()
             old_locked_info = LockedDay.get_locked_day(old_date)
             if old_locked_info:
                 reason = old_locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot reschedule: current date {old_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': old_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
             # Check if new date is locked
@@ -1981,7 +2006,10 @@ def reschedule_event_with_validation(schedule_id):
             if new_locked_info:
                 reason = new_locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot reschedule: target date {new_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot reschedule: target date {new_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': new_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
         # Validate using ConstraintValidator
@@ -2125,6 +2153,9 @@ def reschedule_event_with_validation(schedule_id):
                 # Update employee if a new one was provided
                 if new_employee_id:
                     schedule.employee_id = new_employee_id
+                    new_emp_obj = Employee.query.get(new_employee_id)
+                    if new_emp_obj:
+                        schedule.employee_name = new_emp_obj.name
 
                 # Update event sync status
                 event.sync_status = 'synced'
@@ -2262,11 +2293,13 @@ def reschedule_event_with_validation(schedule_id):
                                         # Update existing schedule
                                         supervisor_schedule.schedule_datetime = supervisor_new_datetime
                                         supervisor_schedule.employee_id = supervisor_employee.id
+                                        supervisor_schedule.employee_name = supervisor_employee.name
                                     else:
                                         # Create new Schedule record
                                         new_supervisor_schedule = Schedule(
                                             event_ref_num=supervisor_event.project_ref_num,
                                             employee_id=supervisor_employee.id,
+                                            employee_name=supervisor_employee.name,
                                             schedule_datetime=supervisor_new_datetime
                                         )
                                         db.session.add(new_supervisor_schedule)
@@ -2390,15 +2423,22 @@ def change_employee_assignment(schedule_id):
         if not schedule:
             return jsonify({'error': 'Schedule not found'}), 404
 
-        # CHECK LOCKED DAYS: Cannot change employee on a locked day
+        # Check for bypass_lock / force_override_lock flags
+        bypass_lock = data.get('bypass_lock', False)
+        force_override_lock = data.get('force_override_lock', False)
+
+        # CHECK LOCKED DAYS: Cannot change employee on a locked day (unless bypassed/overridden)
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not bypass_lock and not force_override_lock:
             schedule_date = schedule.schedule_datetime.date()
             locked_info = LockedDay.get_locked_day(schedule_date)
             if locked_info:
                 reason = locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': schedule_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
         # Get related event
@@ -2561,6 +2601,7 @@ def change_employee_assignment(schedule_id):
         old_employee_id = schedule.employee_id
         old_employee = Employee.query.get(old_employee_id)
         schedule.employee_id = new_employee_id
+        schedule.employee_name = new_employee.name
 
         # Update external_id with the new schedule_event_id from Crossmark
         if new_external_id:
@@ -2664,15 +2705,19 @@ def unschedule_event(schedule_id):
         if not event:
             return jsonify({'error': 'Related event not found'}), 404
 
-        # CHECK LOCKED DAYS: Cannot unschedule from a locked day
+        # CHECK LOCKED DAYS: Cannot unschedule from a locked day (unless overridden)
+        force_override_lock = request.args.get('force_override_lock', 'false').lower() == 'true'
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not force_override_lock:
             schedule_date = schedule.schedule_datetime.date()
             locked_info = LockedDay.get_locked_day(schedule_date)
             if locked_info:
                 reason = locked_info.reason or 'No reason provided'
                 return jsonify({
-                    'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot unschedule: {schedule_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': schedule_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
         # Call Crossmark API BEFORE deleting local record
@@ -2830,9 +2875,11 @@ def unschedule_event_by_id(event_id):
         if not schedules:
             return jsonify({'error': 'No schedules found for this event'}), 404
 
-        # CHECK LOCKED DAYS: Cannot unschedule from locked days
+        # CHECK LOCKED DAYS: Cannot unschedule from locked days (unless overridden)
+        data = request.get_json(silent=True) or {}
+        force_override_lock = data.get('force_override_lock', False)
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not force_override_lock:
             locked_dates = []
             for schedule in schedules:
                 schedule_date = schedule.schedule_datetime.date()
@@ -2845,8 +2892,9 @@ def unschedule_event_by_id(event_id):
 
             if locked_dates:
                 return jsonify({
-                    'error': f'Cannot unschedule: {len(locked_dates)} date(s) are locked. Unlock them first.',
-                    'locked_dates': locked_dates
+                    'error': f'Cannot unschedule: {len(locked_dates)} date(s) are locked.',
+                    'locked_dates': locked_dates,
+                    'locked_day_override': True
                 }), 409
 
         # Call Crossmark API BEFORE deleting local records
@@ -3206,10 +3254,14 @@ def trade_events():
 
         # API submission successful - now perform atomic swap in local database
         original_emp1_id = schedule1.employee_id
+        original_emp1_name = schedule1.employee_name
         original_emp2_id = schedule2.employee_id
+        original_emp2_name = schedule2.employee_name
 
         schedule1.employee_id = original_emp2_id
+        schedule1.employee_name = original_emp2_name
         schedule2.employee_id = original_emp1_id
+        schedule2.employee_name = original_emp1_name
 
         # Update event sync status for both events
         event1.sync_status = 'synced'
@@ -3487,6 +3539,7 @@ def bulk_reassign_supervisor_events():
                 # Update local database with new employee assignment
                 old_employee_name = schedule.employee.name if schedule.employee else 'Unknown'
                 schedule.employee_id = new_employee_id
+                schedule.employee_name = new_employee.name
 
                 # Update sync status
                 event.sync_status = 'synced'
@@ -3663,6 +3716,7 @@ def change_employee():
 
         # API submission successful - now update local record
         schedule.employee_id = new_employee_id
+        schedule.employee_name = new_employee.name
 
         # Update event sync status
         event.sync_status = 'synced'
@@ -4363,6 +4417,7 @@ def import_scheduled_events():
                         new_schedule = Schedule(
                             event_ref_num=event.project_ref_num,
                             employee_id=employee_id,
+                            employee_name=employee_name or (employee.name if employee else None),
                             schedule_datetime=schedule_datetime
                         )
                         db.session.add(new_schedule)
@@ -4498,15 +4553,19 @@ def schedule_event():
         if not (event.start_datetime.date() <= schedule_date <= event.due_datetime.date()):
             return jsonify({'success': False, 'error': 'Date must be within event date range'}), 400
 
-        # CHECK LOCKED DAYS: Cannot schedule to a locked day
+        # CHECK LOCKED DAYS: Cannot schedule to a locked day (unless overridden)
+        force_override_lock = data.get('force_override_lock', False)
         LockedDay = current_app.config.get('LockedDay')
-        if LockedDay:
+        if LockedDay and not force_override_lock:
             locked_info = LockedDay.get_locked_day(schedule_date)
             if locked_info:
                 reason = locked_info.reason or 'No reason provided'
                 return jsonify({
                     'success': False,
-                    'error': f'Cannot schedule event: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
+                    'error': f'Cannot schedule event: {schedule_date.isoformat()} is locked ({reason}).',
+                    'locked_day_override': True,
+                    'locked_date': schedule_date.isoformat(),
+                    'locked_reason': reason
                 }), 409
 
         # Validate time is allowed for this event type (Core events must use shift block times)
@@ -4620,6 +4679,7 @@ def schedule_event():
                 new_schedule = Schedule(
                     event_ref_num=event_id,
                     employee_id=employee_id,
+                    employee_name=employee.name,
                     schedule_datetime=schedule_datetime
                 )
                 db.session.add(new_schedule)
@@ -4711,6 +4771,7 @@ def schedule_event():
                             supervisor_schedule = Schedule(
                                 event_ref_num=supervisor_event.project_ref_num,
                                 employee_id=employee_id,
+                                employee_name=employee.name,
                                 schedule_datetime=supervisor_schedule_datetime
                             )
                             db.session.add(supervisor_schedule)
@@ -5011,23 +5072,27 @@ def change_event_employee(schedule_id):
     if not schedule:
         return jsonify({'error': f'Schedule not found: {schedule_id}'}), 404
 
-    # CHECK LOCKED DAYS: Cannot change employee on a locked day
-    LockedDay = current_app.config.get('LockedDay')
-    if LockedDay:
-        schedule_date = schedule.schedule_datetime.date()
-        locked_info = LockedDay.get_locked_day(schedule_date)
-        if locked_info:
-            reason = locked_info.reason or 'No reason provided'
-            return jsonify({
-                'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}). Unlock the day first.'
-            }), 409
-
     # Parse request body
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Request body is required'}), 400
 
     new_employee_id = data.get('employee_id')
+
+    # CHECK LOCKED DAYS: Cannot change employee on a locked day (unless overridden)
+    force_override_lock = data.get('force_override_lock', False)
+    LockedDay = current_app.config.get('LockedDay')
+    if LockedDay and not force_override_lock:
+        schedule_date = schedule.schedule_datetime.date()
+        locked_info = LockedDay.get_locked_day(schedule_date)
+        if locked_info:
+            reason = locked_info.reason or 'No reason provided'
+            return jsonify({
+                'error': f'Cannot change employee: {schedule_date.isoformat()} is locked ({reason}).',
+                'locked_day_override': True,
+                'locked_date': schedule_date.isoformat(),
+                'locked_reason': reason
+            }), 409
 
     if not new_employee_id:
         return jsonify({'error': 'employee_id is required'}), 400
@@ -5106,6 +5171,7 @@ def change_event_employee(schedule_id):
     try:
         # Update schedule with new employee
         schedule.employee_id = new_employee_id
+        schedule.employee_name = new_employee.name
 
         db.session.commit()
 
@@ -5512,6 +5578,7 @@ def reissue_event():
             if request_employee_id is not None and request_employee_id != current_employee_id:
                 logger.info(f"Updating schedule employee from {current_employee_id} to {request_employee_id}")
                 schedule.employee_id = employee_id
+                schedule.employee_name = employee.name
 
             # Update schedule datetime if changed
             if schedule_datetime != schedule.schedule_datetime:
@@ -5854,16 +5921,18 @@ def bulk_unschedule():
                 results['errors'].append({'event_id': event_id, 'error': 'No schedules found'})
                 continue
 
-            # Check locked days
+            # Check locked days (unless overridden)
+            force_override_lock = data.get('force_override_lock', False)
             LockedDay = current_app.config.get('LockedDay')
-            if LockedDay:
+            if LockedDay and not force_override_lock:
                 locked = False
                 for schedule in schedules:
                     locked_info = LockedDay.get_locked_day(schedule.schedule_datetime.date())
                     if locked_info:
                         results['errors'].append({
                             'event_id': event_id,
-                            'error': f'Date {schedule.schedule_datetime.date().isoformat()} is locked'
+                            'error': f'Date {schedule.schedule_datetime.date().isoformat()} is locked',
+                            'locked_day_override': True
                         })
                         locked = True
                         break
@@ -5893,6 +5962,40 @@ def bulk_unschedule():
         'error_count': len(results['errors']),
         'results': results
     })
+
+
+@api_bp.route('/rebalance-week', methods=['POST'])
+def rebalance_week():
+    """Rebalance Core events for a given week."""
+    from app.services.schedule_rebalancer import ScheduleRebalancer
+    from app.models import get_db
+
+    models = get_models()
+    db = get_db()
+
+    data = request.get_json(silent=True) or {}
+    week_start_str = data.get('week_start')
+
+    if not week_start_str:
+        return jsonify({'status': 'error', 'error': 'week_start is required'}), 400
+
+    try:
+        week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'status': 'error', 'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    try:
+        rebalancer = ScheduleRebalancer(db.session, models)
+        result = rebalancer.rebalance_week(week_start)
+
+        return jsonify({
+            'status': 'success',
+            'data': result
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Rebalance failed: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
 # Register modular API endpoint routes

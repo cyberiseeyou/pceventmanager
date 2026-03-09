@@ -54,8 +54,11 @@ def unscheduled_events():
         'submitted': 'Submitted',
         'paused': 'Paused',
         'reissued': 'Reissued',
-        'cannot_complete': 'Cannot Complete'
+        'cannot_complete': 'Cannot Complete',
+        'past_due': 'Past Due'
     }
+
+    today = date.today()
 
     # Build query based on condition
     if condition_filter == 'all':
@@ -78,6 +81,13 @@ def unscheduled_events():
         query = Event.query.filter_by(condition='Reissued')
     elif condition_filter == 'cannot_complete':
         query = Event.query.filter_by(condition='Cannot Complete')
+    elif condition_filter == 'past_due':
+        # Events due today or earlier that haven't been submitted
+        today_end = datetime.combine(today, datetime.max.time())
+        query = Event.query.filter(
+            Event.due_datetime <= today_end,
+            Event.condition != 'Submitted'
+        )
     else:
         # Default to all events
         query = Event.query
@@ -85,9 +95,6 @@ def unscheduled_events():
     # Apply event type filter if specified
     if event_type_filter and event_type_filter != '':
         query = query.filter_by(event_type=event_type_filter)
-
-    # Apply date filter if specified
-    today = date.today()
     if date_filter == 'today':
         query = query.filter(
             Event.start_datetime >= datetime.combine(today, datetime.min.time()),
@@ -122,7 +129,8 @@ def unscheduled_events():
 
     # Default: filter to current/upcoming events (due date >= today)
     # unless user explicitly set date filters, search query, or toggled show_past
-    if not show_past and not date_filter and not date_from_str and not date_to_str and not search_query:
+    # Skip for past_due tab since it explicitly shows past events
+    if not show_past and not date_filter and not date_from_str and not date_to_str and not search_query and condition_filter != 'past_due':
         query = query.filter(Event.due_datetime >= datetime.combine(today, datetime.min.time()))
 
     # Apply intelligent search if specified
@@ -337,7 +345,7 @@ def unscheduled_events():
         event.days_remaining = days_remaining
 
         # For scheduled events, fetch schedule and employee information
-        if condition_filter in ['all', 'scheduled', 'submitted', 'reissued']:
+        if condition_filter in ['all', 'scheduled', 'submitted', 'reissued', 'past_due']:
             schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
             if schedules:
                 # Get employee names and times for all schedules
@@ -363,14 +371,18 @@ def unscheduled_events():
     event_types = [et[0] for et in event_types]
 
     # Get condition counts for tab badges
+    # Exclude past-due events from other tabs so they only appear in "Past Due"
+    today_start = datetime.combine(today, datetime.min.time())
+    not_past_due = Event.due_datetime >= today_start
     condition_counts = {
-        'all': Event.query.count(),
-        'unstaffed': Event.query.filter_by(condition='Unstaffed').count(),
-        'scheduled': Event.query.filter_by(condition='Scheduled').count(),
-        'submitted': Event.query.filter_by(condition='Submitted').count(),
-        'paused': Event.query.filter_by(condition='Paused').count(),
-        'reissued': Event.query.filter_by(condition='Reissued').count(),
-        'cannot_complete': Event.query.filter_by(condition='Cannot Complete').count(),
+        'all': Event.query.filter(not_past_due).count(),
+        'unstaffed': Event.query.filter_by(condition='Unstaffed').filter(not_past_due).count(),
+        'scheduled': Event.query.filter_by(condition='Scheduled').filter(not_past_due).count(),
+        'submitted': Event.query.filter_by(condition='Submitted').filter(not_past_due).count(),
+        'paused': Event.query.filter_by(condition='Paused').filter(not_past_due).count(),
+        'reissued': Event.query.filter_by(condition='Reissued').filter(not_past_due).count(),
+        'cannot_complete': Event.query.filter_by(condition='Cannot Complete').filter(not_past_due).count(),
+        'past_due': Event.query.filter(Event.due_datetime <= datetime.combine(today, datetime.max.time()), Event.condition != 'Submitted').count(),
     }
 
     # Map date filter display names

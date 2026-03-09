@@ -1616,6 +1616,7 @@ def auto_schedule_event(event_id):
         schedule = Schedule(
             event_ref_num=event.project_ref_num,
             employee_id=result['employee_id'],
+            employee_name=result.get('employee_name'),
             schedule_datetime=result['schedule_datetime']
         )
         db.session.add(schedule)
@@ -2040,6 +2041,7 @@ def settings_page():
         settings['edr_username'] = SystemSetting.get_setting('edr_username') or ''
         settings['edr_password'] = '***' if SystemSetting.get_setting('edr_password') else ''
         settings['edr_mfa_credential_id'] = SystemSetting.get_setting('edr_mfa_credential_id') or ''
+        settings['store_number'] = SystemSetting.get_setting('store_number') or ''
         settings['ai_provider'] = SystemSetting.get_setting('ai_provider') or 'openai'
         settings['ai_api_key'] = '***' if SystemSetting.get_setting('ai_api_key') else ''
         settings['auto_scheduler_enabled'] = SystemSetting.get_setting('auto_scheduler_enabled', True)
@@ -2048,6 +2050,7 @@ def settings_page():
         settings['edr_username'] = current_app.config.get('WALMART_EDR_USERNAME', '')
         settings['edr_password'] = '***' if current_app.config.get('WALMART_EDR_PASSWORD') else ''
         settings['edr_mfa_credential_id'] = current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID', '')
+        settings['store_number'] = ''
         settings['ai_provider'] = current_app.config.get('AI_PROVIDER', 'openai')
         settings['ai_api_key'] = '***' if current_app.config.get('AI_API_KEY') else ''
         settings['auto_scheduler_enabled'] = current_app.config.get('AUTO_SCHEDULER_ENABLED', True)
@@ -2121,6 +2124,11 @@ def save_edr_settings():
             SystemSetting.set_setting('edr_password', password, setting_type='encrypted')
 
         SystemSetting.set_setting('edr_mfa_credential_id', mfa_credential_id)
+
+        # Save store/club number if provided
+        store_number = data.get('store_number', '').strip()
+        if store_number:
+            SystemSetting.set_setting('store_number', store_number)
 
         # Clear any existing EDR session
         if 'edr_auth_token' in flask_session:

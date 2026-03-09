@@ -30,6 +30,7 @@ class ChromeEDRAuthenticator:
     def __init__(self, cdp_port: int = DEFAULT_CDP_PORT):
         self.cdp_port = cdp_port
         self._chrome_process: Optional[subprocess.Popen] = None
+        self._xvfb_process: Optional[subprocess.Popen] = None
         self._temp_profile_dir: Optional[str] = None
         self._browser = None
         self._tab = None
@@ -66,11 +67,58 @@ class ChromeEDRAuthenticator:
         except Exception:
             return False
 
+    def _ensure_display(self) -> Optional[str]:
+        """Ensure a DISPLAY is available, launching Xvfb if needed.
+
+        Returns:
+            The DISPLAY string to use (e.g. ':99'), or None to use --headless.
+        """
+        # Desktop environment already has a display
+        if os.environ.get('DISPLAY'):
+            logger.info(f"Using existing DISPLAY={os.environ['DISPLAY']}")
+            return os.environ['DISPLAY']
+
+        # Try to launch Xvfb for a virtual display
+        xvfb_path = shutil.which('Xvfb')
+        if not xvfb_path:
+            logger.info("Xvfb not installed, will use --headless=new")
+            return None
+
+        display = ':99'
+        try:
+            self._xvfb_process = subprocess.Popen(
+                [xvfb_path, display, '-screen', '0', '1280x1024x24', '-ac'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            logger.info(f"Xvfb launched (PID {self._xvfb_process.pid}) on {display}")
+        except OSError as e:
+            logger.warning(f"Failed to launch Xvfb: {e}, will use --headless=new")
+            return None
+
+        # Wait up to 3s for Xvfb to be ready
+        lock_file = f'/tmp/.X{display[1:]}-lock'
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            if self._xvfb_process.poll() is not None:
+                logger.warning(f"Xvfb exited with code {self._xvfb_process.returncode}, will use --headless=new")
+                self._xvfb_process = None
+                return None
+            if os.path.exists(lock_file):
+                logger.info(f"Xvfb ready ({lock_file} exists)")
+                return display
+            time.sleep(0.2)
+
+        logger.warning("Xvfb did not become ready in 3s, will use --headless=new")
+        self._cleanup_xvfb()
+        return None
+
     def launch_chrome(self) -> bool:
         """Launch Chrome with remote debugging enabled.
 
         If Chrome is already running on the configured port, reuses that instance.
         Otherwise, launches a new Chrome process with a temporary profile directory.
+        When no DISPLAY is available (headless service), launches Xvfb first. If
+        Xvfb is not installed, falls back to --headless=new.
 
         Returns:
             True if Chrome is ready for CDP connections, False on failure.
@@ -88,6 +136,9 @@ class ChromeEDRAuthenticator:
             )
             return False
 
+        # Ensure we have a display (Xvfb in headless environments)
+        display = self._ensure_display()
+
         self._temp_profile_dir = tempfile.mkdtemp(prefix='edr-chrome-')
         logger.info(f"Chrome temp profile: {self._temp_profile_dir}")
 
@@ -102,14 +153,25 @@ class ChromeEDRAuthenticator:
             '--disable-sync',
         ]
 
+        # No display available — use headless mode as fallback
+        if display is None:
+            cmd.append('--headless=new')
+            logger.info("Launching Chrome in --headless=new mode")
+
+        chrome_env = os.environ.copy()
+        if display is not None:
+            chrome_env['DISPLAY'] = display
+
         try:
             self._chrome_process = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=chrome_env,
             )
             logger.info(f"Chrome launched (PID {self._chrome_process.pid})")
         except OSError as e:
             self.last_error = f"Failed to launch Chrome: {e}"
             self._cleanup_temp_profile()
+            self._cleanup_xvfb()
             return False
 
         # Wait for Chrome to become ready for CDP connections
@@ -121,6 +183,7 @@ class ChromeEDRAuthenticator:
             if self._chrome_process.poll() is not None:
                 self.last_error = f"Chrome exited unexpectedly with code {self._chrome_process.returncode}"
                 self._cleanup_temp_profile()
+                self._cleanup_xvfb()
                 return False
             time.sleep(0.5)
 
@@ -161,11 +224,11 @@ class ChromeEDRAuthenticator:
             return False
 
     def cleanup(self) -> None:
-        """Clean up Chrome process and temporary profile directory.
+        """Clean up Chrome process, Xvfb, and temporary profile directory.
 
         Stops the CDP tab, terminates (or kills) the Chrome process,
-        and removes the temporary profile directory. Safe to call
-        multiple times or when no process is running.
+        shuts down Xvfb if we launched it, and removes the temporary
+        profile directory. Safe to call multiple times.
         """
         if self._tab:
             try:
@@ -187,6 +250,7 @@ class ChromeEDRAuthenticator:
 
         self._browser = None
         self._cleanup_temp_profile()
+        self._cleanup_xvfb()
 
     def _cleanup_temp_profile(self) -> None:
         """Remove the temporary Chrome profile directory if it exists."""
@@ -197,6 +261,20 @@ class ChromeEDRAuthenticator:
             except OSError as e:
                 logger.warning(f"Could not remove temp profile: {e}")
             self._temp_profile_dir = None
+
+    def _cleanup_xvfb(self) -> None:
+        """Terminate the Xvfb process if we launched one."""
+        if self._xvfb_process:
+            try:
+                self._xvfb_process.terminate()
+                self._xvfb_process.wait(timeout=3)
+            except Exception:
+                try:
+                    self._xvfb_process.kill()
+                except Exception:
+                    pass
+            logger.info("Xvfb process cleaned up")
+            self._xvfb_process = None
 
     # ── Login flow helpers ────────────────────────────────────────────
 

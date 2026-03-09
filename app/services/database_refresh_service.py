@@ -4,6 +4,7 @@ Handles fetching events from Crossmark API and updating the local database
 """
 from datetime import datetime
 from flask import current_app
+from sqlalchemy import or_
 from app.constants import INACTIVE_CONDITIONS
 import logging
 
@@ -135,10 +136,17 @@ class DatabaseRefreshService:
             current_app.logger.info("Clearing all existing events from database")
             existing_count = Event.query.count()
 
-            # Preserve locally-approved schedules before clearing
-            # These are schedules created via the auto-scheduler approval flow
+            # Preserve local schedules before clearing.
+            # This includes:
+            # 1. Auto-scheduler approved schedules (have PendingSchedule with api_submitted/approved)
+            # 2. Manually created schedules (no matching PendingSchedule, or sync_status != 'synced')
+            # Without this, manually scheduled events lose their schedules on refresh
+            # and the auto-scheduler tries to reschedule them.
             PendingSchedule = models.get('PendingSchedule')
             local_schedules = []
+            preserved_event_refs = set()
+
+            # 1. Preserve auto-scheduler approved schedules
             if PendingSchedule:
                 approved_pending = db.session.query(PendingSchedule).filter(
                     PendingSchedule.status.in_(['api_submitted', 'approved']),
@@ -146,7 +154,6 @@ class DatabaseRefreshService:
                     PendingSchedule.schedule_datetime.isnot(None)
                 ).all()
                 for ps in approved_pending:
-                    # Look up the matching Schedule record to preserve its external_id
                     existing_schedule = db.session.query(Schedule).filter_by(
                         event_ref_num=ps.event_ref_num,
                         employee_id=ps.employee_id
@@ -154,13 +161,36 @@ class DatabaseRefreshService:
                     local_schedules.append({
                         'event_ref_num': ps.event_ref_num,
                         'employee_id': ps.employee_id,
+                        'employee_name': existing_schedule.employee_name if existing_schedule else (ps.employee.name if ps.employee else None),
                         'schedule_datetime': ps.schedule_datetime,
                         'external_id': existing_schedule.external_id if existing_schedule else None,
                         'sync_status': existing_schedule.sync_status if existing_schedule else 'pending_sync'
                     })
-                current_app.logger.info(
-                    f"Preserved {len(local_schedules)} locally-approved schedules for restoration after refresh"
+                    preserved_event_refs.add(ps.event_ref_num)
+
+            # 2. Preserve manually created schedules (not from API sync, not already preserved above)
+            manual_schedules = db.session.query(Schedule).filter(
+                ~Schedule.event_ref_num.in_(preserved_event_refs) if preserved_event_refs else True,
+                or_(
+                    Schedule.sync_status != 'synced',
+                    Schedule.sync_status.is_(None),
+                    Schedule.external_id.is_(None)
                 )
+            ).all()
+            for sched in manual_schedules:
+                local_schedules.append({
+                    'event_ref_num': sched.event_ref_num,
+                    'employee_id': sched.employee_id,
+                    'employee_name': sched.employee_name,
+                    'schedule_datetime': sched.schedule_datetime,
+                    'external_id': sched.external_id,
+                    'sync_status': sched.sync_status or 'pending_sync'
+                })
+                preserved_event_refs.add(sched.event_ref_num)
+
+            current_app.logger.info(
+                f"Preserved {len(local_schedules)} local schedules for restoration after refresh"
+            )
 
             with disable_foreign_keys(db.session):
                 # Clear auto scheduler results if table exists
@@ -231,13 +261,20 @@ class DatabaseRefreshService:
             # Restore locally-approved schedules
             restored_count = 0
             skipped_cancelled = 0
+            skipped_not_found = 0
+            skipped_duplicate = 0
             if local_schedules:
                 for sched_data in local_schedules:
+                    ref = sched_data['event_ref_num']
                     # Only restore if the event still exists after refresh
                     event = Event.query.filter_by(
-                        project_ref_num=sched_data['event_ref_num']
+                        project_ref_num=ref
                     ).first()
                     if not event:
+                        skipped_not_found += 1
+                        current_app.logger.warning(
+                            f"Schedule restore: event {ref} not found after refresh, schedule lost"
+                        )
                         continue
 
                     # Don't restore schedules for cancelled/expired events —
@@ -246,16 +283,27 @@ class DatabaseRefreshService:
                         skipped_cancelled += 1
                         continue
 
+                    # Don't restore schedules for events the API says are Unstaffed —
+                    # someone may have unscheduled the employee externally
+                    if event.condition == 'Unstaffed' and not event.is_scheduled:
+                        skipped_cancelled += 1
+                        current_app.logger.info(
+                            f"Schedule restore: skipping event {ref} — API reports Unstaffed"
+                        )
+                        continue
+
                     # Don't duplicate — skip if the API sync already created a schedule for this event
                     existing = Schedule.query.filter_by(
-                        event_ref_num=sched_data['event_ref_num']
+                        event_ref_num=ref
                     ).first()
                     if existing:
+                        skipped_duplicate += 1
                         continue
 
                     schedule = Schedule(
                         event_ref_num=sched_data['event_ref_num'],
                         employee_id=sched_data['employee_id'],
+                        employee_name=sched_data.get('employee_name'),
                         schedule_datetime=sched_data['schedule_datetime'],
                         external_id=sched_data['external_id'],
                         last_synced=datetime.utcnow(),
@@ -275,6 +323,14 @@ class DatabaseRefreshService:
                 if skipped_cancelled:
                     current_app.logger.info(
                         f"Skipped {skipped_cancelled} schedule restorations for cancelled/expired events"
+                    )
+                if skipped_not_found:
+                    current_app.logger.warning(
+                        f"Lost {skipped_not_found} schedules: events not found after refresh"
+                    )
+                if skipped_duplicate:
+                    current_app.logger.info(
+                        f"Skipped {skipped_duplicate} schedule restorations: API already provided schedule"
                     )
 
             # Post-import fix: Correct truncated event types using pairing logic
@@ -591,6 +647,7 @@ class DatabaseRefreshService:
                 schedule = Schedule(
                     event_ref_num=int(mplan_id) if str(mplan_id).isdigit() else 0,
                     employee_id=employee.id,
+                    employee_name=employee.name,
                     schedule_datetime=schedule_date,
                     external_id=str(scheduled_event_id) if scheduled_event_id else None,
                     last_synced=datetime.utcnow(),
@@ -762,11 +819,8 @@ class DatabaseRefreshService:
             from app.models import get_models
             models = get_models()
             SystemSetting = models.get('SystemSetting')
-            club = None
-            if SystemSetting:
-                setting = SystemSetting.query.filter_by(key='walmart_club_number').first()
-                if setting:
-                    club = setting.value
+            # Get club number from user settings
+            club = SystemSetting.get_setting('store_number', default='') if SystemSetting else None
 
             if not club:
                 current_app.logger.info("No club number configured; skipping event number sync")

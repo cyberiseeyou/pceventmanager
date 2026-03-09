@@ -60,6 +60,14 @@
                     ID)</small>
             </div>
 
+            <div class="form-group">
+                <label for="store_number">Store/Club Number:</label>
+                <input type="text" id="store_number" name="store_number"
+                    value="{{ settings.get('store_number', '') }}" class="form-control"
+                    placeholder="e.g. 8135" inputmode="numeric">
+                <small class="form-text">Your Walmart store or Sam's Club number, used for syncing event numbers and EDR reports</small>
+            </div>
+
             <div id="save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
         </section>
 
@@ -752,6 +760,7 @@
             const username = document.getElementById('edr_username').value.trim();
             const password = document.getElementById('edr_password').value;
             const mfaCredentialId = document.getElementById('edr_mfa_credential_id').value.trim();
+            const storeNumber = document.getElementById('store_number').value.trim();
             const aiProvider = document.getElementById('ai_provider').value;
             const aiApiKey = document.getElementById('ai_api_key').value.trim();
 
@@ -784,7 +793,8 @@
                     body: JSON.stringify({
                         username: username,
                         password: password || undefined,
-                        mfa_credential_id: mfaCredentialId
+                        mfa_credential_id: mfaCredentialId,
+                        store_number: storeNumber || undefined
                     })
                 });
                 const edrData = await edrResponse.json();

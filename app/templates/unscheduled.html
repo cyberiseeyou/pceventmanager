@@ -70,9 +70,14 @@
         class="tab-btn {% if condition == 'cannot_complete' %}active{% endif %}">
         Cannot Complete <span class="tab-count">{{ condition_counts.cannot_complete }}</span>
     </a>
+    <a href="{{ url_for('main.unscheduled_events', condition='past_due') }}"
+        class="tab-btn tab-btn-warning {% if condition == 'past_due' %}active{% endif %}">
+        Past Due <span class="tab-count">{{ condition_counts.past_due }}</span>
+    </a>
 </div>
 
-<!-- Time scope toggle -->
+<!-- Time scope toggle (hidden on Past Due tab since it always shows past events) -->
+{% if condition != 'past_due' %}
 <div style="display: flex; justify-content: flex-end; margin-bottom: var(--spacing-sm);">
     {% if show_past %}
     <a href="{{ url_for('main.unscheduled_events', condition=condition) }}" class="btn btn-sm btn-outline" style="font-size: 12px; padding: 4px 12px; border-radius: 6px; text-decoration: none; color: #6b7280; border: 1px solid #d1d5db;">
@@ -84,37 +89,39 @@
     </a>
     {% endif %}
 </div>
+{% endif %}
 
 <!-- Smart Search and Filter -->
-<div class="filter-actions">
-    <div class="search-section" style="flex: 1;">
-        <form id="search-form" action="{{ url_for('main.unscheduled_events') }}" method="GET"
-            style="display: flex; gap: var(--spacing-sm); align-items: center;">
-            <input type="hidden" name="condition" value="{{ condition }}">
-            <input type="hidden" name="date_filter" value="{{ date_filter if date_filter else '' }}">
-            <div class="universal-search-container" style="flex: 1;">
-                <div class="search-input-wrapper">
-                    <input type="text" name="search" id="smart-search"
-                        placeholder="Search: 123456, JOHN DOE, s:10/28/25, sc:10/28/25 to 11/2/25..."
-                        class="universal-search-input" autocomplete="off" value="{{ request.args.get('search', '') }}">
-                    <div class="search-icon">🔍</div>
-                </div>
-                <div style="margin-top: 8px; font-size: 12px; color: #666;">
-                    <strong>Search Tips:</strong> Combine with commas: <em>123456, JOHN DOE, s:10/28/25</em> •
-                    <strong>Date prefixes:</strong> <em>s:</em> (start), <em>sc:</em> (scheduled), <em>e:</em> or
-                    <em>d:</em> (due) •
-                    <strong>Date ranges:</strong> <em>s:10/28/25 to 11/2/25</em> •
-                    UPPERCASE = Employee • Numbers = Event #
-                </div>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">From</label>
-                <input type="date" name="date_from" id="date-range-from" class="mini-filter" style="width: 145px;"
-                    value="{{ request.args.get('date_from', '') }}" data-action="auto-submit-form">
-                <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">To</label>
-                <input type="date" name="date_to" id="date-range-to" class="mini-filter" style="width: 145px;"
-                    value="{{ request.args.get('date_to', '') }}" data-action="auto-submit-form">
-            </div>
+<div class="filter-actions" style="display: block;">
+    <form id="search-form" action="{{ url_for('main.unscheduled_events') }}" method="GET">
+        <input type="hidden" name="condition" value="{{ condition }}">
+        <input type="hidden" name="date_filter" value="{{ date_filter if date_filter else '' }}">
+
+        <!-- Row 1: Search bar -->
+        <div class="search-input-wrapper" style="margin-bottom: 4px;">
+            <input type="text" name="search" id="smart-search"
+                placeholder="Search: 123456, JOHN DOE, s:10/28/25, sc:10/28/25 to 11/2/25..."
+                class="universal-search-input" autocomplete="off" value="{{ request.args.get('search', '') }}">
+            <div class="search-icon">🔍</div>
+        </div>
+
+        <!-- Row 2: Search tips -->
+        <div style="margin-bottom: 12px; font-size: 12px; color: #666;">
+            <strong>Search Tips:</strong> Combine with commas: <em>123456, JOHN DOE, s:10/28/25</em> •
+            <strong>Date prefixes:</strong> <em>s:</em> (start), <em>sc:</em> (scheduled), <em>e:</em> or
+            <em>d:</em> (due) •
+            <strong>Date ranges:</strong> <em>s:10/28/25 to 11/2/25</em> •
+            UPPERCASE = Employee • Numbers = Event #
+        </div>
+
+        <!-- Row 3: Filters and actions -->
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">From</label>
+            <input type="date" name="date_from" id="date-range-from" class="mini-filter" style="width: 145px;"
+                value="{{ request.args.get('date_from', '') }}" data-action="auto-submit-form">
+            <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">To</label>
+            <input type="date" name="date_to" id="date-range-to" class="mini-filter" style="width: 145px;"
+                value="{{ request.args.get('date_to', '') }}" data-action="auto-submit-form">
             <select name="event_type" class="mini-filter" data-action="auto-submit-form">
                 <option value="">All Types</option>
                 {% for event_type in event_types %}
@@ -137,12 +144,8 @@
                 class="btn btn-secondary" title="Export filtered events to CSV">
                 📥 Export CSV
             </a>
-            <a href="{{ url_for('api.export_corporate_report', date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"
-                class="btn btn-outline" title="Generate formatted corporate report for selected date range">
-                📊 Corporate Report
-            </a>
-        </form>
-    </div>
+        </div>
+    </form>
 </div>
 
 <!-- Active Filters Display -->

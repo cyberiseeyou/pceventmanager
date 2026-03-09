@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Lost Demos{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+<style>
+    .week-nav {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .week-nav button {
+        background: var(--primary, #2563eb);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .week-nav button:hover { opacity: 0.9; }
+    .week-label {
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .lost-demos-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+    }
+    .lost-demos-table th,
+    .lost-demos-table td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .lost-demos-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        font-size: 13px;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+    .lost-demos-table tr:hover { background: #f9fafb; }
+    .undo-btn {
+        background: #f59e0b;
+        color: white;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .undo-btn:hover { background: #d97706; }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #9ca3af;
+    }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; }
+    .summary-stat {
+        font-size: 14px;
+        color: #6b7280;
+        margin-bottom: 8px;
+    }
+    @media print {
+        .week-nav button, .undo-btn, .report-actions { display: none !important; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Lost Demos</h1>
+            <div class="subtitle">Weekly list of confirmed lost demo events</div>
+        </div>
+        <div class="report-actions">
+            <a id="exportBtn" href="#" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+        </div>
+    </div>
+
+    <div class="week-nav">
+        <button id="prevWeek"><i class="fas fa-chevron-left"></i> Prev</button>
+        <span class="week-label" id="weekLabel">Loading...</span>
+        <button id="nextWeek">Next <i class="fas fa-chevron-right"></i></button>
+    </div>
+
+    <div class="summary-stat" id="summaryCount"></div>
+
+    <div id="tableContainer">
+        <table class="lost-demos-table">
+            <thead>
+                <tr>
+                    <th>Event #</th>
+                    <th>Event Name</th>
+                    <th>Type</th>
+                    <th>Due Date</th>
+                    <th>Confirmed</th>
+                    <th>Notes</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="demosBody"></tbody>
+        </table>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <i class="fas fa-check-circle"></i>
+        <h3>No Lost Demos</h3>
+        <p>No confirmed lost demos for this week.</p>
+    </div>
+</div>
+
+<script>
+(function() {
+    var currentWeekStart = getSundayOfCurrentWeek();
+
+    function getSundayOfCurrentWeek() {
+        var d = new Date();
+        var day = d.getDay();
+        d.setDate(d.getDate() - day);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    function formatISODate(d) {
+        return d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getDate()).padStart(2, '0');
+    }
+
+    function formatDisplayDate(d) {
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function updateUI() {
+        var end = new Date(currentWeekStart);
+        end.setDate(end.getDate() + 6);
+        document.getElementById('weekLabel').textContent =
+            formatDisplayDate(currentWeekStart) + ' \u2014 ' + formatDisplayDate(end);
+
+        var ws = formatISODate(currentWeekStart);
+        document.getElementById('exportBtn').href = '/api/lost-demos/export?week_start=' + ws;
+
+        fetchDemos(ws);
+    }
+
+    async function fetchDemos(weekStart) {
+        try {
+            var resp = await fetch('/api/lost-demos?week_start=' + weekStart);
+            var result = await resp.json();
+
+            if (result.status !== 'success') {
+                document.getElementById('demosBody').innerHTML = '';
+                document.getElementById('emptyState').style.display = 'block';
+                document.getElementById('tableContainer').style.display = 'none';
+                document.getElementById('summaryCount').textContent = '';
+                return;
+            }
+
+            var demos = result.data;
+            if (demos.length === 0) {
+                document.getElementById('demosBody').innerHTML = '';
+                document.getElementById('emptyState').style.display = 'block';
+                document.getElementById('tableContainer').style.display = 'none';
+                document.getElementById('summaryCount').textContent = '0 lost demos this week';
+                return;
+            }
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('tableContainer').style.display = 'block';
+            document.getElementById('summaryCount').textContent = demos.length + ' lost demo' + (demos.length !== 1 ? 's' : '') + ' this week';
+
+            document.getElementById('demosBody').innerHTML = demos.map(function(d) {
+                return '<tr>' +
+                    '<td>' + escapeHtml(d.walmart_event_id || String(d.event_ref_num)) + '</td>' +
+                    '<td>' + escapeHtml(d.event_name) + '</td>' +
+                    '<td>' + escapeHtml(d.event_type) + '</td>' +
+                    '<td>' + escapeHtml(d.due_date) + '</td>' +
+                    '<td>' + escapeHtml(d.confirmed_at) + '</td>' +
+                    '<td>' + escapeHtml(d.notes) + '</td>' +
+                    '<td><button class="undo-btn" data-action="undo-lost" data-ref="' + d.event_ref_num + '">Undo</button></td>' +
+                    '</tr>';
+            }).join('');
+
+        } catch (err) {
+            console.error('Failed to fetch lost demos:', err);
+        }
+    }
+
+    document.getElementById('prevWeek').addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+        updateUI();
+    });
+
+    document.getElementById('nextWeek').addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        updateUI();
+    });
+
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-action]');
+        if (!target) return;
+
+        if (target.dataset.action === 'undo-lost') {
+            undoLost(target.dataset.ref);
+        } else if (target.dataset.action === 'print') {
+            window.print();
+        }
+    });
+
+    async function undoLost(refNum) {
+        if (!confirm('Undo this lost demo confirmation? The event will return to the approved events page.')) return;
+
+        try {
+            var resp = await fetch('/api/lost-demos/' + refNum + '/confirm', {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                }
+            });
+            var data = await resp.json();
+            if (resp.ok && data.status === 'success') {
+                updateUI();
+            } else {
+                alert('Failed to undo: ' + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Failed to undo: ' + err.message);
+        }
+    }
+
+    updateUI();
+})();
+</script>
+{% endblock %}

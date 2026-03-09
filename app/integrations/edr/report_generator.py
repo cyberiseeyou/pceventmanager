@@ -337,25 +337,27 @@ class EDRReportGenerator:
 
     def chrome_step3_validate_mfa_code(self, code: str) -> bool:
         """Step 3 via Chrome. Extracts cookies, injects into self.session, closes Chrome."""
-        if not self._chrome_auth:
+        # Capture in local variable to avoid race conditions with concurrent requests
+        chrome = self._chrome_auth
+        if not chrome:
             self.logger.warning("No Chrome auth session, falling back to requests")
             return self.step3_validate_mfa_code(code)
 
-        if not self._chrome_auth.step3_validate_mfa(self.mfa_credential_id, code):
-            self.last_error = self._chrome_auth.last_error
+        if not chrome.step3_validate_mfa(self.mfa_credential_id, code):
+            self.last_error = chrome.last_error
             return False
 
-        cookies = self._chrome_auth.extract_cookies()
+        cookies = chrome.extract_cookies()
         if not cookies:
             self.last_error = "No Walmart cookies found in Chrome after MFA validation"
-            self._chrome_auth.cleanup()
+            chrome.cleanup()
             self._chrome_auth = None
             return False
 
-        count = self._chrome_auth.inject_cookies_into_session(self.session)
+        count = chrome.inject_cookies_into_session(self.session)
         self.logger.info(f"Injected {count} cookies from Chrome into requests.Session")
 
-        self._chrome_auth.cleanup()
+        chrome.cleanup()
         self._chrome_auth = None
         return True
 
@@ -1862,6 +1864,51 @@ class EDRReportGenerator:
             if saved_file:
                 print(f"📁 Report still saved as: {saved_file}")
             return False
+
+    def roll_event(self, event_id: str, scheduled_date: str, club_id: str, walmart_user_id: str) -> Dict[str, Any]:
+        """
+        Roll an event to a new scheduled date in Walmart.
+
+        Args:
+            event_id: The Walmart event ID
+            scheduled_date: Target date in YYYY-MM-DD format
+            club_id: Club/store number
+            walmart_user_id: Walmart user ID from session
+
+        Returns:
+            Dict with 'success' (bool) and optional 'error'
+        """
+        if not self.auth_token:
+            self.logger.error("Not authenticated - cannot roll event")
+            return {'success': False, 'error': 'Not authenticated'}
+
+        url = f"{self.base_url}/api/club-details"
+        headers = self._get_standard_headers(
+            content_type='application/json',
+            referer=f"{self.base_url}/club-details"
+        )
+
+        payload = {
+            "action": "update",
+            "eventId": int(event_id),
+            "eventStatusCode": 2,
+            "userId": walmart_user_id,
+            "clubId": int(club_id),
+            "scheduledDate": scheduled_date
+        }
+
+        self.logger.info(f"Rolling event {event_id} to {scheduled_date} for club {club_id}")
+
+        try:
+            response = self.session.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json() if response.text else {}
+            self.logger.info(f"Successfully rolled event {event_id} to {scheduled_date}")
+            return {'success': True, 'result': result}
+        except Exception as e:
+            error_msg = str(e)
+            self.logger.error(f"Failed to roll event {event_id}: {error_msg}")
+            return {'success': False, 'error': error_msg}
 
 
 # Example usage and testing

@@ -537,6 +537,31 @@
     color: white;
 }
 
+.tab-btn-warning {
+    color: #b45309;
+}
+
+.tab-btn-warning:hover {
+    color: #92400e;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.tab-btn-warning.active {
+    color: #92400e;
+    border-bottom-color: #d97706;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.tab-btn-warning .tab-count {
+    background: rgba(245, 158, 11, 0.15);
+    color: #b45309;
+}
+
+.tab-btn-warning.active .tab-count {
+    background: #d97706;
+    color: white;
+}
+
 /* Event Condition Badge - styled like daily view status badges */
 .event-condition {
     display: inline-block;
@@ -626,4 +651,12 @@
     border-radius: var(--border-radius-sm);
     margin-bottom: var(--spacing-md);
     color: var(--text-secondary);
+}
+
+/* Override global responsive rules that force 44px checkboxes */
+.events-grid input[type="checkbox"] {
+    min-width: 16px;
+    min-height: 16px;
+    width: 16px;
+    height: 16px;
 }

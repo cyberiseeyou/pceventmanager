@@ -189,35 +189,34 @@
       </a>
     </nav>
 
-    <!-- Bulk Actions -->
-    <div role="toolbar" aria-label="Bulk actions" class="bulk-actions">
-      <button type="button" class="btn btn-secondary" id="btn-bulk-reassign-supervisor"
-        aria-label="Reassign all supervisor events">
-        <span class="icon"><span class="material-symbols-outlined">sync</span></span>
-        <span class="btn-text">Reassign Supervisor Events</span>
-      </button>
-
-      <!-- Lock/Unlock Day Button -->
-      <button type="button" class="btn btn-lock" id="btn-lock-day"
+    <!-- Quick Actions (icon-only with tooltips) -->
+    <div role="toolbar" aria-label="Quick actions" class="quick-actions">
+      <button type="button" class="quick-action-btn" id="btn-lock-day"
         data-date="{{ selected_date.strftime('%Y-%m-%d') }}"
-        aria-label="Lock or unlock this day">
-        <span class="icon" id="lock-icon"><span class="material-symbols-outlined">lock_open</span></span>
-        <span class="btn-text" id="lock-text">Lock Day</span>
+        aria-label="Lock or unlock this day"
+        data-tooltip="Lock Day">
+        <span class="material-symbols-outlined" id="lock-icon">lock_open</span>
       </button>
 
-      <!-- Verify Today Link -->
       <a href="{{ url_for('dashboard.weekly_validation', start_date=selected_date.strftime('%Y-%m-%d')) }}"
-        class="btn btn-secondary" aria-label="Verify schedule for this day">
-        <span class="icon"><span class="material-symbols-outlined">verified</span></span>
-        <span class="btn-text">Verify Schedule</span>
+        class="quick-action-btn"
+        aria-label="Verify schedule for this day"
+        data-tooltip="Verify Schedule">
+        <span class="material-symbols-outlined">verified</span>
       </a>
 
-      <!-- Scan-Out Checklist Link -->
       <a href="{{ url_for('dashboard.scan_out_checklist', selected_date=selected_date.strftime('%Y-%m-%d')) }}"
-        class="btn btn-secondary" aria-label="Open scan-out checklist for this day">
-        <span class="icon"><span class="material-symbols-outlined">checklist</span></span>
-        <span class="btn-text">Scan-Out Checklist</span>
+        class="quick-action-btn"
+        aria-label="Open scan-out checklist"
+        data-tooltip="Scan-Out Checklist">
+        <span class="material-symbols-outlined">checklist</span>
       </a>
+
+      <button type="button" class="quick-action-btn" id="btn-bulk-reassign-supervisor"
+        aria-label="Reassign all supervisor events"
+        data-tooltip="Reassign Supervisors">
+        <span class="material-symbols-outlined">sync</span>
+      </button>
     </div>
 
     <!-- Role Assignments -->

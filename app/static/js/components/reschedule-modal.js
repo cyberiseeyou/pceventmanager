@@ -185,13 +185,33 @@ class RescheduleModal {
                 },
                 body: JSON.stringify({
                     new_date: newDate,
-                    new_time: newTime
+                    new_time: newTime,
+                    force_override_lock: this._forceOverrideLock || false
                 })
             });
 
             const result = await response.json();
 
             if (response.status === 409) {
+                // Check if this is a locked day that can be overridden
+                if (result.locked_day_override) {
+                    const confirmOverride = confirm(
+                        `Day is Locked\n\n${result.error}\n\nDo you want to override the lock and proceed anyway?`
+                    );
+                    if (confirmOverride) {
+                        this._forceOverrideLock = true;
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = originalText;
+                        await this.executeReschedule();
+                        this._forceOverrideLock = false;
+                        return;
+                    }
+                    this._forceOverrideLock = false;
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = originalText;
+                    return;
+                }
+
                 // Conflict detected
                 this.displayConflicts(result.conflicts);
                 confirmBtn.disabled = false;

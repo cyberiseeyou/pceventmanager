@@ -2107,6 +2107,7 @@ class AITools:
         new_schedule = Schedule(
             event_ref_num=event.project_ref_num,
             employee_id=employee.id,
+            employee_name=employee.name,
             schedule_datetime=schedule_datetime,
             last_synced=dt.utcnow(),
             sync_status='pending'
@@ -3632,6 +3633,7 @@ class AITools:
             new_schedule = Schedule(
                 event_ref_num=event.project_ref_num,
                 employee_id=prop['employee_id'],
+                employee_name=prop.get('employee_name'),
                 schedule_datetime=schedule_time
             )
             self.db.add(new_schedule)

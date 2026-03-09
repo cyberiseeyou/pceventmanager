@@ -400,7 +400,7 @@ These rules apply to **all event types** regardless of category.
 | Rule | Description |
 |------|-------------|
 | 3-Day Window | Events must have a due date at least 3 days in the future to be auto-scheduled |
-| 3-Week Horizon | Only events with start dates within the next 3 weeks are considered |
+| 4-Month Horizon | Events with due dates within the next 4 months are considered (matching database refresh window) |
 | Start Date | Events cannot be scheduled before their start date (hard constraint, no exceptions) |
 | Due Date | Events must be scheduled strictly before their due date |
 

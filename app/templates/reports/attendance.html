@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Report{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Attendance Report</h1>
+            <div class="subtitle">{{ start_date.strftime('%m/%d/%Y') }} — {{ end_date.strftime('%m/%d/%Y') }}</div>
+        </div>
+        <div class="report-actions">
+            <a href="{{ url_for('reports.export_attendance', start_date=start_date, end_date=end_date) }}" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+            <a href="{{ url_for('reports.index') }}" class="btn">Back</a>
+        </div>
+    </div>
+
+    <form class="date-range-form" method="get">
+        <label for="start_date">From</label>
+        <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To</label>
+        <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn-generate">Generate</button>
+    </form>
+
+    {% if data %}
+    <div class="chart-container">
+        <h3>Attendance Breakdown by Employee</h3>
+        <canvas id="attendanceChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Days Tracked</th>
+                    <th>On-Time</th>
+                    <th>Late</th>
+                    <th>Called-In</th>
+                    <th>NCNS</th>
+                    <th>Excused</th>
+                    <th>Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in data %}
+                <tr>
+                    <td>{{ e.name }}</td>
+                    <td>{{ e.total }}</td>
+                    <td>{{ e.on_time }}</td>
+                    <td>{{ e.late }}</td>
+                    <td>{{ e.called_in }}</td>
+                    <td>{{ e.no_call_no_show }}</td>
+                    <td>{{ e.excused_absence }}</td>
+                    <td>{{ e.attendance_rate }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="chart-container">
+        <p style="text-align: center; color: #6b7280;">No attendance data found for this date range.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    document.querySelectorAll('[data-action="print"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { window.print(); });
+    });
+
+    var aData = {{ data | tojson }};
+    var canvas = document.getElementById('attendanceChart');
+    if (canvas && aData.length > 0) {
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: aData.map(function(e) { return e.name; }),
+                datasets: [
+                    { label: 'On-Time', data: aData.map(function(e) { return e.on_time; }), backgroundColor: '#59a14f' },
+                    { label: 'Late', data: aData.map(function(e) { return e.late; }), backgroundColor: '#f28e2b' },
+                    { label: 'Called-In', data: aData.map(function(e) { return e.called_in; }), backgroundColor: '#4e79a7' },
+                    { label: 'NCNS', data: aData.map(function(e) { return e.no_call_no_show; }), backgroundColor: '#e15759' },
+                    { label: 'Excused', data: aData.map(function(e) { return e.excused_absence; }), backgroundColor: '#76b7b2' }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

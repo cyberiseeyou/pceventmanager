@@ -48,11 +48,14 @@ from datetime import datetime
 import os
 import logging
 import re
+import threading
+import time
 from typing import Dict, List, Optional, Tuple
 
 from .session_manager import session_manager
 from .authenticator import EDRAuthenticator
 from app.integrations.edr.pdf_generator import EDRPDFGenerator
+from app.integrations.edr import EDRReportGenerator
 from app.routes.auth import require_authentication, get_current_user
 from app.services.approved_events_service import ApprovedEventsService
 
@@ -62,6 +65,12 @@ logger = logging.getLogger(__name__)
 
 # Initialize PDF generator
 pdf_generator = EDRPDFGenerator()
+
+# Background auth state for non-blocking MFA request (Chrome CDP steps 1+2 run in a thread)
+walmart_mfa_auth_state = {'status': 'idle', 'error': None}
+
+# Lock to prevent concurrent authenticate requests (gevent cooperative concurrency)
+_authenticate_lock = threading.Lock()
 
 # Helper function to get models from app config
 def get_models():
@@ -246,45 +255,14 @@ def health_check():
 @require_authentication()
 def request_mfa():
     """
-    Request MFA authentication code.
+    Request MFA authentication code via Chrome CDP (background thread).
 
-    Initiates the Walmart authentication flow by:
-    1. Getting Walmart credentials from app config
-    2. Creating a new authenticator instance
-    3. Submitting password (Step 1)
-    4. Requesting MFA code to be sent to registered phone (Step 2)
-    5. Creating session for this user
-
-    The MFA code will be sent to the phone number registered with Walmart
-    for the configured account.
-
-    Required Authentication:
-        Flask-Login session (logged in user)
-
-    Returns:
-        JSON response with:
-        - success: Boolean indicating if MFA request succeeded
-        - message: Status message
-        - session_info: Session details (expires_at, time_remaining)
-
-    Status Codes:
-        200: MFA code requested successfully
-        400: Missing Walmart configuration
-        500: Authentication flow failed
-
-    Example Response:
-        {
-            "success": true,
-            "message": "MFA code sent to registered phone",
-            "session_info": {
-                "user_id": "user123",
-                "created_at": "2025-10-05T12:00:00",
-                "expires_at": "2025-10-05T12:10:00",
-                "time_remaining_seconds": 600,
-                "is_authenticated": false
-            }
-        }
+    Launches Chrome + login steps 1+2 in a background thread so the
+    single Gunicorn worker is not blocked. The frontend polls
+    GET /auth/mfa-status until the thread finishes.
     """
+    global walmart_mfa_auth_state
+
     try:
         # Get current user
         user = get_current_user()
@@ -296,6 +274,10 @@ def request_mfa():
 
         user_id = user.get('username', user.get('userId', 'unknown'))
 
+        # Reject if a background auth is already running
+        if walmart_mfa_auth_state['status'] == 'pending':
+            return jsonify({'success': True, 'status': 'pending', 'message': 'Auth already in progress'}), 200
+
         # Get Walmart credentials from SystemSetting database (with .env fallback)
         SystemSetting = current_app.config.get('SystemSetting')
 
@@ -304,7 +286,6 @@ def request_mfa():
             password = SystemSetting.get_setting('edr_password') or current_app.config.get('WALMART_EDR_PASSWORD')
             mfa_credential_id = SystemSetting.get_setting('edr_mfa_credential_id') or current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
         else:
-            # Fallback to .env config if SystemSetting not available
             username = current_app.config.get('WALMART_EDR_USERNAME')
             password = current_app.config.get('WALMART_EDR_PASSWORD')
             mfa_credential_id = current_app.config.get('WALMART_EDR_MFA_CREDENTIAL_ID')
@@ -316,45 +297,82 @@ def request_mfa():
                 'message': 'Walmart credentials not configured in system settings'
             }), 400
 
-        # Create new authenticator instance
-        authenticator = EDRAuthenticator(username, password, mfa_credential_id)
+        # Mark auth as pending before launching thread
+        walmart_mfa_auth_state = {'status': 'pending', 'error': None}
 
-        # Execute authentication steps 1-2
-        logger.info(f"User {user_id} requesting MFA code")
+        # Capture the Flask app for use inside the background thread
+        app = current_app._get_current_object()
 
-        if not authenticator.step1_submit_password():
-            logger.error(f"Password submission failed for user {user_id}")
-            return jsonify({
-                'success': False,
-                'message': 'Failed to authenticate with Walmart credentials'
-            }), 500
+        def _run_chrome_auth():
+            """Background thread: Chrome CDP launch + step1 + step2."""
+            global walmart_mfa_auth_state
+            with app.app_context():
+                try:
+                    # Use EDRReportGenerator with Chrome CDP (bypasses PerimeterX)
+                    authenticator = EDRReportGenerator()
+                    authenticator.username = username
+                    authenticator.password = password
+                    authenticator.mfa_credential_id = mfa_credential_id
 
-        if not authenticator.step2_request_mfa_code():
-            logger.error(f"MFA code request failed for user {user_id}")
-            return jsonify({
-                'success': False,
-                'message': 'Failed to request MFA code'
-            }), 500
+                    logger.info(f"User {user_id} requesting MFA code via Chrome CDP")
 
-        # Create session for this user
-        session = session_manager.create_session(str(user_id), authenticator)
+                    if not authenticator.chrome_step1_submit_password():
+                        detail = authenticator.last_error or 'Failed to submit password'
+                        logger.error(f"Password submission failed for user {user_id}: {detail}")
+                        walmart_mfa_auth_state = {'status': 'error', 'error': f'Walmart login failed: {detail}'}
+                        return
 
-        logger.info(f"MFA code requested successfully for user {user_id}")
+                    if not authenticator.chrome_step2_request_mfa_code():
+                        detail = authenticator.last_error or 'Failed to request MFA code'
+                        logger.error(f"MFA code request failed for user {user_id}: {detail}")
+                        walmart_mfa_auth_state = {'status': 'error', 'error': f'MFA request failed: {detail}'}
+                        return
+
+                    # Create session for this user (stores the EDRReportGenerator as authenticator)
+                    session_manager.create_session(str(user_id), authenticator)
+                    logger.info(f"MFA code requested successfully for user {user_id}")
+
+                    walmart_mfa_auth_state = {
+                        'status': 'ready',
+                        'error': None,
+                        'message': 'MFA code sent to registered phone',
+                        'session_info': session_manager.get_session_info(str(user_id)),
+                    }
+                except Exception as e:
+                    logger.error(f"Background MFA auth failed for user {user_id}: {e}", exc_info=True)
+                    walmart_mfa_auth_state = {'status': 'error', 'error': str(e)}
+
+        thread = threading.Thread(target=_run_chrome_auth, daemon=True)
+        thread.start()
 
         return jsonify({
             'success': True,
-            'message': 'MFA code sent to registered phone',
-            'session_info': session_manager.get_session_info(str(user_id))
+            'status': 'pending',
+            'message': 'Authentication started — polling for status',
         }), 200
 
     except Exception as e:
         user = get_current_user()
         user_id = user.get('username', 'unknown') if user else 'unknown'
         logger.error(f"MFA request failed for user {user_id}: {str(e)}")
+        walmart_mfa_auth_state = {'status': 'error', 'error': str(e)}
         return jsonify({
             'success': False,
             'message': f'MFA request failed: {str(e)}'
         }), 500
+
+
+@walmart_bp.route('/auth/mfa-status', methods=['GET'])
+@require_authentication()
+def mfa_auth_status():
+    """Poll endpoint for background MFA auth progress.
+
+    Returns the current walmart_mfa_auth_state dict:
+      - status: 'idle' | 'pending' | 'ready' | 'error'
+      - error: error message if status is 'error', else None
+      - session_info: session details when status is 'ready'
+    """
+    return jsonify(walmart_mfa_auth_state)
 
 
 @walmart_bp.route('/auth/authenticate', methods=['POST'])
@@ -403,6 +421,16 @@ def authenticate():
             }
         }
     """
+    global walmart_mfa_auth_state
+
+    # Prevent concurrent authenticate requests (gevent cooperative concurrency
+    # allows two greenlets to interleave on the same authenticator object)
+    if not _authenticate_lock.acquire(blocking=False):
+        return jsonify({
+            'success': False,
+            'message': 'Authentication already in progress. Please wait.'
+        }), 409
+
     try:
         # Get current user
         user = get_current_user()
@@ -445,7 +473,13 @@ def authenticate():
         # Execute authentication steps 3-6
         logger.info(f"User {user_id} attempting authentication with MFA code")
 
-        if not authenticator.step3_validate_mfa_code(mfa_code):
+        # Use Chrome CDP step3 if Chrome auth session is active, otherwise plain requests
+        if hasattr(authenticator, '_chrome_auth') and authenticator._chrome_auth:
+            step3_ok = authenticator.chrome_step3_validate_mfa_code(mfa_code)
+        else:
+            step3_ok = authenticator.step3_validate_mfa_code(mfa_code)
+
+        if not step3_ok:
             logger.error(f"Invalid MFA code for user {user_id}")
             return jsonify({
                 'success': False,
@@ -466,6 +500,9 @@ def authenticate():
         # Mark session as authenticated
         session.mark_authenticated()
 
+        # Reset auth state so a new auth flow can be started later
+        walmart_mfa_auth_state = {'status': 'idle', 'error': None}
+
         logger.info(f"User {user_id} authenticated successfully")
 
         return jsonify({
@@ -478,10 +515,13 @@ def authenticate():
         user = get_current_user()
         user_id = user.get('username', 'unknown') if user else 'unknown'
         logger.error(f"Authentication failed for user {user_id}: {str(e)}")
+        walmart_mfa_auth_state = {'status': 'idle', 'error': None}
         return jsonify({
             'success': False,
             'message': f'Authentication failed: {str(e)}'
         }), 500
+    finally:
+        _authenticate_lock.release()
 
 
 @walmart_bp.route('/auth/logout', methods=['POST'])
@@ -1428,7 +1468,7 @@ def sync_event_numbers():
     and matches them to local events by name/date. Also creates billing-only
     events for unmatched Walmart events.
 
-    Date range: 30 days back to 120 days ahead.
+    Date range: 1st of previous month to end of current month.
 
     Returns:
         JSON response with enrichment counts
@@ -1448,11 +1488,18 @@ def sync_event_numbers():
         if not club:
             return jsonify({'success': False, 'message': 'Club parameter is required'}), 400
 
-        # Broad date range: 30 days back, 120 days ahead
+        # Date range: 1st of previous month to end of current month
         from datetime import timedelta, date
+        import calendar
         today = date.today()
-        start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
-        end_date = (today + timedelta(days=120)).strftime('%Y-%m-%d')
+        # 1st of previous month
+        if today.month == 1:
+            start_date = date(today.year - 1, 12, 1).strftime('%Y-%m-%d')
+        else:
+            start_date = date(today.year, today.month - 1, 1).strftime('%Y-%m-%d')
+        # Last day of current month
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        end_date = date(today.year, today.month, last_day).strftime('%Y-%m-%d')
 
         # Try to get authenticated session
         walmart_events = None

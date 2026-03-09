@@ -19,6 +19,7 @@ var deadlineTimer = null;
 var currentEvents = [];
 var currentFilter = 'all';
 var viewMode = 'panels'; // 'panels' or 'table'
+var currentConfirmedLostRefs = [];
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
@@ -118,11 +119,12 @@ async function checkSessionStatus() {
     }
 }
 
-// Request MFA code
+// Request MFA code (launches Chrome auth in background, then polls for readiness)
 async function requestMFA() {
     document.getElementById('authError').style.display = 'none';
     document.getElementById('authStep1').innerHTML =
-        '<div class="loading-spinner" style="width: 24px; height: 24px; margin: 0 auto;"></div>';
+        '<div class="loading-spinner" style="width: 24px; height: 24px; margin: 0 auto;"></div>' +
+        '<p style="margin-top: 8px; font-size: 0.9em; color: #666;">Launching browser &amp; submitting credentials...</p>';
 
     try {
         var response = await fetch('/api/walmart/auth/request-mfa', {
@@ -131,15 +133,15 @@ async function requestMFA() {
         });
         var data = await response.json();
 
-        if (data.success) {
-            document.getElementById('authStep1').style.display = 'none';
-            document.getElementById('authStep2').style.display = 'block';
-            document.getElementById('mfaCode').focus();
-        } else {
-            showAuthError(data.message || 'Failed to request MFA code');
+        if (!data.success) {
+            showAuthError(data.message || 'Failed to start authentication');
             document.getElementById('authStep1').innerHTML =
                 '<button class="btn btn-primary" data-action="request-mfa"><i class="fas fa-key"></i> Request MFA Code</button>';
+            return;
         }
+
+        // Poll for background auth to finish
+        pollWalmartMfaStatus();
     } catch (error) {
         showAuthError('Network error. Please try again.');
         document.getElementById('authStep1').innerHTML =
@@ -147,15 +149,57 @@ async function requestMFA() {
     }
 }
 
+// Poll GET /api/walmart/auth/mfa-status every 2s until ready or error
+function pollWalmartMfaStatus() {
+    var pollInterval = setInterval(async function() {
+        try {
+            var response = await fetch('/api/walmart/auth/mfa-status');
+            var state = await response.json();
+
+            if (state.status === 'pending') {
+                return; // still running
+            }
+
+            clearInterval(pollInterval);
+
+            if (state.status === 'error') {
+                showAuthError(state.error || 'Authentication failed');
+                document.getElementById('authStep1').innerHTML =
+                    '<button class="btn btn-primary" data-action="request-mfa"><i class="fas fa-key"></i> Request MFA Code</button>';
+                return;
+            }
+
+            if (state.status === 'ready') {
+                document.getElementById('authStep1').style.display = 'none';
+                document.getElementById('authStep2').style.display = 'block';
+                document.getElementById('mfaCode').focus();
+            }
+        } catch (err) {
+            clearInterval(pollInterval);
+            showAuthError('Failed to check auth status. Please try again.');
+            document.getElementById('authStep1').innerHTML =
+                '<button class="btn btn-primary" data-action="request-mfa"><i class="fas fa-key"></i> Request MFA Code</button>';
+        }
+    }, 2000);
+}
+
 // Submit MFA code
+var mfaSubmitting = false;
 async function submitMFA() {
+    if (mfaSubmitting) return;
+
     var code = document.getElementById('mfaCode').value.trim();
     if (code.length !== 6) {
         showAuthError('Please enter a 6-digit code');
         return;
     }
 
+    mfaSubmitting = true;
     document.getElementById('authError').style.display = 'none';
+
+    // Disable submit button while authenticating
+    var submitBtn = document.querySelector('[data-action="submit-mfa"]');
+    if (submitBtn) submitBtn.disabled = true;
 
     try {
         var response = await fetch('/api/walmart/auth/authenticate', {
@@ -175,6 +219,9 @@ async function submitMFA() {
         }
     } catch (error) {
         showAuthError('Network error. Please try again.');
+    } finally {
+        mfaSubmitting = false;
+        if (submitBtn) submitBtn.disabled = false;
     }
 }
 
@@ -295,6 +342,17 @@ async function fetchApprovedEvents() {
         // Store events for filtering
         currentEvents = data.events || [];
 
+        // Fetch confirmed lost demo refs to exclude from Lost Demos category
+        try {
+            var lostResp = await fetch('/api/lost-demos/confirmed-refs');
+            var lostData = await lostResp.json();
+            if (lostData.status === 'success') {
+                currentConfirmedLostRefs = lostData.data || [];
+            }
+        } catch (err) {
+            console.error('Failed to fetch confirmed lost demo refs:', err);
+        }
+
         // Log summary for debugging
         console.log('Fetched ' + currentEvents.length + ' Left In Approved events from Walmart');
         console.log('Date range:', data.date_range);
@@ -360,6 +418,11 @@ function isOnOrBeforeToday(dateStr) {
     return eventDate <= today;
 }
 
+function isCancelledEvent(e) {
+    var c = (e.condition || '').toLowerCase();
+    return c === 'canceled' || c === 'cancelled';
+}
+
 // Update stats display with action-based counts
 function updateStats(summary, events) {
     // Count by action type using same logic as renderPanelView
@@ -377,13 +440,31 @@ function updateStats(summary, events) {
         return !isOnOrBeforeToday(dateToCheck);
     }).length;
 
-    // Catch-all: everything not in scan-out or roll-scheduled needs scheduling
-    var rollUnscheduledCount = events.length - scanOutCount - rollScheduledCount;
+    // Lost demos: unassigned + past due + not cancelled + not already confirmed
+    var lostDemoCount = events.filter(function (e) {
+        if (e.assigned_employee_name) return false;
+        if (isCancelledEvent(e)) return false;
+        if (e.local_ref_num && currentConfirmedLostRefs.indexOf(e.local_ref_num) !== -1) return false;
+        var dueDate = e.due_datetime || e.scheduled_date;
+        return dueDate && isOnOrBeforeToday(dueDate);
+    }).length;
 
-    var totalLIAs = scanOutCount + rollScheduledCount + rollUnscheduledCount;
+    // Cancelled: past due + cancelled condition
+    var cancelledCount = events.filter(function (e) {
+        if (!isCancelledEvent(e)) return false;
+        var dueDate = e.due_datetime || e.scheduled_date;
+        return dueDate && isOnOrBeforeToday(dueDate);
+    }).length;
+
+    // Catch-all: everything not in scan-out, roll-scheduled, lost demos, or cancelled
+    var rollUnscheduledCount = events.length - scanOutCount - rollScheduledCount - lostDemoCount - cancelledCount;
+
+    var totalLIAs = scanOutCount + rollScheduledCount + lostDemoCount + cancelledCount + rollUnscheduledCount;
 
     document.getElementById('statScanOut').textContent = scanOutCount;
     document.getElementById('statRollScheduled').textContent = rollScheduledCount;
+    document.getElementById('statLostDemos').textContent = lostDemoCount;
+    document.getElementById('statCancelled').textContent = cancelledCount;
     document.getElementById('statRollUnscheduled').textContent = rollUnscheduledCount;
     document.getElementById('statTotal').textContent = totalLIAs;
 
@@ -412,16 +493,37 @@ function renderPanelView(events) {
         return !isOnOrBeforeToday(dateToCheck);
     });
 
-    // Catch-all: everything not in scan-out or roll-scheduled needs scheduling
+    // Lost Demos: unassigned + past due + not cancelled + not already confirmed lost
+    // Use due_datetime from local DB if available, otherwise fall back to Walmart scheduled_date
+    var lostDemoEvents = events.filter(function (e) {
+        if (e.assigned_employee_name) return false;
+        if (isCancelledEvent(e)) return false;
+        if (e.local_ref_num && currentConfirmedLostRefs.indexOf(e.local_ref_num) !== -1) return false;
+        var dueDate = e.due_datetime || e.scheduled_date;
+        return dueDate && isOnOrBeforeToday(dueDate);
+    });
+
+    // Cancelled: past due + cancelled condition
+    var cancelledEvents = events.filter(function (e) {
+        if (!isCancelledEvent(e)) return false;
+        var dueDate = e.due_datetime || e.scheduled_date;
+        return dueDate && isOnOrBeforeToday(dueDate);
+    });
+
+    // Catch-all: everything not in scan-out, roll-scheduled, lost demos, or cancelled
     var scanOutIds = new Set(scanOutEvents.map(function (e) { return e.event_id; }));
     var rollScheduledIds = new Set(rollScheduledEvents.map(function (e) { return e.event_id; }));
+    var lostDemoIds = new Set(lostDemoEvents.map(function (e) { return e.event_id; }));
+    var cancelledIds = new Set(cancelledEvents.map(function (e) { return e.event_id; }));
     var rollUnscheduledEvents = events.filter(function (e) {
-        return !scanOutIds.has(e.event_id) && !rollScheduledIds.has(e.event_id);
+        return !scanOutIds.has(e.event_id) && !rollScheduledIds.has(e.event_id) && !lostDemoIds.has(e.event_id) && !cancelledIds.has(e.event_id);
     });
 
     // Apply filter if set
     var showScanOut = currentFilter === 'all' || currentFilter === 'scan_out';
     var showRollScheduled = currentFilter === 'all' || currentFilter === 'roll_scheduled';
+    var showLostDemos = currentFilter === 'all' || currentFilter === 'lost_demos';
+    var showCancelled = currentFilter === 'all' || currentFilter === 'cancelled';
     var showRollUnscheduled = currentFilter === 'all' || currentFilter === 'roll_unscheduled';
 
     // Render Scan-Out Panel
@@ -446,6 +548,30 @@ function renderPanelView(events) {
         }).join('');
     } else {
         rollScheduledPanel.style.display = 'none';
+    }
+
+    // Render Lost Demos Panel
+    var lostDemosPanel = document.getElementById('lostDemosPanel');
+    if (lostDemoEvents.length > 0 && showLostDemos) {
+        lostDemosPanel.style.display = 'block';
+        document.getElementById('lostDemosPanelCount').textContent = lostDemoEvents.length;
+        document.getElementById('lostDemosEvents').innerHTML = lostDemoEvents.map(function (e) {
+            return renderLostDemoCard(e);
+        }).join('');
+    } else {
+        lostDemosPanel.style.display = 'none';
+    }
+
+    // Render Cancelled Panel
+    var cancelledPanel = document.getElementById('cancelledPanel');
+    if (cancelledEvents.length > 0 && showCancelled) {
+        cancelledPanel.style.display = 'block';
+        document.getElementById('cancelledPanelCount').textContent = cancelledEvents.length;
+        document.getElementById('cancelledEvents').innerHTML = cancelledEvents.map(function (e) {
+            return renderEventCard(e, 'cancelled');
+        }).join('');
+    } else {
+        cancelledPanel.style.display = 'none';
     }
 
     // Render Roll Unscheduled Panel
@@ -537,6 +663,51 @@ function renderEventCard(event, actionType) {
         rollDateContent +
         actionContent +
         '</div>';
+}
+
+// Render a Lost Demo event card
+function renderLostDemoCard(event) {
+    var dueDate = event.due_datetime ? formatDate(event.due_datetime) : formatDate(event.scheduled_date);
+    var confirmBtn = '';
+    if (event.local_ref_num) {
+        confirmBtn = '<button class="action-btn danger" data-action="confirm-lost" data-ref-num="' + event.local_ref_num + '">' +
+            '<i class="fas fa-exclamation-triangle"></i> Confirm Lost</button>';
+    } else {
+        confirmBtn = '<span style="color: #9ca3af; font-size: 12px;"><i class="fas fa-info-circle"></i> Not in local DB — import first to confirm</span>';
+    }
+    return '<div class="event-card lost-demo-card">' +
+        '<span class="event-id">' + escapeHtml(event.event_id) + '</span>' +
+        '<span class="event-name" title="' + escapeHtml(event.event_name) + '">' + escapeHtml(event.event_name) + '</span>' +
+        '<span class="event-date" style="color: #dc2626;"><i class="fas fa-calendar-times"></i> Due: ' + dueDate + '</span>' +
+        '<span class="assigned-to" style="color: #dc2626;"><i class="fas fa-user-slash"></i> Unassigned</span>' +
+        confirmBtn +
+        '</div>';
+}
+
+// Confirm a lost demo
+async function confirmLostDemo(refNum) {
+    if (!confirm('Confirm this event as a Lost Demo?')) return;
+
+    try {
+        var response = await fetch('/api/lost-demos/' + refNum + '/confirm', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({})
+        });
+        var data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+            fetchApprovedEvents();  // Refresh
+        } else {
+            alert('Failed to confirm: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Confirm lost demo error:', error);
+        alert('Failed to confirm: ' + error.message);
+    }
 }
 
 // Get latest possible roll date
@@ -961,6 +1132,7 @@ document.addEventListener('click', function(e) {
         case 'show-table-view': showTableView(); break;
         case 'open-walmart': openInWalmart(target.dataset.eventId); break;
         case 'roll-event': rollEventToDate(target.dataset.eventId, target.dataset.date, target.dataset.rollType); break;
+        case 'confirm-lost': confirmLostDemo(target.dataset.refNum); break;
         case 'navigate-events': window.location.href = '/events?search=' + target.dataset.eventId; break;
         case 'sync-event-numbers': syncEventNumbers(); break;
     }

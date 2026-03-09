@@ -58,6 +58,9 @@ def manage_employees(employee_id=None):
     Schedule = models['Schedule']
     EmployeeAvailability = models['EmployeeAvailability']
     EmployeeWeeklyAvailability = models['EmployeeWeeklyAvailability']
+    EmployeeAttendance = models['EmployeeAttendance']
+    EmployeeTimeOff = models['EmployeeTimeOff']
+    EmployeeAvailabilityOverride = models['EmployeeAvailabilityOverride']
 
     if request.method == 'GET':
         # Get all employees with their weekly availability
@@ -203,22 +206,79 @@ def manage_employees(employee_id=None):
             return jsonify({'error': f'Database error: {str(e)}'}), 500
 
     elif request.method == 'DELETE':
-        # Delete employee
+        # Two-step delete: preview future events first, then confirm deletion
         if not employee_id:
             return jsonify({'error': 'Employee ID is required'}), 400
 
         try:
-            # Find the employee
             employee = Employee.query.filter_by(id=employee_id).first()
             if not employee:
                 return jsonify({'error': 'Employee not found'}), 404
 
-            # Check if employee has any scheduled events
-            scheduled_events = Schedule.query.filter_by(employee_id=employee_id).count()
-            if scheduled_events > 0:
-                return jsonify({'error': f'Cannot delete employee with {scheduled_events} scheduled events. Deactivate instead.'}), 400
+            Event = models['Event']
+            RotationAssignment = models['RotationAssignment']
+            PendingSchedule = models['PendingSchedule']
+            ScheduleException = models['ScheduleException']
 
-            # Delete related records first
+            confirm = request.args.get('confirm', '').lower() == 'true'
+            today = datetime.utcnow()
+
+            # Query future schedules for this employee
+            future_schedules = Schedule.query.filter(
+                Schedule.employee_id == employee_id,
+                Schedule.schedule_datetime >= today
+            ).all()
+
+            # Step 1: If not confirmed and there are future events, return preview
+            if not confirm and future_schedules:
+                future_events = []
+                for sched in future_schedules:
+                    event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+                    future_events.append({
+                        'schedule_id': sched.id,
+                        'date': sched.schedule_datetime.strftime('%Y-%m-%d'),
+                        'time': sched.schedule_datetime.strftime('%I:%M %p'),
+                        'event_name': event.project_name if event else 'Unknown Event',
+                        'event_type': event.event_type if event else 'Unknown',
+                        'ref_num': sched.event_ref_num,
+                    })
+                return jsonify({
+                    'status': 'confirm_required',
+                    'employee_name': employee.name,
+                    'future_events': future_events,
+                    'message': f'{employee.name} has {len(future_events)} future scheduled event(s) that will be unscheduled.'
+                })
+
+            # Step 2: Confirmed delete (or no future events)
+
+            # Delete future schedules and mark their events as unscheduled
+            for sched in future_schedules:
+                event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+                if event:
+                    event.is_scheduled = False
+                    event.condition = 'Unstaffed'
+                db.session.delete(sched)
+
+            # Null out employee_id on past schedules (employee_name already stored)
+            past_schedules = Schedule.query.filter(
+                Schedule.employee_id == employee_id,
+                Schedule.schedule_datetime < today
+            ).all()
+            for sched in past_schedules:
+                sched.employee_id = None
+
+            # Clean up auto-scheduler related records
+            RotationAssignment.query.filter_by(employee_id=employee_id).delete()
+            RotationAssignment.query.filter(
+                RotationAssignment.backup_employee_id == employee_id
+            ).update({'backup_employee_id': None})
+            PendingSchedule.query.filter_by(employee_id=employee_id).delete()
+            ScheduleException.query.filter_by(employee_id=employee_id).delete()
+
+            # Clean up employee-related records
+            EmployeeAttendance.query.filter_by(employee_id=employee_id).delete()
+            EmployeeTimeOff.query.filter_by(employee_id=employee_id).delete()
+            EmployeeAvailabilityOverride.query.filter_by(employee_id=employee_id).delete()
             EmployeeWeeklyAvailability.query.filter_by(employee_id=employee_id).delete()
             EmployeeAvailability.query.filter_by(employee_id=employee_id).delete()
 
@@ -226,7 +286,11 @@ def manage_employees(employee_id=None):
             db.session.delete(employee)
             db.session.commit()
 
-            return jsonify({'message': f'Employee {employee.name} deleted successfully'})
+            return jsonify({
+                'message': f'Employee {employee.name} deleted successfully',
+                'future_events_removed': len(future_schedules),
+                'past_schedules_preserved': len(past_schedules)
+            })
 
         except Exception as e:
             db.session.rollback()

@@ -382,6 +382,14 @@ class SessionAPIService:
                     if field in resp and resp[field]:
                         return str(resp[field])
 
+        # Try nested 'MVScheduledEvent' field (Crossmark schedule creation response)
+        if 'MVScheduledEvent' in result_data:
+            mv_event = result_data['MVScheduledEvent']
+            if isinstance(mv_event, dict):
+                for field in id_fields:
+                    if field in mv_event and mv_event[field]:
+                        return str(mv_event[field])
+
         # Try if result_data itself is a list
         if isinstance(result_data, list) and len(result_data) > 0:
             first_item = result_data[0]

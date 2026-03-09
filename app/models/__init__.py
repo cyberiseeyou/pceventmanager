@@ -17,6 +17,7 @@ from .ignored_validation_issue import create_ignored_validation_issue_model
 from .shift_block_setting import create_shift_block_setting_model
 from .notes import create_notes_models
 from .inventory import create_inventory_models
+from .lost_demo import create_lost_demo_model
 
 
 def init_models(db):
@@ -44,6 +45,7 @@ def init_models(db):
     ShiftBlockSetting = create_shift_block_setting_model(db)
     Note, RecurringReminder = create_notes_models(db)
     inventory_models = create_inventory_models(db)
+    LostDemo = create_lost_demo_model(db)
 
     return {
         'Employee': Employee,
@@ -76,7 +78,8 @@ def init_models(db):
         'SupplyAdjustment': inventory_models['SupplyAdjustment'],
         'PurchaseOrder': inventory_models['PurchaseOrder'],
         'OrderItem': inventory_models['OrderItem'],
-        'InventoryReminder': inventory_models['InventoryReminder']
+        'InventoryReminder': inventory_models['InventoryReminder'],
+        'LostDemo': LostDemo,
     }
 
 

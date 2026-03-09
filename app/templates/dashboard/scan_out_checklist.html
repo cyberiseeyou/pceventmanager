@@ -16,13 +16,14 @@
     }
     .scanout-header h1 { font-size: 24px; font-weight: 700; margin: 0; color: white; }
     .scanout-header .date-info { opacity: 0.9; margin-top: 4px; }
-    .nav-btns { display: flex; gap: 8px; }
-    .nav-btns a {
+    .nav-btns { display: flex; gap: 8px; align-items: center; }
+    .nav-btns a, .nav-btns button {
         background: rgba(255,255,255,0.2); color: white;
         padding: 8px 16px; border-radius: 6px;
         text-decoration: none; font-weight: 500;
+        border: none; cursor: pointer; font-size: 14px;
     }
-    .nav-btns a:hover { background: rgba(255,255,255,0.3); }
+    .nav-btns a:hover, .nav-btns button:hover { background: rgba(255,255,255,0.3); }
 
     .progress-bar {
         background: white; padding: 16px 24px; border-radius: 8px;
@@ -73,13 +74,58 @@
         accent-color: #059669;
     }
 
+    /* Sync status overlay */
+    .sync-overlay {
+        display: none;
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 1000;
+        justify-content: center; align-items: center;
+    }
+    .sync-overlay.active { display: flex; }
+    .sync-overlay .sync-card {
+        background: white; border-radius: 12px; padding: 32px;
+        max-width: 400px; width: 90%; text-align: center;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .sync-overlay .sync-card h3 { margin: 0 0 8px; font-size: 18px; color: #1e40af; }
+    .sync-overlay .sync-card p { margin: 0 0 16px; color: #6b7280; font-size: 14px; line-height: 1.5; }
+    .sync-overlay .sync-card .spinner {
+        width: 36px; height: 36px; border: 3px solid #e5e7eb;
+        border-top-color: #3b82f6; border-radius: 50%;
+        animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    .sync-overlay .sync-card input[type="text"] {
+        width: 100%; padding: 10px 14px; border: 2px solid #e5e7eb;
+        border-radius: 8px; font-size: 18px; text-align: center;
+        letter-spacing: 8px; font-weight: 700; outline: none;
+    }
+    .sync-overlay .sync-card input[type="text"]:focus { border-color: #3b82f6; }
+    .sync-overlay .sync-card .btn-row {
+        display: flex; gap: 8px; margin-top: 16px; justify-content: center;
+    }
+    .sync-overlay .sync-card .btn-row button {
+        padding: 10px 20px; border-radius: 8px; font-weight: 600;
+        border: none; cursor: pointer; font-size: 14px;
+    }
+    .sync-overlay .sync-card .btn-primary {
+        background: #1e40af; color: white;
+    }
+    .sync-overlay .sync-card .btn-primary:hover { background: #1e3a8a; }
+    .sync-overlay .sync-card .btn-secondary {
+        background: #f3f4f6; color: #374151;
+    }
+    .sync-overlay .sync-card .btn-secondary:hover { background: #e5e7eb; }
+
     @media print {
         .scanout-header .nav-btns,
         .no-print { display: none !important; }
         .scanout-header { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .checklist-table { box-shadow: none; }
         .checklist-table tbody tr.checked-off { opacity: 1; }
+        .sync-overlay { display: none !important; }
     }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 {% endblock %}
 
@@ -102,7 +148,6 @@
                 Print
             </a>
             <button type="button" id="syncEventNumsBtn" class="no-print"
-                style="background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer;"
                 title="Pull event numbers from Walmart">
                 <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span>
                 Sync Event #s
@@ -157,11 +202,20 @@
     {% endif %}
 </div>
 
+<!-- Sync auth/status overlay -->
+<div class="sync-overlay" id="syncOverlay">
+    <div class="sync-card" id="syncCard">
+        <!-- Content set dynamically by JS -->
+    </div>
+</div>
+
 <script>
 (function() {
     const dateKey = 'scanout-{{ view_date.isoformat() }}';
     const checkboxes = document.querySelectorAll('.checklist-table input[type="checkbox"]');
     const total = checkboxes.length;
+    const clubNumber = '{{ club_number }}';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
     // Load saved state
     const saved = JSON.parse(localStorage.getItem(dateKey) || '{}');
@@ -211,47 +265,229 @@
         });
     });
 
-    // Sync Event Numbers from Walmart
-    const syncBtn = document.getElementById('syncEventNumsBtn');
-    if (syncBtn) {
-        syncBtn.addEventListener('click', async () => {
-            const club = '{{ club_number }}';
-            if (!club) {
-                alert('No Walmart club number configured. Go to Settings to set it.');
-                return;
-            }
-            syncBtn.disabled = true;
-            syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Syncing...';
+    // --- Sync overlay helpers ---
+    const overlay = document.getElementById('syncOverlay');
+    const card = document.getElementById('syncCard');
 
-            try {
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-                const resp = await fetch('/api/walmart/events/sync-event-numbers', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: JSON.stringify({ club: club })
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check</span> Synced ' + data.matched + ' events';
-                    setTimeout(() => { window.location.reload(); }, 1500);
-                } else {
-                    alert(data.message || 'Sync failed. Make sure you are logged in to Walmart.');
-                    syncBtn.disabled = false;
-                    syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span> Sync Event #s';
-                }
-            } catch (err) {
-                alert('Sync request failed: ' + err.message);
-                syncBtn.disabled = false;
-                syncBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">sync</span> Sync Event #s';
+    function showOverlay(html) {
+        card.innerHTML = html;
+        overlay.classList.add('active');
+    }
+
+    function hideOverlay() {
+        overlay.classList.remove('active');
+    }
+
+    function showSyncLoading(message) {
+        showOverlay(`
+            <div class="spinner"></div>
+            <h3>Syncing Event Numbers</h3>
+            <p>${message}</p>
+        `);
+    }
+
+    function showSyncSuccess(matched) {
+        showOverlay(`
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #059669;">check_circle</span>
+            <h3 style="color: #059669;">Sync Complete</h3>
+            <p>Matched ${matched} events with Walmart data.</p>
+        `);
+        setTimeout(() => { window.location.reload(); }, 1500);
+    }
+
+    function showSyncError(message) {
+        showOverlay(`
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #dc2626;">error</span>
+            <h3 style="color: #dc2626;">Sync Failed</h3>
+            <p>${message}</p>
+            <div class="btn-row">
+                <button class="btn-secondary" data-action="close-overlay">Close</button>
+            </div>
+        `);
+    }
+
+    // --- Auth flow (mirrors printing page steps 1-3) ---
+
+    function checkAuthAndSync() {
+        if (!clubNumber) {
+            showSyncError('No store/club number configured.<br>Go to Settings to set your Store/Club Number.');
+            return;
+        }
+
+        showSyncLoading('Checking Walmart session...');
+
+        // First try syncing directly - if there's an active session it will work
+        doSync().then(success => {
+            if (!success) {
+                // No active session - start auth flow (same as printing page steps 1-3)
+                startAuthFlow();
             }
         });
     }
+
+    async function doSync() {
+        try {
+            const resp = await fetch('/api/walmart/events/sync-event-numbers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ club: clubNumber })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSyncSuccess(data.matched);
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    }
+
+    function startAuthFlow() {
+        // Step 1 & 2: Start Chrome auth + request MFA code (background thread)
+        showSyncLoading('Starting Walmart authentication...<br><br>Launching browser and submitting credentials.<br>Please wait.');
+
+        fetch('/printing/edr/request-mfa', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken }
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    showSyncError(data.error || 'Failed to start authentication.<br>Check Settings for Walmart credentials.');
+                    return;
+                }
+                // Poll for background auth to complete
+                pollAuthStatus();
+            })
+            .catch(err => {
+                showSyncError('Failed to start authentication: ' + (err.message || 'Unknown error'));
+            });
+    }
+
+    function pollAuthStatus() {
+        showSyncLoading('Submitting credentials to Walmart...<br><br>Waiting for MFA code to be sent to your phone.');
+
+        const pollInterval = setInterval(() => {
+            fetch('/printing/edr/auth-status')
+                .then(r => r.json())
+                .then(state => {
+                    if (state.status === 'pending') return; // still running
+
+                    clearInterval(pollInterval);
+
+                    if (state.status === 'error') {
+                        showSyncError(state.error || 'Authentication failed.<br>Check Settings for Walmart credentials.');
+                        return;
+                    }
+
+                    if (state.status === 'ready') {
+                        // Step 3: Prompt for MFA code
+                        const expiresMin = Math.floor((state.expires_in_seconds || 300) / 60);
+                        promptMfaCode(expiresMin);
+                    }
+                })
+                .catch(err => {
+                    clearInterval(pollInterval);
+                    showSyncError('Failed to check auth status: ' + (err.message || 'Unknown error'));
+                });
+        }, 2000);
+    }
+
+    function promptMfaCode(expiresMin) {
+        showOverlay(`
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #1e40af;">smartphone</span>
+            <h3>Enter MFA Code</h3>
+            <p>A 6-digit code has been sent to your phone.<br>Code expires in ${expiresMin} minutes.</p>
+            <input type="text" id="mfaCodeInput" maxlength="6" placeholder="000000" autocomplete="one-time-code" inputmode="numeric">
+            <div class="btn-row">
+                <button class="btn-secondary" id="mfaCancelBtn">Cancel</button>
+                <button class="btn-primary" id="mfaSubmitBtn">Verify & Sync</button>
+            </div>
+        `);
+
+        const input = document.getElementById('mfaCodeInput');
+        const submitBtn = document.getElementById('mfaSubmitBtn');
+        const cancelBtn = document.getElementById('mfaCancelBtn');
+
+        input.focus();
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') submitBtn.click();
+        });
+
+        cancelBtn.addEventListener('click', () => hideOverlay());
+
+        submitBtn.addEventListener('click', () => {
+            const code = input.value.trim();
+            if (!/^\d{6}$/.test(code)) {
+                input.style.borderColor = '#dc2626';
+                input.focus();
+                return;
+            }
+            submitMfaCode(code);
+        });
+    }
+
+    function submitMfaCode(code) {
+        showSyncLoading('Verifying MFA code...');
+
+        fetch('/printing/edr/authenticate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ mfa_code: code })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    if (data.error_code === 'mfa_expired' || data.error_code === 'session_expired') {
+                        showOverlay(`
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: #f59e0b;">timer_off</span>
+                            <h3 style="color: #f59e0b;">Code Expired</h3>
+                            <p>${data.error}</p>
+                            <div class="btn-row">
+                                <button class="btn-secondary" data-action="close-overlay">Cancel</button>
+                                <button class="btn-primary" id="retryAuthBtn">Request New Code</button>
+                            </div>
+                        `);
+                        document.getElementById('retryAuthBtn').addEventListener('click', () => startAuthFlow());
+                        return;
+                    }
+                    showSyncError(data.error || 'MFA verification failed.');
+                    return;
+                }
+
+                // Auth succeeded - now sync event numbers
+                showSyncLoading('Authenticated! Syncing event numbers...');
+                doSync().then(success => {
+                    if (!success) {
+                        showSyncError('Authentication succeeded but sync failed. Please try again.');
+                    }
+                });
+            })
+            .catch(err => {
+                showSyncError('MFA verification failed: ' + (err.message || 'Unknown error'));
+            });
+    }
+
+    // --- Event delegation for overlay close buttons ---
+    overlay.addEventListener('click', e => {
+        if (e.target.closest('[data-action="close-overlay"]')) {
+            hideOverlay();
+        }
+    });
+
+    // --- Sync button click handler ---
+    const syncBtn = document.getElementById('syncEventNumsBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', checkAuthAndSync);
+    }
 })();
 </script>
-<style>
-@keyframes spin { to { transform: rotate(360deg); } }
-</style>
 {% endblock %}

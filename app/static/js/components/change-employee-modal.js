@@ -278,7 +278,7 @@ class ChangeEmployeeModal {
      *
      * @param {boolean} overrideNotification - If true, skip notification modal
      */
-    async executeChange(overrideNotification = false) {
+    async executeChange(overrideNotification = false, forceOverrideLock = false) {
         if (!this.selectedEmployeeId) {
             console.error('No employee selected');
             return;
@@ -301,7 +301,8 @@ class ChangeEmployeeModal {
                 },
                 body: JSON.stringify({
                     new_employee_id: this.selectedEmployeeId,
-                    override_notification: overrideNotification
+                    override_notification: overrideNotification,
+                    force_override_lock: forceOverrideLock
                 })
             });
 
@@ -318,6 +319,22 @@ class ChangeEmployeeModal {
             }
 
             if (response.status === 409) {
+                // Check if this is a locked day that can be overridden
+                if (result.locked_day_override) {
+                    const confirmOverride = confirm(
+                        `Day is Locked\n\n${result.error}\n\nDo you want to override the lock and proceed anyway?`
+                    );
+                    if (confirmOverride) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = originalText;
+                        await this.executeChange(overrideNotification, true);
+                        return;
+                    }
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = originalText;
+                    return;
+                }
+
                 // Conflict detected
                 this.displayConflicts(result.conflicts);
                 confirmBtn.disabled = false;

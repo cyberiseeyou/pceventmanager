@@ -201,22 +201,34 @@ if (rescheduleForm) {
         showLoading();
 
         try {
-            var response = await fetch('/api/event/' + scheduleId + '/reschedule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({
-                    new_date: newDate,
-                    new_time: newTime,
-                    override_conflicts: true
-                })
-            });
+            var submitReschedule = async function(forceOverrideLock) {
+                var response = await fetch('/api/event/' + scheduleId + '/reschedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify({
+                        new_date: newDate,
+                        new_time: newTime,
+                        override_conflicts: true,
+                        force_override_lock: forceOverrideLock || false
+                    })
+                });
 
-            if (response.ok) {
-                location.reload();
-            } else {
-                var data = await response.json();
-                alert('Error: ' + (data.error || 'Failed to reschedule'));
-            }
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    var data = await response.json();
+                    if (data.locked_day_override) {
+                        var confirmOverride = confirm('Day is Locked\n\n' + data.error + '\n\nDo you want to override the lock and proceed anyway?');
+                        if (confirmOverride) {
+                            await submitReschedule(true);
+                            return;
+                        }
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to reschedule'));
+                    }
+                }
+            };
+            await submitReschedule(false);
         } catch (err) {
             alert('Error: ' + err.message);
         } finally {
@@ -292,7 +304,7 @@ function selectEmployee(employeeId, employeeName, mode) {
     }
 }
 
-async function confirmChangeEmployee() {
+async function confirmChangeEmployee(forceOverrideLock) {
     var scheduleId = document.getElementById('change-schedule-id').value;
     var newEmployeeId = document.getElementById('change-selected-employee').value;
 
@@ -309,7 +321,8 @@ async function confirmChangeEmployee() {
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
             body: JSON.stringify({
                 new_employee_id: newEmployeeId,
-                override_conflicts: true
+                override_conflicts: true,
+                force_override_lock: forceOverrideLock || false
             })
         });
 
@@ -317,7 +330,16 @@ async function confirmChangeEmployee() {
             location.reload();
         } else {
             var data = await response.json();
-            alert('Error: ' + (data.error || 'Failed to change employee'));
+            if (data.locked_day_override) {
+                hideLoading();
+                var confirmOverride = confirm('Day is Locked\n\n' + data.error + '\n\nDo you want to override the lock and proceed anyway?');
+                if (confirmOverride) {
+                    await confirmChangeEmployee(true);
+                    return;
+                }
+            } else {
+                alert('Error: ' + (data.error || 'Failed to change employee'));
+            }
         }
     } catch (err) {
         alert('Error: ' + err.message);
@@ -531,21 +553,33 @@ async function reassignToRotation(scheduleId, rotationEmployee, dateStr) {
         }
 
         // Now change the employee
-        var changeResponse = await fetch('/api/event/' + scheduleId + '/change-employee', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-            body: JSON.stringify({
-                new_employee_id: rotationEmp.id,
-                override_conflicts: true
-            })
-        });
+        var doChange = async function(forceOverrideLock) {
+            var changeResponse = await fetch('/api/event/' + scheduleId + '/change-employee', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                body: JSON.stringify({
+                    new_employee_id: rotationEmp.id,
+                    override_conflicts: true,
+                    force_override_lock: forceOverrideLock || false
+                })
+            });
 
-        if (changeResponse.ok) {
-            location.reload();
-        } else {
-            var errorData = await changeResponse.json();
-            alert('Error: ' + (errorData.error || 'Failed to reassign'));
-        }
+            if (changeResponse.ok) {
+                location.reload();
+            } else {
+                var errorData = await changeResponse.json();
+                if (errorData.locked_day_override) {
+                    var confirmOverride = confirm('Day is Locked\n\n' + errorData.error + '\n\nDo you want to override the lock and proceed anyway?');
+                    if (confirmOverride) {
+                        await doChange(true);
+                        return;
+                    }
+                } else {
+                    alert('Error: ' + (errorData.error || 'Failed to reassign'));
+                }
+            }
+        };
+        await doChange(false);
     } catch (err) {
         alert('Error: ' + err.message);
     } finally {
@@ -595,22 +629,34 @@ function showDuplicateEvents(events, dateStr) {
 }
 
 // ===== UNSCHEDULE EVENT =====
-async function unscheduleEvent(scheduleId) {
-    if (!confirm('Are you sure you want to unschedule this event?')) return;
+async function unscheduleEvent(scheduleId, forceOverrideLock) {
+    if (!forceOverrideLock && !confirm('Are you sure you want to unschedule this event?')) return;
 
     showLoading();
 
     try {
         var response = await fetch('/api/event/' + scheduleId + '/unschedule', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            body: JSON.stringify({
+                force_override_lock: forceOverrideLock || false
+            })
         });
 
         if (response.ok) {
             location.reload();
         } else {
             var data = await response.json();
-            alert('Error: ' + (data.error || 'Failed to unschedule'));
+            if (data.locked_day_override) {
+                hideLoading();
+                var confirmOverride = confirm('Day is Locked\n\n' + data.error + '\n\nDo you want to override the lock and proceed anyway?');
+                if (confirmOverride) {
+                    await unscheduleEvent(scheduleId, true);
+                    return;
+                }
+            } else {
+                alert('Error: ' + (data.error || 'Failed to unschedule'));
+            }
         }
     } catch (err) {
         alert('Error: ' + err.message);
@@ -792,3 +838,58 @@ document.addEventListener('click', function(e) {
             break;
     }
 });
+
+// ===== REBALANCE WEEK =====
+var rebalanceBtn = document.getElementById('rebalance-week-btn');
+if (rebalanceBtn) {
+    rebalanceBtn.addEventListener('click', async function () {
+        var weekStart = rebalanceBtn.getAttribute('data-week-start');
+
+        if (!confirm('Rebalance Core events for this week? This will immediately move events to balance time slots and employee workloads.')) {
+            return;
+        }
+
+        rebalanceBtn.disabled = true;
+        rebalanceBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rebalancing...';
+        showLoading();
+
+        try {
+            var response = await fetch('/api/rebalance-week', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({ week_start: weekStart })
+            });
+
+            var data = await response.json();
+
+            if (response.ok && data.status === 'success') {
+                var r = data.data;
+                var msg = 'Rebalance complete: ';
+                var parts = [];
+                if (r.time_slot_moves > 0) parts.push(r.time_slot_moves + ' time slot move(s)');
+                if (r.employee_swaps > 0) parts.push(r.employee_swaps + ' employee swap(s)');
+                if (parts.length === 0) parts.push('no changes needed');
+                msg += parts.join(', ');
+
+                hideLoading();
+                alert(msg);
+
+                if (r.moves_made > 0) {
+                    location.reload();
+                }
+            } else {
+                hideLoading();
+                alert('Rebalance failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            hideLoading();
+            alert('Rebalance error: ' + err.message);
+        } finally {
+            rebalanceBtn.disabled = false;
+            rebalanceBtn.innerHTML = '<i class="fas fa-balance-scale"></i> Rebalance';
+        }
+    });
+}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Reports{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Reports</h1>
+            <div class="subtitle">Generate reports with charts, tables, and export options</div>
+        </div>
+    </div>
+
+    <div class="reports-grid">
+        <div class="report-card">
+            <div class="icon">📊</div>
+            <h3>Event Statistics</h3>
+            <p>Summary stats, completion rate, events by condition grouped by week.</p>
+            <a href="{{ url_for('reports.event_statistics') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">👥</div>
+            <h3>Employee Schedule Details</h3>
+            <p>Each employee's assigned events with dates and totals.</p>
+            <a href="{{ url_for('reports.employee_schedules') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">🍩</div>
+            <h3>Event Type Breakdown</h3>
+            <p>Count and percentage of each event type with donut chart.</p>
+            <a href="{{ url_for('reports.event_type_breakdown') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">⚖️</div>
+            <h3>Employee Workload</h3>
+            <p>Hours per employee with overload status indicators.</p>
+            <a href="{{ url_for('reports.employee_workload') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">✅</div>
+            <h3>Attendance Report</h3>
+            <p>On-time, late, and absence tracking per employee.</p>
+            <a href="{{ url_for('reports.attendance') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">📈</div>
+            <h3>Scheduling Coverage</h3>
+            <p>Daily coverage percentage — scheduled vs total events.</p>
+            <a href="{{ url_for('reports.scheduling_coverage') }}" class="open-link">Open Report →</a>
+        </div>
+        <div class="report-card">
+            <div class="icon">🏖️</div>
+            <h3>Time Off Summary</h3>
+            <p>Employee time-off blocks with timeline and totals.</p>
+            <a href="{{ url_for('reports.time_off') }}" class="open-link">Open Report →</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

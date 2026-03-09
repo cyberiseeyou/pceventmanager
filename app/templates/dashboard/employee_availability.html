@@ -84,6 +84,20 @@
     }
     .holiday-notice i { display: block; font-size: 24px; margin-bottom: 8px; }
 </style>
+<style>
+@media print {
+    .sidebar, .sidebar-overlay, .top-bar, .nav-btns, .stats-row, .print-btn { display: none !important; }
+    .planning-header { border-radius: 0; margin-bottom: 12px; padding: 12px 16px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .week-grid { gap: 4px; }
+    .day-column { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+    .day-body { min-height: auto; }
+    .employee-row { padding: 3px 6px; font-size: 11px; }
+    .day-header .day-name { font-size: 10px; }
+    .day-header .day-date { font-size: 14px; }
+    .container-fluid { padding: 0 !important; }
+    body { padding: 0; margin: 0; }
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -101,6 +115,9 @@
             <a href="{{ url_for('dashboard.employee_availability', start_date=(start_date + timedelta(days=7)).isoformat()) }}">
                 Next <i class="fas fa-chevron-right"></i>
             </a>
+            <button class="print-btn" data-action="print" style="background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer;">
+                <i class="fas fa-print"></i> Print
+            </button>
         </div>
     </div>
 
@@ -144,4 +161,7 @@
         {% endfor %}
     </div>
 </div>
+<script>
+document.querySelector('[data-action="print"]').addEventListener('click', function() { window.print(); });
+</script>
 {% endblock %}

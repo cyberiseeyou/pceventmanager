@@ -228,6 +228,7 @@ def terminate_employee_endpoint():
                     # Reassign all schedules
                     for schedule in future_schedules:
                         schedule.employee_id = reassign_to_id
+                        schedule.employee_name = target_employee.name
 
                     message = f"Employee terminated. {affected_count} future events reassigned to {target_employee.name}."
 

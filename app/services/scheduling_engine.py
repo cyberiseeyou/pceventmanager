@@ -150,10 +150,10 @@ class SchedulingEngine:
             slots = get_digital_teardown_slots()
             return [slot['start'] for slot in slots]
         except Exception:
-            # Fallback to hard-coded defaults (moved forward 1 hour from 17:00)
+            # Fallback to hard-coded defaults starting at 5:00 PM (15-min intervals)
             return [
-                time(18, 0), time(18, 15), time(18, 30), time(18, 45),
-                time(19, 0), time(19, 15), time(19, 30), time(19, 45)
+                time(17, 0), time(17, 15), time(17, 30), time(17, 45),
+                time(18, 0), time(18, 15), time(18, 30), time(18, 45)
             ]
 
     def __init__(self, db_session: Session, models: dict):
@@ -348,25 +348,34 @@ class SchedulingEngine:
             SchedulerRunHistory object
         """
         # AUTO-REFRESH: Sync database from external API before scheduling
-        # This ensures we have the latest event data before making scheduling decisions
-        current_app.logger.info("=== PRE-SCHEDULER DATABASE REFRESH ===")
-        try:
-            from app.services.database_refresh_service import DatabaseRefreshService
-            refresh_service = DatabaseRefreshService()
-            refresh_result = refresh_service.refresh()
-            if refresh_result.get('success'):
-                current_app.logger.info(
-                    f"Database refresh completed: {refresh_result.get('stats', {}).get('total_processed', 0)} events processed"
+        # Database MUST be refreshed before scheduling - abort if refresh fails
+        if not current_app.config.get('TESTING', False):
+            current_app.logger.info("=== PRE-SCHEDULER DATABASE REFRESH ===")
+            try:
+                from app.services.database_refresh_service import DatabaseRefreshService
+                refresh_service = DatabaseRefreshService()
+                refresh_result = refresh_service.refresh()
+                if refresh_result.get('success'):
+                    current_app.logger.info(
+                        f"Database refresh completed: {refresh_result.get('stats', {}).get('total_processed', 0)} events processed"
+                    )
+                else:
+                    error_msg = refresh_result.get('message', 'Unknown error')
+                    current_app.logger.error(f"Database refresh failed: {error_msg}")
+                    raise RuntimeError(
+                        f"Database refresh failed: {error_msg}. "
+                        f"Cannot run scheduler without fresh data."
+                    )
+            except RuntimeError:
+                raise  # Re-raise our own error
+            except Exception as refresh_error:
+                current_app.logger.error(f"Database refresh error: {refresh_error}")
+                raise RuntimeError(
+                    f"Database refresh error: {refresh_error}. "
+                    f"Cannot run scheduler without fresh data."
                 )
-            else:
-                current_app.logger.warning(
-                    f"Database refresh failed: {refresh_result.get('message', 'Unknown error')}. "
-                    f"Proceeding with existing data."
-                )
-        except Exception as refresh_error:
-            current_app.logger.warning(
-                f"Database refresh error: {refresh_error}. Proceeding with existing data."
-            )
+        else:
+            current_app.logger.info("Skipping database refresh in test environment")
 
         # Create run history record
         run = self.SchedulerRunHistory(
@@ -1002,7 +1011,7 @@ class SchedulingEngine:
         )
         current_app.logger.info(
             f"FIND BUMPABLE: Selected {schedule_type} event {best_schedule.event.project_ref_num} (due {best_schedule.event.due_datetime.date()}) "
-            f"scheduled on {best_schedule.schedule_datetime.strftime('%Y-%m-%d %I:%M %p')} with {best_schedule.employee.name}"
+            f"scheduled on {best_schedule.schedule_datetime.strftime('%Y-%m-%d %I:%M %p')} with {best_schedule.employee.name if best_schedule.employee else best_schedule.employee_name or 'Unknown'}"
         )
 
         return best_schedule.employee, best_schedule.schedule_datetime, best_schedule, is_posted
@@ -1324,7 +1333,13 @@ class SchedulingEngine:
         """
         Wave 3: Schedule Freeosk and Digital events
 
-        Priority: Primary Lead → Other Leads → Club Supervisor
+        Digital Scheduling Rules:
+        - Digital Setup: Primary Lead at 10:15 (rotating slots)
+        - Digital Refresh (non-setup day): Primary Lead at 10:15 (rotating slots)
+        - Digital Refresh (setup day, e.g. Saturday): Secondary Lead at 12:00
+        - Digital Teardown (e.g. Friday): Secondary Lead at 5:00 PM (15-min intervals)
+        - All digitals MUST be completed on their start date
+        - Club Supervisor is fallback for all digital assignments
         """
         for event in events:
             if event.is_scheduled:
@@ -1332,14 +1347,23 @@ class SchedulingEngine:
 
             # Handle Digitals events (detect subtype from name)
             if event.event_type == 'Digitals':
-                event_name_upper = event.project_name.upper()
+                event_name_upper = (event.project_name or '').upper()
 
                 # Digital Teardown goes to Secondary Lead (with Club Supervisor fallback)
                 if 'TEARDOWN' in event_name_upper:
                     self._schedule_secondary_lead_event(run, event)
-                # Digital Setup/Refresh goes to Primary Lead (with Club Supervisor fallback)
-                elif 'SETUP' in event_name_upper or 'REFRESH' in event_name_upper:
+                # Digital Setup goes to Primary Lead
+                elif 'SETUP' in event_name_upper:
                     self._schedule_primary_lead_event(run, event)
+                # Digital Refresh - check if setup day
+                elif 'REFRESH' in event_name_upper:
+                    event_date = self._get_earliest_schedule_date(event)
+                    if self._has_digital_setups_on_date(events, event_date):
+                        # Setup day: schedule at 12:00 with a different lead
+                        self._schedule_secondary_lead_event(run, event, override_time=time(12, 0))
+                    else:
+                        # Non-setup day: Primary Lead at 10:15 (rotating slots)
+                        self._schedule_primary_lead_event(run, event)
                 else:
                     # Unknown Digital subtype - try Primary Lead as default
                     self._schedule_primary_lead_event(run, event)
@@ -1366,27 +1390,34 @@ class SchedulingEngine:
         """
         Wave 4: Schedule Digital events ONLY
 
-        Digital Setup/Refresh:
-            - Times: 9:15, 9:30, 9:45, 10:00 (rotating)
-            - Priority: Primary Lead → Other Leads → Club Supervisor
-
-        Digital Teardown:
-            - Times: 5:00 PM+ (15-min intervals)
-            - Priority: Secondary Lead → Club Supervisor
+        Digital Setup: Primary Lead at 10:15 (rotating slots)
+        Digital Refresh (non-setup day): Primary Lead at 10:15 (rotating slots)
+        Digital Refresh (setup day): Secondary Lead at 12:00
+        Digital Teardown: Secondary Lead at 5:00 PM (15-min intervals)
+        All digitals MUST be completed on their start date
         """
         for event in events:
             if event.is_scheduled:
                 continue
 
             if event.event_type == 'Digitals':
-                event_name_upper = event.project_name.upper()
+                event_name_upper = (event.project_name or '').upper()
 
                 # Digital Teardown goes to Secondary Lead (with Club Supervisor fallback)
                 if 'TEARDOWN' in event_name_upper:
                     self._schedule_secondary_lead_event(run, event)
-                # Digital Setup/Refresh goes to Primary Lead (with Club Supervisor fallback)
-                elif 'SETUP' in event_name_upper or 'REFRESH' in event_name_upper:
+                # Digital Setup goes to Primary Lead
+                elif 'SETUP' in event_name_upper:
                     self._schedule_primary_lead_event(run, event)
+                # Digital Refresh - check if setup day
+                elif 'REFRESH' in event_name_upper:
+                    event_date = self._get_earliest_schedule_date(event)
+                    if self._has_digital_setups_on_date(events, event_date):
+                        # Setup day: schedule at 12:00 with a different lead
+                        self._schedule_secondary_lead_event(run, event, override_time=time(12, 0))
+                    else:
+                        # Non-setup day: Primary Lead at 10:15 (rotating slots)
+                        self._schedule_primary_lead_event(run, event)
                 else:
                     # Unknown Digital subtype - try Primary Lead as default
                     self._schedule_primary_lead_event(run, event)
@@ -1580,86 +1611,79 @@ class SchedulingEngine:
         """
         Wave 5: Schedule Other events
 
+        Iterates from earliest date to due date, trying each day.
         Priority: Club Supervisor (at noon) → ANY Lead Event Specialist fallback
         """
-        # Use event's start date for scheduling
         current_date = self._get_earliest_schedule_date(event)
-
-        # Schedule at noon
-        schedule_time = time(12, 0)
-        schedule_datetime = datetime.combine(current_date.date(), schedule_time)
-        target_date = schedule_datetime.date()
-        day_of_week = target_date.weekday()
         day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-        day_column = day_names[day_of_week]
 
-        # Try Club Supervisor first
-        club_supervisor = self.db.query(self.Employee).filter_by(
-            job_title='Club Supervisor',
-            is_active=True
-        ).first()
+        while current_date < event.due_datetime:
+            schedule_time_val = time(12, 0)
+            schedule_datetime = datetime.combine(current_date.date(), schedule_time_val)
+            target_date = schedule_datetime.date()
+            day_of_week = target_date.weekday()
+            day_column = day_names[day_of_week]
 
-        if club_supervisor:
-            # Check basic availability (time off and weekly availability only)
-            # Time conflicts are ignored for Club Supervisor
-
-            # Check time off
-            time_off = self.db.query(self.EmployeeTimeOff).filter(
-                self.EmployeeTimeOff.employee_id == club_supervisor.id,
-                self.EmployeeTimeOff.start_date <= target_date,
-                self.EmployeeTimeOff.end_date >= target_date
+            # Try Club Supervisor first
+            club_supervisor = self.db.query(self.Employee).filter_by(
+                job_title='Club Supervisor',
+                is_active=True
             ).first()
 
-            if not time_off:
-                # Check weekly availability
-                weekly_avail = self.db.query(self.EmployeeWeeklyAvailability).filter_by(
-                    employee_id=club_supervisor.id
+            if club_supervisor:
+                time_off = self.db.query(self.EmployeeTimeOff).filter(
+                    self.EmployeeTimeOff.employee_id == club_supervisor.id,
+                    self.EmployeeTimeOff.start_date <= target_date,
+                    self.EmployeeTimeOff.end_date >= target_date
                 ).first()
 
-                is_available = True
-                if weekly_avail:
-                    is_available = getattr(weekly_avail, day_column, True)
+                if not time_off:
+                    weekly_avail = self.db.query(self.EmployeeWeeklyAvailability).filter_by(
+                        employee_id=club_supervisor.id
+                    ).first()
 
-                if is_available:
-                    # Schedule to Club Supervisor (no time conflict checks)
-                    self._create_pending_schedule(run, event, club_supervisor, schedule_datetime, False, None, None)
-                    run.events_scheduled += 1
-                    current_app.logger.info(f"Wave 5: Scheduled Other event {event.project_ref_num} to Club Supervisor")
-                    return
+                    is_available = True
+                    if weekly_avail:
+                        is_available = getattr(weekly_avail, day_column, True)
 
-        # Fallback to ANY Lead Event Specialist if Club Supervisor unavailable
-        leads = self.db.query(self.Employee).filter(
-            self.Employee.job_title == 'Lead Event Specialist',
-            self.Employee.is_active == True
-        ).all()
+                    if is_available:
+                        self._create_pending_schedule(run, event, club_supervisor, schedule_datetime, False, None, None)
+                        run.events_scheduled += 1
+                        current_app.logger.info(f"Wave 5: Scheduled Other event {event.project_ref_num} to Club Supervisor on {target_date}")
+                        return
 
-        for lead in leads:
-            # Check time off
-            time_off = self.db.query(self.EmployeeTimeOff).filter(
-                self.EmployeeTimeOff.employee_id == lead.id,
-                self.EmployeeTimeOff.start_date <= target_date,
-                self.EmployeeTimeOff.end_date >= target_date
-            ).first()
+            # Fallback to ANY Lead Event Specialist
+            leads = self.db.query(self.Employee).filter(
+                self.Employee.job_title == 'Lead Event Specialist',
+                self.Employee.is_active == True
+            ).all()
 
-            if not time_off:
-                # Check weekly availability
-                weekly_avail = self.db.query(self.EmployeeWeeklyAvailability).filter_by(
-                    employee_id=lead.id
+            for lead in leads:
+                time_off = self.db.query(self.EmployeeTimeOff).filter(
+                    self.EmployeeTimeOff.employee_id == lead.id,
+                    self.EmployeeTimeOff.start_date <= target_date,
+                    self.EmployeeTimeOff.end_date >= target_date
                 ).first()
 
-                is_available = True
-                if weekly_avail:
-                    is_available = getattr(weekly_avail, day_column, True)
+                if not time_off:
+                    weekly_avail = self.db.query(self.EmployeeWeeklyAvailability).filter_by(
+                        employee_id=lead.id
+                    ).first()
 
-                if is_available:
-                    # Schedule to this Lead (no time conflict checks for Other events)
-                    self._create_pending_schedule(run, event, lead, schedule_datetime, False, None, None)
-                    run.events_scheduled += 1
-                    current_app.logger.info(f"Wave 5: Scheduled Other event {event.project_ref_num} to Lead Event Specialist {lead.name}")
-                    return
+                    is_available = True
+                    if weekly_avail:
+                        is_available = getattr(weekly_avail, day_column, True)
 
-        # Failed to schedule
-        self._create_failed_pending_schedule(run, event, "No Club Supervisor or Lead Event Specialist available")
+                    if is_available:
+                        self._create_pending_schedule(run, event, lead, schedule_datetime, False, None, None)
+                        run.events_scheduled += 1
+                        current_app.logger.info(f"Wave 5: Scheduled Other event {event.project_ref_num} to Lead {lead.name} on {target_date}")
+                        return
+
+            current_date += timedelta(days=1)
+
+        # Failed to schedule on any date
+        self._create_failed_pending_schedule(run, event, "No Club Supervisor or Lead available before due date")
         run.events_failed += 1
 
     def _get_juicer_time(self, event: object) -> time:
@@ -2111,7 +2135,39 @@ class SchedulingEngine:
 
         current_app.logger.info(f"    Employee pool: {len(employee_pool)} available")
 
-        # Try each employee (Leads first due to list order)
+        # Sort employee pool by weekly workload (fewest Core events this week first)
+        # within each role tier (Leads, Specialists, Juicers)
+        if event.event_type == 'Core':
+            week_start = target_date_obj - timedelta(days=target_date_obj.weekday())
+            week_end = week_start + timedelta(days=6)
+
+            def _weekly_core_count(emp):
+                """Count Core events for this employee in the target week."""
+                pending_count = self.db.query(self.PendingSchedule).join(
+                    self.Event, self.PendingSchedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.PendingSchedule.scheduler_run_id == run.id,
+                    self.PendingSchedule.employee_id == emp.id,
+                    func.date(self.PendingSchedule.schedule_datetime) >= week_start,
+                    func.date(self.PendingSchedule.schedule_datetime) <= week_end,
+                    self.Event.event_type == 'Core',
+                    self.PendingSchedule.failure_reason.is_(None)
+                ).count()
+                posted_count = self.db.query(self.Schedule).join(
+                    self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.Schedule.employee_id == emp.id,
+                    func.date(self.Schedule.schedule_datetime) >= week_start,
+                    func.date(self.Schedule.schedule_datetime) <= week_end,
+                    self.Event.event_type == 'Core'
+                ).count()
+                return pending_count + posted_count
+
+            # Stable sort within role tiers: Leads stay before Specialists, but sorted by workload within tier
+            role_order = {'Lead': 0, 'Specialist': 1, 'Juicer-as-Specialist': 2}
+            employee_pool.sort(key=lambda x: (role_order.get(x[1], 99), _weekly_core_count(x[0])))
+
+        # Try each employee (sorted by role tier then weekly workload)
         for employee, role in employee_pool:
             # SAFEGUARD: For Core events, explicitly check if employee already has a Core event
             # on this day (catches timing issues with constraint validator)
@@ -2674,16 +2730,38 @@ class SchedulingEngine:
         self.teardown_time_slot_index[date_str] += 1
         return time_slot
 
-    def _schedule_secondary_lead_event(self, run: object, event: object) -> None:
-        """
-        Schedule Digital Teardown to Secondary Lead at rotating 15-min intervals from 5 PM
+    def _has_digital_setups_on_date(self, events: List[object], target_date) -> bool:
+        """Check if there are Digital Setup events on the given date"""
+        if hasattr(target_date, 'date'):
+            target_date = target_date.date()
+        for e in events:
+            if e.event_type == 'Digitals':
+                name_upper = (e.project_name or '').upper()
+                if 'SETUP' in name_upper:
+                    event_date = self._get_earliest_schedule_date(e)
+                    if hasattr(event_date, 'date'):
+                        event_date = event_date.date()
+                    if event_date == target_date:
+                        return True
+        return False
 
-        Wave 3 Priority: Secondary Lead → Club Supervisor (fallback)
+    def _schedule_secondary_lead_event(self, run: object, event: object, override_time: time = None) -> None:
+        """
+        Schedule Digital Teardown/Refresh to Secondary Lead (different from Primary Lead)
+
+        Wave 3 Priority: Secondary Lead → Other Leads → Club Supervisor (fallback)
         IMPORTANT: Digital events MUST be scheduled on their start date
+
+        Args:
+            override_time: If provided, use this time instead of teardown slot rotation.
+                           Used for Digital Refresh on setup days (12:00).
         """
         # Use event's start date - Digital events don't move to other days
         schedule_date = self._get_earliest_schedule_date(event)
-        schedule_time = self._get_next_teardown_time_slot(schedule_date)
+        if override_time:
+            schedule_time = override_time
+        else:
+            schedule_time = self._get_next_teardown_time_slot(schedule_date)
         schedule_datetime = datetime.combine(schedule_date.date(), schedule_time)
         target_date = schedule_datetime.date()
         day_of_week = target_date.weekday()
@@ -2714,7 +2792,7 @@ class SchedulingEngine:
                     self._create_pending_schedule(run, event, secondary_lead, schedule_datetime, False, None, None)
                     run.events_scheduled += 1
                     current_app.logger.info(
-                        f"Wave 3: Scheduled Digital Teardown {event.project_ref_num} to Secondary Lead {secondary_lead.name}"
+                        f"Wave 3: Scheduled {event.project_name} {event.project_ref_num} to Secondary Lead {secondary_lead.name} at {schedule_time}"
                     )
                     return
 
@@ -2746,21 +2824,21 @@ class SchedulingEngine:
                     self._create_pending_schedule(run, event, club_supervisor, schedule_datetime, False, None, None)
                     run.events_scheduled += 1
                     current_app.logger.info(
-                        f"Wave 3: Scheduled Digital Teardown {event.project_ref_num} to Club Supervisor (no secondary lead available)"
+                        f"Wave 3: Scheduled {event.project_name} {event.project_ref_num} to Club Supervisor at {schedule_time} (no secondary lead available)"
                     )
                     return
                 else:
                     current_app.logger.warning(
-                        f"Wave 3: Club Supervisor NOT available on {day_column} for Digital Teardown {event.project_ref_num}"
+                        f"Wave 3: Club Supervisor NOT available on {day_column} for {event.project_name} {event.project_ref_num}"
                     )
             else:
                 current_app.logger.warning(
-                    f"Wave 3: Club Supervisor has time off on {target_date} for Digital Teardown {event.project_ref_num}"
+                    f"Wave 3: Club Supervisor has time off on {target_date} for {event.project_name} {event.project_ref_num}"
                 )
 
         # This should NEVER happen - log detailed info for debugging
         current_app.logger.error(
-            f"Wave 3: CRITICAL - No Secondary Lead or Club Supervisor available for Digital Teardown {event.project_ref_num} on {target_date} ({day_column})"
+            f"Wave 3: CRITICAL - No Secondary Lead or Club Supervisor available for {event.project_name} {event.project_ref_num} on {target_date} ({day_column})"
         )
         self._create_failed_pending_schedule(
             run,
@@ -3594,19 +3672,19 @@ class SchedulingEngine:
                         f"for Supervisor event {event.project_ref_num}"
                     )
                 else:
-                    # No Core schedule found - fall back to Supervisor's own start date
-                    schedule_date = max(event.start_datetime.date(), datetime.now().date())
+                    # No Core schedule found - do NOT schedule Supervisor independently
                     current_app.logger.warning(
-                        f"schedule_single_event: No scheduled Core event found for Supervisor {event.project_ref_num}, "
-                        f"using Supervisor's start date {schedule_date}"
+                        f"schedule_single_event: No scheduled Core event found for Supervisor {event.project_ref_num}. "
+                        f"Supervisor will be scheduled when its Core event is approved."
                     )
+                    return None
             else:
-                # Can't extract event number - fall back to Supervisor's own start date
-                schedule_date = max(event.start_datetime.date(), datetime.now().date())
+                # Can't extract event number - can't pair with Core
                 current_app.logger.warning(
-                    f"schedule_single_event: Cannot extract event number from Supervisor {event.project_ref_num}, "
-                    f"using Supervisor's start date {schedule_date}"
+                    f"schedule_single_event: Cannot extract event number from Supervisor {event.project_ref_num}. "
+                    f"Cannot schedule without Core pairing."
                 )
+                return None
         else:
             # Use event's own start date for non-Supervisor events
             schedule_date = max(event.start_datetime.date(), datetime.now().date())

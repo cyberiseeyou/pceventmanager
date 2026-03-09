@@ -46,6 +46,36 @@
         background: rgba(255, 255, 255, 0.3);
     }
 
+    .rebalance-btn {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        font-size: inherit;
+        font-family: inherit;
+    }
+
+    .rebalance-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .rebalance-btn--has-issues {
+        background: rgba(255, 193, 7, 0.4);
+        border: 1px solid rgba(255, 193, 7, 0.6);
+    }
+
+    .rebalance-btn--has-issues:hover {
+        background: rgba(255, 193, 7, 0.5);
+    }
+
+    .rebalance-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
     /* Summary Stats - Simple row */
     .stats-row {
         display: flex;
@@ -459,6 +489,12 @@
             <a href="{{ url_for('dashboard.fix_wizard', start_date=start_date.isoformat()) }}">
                 <i class="fas fa-magic"></i> Fix Wizard
             </a>
+            <button type="button" id="rebalance-week-btn"
+                    class="rebalance-btn{% if result.weekly_issues %} rebalance-btn--has-issues{% endif %}"
+                    data-week-start="{{ start_date.isoformat() }}"
+                    title="Rebalance Core events for this week">
+                <i class="fas fa-balance-scale"></i> Rebalance
+            </button>
         </div>
     </div>
 
@@ -983,5 +1019,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/pages/weekly-validation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/weekly-validation.js') }}?v=2"></script>
 {% endblock %}

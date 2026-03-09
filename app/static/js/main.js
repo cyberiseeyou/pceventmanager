@@ -10,28 +10,6 @@
  * @module main
  */
 
-/**
- * Escape HTML special characters to prevent XSS when inserting user content into the DOM
- *
- * @param {string|null|undefined} text - Raw text to escape
- * @returns {string} HTML-safe string, or empty string if input is null/undefined
- */
-function escapeHtml(text) {
-    if (text == null) return '';
-    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-
-/**
- * Convert a string to Title Case for consistent name display
- *
- * @param {string|null|undefined} text - Raw text to convert
- * @returns {string} Title-cased string, or empty string if input is null/undefined
- */
-function toTitleCase(text) {
-    if (text == null) return '';
-    return String(text).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-}
-
 document.addEventListener('DOMContentLoaded', function () {
     // Initialize import/export functionality if on dashboard
     initializeImportExport();
@@ -1099,25 +1077,36 @@ document.addEventListener('DOMContentLoaded', function () {
                 formData.append('override', 'true');
             }
 
-            fetch('/api/reschedule', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Event rescheduled successfully!');
-                        closeModal('reschedule-modal');
-                        // Optionally refresh validation or page
-                        window.location.reload();
-                    } else {
-                        alert(`Error: ${data.error || 'Failed to reschedule event'}`);
-                    }
+            const submitRescheduleRequest = (fd) => {
+                fetch('/api/reschedule', {
+                    method: 'POST',
+                    body: fd
                 })
-                .catch(error => {
-                    console.error('Reschedule error:', error);
-                    alert('Error rescheduling event. Please try again.');
-                });
+                    .then(response => response.json().then(data => ({ response, data })))
+                    .then(({ response, data }) => {
+                        if (data.success) {
+                            alert('Event rescheduled successfully!');
+                            closeModal('reschedule-modal');
+                            window.location.reload();
+                        } else if (data.locked_day_override) {
+                            const confirmOverride = confirm(
+                                `Day is Locked\n\n${data.error}\n\nDo you want to override the lock and proceed anyway?`
+                            );
+                            if (confirmOverride) {
+                                fd.append('force_override_lock', 'true');
+                                submitRescheduleRequest(fd);
+                            }
+                        } else {
+                            alert(`Error: ${data.error || 'Failed to reschedule event'}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Reschedule error:', error);
+                        alert('Error rescheduling event. Please try again.');
+                    });
+            };
+
+            submitRescheduleRequest(formData);
         });
     }
 

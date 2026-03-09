@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Time Off Summary{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Time Off Summary</h1>
+            <div class="subtitle">{{ start_date.strftime('%m/%d/%Y') }} — {{ end_date.strftime('%m/%d/%Y') }}</div>
+        </div>
+        <div class="report-actions">
+            <a href="{{ url_for('reports.export_time_off', start_date=start_date, end_date=end_date) }}" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+            <a href="{{ url_for('reports.index') }}" class="btn">Back</a>
+        </div>
+    </div>
+
+    <form class="date-range-form" method="get">
+        <label for="start_date">From</label>
+        <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To</label>
+        <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn-generate">Generate</button>
+    </form>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="value">{{ data.total_days }}</div>
+            <div class="label">Total Time-Off Days</div>
+        </div>
+    </div>
+
+    {% if data.records %}
+    <div class="chart-container">
+        <h3>Days Off by Employee</h3>
+        <canvas id="timeOffChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Days</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in data.records %}
+                <tr>
+                    <td>{{ r.name }}</td>
+                    <td>{{ r.start_date }}</td>
+                    <td>{{ r.end_date }}</td>
+                    <td>{{ r.days }}</td>
+                    <td>{{ r.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="chart-container">
+        <p style="text-align: center; color: #6b7280;">No time-off records found for this date range.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    document.querySelectorAll('[data-action="print"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { window.print(); });
+    });
+
+    var records = {{ data.records | tojson }};
+    // Aggregate days per employee
+    var empDays = {};
+    records.forEach(function(r) {
+        empDays[r.name] = (empDays[r.name] || 0) + r.days;
+    });
+    var labels = Object.keys(empDays);
+    var values = Object.values(empDays);
+
+    var canvas = document.getElementById('timeOffChart');
+    if (canvas && labels.length > 0) {
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Days Off',
+                    data: values,
+                    backgroundColor: '#76b7b2'
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

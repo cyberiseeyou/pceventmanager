@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Event Type Breakdown{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Event Type Breakdown</h1>
+            <div class="subtitle">{{ start_date.strftime('%m/%d/%Y') }} — {{ end_date.strftime('%m/%d/%Y') }}</div>
+        </div>
+        <div class="report-actions">
+            <a href="{{ url_for('reports.export_event_type_breakdown', start_date=start_date, end_date=end_date) }}" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+            <a href="{{ url_for('reports.index') }}" class="btn">Back</a>
+        </div>
+    </div>
+
+    <form class="date-range-form" method="get">
+        <label for="start_date">From</label>
+        <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To</label>
+        <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn-generate">Generate</button>
+    </form>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="value">{{ data.total }}</div>
+            <div class="label">Total Events</div>
+        </div>
+    </div>
+
+    {% if data.types %}
+    <div class="chart-container">
+        <h3>Event Types</h3>
+        <div style="max-width: 400px; margin: 0 auto;">
+            <canvas id="typeChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Event Type</th>
+                    <th>Count</th>
+                    <th>Percentage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in data.types %}
+                <tr>
+                    <td>{{ t.event_type }}</td>
+                    <td>{{ t.count }}</td>
+                    <td>{{ t.percentage }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="chart-container">
+        <p style="text-align: center; color: #6b7280;">No events found for this date range.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    document.querySelectorAll('[data-action="print"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { window.print(); });
+    });
+
+    var typeData = {{ data.types | tojson }};
+    var colors = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
+    var canvas = document.getElementById('typeChart');
+    if (canvas && typeData.length > 0) {
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: typeData.map(function(t) { return t.event_type; }),
+                datasets: [{
+                    data: typeData.map(function(t) { return t.count; }),
+                    backgroundColor: colors.slice(0, typeData.length)
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

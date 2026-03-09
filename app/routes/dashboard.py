@@ -1006,6 +1006,7 @@ def assign_supervisor_event():
         new_schedule = Schedule(
             event_ref_num=supervisor_event.project_ref_num,
             employee_id=supervisor_employee.id,
+            employee_name=supervisor_employee.name,
             schedule_datetime=supervisor_datetime
         )
         db.session.add(new_schedule)
@@ -1354,12 +1355,20 @@ def scan_out_checklist(selected_date=None):
     date_start = datetime.combine(view_date, datetime.min.time())
     date_end = datetime.combine(view_date + timedelta(days=1), datetime.min.time())
 
+    # Event types excluded from scan-out checklist (not scanned out in Walmart)
+    EXCLUDED_SCANOUT_TYPES = {
+        'Supervisor', 'Juicer Survey', 'Freeosk',
+        'Digital Refresh', 'Digital Teardown',
+    }
+
+    Event = models['Event']
     schedules = db.session.query(Schedule).options(
         joinedload(Schedule.event),
         joinedload(Schedule.employee)
-    ).filter(
+    ).join(Schedule.event).filter(
         Schedule.schedule_datetime >= date_start,
-        Schedule.schedule_datetime < date_end
+        Schedule.schedule_datetime < date_end,
+        ~Event.event_type.in_(EXCLUDED_SCANOUT_TYPES)
     ).order_by(Schedule.schedule_datetime.asc()).all()
 
     events = []
@@ -1378,10 +1387,9 @@ def scan_out_checklist(selected_date=None):
     prev_date = view_date - timedelta(days=1)
     next_date = view_date + timedelta(days=1)
 
-    # Get club number for Walmart sync
+    # Get club number from user settings
     SystemSetting = models['SystemSetting']
-    club_setting = SystemSetting.query.filter_by(key='walmart_club_number').first()
-    club_number = club_setting.value if club_setting else ''
+    club_number = SystemSetting.get_setting('store_number', default='')
 
     return render_template('dashboard/scan_out_checklist.html',
                          events=events,

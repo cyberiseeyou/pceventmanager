@@ -420,6 +420,58 @@
         </div>
     </div>
 
+    <!-- Availability Views Section -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-white" style="background-color: #667eea;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users"></i> Employee Availability
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Weekly view of who is available each day (checks weekly schedule, time off, holidays)</p>
+                    <div class="row">
+                        <div class="col-12">
+                            <label for="availability-start-date" class="form-label">Week Starting</label>
+                            <input type="date" class="form-control" id="availability-start-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a id="availability-link" href="/dashboard/employee-availability" class="btn text-white" style="background-color: #667eea;" target="_blank">
+                            <i class="fas fa-external-link-alt"></i> Open &amp; Print
+                        </a>
+                        <small class="text-muted ms-2">Opens in new tab with print button</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-white" style="background-color: #059669;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-check"></i> Available Schedule Blocks
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Who can still be scheduled (available, no time off, no main event yet)</p>
+                    <div class="row">
+                        <div class="col-12">
+                            <label for="blocks-start-date" class="form-label">Week Starting</label>
+                            <input type="date" class="form-control" id="blocks-start-date">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a id="blocks-link" href="/dashboard/available-blocks" class="btn text-white" style="background-color: #059669;" target="_blank">
+                            <i class="fas fa-external-link-alt"></i> Open &amp; Print
+                        </a>
+                        <small class="text-muted ms-2">Opens in new tab with print button</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Freeosk Manual Test Section -->
     <div class="row mb-4">
         <div class="col-12">
@@ -743,10 +795,22 @@
         document.getElementById('item-list-date').value = today;
         document.getElementById('scanout-date').value = today;
 
+        // Set default dates for availability sections
+        document.getElementById('availability-start-date').value = today;
+        document.getElementById('blocks-start-date').value = today;
+
         // Update scan-out link when date changes
         document.getElementById('scanout-date').addEventListener('change', function() {
             const link = document.getElementById('scanout-link');
             link.href = '/dashboard/scan-out-checklist/' + this.value;
+        });
+
+        // Update availability links when dates change
+        document.getElementById('availability-start-date').addEventListener('change', function() {
+            document.getElementById('availability-link').href = '/dashboard/employee-availability?start_date=' + this.value;
+        });
+        document.getElementById('blocks-start-date').addEventListener('change', function() {
+            document.getElementById('blocks-link').href = '/dashboard/available-blocks?start_date=' + this.value;
         });
 
         // Set default date for Freeosk manual test to upcoming Friday
@@ -2399,12 +2463,10 @@
     }
 
     function requestAndAuthenticateMFA(callback) {
-        // Step 1: Request MFA code
-        showLoading('📱 Requesting MFA code...\n\nPlease wait while we send a verification code to your phone.');
+        // Step 1: Fire off background auth (Chrome launch + credentials + MFA request)
+        showLoading('📱 Starting Walmart authentication...\n\nLaunching browser and submitting credentials.\nThis runs in the background — please wait.');
 
-        fetch('/printing/edr/request-mfa', {
-            method: 'POST'
-        })
+        fetch('/printing/edr/request-mfa', { method: 'POST' })
             .then(response => {
                 if (!response.ok) {
                     return response.json().catch(() => ({ success: false, error: `Server returned ${response.status} ${response.statusText}` }));
@@ -2412,100 +2474,119 @@
                 return response.json();
             })
             .then(data => {
-                hideLoading();
-
                 if (!data.success) {
-                    alert('EDR Authentication Error\n\n' + (data.error || 'Failed to request MFA code') + '\n\nCheck Settings page for Walmart credentials.');
+                    hideLoading();
+                    alert('EDR Authentication Error\n\n' + (data.error || 'Failed to start auth') + '\n\nCheck Settings page for Walmart credentials.');
                     return;
                 }
-
-                // Calculate expiration time for display
-                const expiresIn = data.expires_in_seconds || 300;
-                const expiresMinutes = Math.floor(expiresIn / 60);
-
-                // Step 2: Prompt user for MFA code with expiration warning
-                const mfaCode = prompt(`📲 MFA Code Sent!\n\nA 6-digit verification code has been sent to your phone.\n\n⏱️ Note: This code expires in ${expiresMinutes} minutes.\n\nPlease enter the code:`);
-
-                if (!mfaCode || mfaCode.trim() === '') {
-                    alert('Authentication cancelled');
-                    return;
-                }
-
-                // Validate MFA code format
-                if (!/^\d{6}$/.test(mfaCode.trim())) {
-                    alert('MFA code must be exactly 6 digits');
-                    return;
-                }
-
-                // Step 3: Complete authentication with MFA code
-                showLoading('🔐 Verifying MFA code...\n\nPlease wait while we authenticate with Walmart.');
-
-                fetch('/printing/edr/authenticate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        mfa_code: mfaCode.trim()
-                    })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (!data.success) {
-                            hideLoading();
-
-                            // Check for specific error codes that allow retry
-                            if (data.error_code === 'mfa_expired' || data.error_code === 'session_expired') {
-                                // Code expired - offer to request a new one
-                                if (confirm(data.error + '\n\nWould you like to request a new code?')) {
-                                    requestAndAuthenticateMFA(callback);
-                                }
-                                return;
-                            }
-
-                            if (data.error_code === 'mfa_invalid') {
-                                // Invalid code - offer to try again with a new code
-                                if (confirm(data.error + '\n\nWould you like to request a new code?')) {
-                                    requestAndAuthenticateMFA(callback);
-                                }
-                                return;
-                            }
-
-                            // Generic error
-                            alert(data.error || 'Authentication failed');
-                            return;
-                        }
-
-                        // Mark as authenticated
-                        edrAuthenticated = true;
-
-                        // Update loading message to show we're starting paperwork generation
-                        // Don't hide loading yet - let the progress modal take over
-                        const loadingDiv = document.getElementById('loading');
-                        const loadingMsg = document.getElementById('loading-message');
-                        if (loadingMsg) {
-                            loadingMsg.innerHTML = '✅ Authentication successful!\n\n📄 Starting paperwork generation...\n\nPlease wait...';
-                        }
-
-                        // Small delay to show the success message, then execute callback
-                        setTimeout(() => {
-                            hideLoading();
-                            // Execute the callback (which will show the progress modal)
-                            if (callback) {
-                                callback();
-                            }
-                        }, 500);
-                    })
-                    .catch(error => {
-                        hideLoading();
-                        console.error('Error:', error);
-                        alert('Authentication failed: ' + (error.error || error.message || 'Unknown error'));
-                    });
+                // Start polling for background thread to finish
+                pollAuthStatus(callback);
             })
             .catch(error => {
                 hideLoading();
                 console.error('Error:', error);
-                alert('Failed to request MFA code: ' + (error.error || error.message || 'Unknown error'));
+                alert('Failed to start MFA request: ' + (error.error || error.message || 'Unknown error'));
+            });
+    }
+
+    function pollAuthStatus(callback) {
+        // Poll GET /edr/auth-status every 2s until ready or error
+        const pollInterval = setInterval(() => {
+            fetch('/printing/edr/auth-status')
+                .then(r => r.json())
+                .then(state => {
+                    if (state.status === 'pending') {
+                        // Still running — keep polling
+                        return;
+                    }
+                    clearInterval(pollInterval);
+
+                    if (state.status === 'error') {
+                        hideLoading();
+                        alert('EDR Authentication Error\n\n' + (state.error || 'Unknown error') + '\n\nCheck Settings page for Walmart credentials.');
+                        return;
+                    }
+
+                    if (state.status === 'ready') {
+                        hideLoading();
+                        // MFA code has been sent — prompt user
+                        const expiresIn = state.expires_in_seconds || 300;
+                        const expiresMinutes = Math.floor(expiresIn / 60);
+                        promptForMfaCode(expiresMinutes, callback);
+                    }
+                })
+                .catch(err => {
+                    clearInterval(pollInterval);
+                    hideLoading();
+                    console.error('Auth status poll error:', err);
+                    alert('Failed to check auth status: ' + (err.message || 'Unknown error'));
+                });
+        }, 2000);
+    }
+
+    function promptForMfaCode(expiresMinutes, callback) {
+        const mfaCode = prompt(`📲 MFA Code Sent!\n\nA 6-digit verification code has been sent to your phone.\n\n⏱️ Note: This code expires in ${expiresMinutes} minutes.\n\nPlease enter the code:`);
+
+        if (!mfaCode || mfaCode.trim() === '') {
+            alert('Authentication cancelled');
+            return;
+        }
+
+        if (!/^\d{6}$/.test(mfaCode.trim())) {
+            alert('MFA code must be exactly 6 digits');
+            return;
+        }
+
+        // Step 3: Complete authentication with MFA code (synchronous — fast)
+        showLoading('🔐 Verifying MFA code...\n\nPlease wait while we authenticate with Walmart.');
+
+        fetch('/printing/edr/authenticate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mfa_code: mfaCode.trim() })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    hideLoading();
+
+                    if (data.error_code === 'mfa_expired' || data.error_code === 'session_expired') {
+                        if (confirm(data.error + '\n\nWould you like to request a new code?')) {
+                            requestAndAuthenticateMFA(callback);
+                        }
+                        return;
+                    }
+
+                    if (data.error_code === 'mfa_invalid') {
+                        if (confirm(data.error + '\n\nWould you like to request a new code?')) {
+                            requestAndAuthenticateMFA(callback);
+                        }
+                        return;
+                    }
+
+                    alert(data.error || 'Authentication failed');
+                    return;
+                }
+
+                // Mark as authenticated
+                edrAuthenticated = true;
+
+                const loadingMsg = document.getElementById('loading-message');
+                if (loadingMsg) {
+                    loadingMsg.innerHTML = '✅ Authentication successful!\n\n📄 Starting paperwork generation...\n\nPlease wait...';
+                }
+
+                setTimeout(() => {
+                    hideLoading();
+                    if (callback) {
+                        callback();
+                    }
+                }, 500);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Authentication failed: ' + (error.error || error.message || 'Unknown error'));
             });
     }
 

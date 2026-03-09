@@ -459,7 +459,7 @@
     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: center;">
         <div>
             <p style="color: var(--text-secondary); margin-bottom: 15px; line-height: 1.6;">
-                The auto-scheduler will analyze unscheduled events within the next 3 weeks and create
+                The auto-scheduler will analyze unscheduled events within the next 4 months and create
                 assignment proposals based on weekly rotations, employee availability, and event priorities.
             </p>
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -669,7 +669,7 @@
                                 window.location.href = '{{ url_for("auto_scheduler.review") }}';
                             }
                         } else {
-                            alert('Auto-scheduler completed but found no events to schedule in the next 3 weeks.');
+                            alert('Auto-scheduler completed but found no events to schedule in the next 4 months.');
                         }
                     }, 1500);
                 } else {

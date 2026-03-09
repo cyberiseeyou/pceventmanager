@@ -45,6 +45,8 @@ WEIGHT_PROXIMITY = 15            # S12: Penalty per time-proximity violation
 WEIGHT_SHIFT_BALANCE = 10        # S13: Penalty per imbalanced day
 WEIGHT_BUMP = 200                # S14: Penalty per bumped existing schedule
 WEIGHT_ML_AFFINITY = 8           # S15: Bonus for ML-predicted employee-event affinity
+WEIGHT_EARLY_SCHEDULING = 15     # S16: Per-day bonus for scheduling earlier within valid range
+WEIGHT_WEEKLY_BALANCE = 12       # S17: Penalty per weekly employee imbalance unit
 
 # ---------------------------------------------------------------------------
 # Scheduling constants
@@ -75,6 +77,11 @@ SUPERVISOR_PREFERRED_TYPES = {'Supervisor', 'Digitals', 'Freeosk',
                               'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
 # Subset of Juicer types that count toward H22/H23 daily/weekly production limits
 JUICER_PRODUCTION_TYPES = {'Juicer Production', 'Juicer'}
+# Juicer types that must be pinned to their start date (long-duration events)
+# Juicer Survey is excluded — it's a 15-minute task that can be done any day in range
+JUICER_START_DATE_PINNED = {'Juicer', 'Juicer Production', 'Juicer Deep Clean'}
+# Digital event types that must be completed on their start date
+DIGITAL_START_DATE_PINNED = {'Digital Setup', 'Digital Refresh', 'Digital Teardown'}
 
 # Swap reason constants
 SWAP_REASON_DUE_DATE = 'Due date priority swap'
@@ -410,6 +417,20 @@ class CPSATSchedulingEngine:
         """Get effective event type considering overrides."""
         return getattr(event, '_override_event_type', None) or event.event_type
 
+    def _has_digital_setups_on_date(self, target_date):
+        """Check if there are Digital Setup events on the given date."""
+        if isinstance(target_date, datetime):
+            target_date = target_date.date()
+        for event in self.events:
+            etype = self._get_event_type(event)
+            if etype == 'Digitals':
+                name_upper = (event.project_name or '').upper()
+                if 'SETUP' in name_upper:
+                    for d in self._valid_days_for_event(event):
+                        if d == target_date:
+                            return True
+        return False
+
     def _extract_event_number(self, project_name):
         """Extract the unique event identifier from a project name.
 
@@ -709,6 +730,10 @@ class CPSATSchedulingEngine:
     def _valid_days_for_event(self, event):
         """Return list of valid days for a specific event.
 
+        Juicer events are pinned to their start date only — if the start date
+        is not valid, the event cannot be auto-scheduled and requires manual
+        intervention.
+
         Bumpable events also include their currently-scheduled date(s) even
         if those fall within the scheduling buffer window, since the solver
         needs to be able to "keep" the existing assignment.
@@ -723,6 +748,28 @@ class CPSATSchedulingEngine:
         e_due = event.due_datetime
         if isinstance(e_due, datetime):
             e_due = e_due.date()
+
+        # Juicer Production/Deep Clean must be scheduled on their start date only.
+        # Juicer Survey is a short task and can be scheduled on any valid day in range.
+        etype = self._get_event_type(event)
+        if etype in JUICER_START_DATE_PINNED:
+            if e_start in self.valid_days and e_start >= earliest:
+                return [e_start]
+            return []
+
+        # All digital events MUST be completed on their start date.
+        # Handles both specific types (Digital Setup, etc.) and the generic
+        # 'Digitals' type with subtype detected from project_name.
+        if etype in DIGITAL_START_DATE_PINNED:
+            if e_start in self.valid_days and e_start >= earliest:
+                return [e_start]
+            return []
+        if etype == 'Digitals':
+            name_upper = (event.project_name or '').upper()
+            if 'SETUP' in name_upper or 'REFRESH' in name_upper or 'TEARDOWN' in name_upper:
+                if e_start in self.valid_days and e_start >= earliest:
+                    return [e_start]
+                return []
 
         start = max(e_start, earliest)
         valid = [d for d in self.valid_days if start <= d < e_due]
@@ -941,6 +988,14 @@ class CPSATSchedulingEngine:
 
         # H25: Juicer events must be assigned to rotation employee
         self._add_juicer_rotation_constraint(model)
+
+        # H26: Digital Refresh on setup days and Digital Teardown must NOT go
+        # to the Primary Lead (must use a different lead or Club Supervisor)
+        self._add_digital_different_lead_constraint(model)
+
+        # H27: Digital Setup/Refresh (non-setup days) must go to Primary Lead
+        # if the Primary Lead is available and eligible
+        self._add_digital_primary_lead_constraint(model)
 
         # H20: Full-day event exclusivity
         self._add_full_day_exclusivity(model)
@@ -1312,6 +1367,105 @@ class CPSATSchedulingEngine:
                         self.v_assign_emp[(eid, backup)]
                     )
 
+    def _add_digital_different_lead_constraint(self, model):
+        """H26: Digital Refresh (on setup days) and Digital Teardown must use a
+        different lead than the Primary Lead.
+
+        On days with Digital Setup events, the Digital Refresh should be handled
+        by a different Lead Event Specialist (or Club Supervisor). Similarly,
+        Digital Teardowns should use the Secondary Lead. If the Primary Lead is
+        the only eligible employee, the constraint is skipped (solver falls back).
+        """
+        for event in self.events:
+            eid = event.id
+            etype = self._get_event_type(event)
+            name_upper = (event.project_name or '').upper()
+
+            is_teardown = (etype == 'Digital Teardown' or
+                           (etype == 'Digitals' and 'TEARDOWN' in name_upper))
+            is_refresh_on_setup_day = False
+            if etype in ('Digital Refresh', 'Digitals') and 'REFRESH' in name_upper:
+                # Will check per-day below
+                is_refresh_on_setup_day = True
+
+            if not is_teardown and not is_refresh_on_setup_day:
+                continue
+            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                continue
+
+            eligible = self.eligible_employees.get(eid, set())
+            valid_days = self._valid_days_for_event(event)
+
+            for d in valid_days:
+                if (eid, d) not in self.v_assign_day:
+                    continue
+
+                # For refresh, only apply on days that actually have setups
+                if is_refresh_on_setup_day and not self._has_digital_setups_on_date(d):
+                    continue
+
+                primary, _ = self._get_rotation_employee(d, 'primary_lead')
+                if not primary or (eid, primary) not in self.v_assign_emp:
+                    continue
+
+                # Only forbid primary if there's at least one other eligible employee
+                other_eligible = [e for e in eligible
+                                  if e != primary and (eid, e) in self.v_assign_emp
+                                  and (e, d) not in self.unavailable]
+                if not other_eligible:
+                    continue  # Primary is only option, allow it
+
+                # If scheduled on this day, must NOT be assigned to primary lead
+                model.AddImplication(
+                    self.v_assign_day[(eid, d)],
+                    self.v_assign_emp[(eid, primary)].Not()
+                )
+
+    def _add_digital_primary_lead_constraint(self, model):
+        """H27: Digital Setup and Digital Refresh (on non-setup days) must be
+        assigned to the Primary Lead if they are available and eligible.
+
+        Same pattern as H25 (Juicer rotation): if the rotation employee is
+        eligible and available, force the assignment.
+        """
+        for event in self.events:
+            eid = event.id
+            etype = self._get_event_type(event)
+            name_upper = (event.project_name or '').upper()
+
+            # Identify Setup and non-setup-day Refresh events
+            is_setup = (etype == 'Digital Setup' or
+                        (etype == 'Digitals' and 'SETUP' in name_upper))
+            is_refresh = (etype == 'Digital Refresh' or
+                          (etype == 'Digitals' and 'REFRESH' in name_upper
+                           and 'SETUP' not in name_upper and 'TEARDOWN' not in name_upper))
+
+            if not is_setup and not is_refresh:
+                continue
+            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                continue
+
+            valid_days = self._valid_days_for_event(event)
+            for d in valid_days:
+                if (eid, d) not in self.v_assign_day:
+                    continue
+
+                # Refresh on setup days is handled by H26 (different lead), skip here
+                if is_refresh and self._has_digital_setups_on_date(d):
+                    continue
+
+                primary, _ = self._get_rotation_employee(d, 'primary_lead')
+                if not primary:
+                    continue
+
+                # If primary is eligible and available, force assignment to them
+                if ((eid, primary) in self.v_assign_emp
+                        and (primary, d) not in self.unavailable):
+                    model.AddImplication(
+                        self.v_assign_day[(eid, d)],
+                        self.v_assign_emp[(eid, primary)]
+                    )
+
     def _add_full_day_exclusivity(self, model):
         """H20: Full-day events (>= 480 min) block Core/Juicer on same day."""
         full_day_events = [e for e in self.events
@@ -1565,12 +1719,24 @@ class CPSATSchedulingEngine:
                     ]).OnlyEnforceIf(ind.Not())
                     terms.append(ind * WEIGHT_LEAD_BLOCK1)
 
-        # S8: Primary Lead on Freeosk/Digital Refresh
+        # S8: Primary Lead on Freeosk/Digital Refresh (non-setup days only)
+        # On setup days (days with Digital Setups), Digital Refresh should go to
+        # a DIFFERENT lead, so we skip the Primary Lead bonus for those days.
         lead_daily_types = {'Freeosk', 'Digital Refresh'}
         for event in self.events:
             eid = event.id
             etype = self._get_event_type(event)
-            if etype not in lead_daily_types:
+            # Also handle 'Digitals' type with REFRESH in name
+            is_refresh = False
+            if etype in lead_daily_types:
+                is_refresh = (etype == 'Digital Refresh')
+            elif etype == 'Digitals':
+                name_upper = (event.project_name or '').upper()
+                if 'REFRESH' in name_upper:
+                    is_refresh = True
+                else:
+                    continue
+            else:
                 continue
             if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
                 continue
@@ -1578,6 +1744,9 @@ class CPSATSchedulingEngine:
             valid_days = self._valid_days_for_event(event)
             for d in valid_days:
                 if (eid, d) not in self.v_assign_day:
+                    continue
+                # Skip Primary Lead bonus for Digital Refresh on setup days
+                if is_refresh and self._has_digital_setups_on_date(d):
                     continue
                 primary, _ = self._get_rotation_employee(d, 'primary_lead')
                 if primary and (eid, primary) in self.v_assign_emp:
@@ -1763,6 +1932,72 @@ class CPSATSchedulingEngine:
                     if weight > 0:
                         terms.append(self.v_assign_emp[key] * weight)
 
+        # S16: Early scheduling bonus — prefer earlier days within valid range
+        # Gives a higher bonus for earlier days so events fill the earliest
+        # available date when an employee is free.
+        early_weight = self._get_effective_weight(WEIGHT_EARLY_SCHEDULING, 'WEIGHT_EARLY_SCHEDULING')
+        for event in self.events:
+            eid = event.id
+            if eid not in self.v_scheduled or isinstance(self.v_scheduled[eid], int):
+                continue
+
+            valid_days = self._valid_days_for_event(event)
+            if len(valid_days) <= 1:
+                continue  # Only one valid day, no preference needed
+
+            # Bonus decreases for each later day: first day gets max bonus
+            for i, d in enumerate(valid_days):
+                if (eid, d) not in self.v_assign_day:
+                    continue
+                days_from_start = i
+                bonus = max(0, (len(valid_days) - days_from_start)) * early_weight
+                if bonus > 0:
+                    terms.append(self.v_assign_day[(eid, d)] * bonus)
+
+        # S17: Weekly employee balance — penalize uneven Core distribution per employee per week
+        # This prevents one employee getting 6 Core events in a week while another gets 1
+        weekly_balance_weight = self._get_effective_weight(WEIGHT_WEEKLY_BALANCE, 'WEIGHT_WEEKLY_BALANCE')
+        core_events_for_balance = [e for e in self.events if self._get_event_type(e) == 'Core']
+        if core_events_for_balance and len(self.employee_ids) > 1:
+            for w_idx, week_days in self.weeks.items():
+                emp_week_counts = {}
+                for emp_id in self.employee_ids:
+                    emp = self.employees[emp_id]
+                    # Skip Club Supervisor and Juicer Barista — they don't normally do Core
+                    if emp.job_title in ('Club Supervisor', 'Juicer Barista'):
+                        continue
+                    indicators = []
+                    for event in core_events_for_balance:
+                        eid = event.id
+                        if (eid, emp_id) not in self.v_assign_emp:
+                            continue
+                        for d in week_days:
+                            if (eid, d) not in self.v_assign_day:
+                                continue
+                            ind = model.NewBoolVar(f'wb_{eid}_{emp_id}_{w_idx}_{d}')
+                            model.AddBoolAnd([
+                                self.v_assign_emp[(eid, emp_id)],
+                                self.v_assign_day[(eid, d)]
+                            ]).OnlyEnforceIf(ind)
+                            model.AddBoolOr([
+                                self.v_assign_emp[(eid, emp_id)].Not(),
+                                self.v_assign_day[(eid, d)].Not()
+                            ]).OnlyEnforceIf(ind.Not())
+                            indicators.append(ind)
+                    if indicators:
+                        wc = model.NewIntVar(0, len(core_events_for_balance), f'wc_{emp_id}_{w_idx}')
+                        model.Add(wc == sum(indicators))
+                        emp_week_counts[emp_id] = wc
+
+                if len(emp_week_counts) >= 2:
+                    max_wk = model.NewIntVar(0, len(core_events_for_balance), f'max_wk_{w_idx}')
+                    min_wk = model.NewIntVar(0, len(core_events_for_balance), f'min_wk_{w_idx}')
+                    model.AddMaxEquality(max_wk, list(emp_week_counts.values()))
+                    model.AddMinEquality(min_wk, list(emp_week_counts.values()))
+                    spread_wk = model.NewIntVar(0, len(core_events_for_balance), f'spread_wk_{w_idx}')
+                    model.Add(spread_wk == max_wk - min_wk)
+                    terms.append(spread_wk * (-weekly_balance_weight))
+
         # Final objective: maximize
         if terms:
             model.Maximize(sum(terms))
@@ -1863,7 +2098,7 @@ class CPSATSchedulingEngine:
                                 if (eid, b) in self.v_assign_block and solver.Value(self.v_assign_block[(eid, b)]):
                                     assigned_block = b
                                     break
-                        schedule_time_val = self._get_schedule_time(event, etype, assigned_block)
+                        schedule_time_val = self._get_schedule_time(event, etype, assigned_block, assigned_day)
                         schedule_dt = datetime.combine(assigned_day, schedule_time_val)
 
                         # Find the posted schedule being replaced
@@ -1940,7 +2175,7 @@ class CPSATSchedulingEngine:
                         break
 
             # Determine schedule time
-            schedule_time_val = self._get_schedule_time(event, etype, assigned_block)
+            schedule_time_val = self._get_schedule_time(event, etype, assigned_block, assigned_day)
             schedule_dt = datetime.combine(assigned_day, schedule_time_val)
 
             # Check if this new event displaced a bumpable event
@@ -2046,10 +2281,29 @@ class CPSATSchedulingEngine:
 
         return None
 
-    def _get_schedule_time(self, event, etype, block=None):
-        """Determine the schedule time for an event based on type and block."""
+    def _get_schedule_time(self, event, etype, block=None, assigned_day=None):
+        """Determine the schedule time for an event based on type and block.
+
+        For Digital Refresh on days that also have Digital Setup events,
+        the time is 12:00 instead of the default digital setup slot.
+        """
         if etype == 'Core' and block and block in self.block_arrive_time:
             return self.block_arrive_time[block]
+
+        # For generic 'Digitals' type, detect subtype from project name
+        if etype == 'Digitals':
+            name_upper = (event.project_name or '').upper()
+            if 'TEARDOWN' in name_upper or 'TEAR DOWN' in name_upper:
+                return self.default_times.get('Digital Teardown', time(17, 0))
+            if 'REFRESH' in name_upper and assigned_day and self._has_digital_setups_on_date(assigned_day):
+                return time(12, 0)
+            # Setup or non-setup-day Refresh: use digital setup slot time
+            return self.default_times.get('Digital Setup', time(10, 15))
+
+        # Digital Refresh on setup days gets scheduled at 12:00
+        if etype == 'Digital Refresh' and assigned_day:
+            if self._has_digital_setups_on_date(assigned_day):
+                return time(12, 0)
 
         return self.default_times.get(etype, time(11, 0))
 
@@ -2667,6 +2921,18 @@ class CPSATSchedulingEngine:
                     if sched_date < cand_start_date or sched_date >= cand_due_date:
                         continue
 
+                    # Juicer Production/Deep Clean must land on their start date only
+                    if etype in JUICER_START_DATE_PINNED and sched_date != cand_start_date:
+                        continue
+
+                    # Digital events must land on their start date only
+                    if etype in DIGITAL_START_DATE_PINNED and sched_date != cand_start_date:
+                        continue
+                    if etype == 'Digitals' and sched_date != cand_start_date:
+                        cand_name = (candidate.project_name or '').upper()
+                        if 'SETUP' in cand_name or 'REFRESH' in cand_name or 'TEARDOWN' in cand_name:
+                            continue
+
                     # Date must not be locked or a holiday
                     if sched_date in blocked_dates:
                         continue
@@ -2709,6 +2975,100 @@ class CPSATSchedulingEngine:
         return swap_count
 
     # ------------------------------------------------------------------
+    # Orphaned Supervisor scheduling
+    # ------------------------------------------------------------------
+
+    def _schedule_orphaned_supervisors(self, run):
+        """Schedule Supervisor events whose Core is already posted from a previous run.
+
+        Searches for unscheduled Supervisor events, finds their matching Core's
+        scheduled date (from pending or posted schedules), and creates a
+        PendingSchedule for the Supervisor on that date.
+
+        Returns the number of Supervisors successfully scheduled.
+        """
+        scheduled_count = 0
+
+        for sup in self.supervisor_events:
+            # Skip if already paired and scheduled in this run (via _extract_solution)
+            if sup.is_scheduled:
+                continue
+
+            num = self._extract_event_number(sup.project_name)
+            if not num:
+                continue
+
+            # Skip if this supervisor was already paired with a Core in the current run
+            if any(self.core_sup_pairs.get(eid) == sup for eid in self.core_sup_pairs):
+                continue
+
+            # Look for Core's scheduled date in pending schedules (this run)
+            core_date = None
+            pending_core = self.db.query(self.PendingSchedule).join(
+                self.Event,
+                self.PendingSchedule.event_ref_num == self.Event.project_ref_num
+            ).filter(
+                self.Event.event_type == 'Core',
+                ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
+                self.PendingSchedule.scheduler_run_id == run.id,
+                self.PendingSchedule.failure_reason.is_(None),
+            ).all()
+
+            for p in pending_core:
+                if self._extract_event_number(p.event.project_name) == num:
+                    core_date = p.schedule_datetime.date() if isinstance(
+                        p.schedule_datetime, datetime
+                    ) else p.schedule_datetime
+                    break
+
+            # Look in posted schedules (previous runs)
+            if not core_date:
+                posted_core = self.db.query(self.Schedule).join(
+                    self.Event,
+                    self.Schedule.event_ref_num == self.Event.project_ref_num
+                ).filter(
+                    self.Event.event_type == 'Core',
+                    ~self.Event.condition.in_(list(INACTIVE_CONDITIONS)),
+                ).all()
+
+                for s in posted_core:
+                    if self._extract_event_number(s.event.project_name) == num:
+                        core_date = s.schedule_datetime.date() if isinstance(
+                            s.schedule_datetime, datetime
+                        ) else s.schedule_datetime
+                        break
+
+            if not core_date:
+                logger.info(
+                    f"Orphaned Supervisor: No Core found for {sup.project_ref_num} (event# {num})"
+                )
+                continue
+
+            # Find employee for Supervisor
+            sup_time = self.default_times.get('Supervisor', time(12, 0))
+            sup_dt = datetime.combine(core_date, sup_time)
+            sup_emp = self._find_supervisor_employee(core_date, sup_dt)
+
+            if sup_emp:
+                self._create_pending_schedule(run, sup, sup_emp, sup_dt)
+                sup.is_scheduled = True
+                scheduled_count += 1
+                logger.info(
+                    f"Orphaned Supervisor: Scheduled {sup.project_ref_num} "
+                    f"to employee {sup_emp} on {core_date}"
+                )
+            else:
+                self._create_pending_failure(
+                    run, sup,
+                    "No Club Supervisor or Lead available for orphaned Supervisor"
+                )
+                logger.warning(
+                    f"Orphaned Supervisor: No employee available for {sup.project_ref_num} on {core_date}"
+                )
+
+        return scheduled_count
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -2721,6 +3081,37 @@ class CPSATSchedulingEngine:
         Phase 3: Solver with bumping (only for Phase 2 failures)
         Phase 4: Due-date verification post-pass
         """
+        # === PRE-SCHEDULER DATABASE REFRESH ===
+        # Database MUST be refreshed before scheduling - abort if refresh fails
+        from flask import current_app
+        if not current_app.config.get('TESTING', False):
+            logger.info("=== PRE-SCHEDULER DATABASE REFRESH ===")
+            try:
+                from app.services.database_refresh_service import DatabaseRefreshService
+                refresh_service = DatabaseRefreshService()
+                refresh_result = refresh_service.refresh()
+                if refresh_result.get('success'):
+                    logger.info(
+                        f"Database refresh completed: {refresh_result.get('stats', {}).get('total_processed', 0)} events processed"
+                    )
+                else:
+                    error_msg = refresh_result.get('message', 'Unknown error')
+                    logger.error(f"Database refresh failed: {error_msg}")
+                    raise RuntimeError(
+                        f"Database refresh failed: {error_msg}. "
+                        f"Cannot run scheduler without fresh data."
+                    )
+            except RuntimeError:
+                raise  # Re-raise our own error
+            except Exception as refresh_error:
+                logger.error(f"Database refresh error: {refresh_error}")
+                raise RuntimeError(
+                    f"Database refresh error: {refresh_error}. "
+                    f"Cannot run scheduler without fresh data."
+                )
+        else:
+            logger.info("Skipping database refresh in test environment")
+
         run = self.SchedulerRunHistory(
             run_type=run_type, status='running', solver_type='cpsat',
         )
@@ -2872,10 +3263,16 @@ class CPSATSchedulingEngine:
             total_scheduled += phase4_swaps
             total_failed = max(0, total_failed - phase4_swaps)
 
+            # === PHASE 5: Orphaned Supervisor pass ===
+            # Schedule Supervisor events whose Core was already posted in a previous run
+            logger.info("=== PHASE 5: Orphaned Supervisor pass ===")
+            orphan_scheduled = self._schedule_orphaned_supervisors(run)
+            total_scheduled += orphan_scheduled
+
             # === Finalize ===
             run.status = 'completed'
             run.completed_at = datetime.utcnow()
-            run.total_events_processed = phase2_events + phase1_swaps + phase4_swaps
+            run.total_events_processed = phase2_events + phase1_swaps + phase4_swaps + orphan_scheduled
             run.events_scheduled = total_scheduled
             run.events_failed = total_failed
             run.events_requiring_swaps = total_swaps
@@ -2885,7 +3282,7 @@ class CPSATSchedulingEngine:
                 f"CP-SAT Scheduler: Done. "
                 f"Phase1Swaps={phase1_swaps}, Phase2={scheduled_2}/{failed_2}, "
                 f"Phase3={'skipped' if failed_2 == 0 else scheduled_3}, "
-                f"Phase4Swaps={phase4_swaps}, "
+                f"Phase4Swaps={phase4_swaps}, Orphan Supervisors={orphan_scheduled}, "
                 f"Total: Scheduled={total_scheduled}, Failed={total_failed}, Swaps={total_swaps}"
             )
 

@@ -19,7 +19,8 @@ def create_schedule_model(db):
 
         id = db.Column(db.Integer, primary_key=True, autoincrement=True)
         event_ref_num = db.Column(db.Integer, db.ForeignKey('events.project_ref_num'), nullable=False)
-        employee_id = db.Column(db.String(50), db.ForeignKey('employees.id'), nullable=False)
+        employee_id = db.Column(db.String(50), db.ForeignKey('employees.id'), nullable=True)
+        employee_name = db.Column(db.String(100), nullable=True)
         schedule_datetime = db.Column(db.DateTime, nullable=False)
 
         # Sync fields for API integration

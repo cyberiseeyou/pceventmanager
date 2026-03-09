@@ -251,6 +251,12 @@ def register_blueprints(app, db, models):
     from app.routes.api_locked_days import api_locked_days_bp
     app.register_blueprint(api_locked_days_bp)
 
+    from app.routes.reports import reports_bp
+    app.register_blueprint(reports_bp)
+
+    from app.routes.lost_demos import lost_demos_bp
+    app.register_blueprint(lost_demos_bp)
+
     # Configure CSRF exemptions for specific routes (after blueprint registration)
     if 'auth.login' in app.view_functions:
         csrf.exempt(app.view_functions['auth.login'])

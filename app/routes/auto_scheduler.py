@@ -510,8 +510,10 @@ def approve_schedule():
 
     # CHECK LOCKED DAYS: Before approving, check if any affected dates are locked
     # This includes both target schedule dates and dates of events being bumped
+    approve_data = request.get_json(silent=True) or {}
+    force_override_lock = approve_data.get('force_override_lock', False)
     LockedDay = current_app.config.get('LockedDay')
-    if LockedDay:
+    if LockedDay and not force_override_lock:
         locked_date_conflicts = []
         checked_dates = set()
 
@@ -567,8 +569,9 @@ def approve_schedule():
 
             return jsonify({
                 'success': False,
-                'error': f'Cannot approve: {len(unique_dates)} locked day(s) would be affected. Unlock these days first.',
-                'locked_dates': locked_date_conflicts
+                'error': f'Cannot approve: {len(unique_dates)} locked day(s) would be affected.',
+                'locked_dates': locked_date_conflicts,
+                'locked_day_override': True
             }), 409  # Conflict
 
     # FIRST: Handle bumped events BEFORE processing pending schedules
@@ -894,6 +897,7 @@ def approve_schedule():
             schedule = all_models['Schedule'](
                 event_ref_num=pending.event_ref_num,
                 employee_id=pending.employee_id,
+                employee_name=employee.name if employee else None,
                 schedule_datetime=pending.schedule_datetime,
                 external_id=str(scheduled_event_id) if scheduled_event_id else None,
                 last_synced=datetime.utcnow() if sync_enabled else None,
@@ -1189,6 +1193,7 @@ def approve_single_schedule(pending_id):
         schedule = all_models['Schedule'](
             event_ref_num=pending.event_ref_num,
             employee_id=pending.employee_id,
+            employee_name=employee.name if employee else None,
             schedule_datetime=pending.schedule_datetime,
             external_id=str(scheduled_event_id) if scheduled_event_id else None,
             last_synced=datetime.utcnow() if sync_enabled else None,
@@ -1228,6 +1233,7 @@ def approve_single_schedule(pending_id):
                     pending.employee_id
                 )
                 if supervisor_scheduled:
+                    db.session.commit()
                     current_app.logger.info(
                         f"Auto-scheduled supervisor event: {supervisor_event_name}"
                     )

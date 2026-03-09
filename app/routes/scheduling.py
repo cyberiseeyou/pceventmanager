@@ -409,8 +409,18 @@ def auto_schedule_supervisor_event(db, Event, Schedule, Employee, core_project_r
         ).first()
 
         if existing_supervisor_schedule:
-            # Already scheduled, skip
-            return False, None
+            existing_date = existing_supervisor_schedule.schedule_datetime.date()
+            if existing_date == core_date:
+                # Already scheduled on correct date, skip
+                return False, None
+            else:
+                # Supervisor exists but on wrong date — delete it so we can reschedule on Core's date
+                from flask import current_app
+                current_app.logger.info(
+                    f"Moving Supervisor {supervisor_event.project_ref_num} from {existing_date} to {core_date} "
+                    f"to match Core {core_project_ref_num}"
+                )
+                db.session.delete(existing_supervisor_schedule)
 
         # Determine who to assign the supervisor event to
         # Priority: Lead with CORE event that day > Club Supervisor
@@ -458,9 +468,11 @@ def auto_schedule_supervisor_event(db, Event, Schedule, Employee, core_project_r
         from datetime import datetime, time
         supervisor_datetime = datetime.combine(core_date, time(12, 0))  # 12:00 PM
 
+        assigned_employee = Employee.query.get(assigned_employee_id)
         new_supervisor_schedule = Schedule(
             event_ref_num=supervisor_event.project_ref_num,
             employee_id=assigned_employee_id,
+            employee_name=assigned_employee.name if assigned_employee else None,
             schedule_datetime=supervisor_datetime
         )
         db.session.add(new_supervisor_schedule)
@@ -689,6 +701,11 @@ def save_schedule():
                         response_data.get('scheduledEventId') or
                         response_data.get('ID')
                     )
+                    # Check nested MVScheduledEvent (Crossmark response format)
+                    if not scheduled_event_id:
+                        mv_event = response_data.get('MVScheduledEvent', {})
+                        if isinstance(mv_event, dict):
+                            scheduled_event_id = mv_event.get('ID') or mv_event.get('id')
 
             current_app.logger.info(f"Extracted scheduled_event_id: {scheduled_event_id}")
 
@@ -701,6 +718,7 @@ def save_schedule():
         new_schedule = Schedule(
             event_ref_num=event.project_ref_num,
             employee_id=employee_id,
+            employee_name=employee.name,
             schedule_datetime=schedule_datetime,
             external_id=str(scheduled_event_id) if scheduled_event_id else None,
             last_synced=datetime.utcnow(),

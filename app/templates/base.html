@@ -220,6 +220,11 @@
                 <span class="material-symbols-outlined">fact_check</span>
                 <span>Left in Approved</span>
             </a>
+            <a href="{{ url_for('lost_demos.lost_demos_page') }}"
+                class="sidebar-item {% if request.endpoint == 'lost_demos.lost_demos_page' %}active{% endif %}">
+                <span class="material-symbols-outlined">event_busy</span>
+                <span>Lost Demos</span>
+            </a>
 
             <!-- Team Group -->
             <div class="sidebar-group-label">Team</div>
@@ -255,6 +260,21 @@
                 class="sidebar-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
                 <span class="material-symbols-outlined">verified</span>
                 <span>Weekly Validation</span>
+            </a>
+            <a href="{{ url_for('dashboard.employee_availability') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.employee_availability' %}active{% endif %}">
+                <span class="material-symbols-outlined">groups</span>
+                <span>Employee Availability</span>
+            </a>
+            <a href="{{ url_for('dashboard.available_blocks') }}"
+                class="sidebar-item {% if request.endpoint == 'dashboard.available_blocks' %}active{% endif %}">
+                <span class="material-symbols-outlined">event_available</span>
+                <span>Available Blocks</span>
+            </a>
+            <a href="{{ url_for('reports.index') }}"
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('reports.') %}active{% endif %}">
+                <span class="material-symbols-outlined">bar_chart</span>
+                <span>Reports</span>
             </a>
             <a href="{{ url_for('dashboard.scan_out_checklist') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.scan_out_checklist' %}active{% endif %}">
@@ -304,6 +324,9 @@
             <p>&copy; {{ now().year if now is defined else 2026 }} Product Connections. All rights reserved.</p>
         </div>
     </footer>
+
+    <!-- Shared text utilities (toTitleCase, escapeHtml) -->
+    <script src="{{ url_for('static', filename='js/text-utils.js') }}"></script>
 
     <!-- CSRF Protection (CRITICAL-02) -->
     <script src="{{ url_for('static', filename='js/csrf_helper.js') }}"></script>

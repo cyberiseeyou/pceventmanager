@@ -166,11 +166,15 @@ class CommandCenterService:
             ).count()
             stats['unscheduled_total'] = unscheduled
 
-            # Urgent unscheduled (due within 3 days)
+            # Urgent unscheduled (due within 3 days, excluding past-due)
+            # due_datetime means "must be completed BEFORE that date", so
+            # events due today are already past-due. Start from tomorrow.
+            tomorrow = today + timedelta(days=1)
             urgent_deadline = today + timedelta(days=3)
             urgent = self.db.session.query(self.Event).filter(
                 self.Event.is_scheduled == False,
                 self.Event.condition == 'Unstaffed',
+                self.Event.due_datetime > datetime.combine(today, datetime.max.time()),
                 self.Event.due_datetime <= datetime.combine(urgent_deadline, datetime.max.time())
             ).count()
             stats['unscheduled_urgent'] = urgent
@@ -216,7 +220,11 @@ class CommandCenterService:
         return []
 
     def _get_unscheduled_urgent(self, today: date) -> List[Dict]:
-        """Get unscheduled events due within 3 days"""
+        """Get unscheduled events due within 3 days (excludes past-due).
+
+        due_datetime means "must be completed BEFORE that date", so events
+        whose due_datetime is today are already past-due and excluded.
+        """
         if not self.Event:
             return []
 
@@ -225,6 +233,7 @@ class CommandCenterService:
         events = self.db.session.query(self.Event).filter(
             self.Event.is_scheduled == False,
             self.Event.condition == 'Unstaffed',
+            self.Event.due_datetime > datetime.combine(today, datetime.max.time()),
             self.Event.due_datetime <= datetime.combine(urgent_deadline, datetime.max.time())
         ).order_by(
             self.Event.due_datetime.asc()
@@ -232,14 +241,15 @@ class CommandCenterService:
 
         result = []
         for event in events:
-            days_until_due = (event.due_datetime.date() - today).days if event.due_datetime else None
+            # Subtract 1 because due_datetime means "before that date"
+            days_until_due = (event.due_datetime.date() - today).days - 1 if event.due_datetime else None
             result.append({
                 'event_id': event.project_ref_num,
                 'name': event.project_name,
                 'event_type': event.event_type,
                 'due_date': event.due_datetime.date().isoformat() if event.due_datetime else None,
                 'days_until_due': days_until_due,
-                'urgency': 'urgent' if days_until_due and days_until_due <= 1 else 'warning'
+                'urgency': 'urgent' if days_until_due is not None and days_until_due <= 1 else 'warning'
             })
 
         return result

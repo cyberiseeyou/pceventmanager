@@ -1,14 +1,6 @@
 // static/js/pages/daily-view.js
 
 /**
- * Convert a string to Title Case for consistent name display
- */
-function toTitleCase(text) {
-    if (text == null) return '';
-    return String(text).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-}
-
-/**
  * Daily View Page Controller
  *
  * Manages daily schedule view including summary, timeslots, and event cards.
@@ -1733,6 +1725,7 @@ class DailyView {
      */
     closeRescheduleModal() {
         document.getElementById('reschedule-modal').style.display = 'none';
+        this.bypassLock = false;  // Clear bypass lock flag (set by Call-Off Wizard)
     }
 
     /* ===================================================================
@@ -2415,7 +2408,7 @@ class DailyView {
      * @param {HTMLElement} modal - Modal element
      * @param {boolean} overrideConflicts - Whether to override conflicts
      */
-    async submitChangeEmployee(scheduleId, newEmployeeId, modal, overrideConflicts = false) {
+    async submitChangeEmployee(scheduleId, newEmployeeId, modal, overrideConflicts = false, forceOverrideLock = false) {
         const submitBtn = modal.querySelector('.modal-submit');
         const originalText = submitBtn.textContent;
 
@@ -2432,19 +2425,34 @@ class DailyView {
                 },
                 body: JSON.stringify({
                     new_employee_id: newEmployeeId,
-                    override_conflicts: overrideConflicts
+                    override_conflicts: overrideConflicts,
+                    bypass_lock: !!this.bypassLock,
+                    force_override_lock: forceOverrideLock
                 })
             });
 
             const result = await response.json();
 
             if (response.status === 409) {
+                // Check if this is a locked day that can be overridden
+                if (result.locked_day_override) {
+                    const confirmOverride = confirm(
+                        `🔒 Day is Locked\n\n${result.error}\n\nDo you want to override the lock and proceed anyway?`
+                    );
+                    if (confirmOverride) {
+                        await this.submitChangeEmployee(scheduleId, newEmployeeId, modal, overrideConflicts, true);
+                    }
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+
                 // Conflict detected - show conflicts with override option
                 this.showModalConflictsWithOverride(
                     modal,
                     'Employee Change Conflicts',
                     result.conflicts,
-                    () => this.submitChangeEmployee(scheduleId, newEmployeeId, modal, true)
+                    () => this.submitChangeEmployee(scheduleId, newEmployeeId, modal, true, forceOverrideLock)
                 );
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
@@ -2592,6 +2600,9 @@ class DailyView {
      */
     closeChangeEmployeeModal(modal) {
         if (!modal) return;
+
+        // Clear bypass lock flag (set by Call-Off Wizard)
+        this.bypassLock = false;
 
         // Remove escape key handler
         if (modal._escapeHandler) {
@@ -3123,7 +3134,7 @@ class DailyView {
      *
      * @param {number} scheduleId - Schedule ID to unschedule
      */
-    async handleUnschedule(scheduleId) {
+    async handleUnschedule(scheduleId, forceOverrideLock = false) {
         console.log('Unschedule event:', scheduleId);
 
         // Get event card for context
@@ -3131,15 +3142,17 @@ class DailyView {
         const employeeName = eventCard?.querySelector('.employee-name')?.textContent?.replace(/person|Assigned to|👤/g, '').trim() || 'this employee';
         const eventInfo = eventCard?.querySelector('.event-info')?.textContent || 'this event';
 
-        // Show confirmation modal
-        const confirmed = await this.showConfirmationModal(
-            'Unschedule Event',
-            `Are you sure you want to unschedule ${eventInfo} for ${employeeName}? This will remove the employee assignment.`
-        );
+        // Show confirmation modal (skip if retrying with force override)
+        if (!forceOverrideLock) {
+            const confirmed = await this.showConfirmationModal(
+                'Unschedule Event',
+                `Are you sure you want to unschedule ${eventInfo} for ${employeeName}? This will remove the employee assignment.`
+            );
 
-        if (!confirmed) {
-            console.log('Unschedule cancelled by user');
-            return;
+            if (!confirmed) {
+                console.log('Unschedule cancelled by user');
+                return;
+            }
         }
 
         // Close any open dropdowns
@@ -3159,7 +3172,10 @@ class DailyView {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': this.getCsrfToken()
-                }
+                },
+                body: JSON.stringify({
+                    force_override_lock: forceOverrideLock
+                })
             });
 
             const data = await response.json();
@@ -3219,6 +3235,28 @@ class DailyView {
                 await this.loadDailySummary();
 
             } else {
+                // Check if this is a locked day that can be overridden
+                if (data.locked_day_override) {
+                    const confirmOverride = confirm(
+                        `🔒 Day is Locked\n\n${data.error}\n\nDo you want to override the lock and proceed anyway?`
+                    );
+                    if (confirmOverride) {
+                        // Re-enable button before retrying
+                        if (unscheduleBtn) {
+                            unscheduleBtn.disabled = false;
+                            unscheduleBtn.textContent = 'Unschedule';
+                        }
+                        await this.handleUnschedule(scheduleId, true);
+                        return;
+                    }
+                    // User cancelled - re-enable button
+                    if (unscheduleBtn) {
+                        unscheduleBtn.disabled = false;
+                        unscheduleBtn.textContent = 'Unschedule';
+                    }
+                    return;
+                }
+
                 // API returned error
                 throw new Error(data.error || 'Failed to unschedule event');
             }
@@ -3567,26 +3605,24 @@ class DailyView {
     updateLockButtonState() {
         const lockBtn = document.getElementById('btn-lock-day');
         const lockIcon = document.getElementById('lock-icon');
-        const lockText = document.getElementById('lock-text');
 
-        if (!lockBtn || !lockIcon || !lockText) return;
+        if (!lockBtn || !lockIcon) return;
 
         if (this.isLocked) {
-            lockIcon.innerHTML = '<span class="material-symbols-outlined">lock</span>';
-            lockText.textContent = 'Unlock Day';
+            lockIcon.textContent = 'lock';
             lockBtn.classList.add('btn-locked');
             lockBtn.classList.remove('btn-unlocked');
             lockBtn.setAttribute('aria-label', 'Unlock this day');
-            lockBtn.title = this.lockInfo ?
+            const tip = this.lockInfo ?
                 `Locked by ${this.lockInfo.locked_by}${this.lockInfo.reason ? ': ' + this.lockInfo.reason : ''}` :
-                'Day is locked';
+                'Unlock Day';
+            lockBtn.setAttribute('data-tooltip', tip);
         } else {
-            lockIcon.innerHTML = '<span class="material-symbols-outlined">lock_open</span>';
-            lockText.textContent = 'Lock Day';
+            lockIcon.textContent = 'lock_open';
             lockBtn.classList.add('btn-unlocked');
             lockBtn.classList.remove('btn-locked');
             lockBtn.setAttribute('aria-label', 'Lock this day');
-            lockBtn.title = 'Lock this day to prevent schedule changes';
+            lockBtn.setAttribute('data-tooltip', 'Lock Day');
         }
     }
 
@@ -4024,6 +4060,7 @@ class DailyView {
             btn.addEventListener('click', () => {
                 const scheduleId = btn.getAttribute('data-schedule-id');
                 this.closeCallOffWizard();
+                this.bypassLock = true;  // Bypass locked day check for call-off actions
                 this.handleChangeEmployee(scheduleId);
             });
         });
@@ -4033,6 +4070,7 @@ class DailyView {
             btn.addEventListener('click', () => {
                 const scheduleId = btn.getAttribute('data-schedule-id');
                 this.closeCallOffWizard();
+                this.bypassLock = true;  // Bypass locked day check for call-off actions
                 this.handleReschedule(scheduleId);
             });
         });
@@ -4048,7 +4086,8 @@ class DailyView {
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-CSRF-Token': this.getCsrfToken()
-                            }
+                            },
+                            body: JSON.stringify({ bypass_lock: true })
                         });
                         const data = await response.json();
                         if (response.ok && data.success) {
@@ -4104,7 +4143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const rescheduleForm = document.getElementById('reschedule-form');
     if (rescheduleForm) {
         // Helper function to submit reschedule with optional override
-        const submitReschedule = async (overrideConflicts = false) => {
+        const submitReschedule = async (overrideConflicts = false, forceOverrideLock = false) => {
             const scheduleId = document.getElementById('reschedule-schedule-id').value;
             const date = document.getElementById('reschedule-date').value;
             const timeInput = document.getElementById('reschedule-time');
@@ -4127,21 +4166,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         new_date: date,
                         new_time: time,
                         employee_id: employeeId,
-                        override_conflicts: overrideConflicts // Fixed: API expects 'override_conflicts'
+                        override_conflicts: overrideConflicts,
+                        bypass_lock: !!(window.dailyView && window.dailyView.bypassLock),
+                        force_override_lock: forceOverrideLock
                     })
                 });
 
                 const data = await response.json();
 
                 if (response.status === 409) {
-                    // Check if this is a locked day error (no conflicts array)
-                    if (!data.conflicts && data.error) {
-                        // Locked day error - show clear message with unlock instructions
-                        if (data.error.includes('locked')) {
-                            window.toaster.warning(`🔒 Day is Locked - ${data.error} - To reschedule this event, first unlock the day using the "Lock Day" button.`);
-                        } else {
-                            window.toaster.error('Error: ' + data.error);
+                    // Check if this is a locked day that can be overridden
+                    if (data.locked_day_override) {
+                        const confirmOverride = confirm(
+                            `🔒 Day is Locked\n\n${data.error}\n\nDo you want to override the lock and proceed anyway?`
+                        );
+                        if (confirmOverride) {
+                            await submitReschedule(overrideConflicts, true);
                         }
+                        return;
+                    }
+
+                    // Check if this is another non-conflict error
+                    if (!data.conflicts && data.error) {
+                        window.toaster.error('Error: ' + data.error);
                         return;
                     }
 

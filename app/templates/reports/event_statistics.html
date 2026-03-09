@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Event Statistics{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Event Statistics</h1>
+            <div class="subtitle">{{ start_date.strftime('%m/%d/%Y') }} — {{ end_date.strftime('%m/%d/%Y') }}</div>
+        </div>
+        <div class="report-actions">
+            <a href="{{ url_for('reports.export_event_statistics', start_date=start_date, end_date=end_date) }}" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+            <a href="{{ url_for('reports.index') }}" class="btn">Back</a>
+        </div>
+    </div>
+
+    <form class="date-range-form" method="get">
+        <label for="start_date">From</label>
+        <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To</label>
+        <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn-generate">Generate</button>
+    </form>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="value">{{ data.total }}</div>
+            <div class="label">Total Events</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ data.completion_rate }}%</div>
+            <div class="label">Completion Rate</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ data.scheduled_pct }}%</div>
+            <div class="label">Scheduled</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ data.unstaffed_pct }}%</div>
+            <div class="label">Unstaffed</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #dc2626;">
+            <div class="value">{{ data.lost_rate }}%</div>
+            <div class="label">Lost Demo Rate</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">{{ data.lost_count }} lost of {{ data.total }} total</div>
+        </div>
+    </div>
+
+    {% if data.by_condition %}
+    <div class="chart-container">
+        <h3>Events by Condition</h3>
+        <div style="max-width: 400px; margin: 0 auto;">
+            <canvas id="conditionChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+
+    {% for week in data.weeks %}
+    <div class="chart-container">
+        <table class="report-table">
+            <thead>
+                <tr class="week-header">
+                    <td colspan="9">Week of {{ week.start }} — {{ week.end }} ({{ week.count }} events)</td>
+                </tr>
+                <tr>
+                    <th>Event #</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Start</th>
+                    <th>Due</th>
+                    <th>Employee</th>
+                    <th>Scheduled</th>
+                    <th>Days Avail.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in week.events %}
+                <tr>
+                    <td>{{ e.ref_num }}</td>
+                    <td>{{ e.name }}</td>
+                    <td>{{ e.event_type }}</td>
+                    <td>{{ e.condition }}</td>
+                    <td>{{ e.start_date }}</td>
+                    <td>{{ e.due_date }}</td>
+                    <td>{{ e.employee }}</td>
+                    <td>{{ e.schedule_date }}</td>
+                    <td>{{ e.days_available }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    document.querySelectorAll('[data-action="print"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { window.print(); });
+    });
+
+    var conditionData = {{ data.by_condition | tojson }};
+    var labels = Object.keys(conditionData);
+    var values = Object.values(conditionData);
+    var colors = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
+
+    var canvas = document.getElementById('conditionChart');
+    if (canvas && labels.length > 0) {
+        new Chart(canvas, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length)
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

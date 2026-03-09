@@ -23,6 +23,7 @@ import os
 import logging
 import requests
 import re
+import threading
 import time
 from PyPDF2 import PdfWriter, PdfReader
 from io import BytesIO
@@ -64,6 +65,9 @@ daily_items_pdf_generator = DailyItemsListPDFGenerator() if edr_available else N
 # MFA code expiration tracking
 MFA_CODE_EXPIRY_SECONDS = 300  # 5 minutes
 mfa_request_timestamp = None
+
+# Background auth state for non-blocking MFA request (steps 1+2 run in a thread)
+mfa_auth_state = {'status': 'idle', 'error': None}
 
 
 def get_walmart_week(target_date):
@@ -1179,15 +1183,22 @@ def freeosk_manual_test():
 def edr_request_mfa():
     """
     Request MFA code for Walmart authentication.
-    Uses the simple global authenticator approach from edr_downloader.
+
+    Launches Chrome + login steps 1+2 in a background thread so the
+    single Gunicorn worker is not blocked for 10-30 seconds. The frontend
+    polls GET /edr/auth-status until the thread finishes.
     """
-    global edr_authenticator, mfa_request_timestamp
+    global edr_authenticator, mfa_request_timestamp, mfa_auth_state
 
     logger.info("EDR MFA request received")
 
     if not edr_available:
         logger.error("EDR modules not available - check import errors on startup")
         return jsonify({'success': False, 'error': 'EDR modules not available'}), 500
+
+    # Reject if a background auth is already running
+    if mfa_auth_state['status'] == 'pending':
+        return jsonify({'success': True, 'status': 'pending', 'message': 'Auth already in progress'}), 200
 
     try:
         # Get Walmart credentials from SystemSetting database (with .env fallback)
@@ -1212,41 +1223,83 @@ def edr_request_mfa():
         # Clean up any prior Chrome session before creating a new instance
         if edr_authenticator and hasattr(edr_authenticator, '_chrome_auth') and edr_authenticator._chrome_auth:
             edr_authenticator._chrome_auth.cleanup()
-        # Create new EDRReportGenerator instance (NOT EDRAuthenticator)
+
+        # Create new EDRReportGenerator instance
         edr_authenticator = EDRReportGenerator()
         edr_authenticator.username = username
         edr_authenticator.password = password
         edr_authenticator.mfa_credential_id = mfa_credential_id
 
-        # Step 1: Submit password (Chrome Remote Debugging bypasses PerimeterX)
-        if not edr_authenticator.chrome_step1_submit_password():
-            detail = edr_authenticator.last_error or 'Failed to submit password'
-            logger.error(f"EDR step1 failed: {detail}")
-            return jsonify({'success': False, 'error': f'Walmart login failed: {detail}'}), 400
+        # Mark auth as pending before launching thread
+        mfa_auth_state = {'status': 'pending', 'error': None}
 
-        # Step 2: Request MFA code
-        if not edr_authenticator.chrome_step2_request_mfa_code():
-            detail = edr_authenticator.last_error or 'Failed to request MFA code'
-            logger.error(f"EDR step2 failed: {detail}")
-            return jsonify({'success': False, 'error': f'MFA request failed: {detail}'}), 400
+        # Capture the Flask app for use inside the background thread
+        app = current_app._get_current_object()
 
-        # Store timestamp when MFA was requested for expiration tracking
-        mfa_request_timestamp = time.time()
-        logger.info(f"MFA code requested, timestamp stored: {mfa_request_timestamp}")
+        def _run_chrome_auth():
+            """Background thread: Chrome launch + step1 + step2."""
+            global mfa_request_timestamp, mfa_auth_state
+            with app.app_context():
+                try:
+                    # Step 1: Submit password (Chrome Remote Debugging bypasses PerimeterX)
+                    if not edr_authenticator.chrome_step1_submit_password():
+                        detail = edr_authenticator.last_error or 'Failed to submit password'
+                        logger.error(f"EDR step1 failed: {detail}")
+                        mfa_auth_state = {'status': 'error', 'error': f'Walmart login failed: {detail}'}
+                        return
+
+                    # Step 2: Request MFA code
+                    if not edr_authenticator.chrome_step2_request_mfa_code():
+                        detail = edr_authenticator.last_error or 'Failed to request MFA code'
+                        logger.error(f"EDR step2 failed: {detail}")
+                        mfa_auth_state = {'status': 'error', 'error': f'MFA request failed: {detail}'}
+                        return
+
+                    # Store timestamp when MFA was requested for expiration tracking
+                    mfa_request_timestamp = time.time()
+                    logger.info(f"MFA code requested, timestamp stored: {mfa_request_timestamp}")
+                    mfa_auth_state = {
+                        'status': 'ready',
+                        'error': None,
+                        'expires_in_seconds': MFA_CODE_EXPIRY_SECONDS,
+                    }
+                except Exception as e:
+                    logger.error(f"Background MFA auth failed: {e}", exc_info=True)
+                    # Clean up Chrome on failure
+                    if edr_authenticator and hasattr(edr_authenticator, '_chrome_auth') and edr_authenticator._chrome_auth:
+                        edr_authenticator._chrome_auth.cleanup()
+                        edr_authenticator._chrome_auth = None
+                    mfa_auth_state = {'status': 'error', 'error': str(e)}
+
+        thread = threading.Thread(target=_run_chrome_auth, daemon=True)
+        thread.start()
 
         return jsonify({
             'success': True,
-            'message': 'MFA code sent to your phone',
-            'expires_in_seconds': MFA_CODE_EXPIRY_SECONDS
+            'status': 'pending',
+            'message': 'Authentication started — polling for status',
         })
 
     except Exception as e:
         logger.error(f"MFA request failed: {str(e)}")
-        # Clean up Chrome if it was launched before the exception
+        mfa_auth_state = {'status': 'error', 'error': str(e)}
         if edr_authenticator and hasattr(edr_authenticator, '_chrome_auth') and edr_authenticator._chrome_auth:
             edr_authenticator._chrome_auth.cleanup()
             edr_authenticator._chrome_auth = None
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@printing_bp.route('/edr/auth-status', methods=['GET'])
+@require_authentication()
+def edr_auth_status():
+    """Poll endpoint for background MFA auth progress.
+
+    Returns the current mfa_auth_state dict:
+      - status: 'idle' | 'pending' | 'ready' | 'error'
+      - error: error message if status is 'error', else None
+      - expires_in_seconds: MFA expiry window when status is 'ready'
+    """
+    return jsonify(mfa_auth_state)
 
 
 @printing_bp.route('/edr/authenticate', methods=['POST'])
@@ -1329,7 +1382,7 @@ def edr_authenticate():
             from app.models import get_models as _get_models
             _models = _get_models()
             SystemSetting = _models.get('SystemSetting')
-            club = SystemSetting.get_setting('store_number') if SystemSetting else None
+            club = SystemSetting.get_setting('store_number', default='') if SystemSetting else None
             if club and edr_authenticator.session and edr_authenticator.auth_token:
                 from app.integrations.walmart_api.routes import _fetch_all_events_with_session
                 from app.services.walmart_event_enrichment import WalmartEventEnrichmentService

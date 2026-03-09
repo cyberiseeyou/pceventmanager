@@ -204,6 +204,7 @@ class WeeklyValidationService:
         weekly_issues.extend(self._check_weekly_core_limit(week_dates))
         weekly_issues.extend(self._check_weekly_juicer_limit(week_dates))
         weekly_issues.extend(self._check_schedule_randomization(week_dates))
+        weekly_issues.extend(self._check_workload_balance(week_dates))
 
         # Filter out ignored weekly issues
         weekly_issues = self._filter_ignored_issues(weekly_issues)
@@ -918,5 +919,190 @@ class WeeklyValidationService:
                             'week_end': week_end.isoformat()
                         }
                     ))
+
+        return issues
+
+    def _check_workload_balance(self, week_dates: List[date]) -> List[VerificationIssue]:
+        """
+        RULE-024: Core event workload should be balanced across eligible employees
+
+        Checks two balance dimensions:
+        1. Within this week: Are Core events distributed evenly among eligible employees?
+        2. Across weeks: Does any employee have significantly more/fewer Core events
+           compared to the prior week? (detects week-to-week spikes)
+
+        Thresholds:
+        - Within-week imbalance: warning if max - min >= 3 (among eligible employees working this week)
+        - Cross-week spike: warning if an employee's count changed by 3+ from prior week
+        """
+        issues = []
+        week_start = week_dates[0]
+        week_end = week_dates[-1]
+
+        EmployeeWeeklyAvailability = self.models.get('EmployeeWeeklyAvailability')
+        EmployeeTimeOff = self.models.get('EmployeeTimeOff')
+
+        # Get all active employees who can work Core events (exclude Club Supervisor, Juicer Barista)
+        eligible_employees = self.db.query(self.Employee).filter(
+            self.Employee.is_active == True,
+            self.Employee.job_title.in_(['Lead Event Specialist', 'Event Specialist'])
+        ).all()
+
+        if len(eligible_employees) < 2:
+            return issues
+
+        # Count available days per employee this week (for context)
+        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        emp_available_days = {}
+        for emp in eligible_employees:
+            avail_count = 0
+            for day_date in week_dates:
+                dow = day_date.weekday()
+                day_available = True
+
+                # Check weekly availability
+                if EmployeeWeeklyAvailability:
+                    weekly_avail = self.db.query(EmployeeWeeklyAvailability).filter_by(
+                        employee_id=emp.id
+                    ).first()
+                    if weekly_avail and not getattr(weekly_avail, day_names[dow], True):
+                        day_available = False
+
+                # Check time off
+                if day_available and EmployeeTimeOff:
+                    on_time_off = self.db.query(EmployeeTimeOff).filter(
+                        EmployeeTimeOff.employee_id == emp.id,
+                        EmployeeTimeOff.start_date <= day_date,
+                        EmployeeTimeOff.end_date >= day_date
+                    ).first()
+                    if on_time_off:
+                        day_available = False
+
+                if day_available:
+                    avail_count += 1
+
+            emp_available_days[emp.id] = avail_count
+
+        # Get Core event counts per employee for this week
+        core_counts_query = self.db.query(
+            self.Employee.id,
+            self.Employee.name,
+            func.count(self.Schedule.id).label('core_count')
+        ).join(
+            self.Schedule, self.Employee.id == self.Schedule.employee_id
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) >= week_start,
+            func.date(self.Schedule.schedule_datetime) <= week_end,
+            self.Event.event_type == 'Core',
+            self.Employee.id.in_([e.id for e in eligible_employees])
+        ).group_by(
+            self.Employee.id, self.Employee.name
+        ).all()
+
+        emp_core_counts = {emp_id: count for emp_id, _, count in core_counts_query}
+        emp_names = {emp_id: name for emp_id, name, _ in core_counts_query}
+
+        # Include employees with 0 Core events (if they had available days)
+        for emp in eligible_employees:
+            if emp.id not in emp_core_counts and emp_available_days.get(emp.id, 0) > 0:
+                emp_core_counts[emp.id] = 0
+                emp_names[emp.id] = emp.name
+
+        if len(emp_core_counts) < 2:
+            return issues
+
+        # --- Check 1: Within-week imbalance ---
+        counts = list(emp_core_counts.values())
+        max_count = max(counts)
+        min_count = min(counts)
+        spread = max_count - min_count
+
+        if spread >= 3:
+            # Find who has max and min
+            overloaded = [
+                f"{emp_names[eid]} ({emp_core_counts[eid]})"
+                for eid in emp_core_counts if emp_core_counts[eid] == max_count
+            ]
+            underloaded = [
+                f"{emp_names[eid]} ({emp_core_counts[eid]})"
+                for eid in emp_core_counts if emp_core_counts[eid] == min_count
+            ]
+
+            severity = 'critical' if spread >= 4 else 'warning'
+            issues.append(VerificationIssue(
+                severity=severity,
+                rule_name='Weekly Workload Balance',
+                message=(
+                    f"Core event workload is unbalanced for week of {week_start}. "
+                    f"Spread is {spread} (max {max_count}, min {min_count}). "
+                    f"Most loaded: {', '.join(overloaded)}. "
+                    f"Least loaded: {', '.join(underloaded)}."
+                ),
+                details={
+                    'week_start': week_start.isoformat(),
+                    'week_end': week_end.isoformat(),
+                    'spread': spread,
+                    'max_count': max_count,
+                    'min_count': min_count,
+                    'employee_counts': {
+                        emp_names.get(eid, eid): count
+                        for eid, count in emp_core_counts.items()
+                    },
+                    'employee_available_days': {
+                        emp_names.get(eid, eid): emp_available_days.get(eid, 0)
+                        for eid in emp_core_counts
+                    }
+                }
+            ))
+
+        # --- Check 2: Cross-week spike detection ---
+        prior_week_start = week_start - timedelta(days=7)
+        prior_week_end = week_start - timedelta(days=1)
+
+        prior_counts_query = self.db.query(
+            self.Employee.id,
+            self.Employee.name,
+            func.count(self.Schedule.id).label('core_count')
+        ).join(
+            self.Schedule, self.Employee.id == self.Schedule.employee_id
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) >= prior_week_start,
+            func.date(self.Schedule.schedule_datetime) <= prior_week_end,
+            self.Event.event_type == 'Core',
+            self.Employee.id.in_([e.id for e in eligible_employees])
+        ).group_by(
+            self.Employee.id, self.Employee.name
+        ).all()
+
+        prior_emp_counts = {emp_id: count for emp_id, _, count in prior_counts_query}
+
+        for emp_id, current_count in emp_core_counts.items():
+            prior_count = prior_emp_counts.get(emp_id, 0)
+            change = current_count - prior_count
+
+            if abs(change) >= 3:
+                name = emp_names.get(emp_id, str(emp_id))
+                direction = "increase" if change > 0 else "decrease"
+                issues.append(VerificationIssue(
+                    severity='warning',
+                    rule_name='Week-to-Week Workload Spike',
+                    message=(
+                        f"{name} has a {direction} of {abs(change)} Core events compared to prior week "
+                        f"({prior_count} → {current_count}). Consider redistributing."
+                    ),
+                    details={
+                        'employee_id': emp_id,
+                        'employee_name': name,
+                        'current_week_count': current_count,
+                        'prior_week_count': prior_count,
+                        'change': change,
+                        'week_start': week_start.isoformat(),
+                        'prior_week_start': prior_week_start.isoformat()
+                    }
+                ))
 
         return issues

@@ -65,6 +65,61 @@ class TestCleanup:
         auth._temp_profile_dir = None
         auth.cleanup()  # Should not raise
 
+    def test_cleanup_terminates_xvfb(self):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        mock_xvfb = MagicMock()
+        auth._xvfb_process = mock_xvfb
+        auth._chrome_process = None
+        auth._temp_profile_dir = None
+        auth.cleanup()
+        mock_xvfb.terminate.assert_called_once()
+        assert auth._xvfb_process is None
+
+
+class TestEnsureDisplay:
+    @patch.dict('os.environ', {'DISPLAY': ':0'})
+    def test_uses_existing_display(self):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        result = auth._ensure_display()
+        assert result == ':0'
+        assert auth._xvfb_process is None
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('shutil.which', return_value=None)
+    def test_returns_none_when_no_xvfb(self, mock_which):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        result = auth._ensure_display()
+        assert result is None
+        assert auth._xvfb_process is None
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('os.path.exists', return_value=True)
+    @patch('app.integrations.edr.chrome_cdp_auth.time.sleep')
+    @patch('subprocess.Popen')
+    @patch('shutil.which', return_value='/usr/bin/Xvfb')
+    def test_launches_xvfb_when_no_display(self, mock_which, mock_popen, mock_sleep, mock_exists):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # still running
+        mock_popen.return_value = mock_proc
+        auth = ChromeEDRAuthenticator()
+        result = auth._ensure_display()
+        assert result == ':99'
+        assert auth._xvfb_process is mock_proc
+        mock_popen.assert_called_once()
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('subprocess.Popen', side_effect=OSError("not found"))
+    @patch('shutil.which', return_value='/usr/bin/Xvfb')
+    def test_falls_back_when_xvfb_fails_to_start(self, mock_which, mock_popen):
+        from app.integrations.edr.chrome_cdp_auth import ChromeEDRAuthenticator
+        auth = ChromeEDRAuthenticator()
+        result = auth._ensure_display()
+        assert result is None
+
 
 class TestLoginFlow:
     def _make_auth_with_mock_tab(self):
