@@ -5,7 +5,7 @@ Provides centralized error handling, logging, and debugging capabilities
 import logging
 import traceback
 from datetime import datetime
-from flask import jsonify, request, current_app
+from flask import jsonify, request, current_app, render_template
 from functools import wraps
 import os
 
@@ -89,7 +89,7 @@ def register_error_handlers(app):
                 'message': 'Access denied',
                 'status_code': 403
             }), 403
-        return "Forbidden", 403
+        return render_template('errors/403.html'), 403
 
     @app.errorhandler(404)
     def not_found_error(error):

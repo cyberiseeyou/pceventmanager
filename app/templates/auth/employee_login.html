@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Login - PC Events</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <meta name="theme-color" content="#2E4C73">
+</head>
+
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-header">
+            <div class="login-logo-container">
+                <img src="{{ url_for('static', filename='img/PC-Logo_Primary_Full-Color-1024x251.png') }}"
+                    alt="Product Connections" class="login-logo">
+            </div>
+            <h1 class="login-title">Team Login</h1>
+            <p class="login-subtitle">Event Specialists & Leads — enter your name and PIN</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.employee_login') }}" class="login-form" aria-label="Employee login form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="login-alert login-alert-{{ category }}" role="alert">
+                <div class="login-alert-content">
+                    {{ message }}
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="login-field">
+                <label class="login-label" for="employee_id">Your Name <span class="required">*</span></label>
+                <select id="employee_id" name="employee_id" required class="login-input" style="height: 48px; font-size: 16px;">
+                    <option value="">Select your name...</option>
+                </select>
+                <span class="login-hint">Choose your name from the list</span>
+            </div>
+
+            <div class="login-field">
+                <label class="login-label" for="pin">PIN <span class="required">*</span></label>
+                <input type="password" id="pin" name="pin" required
+                    class="login-input" placeholder="Enter your PIN"
+                    inputmode="numeric" pattern="[0-9]*" minlength="4"
+                    autocomplete="current-password"
+                    style="font-size: 20px; letter-spacing: 0.3em; text-align: center;">
+                <span class="login-hint">The PIN your supervisor gave you</span>
+            </div>
+
+            <button type="submit" class="login-submit-btn">
+                <span class="login-submit-text">Sign In</span>
+            </button>
+        </form>
+
+        <div class="login-footer">
+            <p class="login-footer-text">
+                <strong>Supervisor?</strong>
+                <a href="{{ url_for('auth.login_page') }}" class="login-link">Use Crossmark login</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Load active employees with accounts for the dropdown
+        fetch('/api/employees/with-accounts')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('employee_id');
+                if (data.employees) {
+                    data.employees.forEach(emp => {
+                        const opt = document.createElement('option');
+                        opt.value = emp.id;
+                        opt.textContent = emp.name;
+                        select.appendChild(opt);
+                    });
+                }
+            })
+            .catch(() => {
+                // If API fails, show text input instead
+                const select = document.getElementById('employee_id');
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.name = 'employee_id';
+                input.id = 'employee_id';
+                input.required = true;
+                input.className = 'login-input';
+                input.placeholder = 'Enter your Employee ID';
+                select.parentNode.replaceChild(input, select);
+            });
+    </script>
+</body>
+
+</html>

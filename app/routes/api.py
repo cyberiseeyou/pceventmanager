@@ -23,6 +23,19 @@ from app.routes.api_employee_termination import register_termination_routes
 from app.routes.api_auto_scheduler_settings import register_auto_scheduler_settings_routes
 
 
+@api_bp.route('/employees/with-accounts', methods=['GET'])
+def get_employees_with_accounts():
+    """Get active employees who have PIN accounts set up (for login dropdown)."""
+    models = get_models()
+    Employee = models['Employee']
+    employees = Employee.query.filter_by(
+        is_active=True, has_account=True
+    ).order_by(Employee.name).all()
+    return jsonify({
+        'employees': [{'id': e.id, 'name': e.name} for e in employees]
+    })
+
+
 @api_bp.route('/daily-summary/<date>', methods=['GET'])
 def get_daily_summary(date):
     """
