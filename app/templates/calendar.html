@@ -2294,4 +2294,18 @@
         if (target) filterEventsByType();
     });
 </script>
+<script src="{{ url_for('static', filename='js/utils/swipe-handler.js') }}"></script>
+<script>
+(function() {
+    var grid = document.getElementById('calendar-grid');
+    var prevBtn = document.getElementById('nav-prev');
+    var nextBtn = document.getElementById('nav-next');
+    if (grid && prevBtn && nextBtn) {
+        initSwipe(grid, {
+            onSwipeLeft: function() { nextBtn.click(); },
+            onSwipeRight: function() { prevBtn.click(); }
+        });
+    }
+})();
+</script>
 {% endblock %}
