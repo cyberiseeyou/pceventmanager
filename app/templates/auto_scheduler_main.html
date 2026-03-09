@@ -384,6 +384,21 @@
         border-radius: 50%;
         background: #ef6c00;
     }
+
+    @media (max-width: 480px) {
+        .dashboard-section { padding: var(--spacing-md); }
+        .section-header { flex-direction: column; align-items: flex-start; gap: var(--spacing-sm); }
+        .section-title { font-size: 1.2rem; }
+        .percentage-display { padding: var(--spacing-md); }
+        .percentage-number { font-size: 2.5rem; }
+        .pending-notification-content { flex-direction: column; text-align: center; gap: 12px; }
+        .pending-notification .btn-review { width: 100%; text-align: center; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+        .progress-modal { padding: 20px 16px; }
+        .progress-modal h2 { font-size: 1.2rem; }
+        .unscheduled-header { flex-direction: column; gap: 4px; }
+        .btn { min-height: 44px; }
+        .form-control { min-height: 44px; font-size: 16px; }
+    }
 </style>
 {% endblock %}
 

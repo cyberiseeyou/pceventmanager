@@ -247,6 +247,13 @@
     transform: translateY(-2px);
     box-shadow: 0 .5rem 1rem rgba(0,0,0,.12) !important;
 }
+
+@media (max-width: 480px) {
+    #orderTabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; white-space: nowrap; scrollbar-width: none; }
+    #orderTabs::-webkit-scrollbar { display: none; }
+    .btn { min-height: 44px; }
+    .d-flex.justify-content-between { flex-direction: column; gap: 12px; align-items: flex-start !important; }
+}
 </style>
 
 <script>

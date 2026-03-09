@@ -30,6 +30,13 @@
 .modal-dialog {
     z-index: 1055;
 }
+
+@media (max-width: 480px) {
+    .d-flex.justify-content-between { flex-direction: column; gap: 12px; align-items: flex-start !important; }
+    .btn { min-height: 44px; }
+    .form-control { min-height: 44px; font-size: 16px; }
+    .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
 </style>
 {% endblock %}
 

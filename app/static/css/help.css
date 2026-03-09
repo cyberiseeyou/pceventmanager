@@ -433,3 +433,12 @@
         font-size: var(--font-size-small);
     }
 }
+
+@media (max-width: 480px) {
+    .help-content { padding: var(--spacing-sm); }
+    .help-nav-item { min-height: 44px; display: flex; align-items: center; padding: 10px; }
+    .help-content h1 { font-size: 1.3rem; }
+    .help-content h2 { font-size: 1.1rem; }
+    .permission-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .help-cards { gap: var(--spacing-sm); }
+}

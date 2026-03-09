@@ -695,6 +695,18 @@
     .event-type-toggle-item {
         margin: 0;
     }
+
+    @media (max-width: 480px) {
+        .settings-container { padding: 10px; }
+        .settings-section { padding: 14px; }
+        .documentation-subsection { padding: 12px; }
+        .form-control { min-height: 44px; font-size: 16px; }
+        .btn { min-height: 44px; padding: 10px 16px; }
+        .modal-content { width: 95% !important; max-width: none !important; }
+        .modal-footer { flex-direction: column; gap: 8px; }
+        .modal-footer .btn { width: 100%; }
+        .toggle-container input[type="checkbox"] { width: 24px; height: 24px; }
+    }
 </style>
 
 <script>
