@@ -59,7 +59,12 @@
         <div class="offline-icon">&#x1F4F6;</div>
         <h1>You're Offline</h1>
         <p>It looks like you've lost your internet connection. Check your Wi-Fi or data and try again.</p>
-        <button class="retry-btn" onclick="window.location.reload()">Try Again</button>
+        <button class="retry-btn" id="offline-retry-btn">Try Again</button>
     </div>
+    <script>
+        document.getElementById('offline-retry-btn').addEventListener('click', function() {
+            window.location.reload();
+        });
+    </script>
 </body>
 </html>

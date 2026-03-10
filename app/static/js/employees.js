@@ -251,6 +251,12 @@ function setupModalHandlers() {
     // Add Employee form submission
     document.getElementById('add-employee-form').addEventListener('submit', handleAddEmployeeSubmit);
 
+    // Set PIN form submission
+    const setPinForm = document.getElementById('set-pin-form');
+    if (setPinForm) {
+        setPinForm.addEventListener('submit', handleSetPinSubmit);
+    }
+
     // Close modal when clicking outside
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function (e) {
