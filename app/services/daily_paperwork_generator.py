@@ -1396,6 +1396,368 @@ class DailyPaperworkGenerator:
             logger.error(" Failed to merge PDFs")
             return None
 
+    def generate_multi_day_paperwork(self, dates: List) -> Optional[str]:
+        """
+        Generate paperwork for multiple days in one PDF.
+
+        Each day's paperwork is included in order, followed by a combined
+        item list covering all days at the end.
+
+        Args:
+            dates: List of datetime.date objects, in order
+
+        Returns:
+            Path to final consolidated PDF, or None on failure
+        """
+        if not dates:
+            return None
+
+        logger.info(f" Generating multi-day paperwork for {len(dates)} days: {[d.strftime('%Y-%m-%d') for d in dates]}")
+
+        all_day_pdfs = []
+        all_edr_data_across_days = []  # Collect EDR data from all days for combined item list
+
+        for target_date in dates:
+            logger.info(f"\n{'='*60}")
+            logger.info(f" Processing day: {target_date.strftime('%Y-%m-%d (%A)')}")
+            logger.info(f"{'='*60}")
+
+            # Get events for this date
+            schedules = self.get_events_for_date(target_date)
+            if not schedules:
+                logger.warning(f" No events found for {target_date}, skipping")
+                continue
+
+            logger.info(f" Found {len(schedules)} scheduled events")
+
+            # Get Primary Lead for shift block assignment
+            primary_lead_id = None
+            try:
+                from app.services.rotation_manager import RotationManager
+                from app.models.registry import get_models
+                full_models = get_models()
+                rotation_manager = RotationManager(self.db, full_models)
+                primary_lead = rotation_manager.get_rotation_employee(
+                    datetime.combine(target_date, datetime.min.time()),
+                    'primary_lead'
+                )
+                if primary_lead:
+                    primary_lead_id = primary_lead.id
+            except Exception as e:
+                logger.warning(f" Could not get Primary Lead: {e}")
+
+            # Pre-assign shift blocks for Core schedules
+            core_schedules = [(s, e, emp) for s, e, emp in schedules if e.event_type == 'Core']
+            if core_schedules:
+                try:
+                    from app.services.shift_block_config import ShiftBlockConfig
+                    block_assignments = ShiftBlockConfig.assign_blocks_for_date(
+                        core_schedules, target_date, primary_lead_id=primary_lead_id
+                    )
+                    if block_assignments:
+                        self.db.commit()
+                except Exception as e:
+                    logger.warning(f" Could not assign shift blocks: {e}")
+
+            # Day's PDF list
+            day_pdfs = []
+
+            # 1. Daily Schedule
+            schedule_pdf = self.generate_daily_schedule_pdf(target_date, schedules)
+            day_pdfs.append(schedule_pdf)
+
+            # 2. Check for cancelled events
+            cancelled_events = []
+            from app.utils.event_helpers import get_walmart_event_id
+
+            for schedule, event, employee in schedules:
+                if event.condition and event.condition.lower() == 'canceled':
+                    event_num = get_walmart_event_id(event)
+                    cancelled_events.append({
+                        'event_number': event_num or str(event.project_ref_num),
+                        'event_name': event.project_name,
+                        'employee_name': employee.name if employee else 'Unassigned',
+                        'edr_status': 'Canceled (Crossmark)',
+                        'date': target_date.strftime('%Y-%m-%d')
+                    })
+
+            if cancelled_events:
+                raise CancelledEventError(cancelled_events)
+
+            # 3. Fetch EDR data
+            edr_data_cache = {}
+            edr_data_list = []
+
+            if self.edr_generator and self.edr_generator.auth_token:
+                for schedule, event, employee in schedules:
+                    event_num = get_walmart_event_id(event)
+                    if event_num:
+                        try:
+                            edr_data = self.edr_generator.get_edr_report(event_num)
+                            if edr_data:
+                                edr_status_code = edr_data.get('demoStatusCode', 'N/A')
+                                edr_status_desc = self._get_edr_status_description(edr_status_code)
+
+                                try:
+                                    event.edr_status = edr_status_desc
+                                    event.edr_status_updated = datetime.now()
+                                    self.db.commit()
+                                except Exception:
+                                    pass
+
+                                if is_cancelled_status(edr_status_code):
+                                    cancelled_events.append({
+                                        'event_number': event_num,
+                                        'event_name': event.project_name,
+                                        'employee_name': employee.name if employee else 'Unassigned',
+                                        'edr_status': edr_status_desc,
+                                        'date': target_date.strftime('%Y-%m-%d')
+                                    })
+                                    continue
+
+                                if event.event_type == 'Core':
+                                    edr_data_cache[event_num] = edr_data
+                                    edr_data_list.append(edr_data)
+                        except Exception as e:
+                            logger.error(f" Failed to fetch event {event_num}: {e}")
+
+            if cancelled_events:
+                raise CancelledEventError(cancelled_events)
+
+            # 3b. Per-day item list
+            if edr_data_list:
+                items_pdf = self.generate_item_numbers_pdf(edr_data_list, target_date)
+                day_pdfs.append(items_pdf)
+                # Collect for combined list
+                all_edr_data_across_days.extend(edr_data_list)
+
+            # 3c. Freeosk/Digital Setup manuals (Friday/Saturday)
+            if target_date.weekday() == 4:  # Friday
+                for schedule, event, employee in schedules:
+                    if event.event_type == 'Freeosk' and 'LKD-FSK' in (event.project_name or ''):
+                        if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
+                            freeosk_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
+                            if freeosk_pdf:
+                                day_pdfs.append(freeosk_pdf)
+            elif target_date.weekday() == 5:  # Saturday
+                for schedule, event, employee in schedules:
+                    if event.event_type == 'Digitals' and 'Setup' in (event.project_name or ''):
+                        if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
+                            digital_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
+                            if digital_pdf:
+                                day_pdfs.append(digital_pdf)
+
+            # 4. Per-event documents (EDR, SalesTool, templates)
+            docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs')
+            PaperworkTemplate = self.models.get('PaperworkTemplate')
+            event_templates = []
+            daily_templates = []
+
+            if PaperworkTemplate:
+                try:
+                    templates = PaperworkTemplate.query.filter_by(is_active=True).order_by(PaperworkTemplate.display_order).all()
+                    for template in templates:
+                        template_path = os.path.join(docs_dir, template.file_path)
+                        if os.path.exists(template_path):
+                            info = {'name': template.name, 'path': template_path, 'order': template.display_order}
+                            if template.category == 'daily':
+                                daily_templates.append(info)
+                            else:
+                                event_templates.append(info)
+                except Exception:
+                    activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
+                    checklist_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
+                    if os.path.exists(activity_log_path):
+                        event_templates.append({'name': 'Activity Log', 'path': activity_log_path, 'order': 1})
+                    if os.path.exists(checklist_path):
+                        event_templates.append({'name': 'Checklist', 'path': checklist_path, 'order': 2})
+            else:
+                activity_log_path = os.path.join(docs_dir, 'Event Table Activity Log.pdf')
+                checklist_path = os.path.join(docs_dir, 'Daily Task Checkoff Sheet.pdf')
+                if os.path.exists(activity_log_path):
+                    event_templates.append({'name': 'Activity Log', 'path': activity_log_path, 'order': 1})
+                if os.path.exists(checklist_path):
+                    event_templates.append({'name': 'Checklist', 'path': checklist_path, 'order': 2})
+
+            for schedule, event, employee in schedules:
+                if event.event_type == 'Core':
+                    event_num = get_walmart_event_id(event)
+
+                    if event_num and event_num in edr_data_cache:
+                        schedule_info = {
+                            'scheduled_date': schedule.schedule_datetime,
+                            'scheduled_time': schedule.schedule_datetime.time() if schedule.schedule_datetime else None,
+                            'event_type': event.event_type,
+                            'shift_block': schedule.shift_block,
+                            'start_date': event.start_date if hasattr(event, 'start_date') else None,
+                            'due_date': event.due_date if hasattr(event, 'due_date') else None
+                        }
+                        edr_pdf = self.get_event_edr_pdf_from_data(edr_data_cache[event_num], event_num, employee.name, schedule_info)
+                        if edr_pdf:
+                            day_pdfs.append(edr_pdf)
+
+                    if hasattr(event, 'sales_tools_url') and event.sales_tools_url:
+                        salestool_pdf = self.get_salestool_pdf(event.sales_tools_url, event.project_ref_num)
+                        if salestool_pdf:
+                            day_pdfs.append(salestool_pdf)
+
+                    for template in event_templates:
+                        day_pdfs.append(template['path'])
+
+            # 5. Daily-level templates
+            for template in daily_templates:
+                day_pdfs.append(template['path'])
+
+            all_day_pdfs.extend(day_pdfs)
+            logger.info(f" Day {target_date} complete: {len(day_pdfs)} PDFs")
+
+        if not all_day_pdfs:
+            logger.warning(" No PDFs generated for any day")
+            return None
+
+        # 6. If multiple days, append a combined item list at the very end
+        if len(dates) > 1 and all_edr_data_across_days:
+            logger.info(f" Generating combined item list across all {len(dates)} days...")
+            combined_items_pdf = self._generate_combined_item_list(all_edr_data_across_days, dates)
+            if combined_items_pdf:
+                all_day_pdfs.append(combined_items_pdf)
+
+        # Merge all PDFs
+        date_range = f"{dates[0].strftime('%Y%m%d')}-{dates[-1].strftime('%Y%m%d')}"
+        output_filename = f'Paperwork_{date_range}.pdf'
+        output_path = os.path.join(tempfile.gettempdir(), output_filename)
+
+        logger.info(f" Merging {len(all_day_pdfs)} PDFs into final multi-day document...")
+        if self.merge_pdfs(all_day_pdfs, output_path):
+            logger.info(f" Multi-day paperwork generated: {output_path}")
+            return output_path
+        else:
+            logger.error(" Failed to merge PDFs")
+            return None
+
+    def _generate_combined_item_list(self, edr_data_list: List, dates: List) -> Optional[str]:
+        """
+        Generate a combined item list PDF covering multiple days.
+        Groups items by event, deduplicates across days.
+        """
+        if not PDF_LIBRARIES_AVAILABLE:
+            return None
+
+        # Collect all items grouped by event, deduplicating
+        event_groups = {}  # event_id -> {event_name, items set}
+
+        for edr_data in edr_data_list:
+            if not edr_data:
+                continue
+            event_id = str(edr_data.get('demoId', 'N/A'))
+            event_name = str(edr_data.get('demoName', 'N/A'))
+            item_details = edr_data.get('itemDetails', [])
+            if not item_details:
+                continue
+
+            if event_id not in event_groups:
+                event_groups[event_id] = {'event_name': event_name, 'items': {}}
+
+            for item in item_details:
+                item_nbr = str(item.get('itemNbr', ''))
+                upc_nbr = str(item.get('gtin', ''))
+                item_desc = str(item.get('itemDesc', ''))
+                if item_nbr and item_nbr != 'N/A':
+                    barcode_number = upc_nbr if upc_nbr and upc_nbr not in ['', 'N/A', 'None'] else item_nbr
+                    event_groups[event_id]['items'][item_nbr] = (item_nbr, barcode_number, item_desc)
+
+        if not event_groups:
+            return None
+
+        # Build PDF
+        output_path = os.path.join(tempfile.gettempdir(), f'combined_item_list_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+        doc = SimpleDocTemplate(output_path, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
+
+        styles = getSampleStyleSheet()
+        story = []
+
+        title_style = ParagraphStyle(
+            'CombinedTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#2E4C73')
+        )
+
+        date_range_str = f"{dates[0].strftime('%m/%d/%Y')} - {dates[-1].strftime('%m/%d/%Y')}"
+        story.append(Paragraph("Combined Item List", title_style))
+
+        subtitle_style = ParagraphStyle(
+            'CombinedSubtitle',
+            parent=styles['Normal'],
+            fontSize=14,
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#666666')
+        )
+        story.append(Paragraph(date_range_str, subtitle_style))
+        story.append(Spacer(1, 12))
+
+        total_items = 0
+        for event_id, group in event_groups.items():
+            items = list(group['items'].values())
+            total_items += len(items)
+
+            # Event header
+            event_header_style = ParagraphStyle(
+                f'EventHeader_{event_id}',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceBefore=16,
+                spaceAfter=8,
+                fontName='Helvetica-Bold',
+                textColor=colors.HexColor('#2E4C73')
+            )
+            story.append(Paragraph(f"Event {event_id}: {group['event_name']}", event_header_style))
+
+            # Items table
+            table_data = [['Item #', 'UPC/Barcode', 'Description']]
+            for item_nbr, barcode_num, item_desc in items:
+                table_data.append([item_nbr, barcode_num, item_desc])
+
+            table = Table(table_data, colWidths=[80, 120, 260])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E4C73')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+
+        # Summary
+        summary_style = ParagraphStyle(
+            'Summary',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceBefore=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#666666')
+        )
+        story.append(Spacer(1, 20))
+        story.append(Paragraph(
+            f"Total: {total_items} items across {len(event_groups)} events | {date_range_str}",
+            summary_style
+        ))
+
+        doc.build(story)
+        self.temp_files.append(output_path)
+        logger.info(f" Combined item list generated: {total_items} items across {len(event_groups)} events")
+        return output_path
+
     def cleanup(self):
         """Clean up temporary files"""
         for temp_file in self.temp_files:

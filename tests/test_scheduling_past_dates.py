@@ -2,8 +2,8 @@ import pytest
 from datetime import datetime, timedelta, time
 from app.services.scheduling_engine import SchedulingEngine
 
-def test_juicer_event_past_start_date_uses_today(db_session, models):
-    """Test that events with past start dates are scheduled for today"""
+def test_juicer_event_past_start_date_fails(db_session, models):
+    """Test that Juicer events with past start dates fail (start-date-only rule)"""
     Event = models['Event']
     Employee = models['Employee']
     RotationAssignment = models['RotationAssignment']
@@ -47,13 +47,14 @@ def test_juicer_event_past_start_date_uses_today(db_session, models):
     engine = SchedulingEngine(db_session, models)
     engine._schedule_juicer_event_wave2(run, event)
 
-    # Verify event was scheduled for today, not the past date
-    assert event.is_scheduled
+    # Juicer events can only be scheduled on their start date — past start = failure
+    assert not event.is_scheduled
     pending = db_session.query(models['PendingSchedule']).filter_by(
         event_ref_num=event.project_ref_num
     ).first()
     assert pending is not None
-    assert pending.schedule_datetime.date() == today.date()
+    assert pending.failure_reason is not None
+    assert "past" in pending.failure_reason.lower()
 
 def test_juicer_event_past_start_and_due_fails(db_session, models):
     """Test that events with both dates in past fail appropriately"""

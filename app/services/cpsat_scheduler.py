@@ -77,9 +77,8 @@ SUPERVISOR_PREFERRED_TYPES = {'Supervisor', 'Digitals', 'Freeosk',
                               'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
 # Subset of Juicer types that count toward H22/H23 daily/weekly production limits
 JUICER_PRODUCTION_TYPES = {'Juicer Production', 'Juicer'}
-# Juicer types that must be pinned to their start date (long-duration events)
-# Juicer Survey is excluded — it's a 15-minute task that can be done any day in range
-JUICER_START_DATE_PINNED = {'Juicer', 'Juicer Production', 'Juicer Deep Clean'}
+# Juicer types that must be pinned to their start date
+JUICER_START_DATE_PINNED = {'Juicer', 'Juicer Production', 'Juicer Deep Clean', 'Juicer Survey'}
 # Digital event types that must be completed on their start date
 DIGITAL_START_DATE_PINNED = {'Digital Setup', 'Digital Refresh', 'Digital Teardown'}
 
@@ -749,8 +748,7 @@ class CPSATSchedulingEngine:
         if isinstance(e_due, datetime):
             e_due = e_due.date()
 
-        # Juicer Production/Deep Clean must be scheduled on their start date only.
-        # Juicer Survey is a short task and can be scheduled on any valid day in range.
+        # All Juicer types must be scheduled on their start date only.
         etype = self._get_event_type(event)
         if etype in JUICER_START_DATE_PINNED:
             if e_start in self.valid_days and e_start >= earliest:
@@ -767,6 +765,15 @@ class CPSATSchedulingEngine:
         if etype == 'Digitals':
             name_upper = (event.project_name or '').upper()
             if 'SETUP' in name_upper or 'REFRESH' in name_upper or 'TEARDOWN' in name_upper:
+                if e_start in self.valid_days and e_start >= earliest:
+                    return [e_start]
+                return []
+
+        # Daily Freeosk events must be scheduled on their start date.
+        # Weekly Freeosk Troubleshooting events have multi-day ranges and are NOT pinned.
+        if etype == 'Freeosk':
+            name_upper = (event.project_name or '').upper()
+            if 'TROUBLESHOOTING' not in name_upper:
                 if e_start in self.valid_days and e_start >= earliest:
                     return [e_start]
                 return []
@@ -2931,6 +2938,12 @@ class CPSATSchedulingEngine:
                     if etype == 'Digitals' and sched_date != cand_start_date:
                         cand_name = (candidate.project_name or '').upper()
                         if 'SETUP' in cand_name or 'REFRESH' in cand_name or 'TEARDOWN' in cand_name:
+                            continue
+
+                    # Daily Freeosk events must land on their start date only
+                    if etype == 'Freeosk' and sched_date != cand_start_date:
+                        cand_name = (candidate.project_name or '').upper()
+                        if 'TROUBLESHOOTING' not in cand_name:
                             continue
 
                     # Date must not be locked or a holiday

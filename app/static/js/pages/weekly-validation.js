@@ -893,3 +893,62 @@ if (rebalanceBtn) {
         }
     });
 }
+
+// ===== FIX ALL ISSUES =====
+var fixAllBtn = document.getElementById('fix-all-btn');
+if (fixAllBtn) {
+    fixAllBtn.addEventListener('click', async function () {
+        var weekStart = fixAllBtn.getAttribute('data-week-start');
+
+        if (!confirm('Attempt to auto-fix all actionable issues for this week?\n\nThis will apply the best available fix for each critical and warning issue (reassign, reschedule, unschedule). Info-only and soft warnings will be skipped.\n\nThis action cannot be undone.')) {
+            return;
+        }
+
+        fixAllBtn.disabled = true;
+        fixAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fixing...';
+        showLoading();
+
+        try {
+            var response = await fetch('/dashboard/api/fix-wizard/fix-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({ start_date: weekStart })
+            });
+
+            var data = await response.json();
+
+            if (response.ok && data.status === 'success') {
+                var msg = 'Fix All complete:\n';
+                msg += '  Fixed: ' + data.fixed + '\n';
+                msg += '  Skipped: ' + data.skipped + '\n';
+                msg += '  Failed: ' + data.failed;
+
+                if (data.actions && data.actions.length > 0) {
+                    msg += '\n\nActions taken:';
+                    data.actions.forEach(function (a) {
+                        msg += '\n  ' + (a.status === 'success' ? '\u2713' : '\u2717') + ' ' + a.rule + ': ' + a.description;
+                    });
+                }
+
+                hideLoading();
+                alert(msg);
+
+                if (data.fixed > 0) {
+                    location.reload();
+                }
+            } else {
+                hideLoading();
+                alert('Fix All failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            hideLoading();
+            alert('Fix All error: ' + err.message);
+        } finally {
+            fixAllBtn.disabled = false;
+            fixAllBtn.innerHTML = '<i class="fas fa-wrench"></i> Fix All Issues';
+        }
+    });
+}

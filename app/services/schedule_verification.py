@@ -176,6 +176,7 @@ class ScheduleVerificationService:
         issues.extend(self._check_digitals_scheduling(verify_date))  # Rule 7
         issues.extend(self._check_events_due_tomorrow(verify_date))  # Rule 8
         issues.extend(self._check_juicer_rotation(verify_date))  # Rules 9 & 10
+        issues.extend(self._check_start_date_pinning(verify_date))  # Rule 11
 
         # Determine overall status
         critical_count = sum(1 for issue in issues if issue.severity == 'critical')
@@ -1240,6 +1241,74 @@ class ScheduleVerificationService:
                         'employee_name': employee.name,
                         'core_schedule_id': core_event.id,
                         'date': verify_date.isoformat()
+                    }
+                ))
+
+        return issues
+
+    def _check_start_date_pinning(self, verify_date: date) -> List[VerificationIssue]:
+        """
+        Verify that Juicer and daily Freeosk events are scheduled on their start date.
+
+        Juicer events (Production, Survey, Deep Clean) and daily Freeosk events
+        can only be scheduled on the day matching their start_datetime.
+        Weekly Freeosk Troubleshooting events are exempt (they have multi-day ranges).
+        """
+        issues = []
+
+        # Check Juicer events
+        juicer_schedules = self.db.query(
+            self.Schedule, self.Event
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type.in_(['Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'])
+        ).all()
+
+        for schedule, event in juicer_schedules:
+            event_start = event.start_datetime.date() if isinstance(event.start_datetime, datetime) else event.start_datetime
+            if verify_date != event_start:
+                issues.append(VerificationIssue(
+                    severity='critical',
+                    rule_name='Juicer Date Pinning',
+                    message=f"Juicer event '{event.project_name}' is scheduled on {verify_date} but must be on its start date {event_start}.",
+                    details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
+                        'event_name': event.project_name,
+                        'event_type': event.event_type,
+                        'scheduled_date': verify_date.isoformat(),
+                        'required_date': event_start.isoformat()
+                    }
+                ))
+
+        # Check daily Freeosk events (exclude Troubleshooting)
+        freeosk_schedules = self.db.query(
+            self.Schedule, self.Event
+        ).join(
+            self.Event, self.Schedule.event_ref_num == self.Event.project_ref_num
+        ).filter(
+            func.date(self.Schedule.schedule_datetime) == verify_date,
+            self.Event.event_type == 'Freeosk'
+        ).all()
+
+        for schedule, event in freeosk_schedules:
+            name_upper = (event.project_name or '').upper()
+            if 'TROUBLESHOOTING' in name_upper:
+                continue
+            event_start = event.start_datetime.date() if isinstance(event.start_datetime, datetime) else event.start_datetime
+            if verify_date != event_start:
+                issues.append(VerificationIssue(
+                    severity='critical',
+                    rule_name='Freeosk Date Pinning',
+                    message=f"Freeosk event '{event.project_name}' is scheduled on {verify_date} but must be on its start date {event_start}.",
+                    details={
+                        'schedule_id': schedule.id,
+                        'event_id': event.id,
+                        'event_name': event.project_name,
+                        'scheduled_date': verify_date.isoformat(),
+                        'required_date': event_start.isoformat()
                     }
                 ))
 

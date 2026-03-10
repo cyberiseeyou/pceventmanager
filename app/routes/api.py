@@ -456,11 +456,11 @@ def get_daily_events(date):
 
 def _is_event_overdue(schedule_datetime, reporting_status):
     """
-    Check if event is overdue (>24 hours past and not submitted).
+    Check if event is overdue (>24 hours past and not submitted/cancelled).
 
     Args:
         schedule_datetime: Scheduled datetime of the event
-        reporting_status: Current reporting status (scheduled, submitted)
+        reporting_status: Current reporting status (scheduled, submitted, cancelled)
 
     Returns:
         bool: True if overdue, False otherwise
@@ -469,7 +469,7 @@ def _is_event_overdue(schedule_datetime, reporting_status):
         This is a helper function for Story 3.3.
         Story 3.4 will add the reporting_status field to events table.
     """
-    if reporting_status == 'submitted':
+    if reporting_status in ('submitted', 'cancelled'):
         return False
 
     threshold = datetime.now() - timedelta(hours=24)

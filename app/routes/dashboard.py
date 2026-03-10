@@ -1190,6 +1190,44 @@ def fix_wizard_skip():
         return jsonify({'status': 'error', 'error': result.get('message', 'Skip failed')}), 400
 
 
+@dashboard_bp.route('/api/fix-wizard/fix-all', methods=['POST'])
+@require_authentication()
+def fix_wizard_fix_all():
+    """
+    API: Attempt to auto-fix all actionable validation issues for a week.
+
+    Request body:
+        start_date: First day of week (YYYY-MM-DD), optional
+    """
+    from app.services.fix_wizard import FixWizardService
+
+    db = current_app.extensions['sqlalchemy']
+    models = _get_fix_wizard_models()
+
+    data = flask_request.get_json(silent=True) or {}
+    date_param = data.get('start_date') or flask_request.args.get('start_date')
+
+    if date_param:
+        try:
+            start_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = date.today()
+    else:
+        start_date = date.today()
+
+    # Align to Sunday
+    days_since_sunday = (start_date.weekday() + 1) % 7
+    start_date = start_date - timedelta(days=days_since_sunday)
+
+    try:
+        service = FixWizardService(db.session, models)
+        result = service.fix_all(start_date)
+        return jsonify({'status': 'success', **result})
+    except Exception as e:
+        current_app.logger.error(f"Fix all error: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
 @dashboard_bp.route('/approved-events')
 def approved_events():
     """

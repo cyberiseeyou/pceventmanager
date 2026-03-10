@@ -1792,8 +1792,8 @@ class SchedulingEngine:
         """
         Wave 2: Schedule a Juicer event to the rotation-assigned Juicer Barista
 
-        UPDATED: If start date is in the past, schedule for today or earliest valid date
-        instead of failing. Only fail if due date has also passed.
+        IMPORTANT: Juicer events are ALWAYS scheduled on their start date.
+        They should NOT be automatically moved to different days.
 
         Scheduling times:
         - JUICER-PRODUCTION-SPCLTY: 9:00 AM
@@ -1803,29 +1803,31 @@ class SchedulingEngine:
         # Determine the appropriate time for this Juicer event
         juicer_time = self._get_juicer_time(event)
 
-        # NEW: Check if start date is in the past
+        # Juicer events MUST be on their start date — reject if past or within buffer
         today = datetime.now().date()
         event_start_date = event.start_datetime.date()
+        buffer_days = 0 if self.emergency_mode else self.SCHEDULING_WINDOW_DAYS
+        earliest_allowed = today + timedelta(days=buffer_days)
 
         if event_start_date < today:
-            # Start date has passed - use today instead
-            target_date = datetime.combine(today, time(0, 0))
-            current_app.logger.info(
-                f"Event {event.project_ref_num} start date {event_start_date} is in the past. "
-                f"Using today {today} as target date."
-            )
-        else:
-            # Start date is today or future - use it
-            target_date = event.start_datetime
-
-        # Validate target date is not past the due date
-        if target_date.date() > event.due_datetime.date():
             self._create_failed_pending_schedule(
                 run, event,
-                f"Event start date {event_start_date} is in the past and due date {event.due_datetime.date()} has also passed"
+                f"Event start date {event_start_date} is in the past"
             )
             run.events_failed += 1
             return
+
+        if event_start_date < earliest_allowed:
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Event start date {event_start_date} is within the "
+                f"{self.SCHEDULING_WINDOW_DAYS}-day scheduling buffer (earliest: {earliest_allowed})"
+            )
+            run.events_failed += 1
+            return
+
+        # ONLY schedule on the event's START DATE
+        target_date = event.start_datetime
 
         # Try to schedule with rotation (primary first, backup if needed)
         self._try_schedule_with_rotation_and_backup(
@@ -2586,8 +2588,38 @@ class SchedulingEngine:
         Wave 3 Priority: Primary Lead → Other Leads → Club Supervisor (fallback)
         IMPORTANT: Freeosk events MUST be scheduled on their start date
         """
-        # Use event's start date - Freeosk/Digital events don't move to other days
-        schedule_date = self._get_earliest_schedule_date(event)
+        # Daily Freeosk events MUST be on their start date — reject if past or within buffer
+        # Freeosk Troubleshooting/weekly events have flexible date ranges and use earliest schedule date
+        event_name_upper = (event.project_name or '').upper()
+        is_daily_freeosk = event.event_type == 'Freeosk' and 'TROUBLESHOOTING' not in event_name_upper
+
+        if is_daily_freeosk:
+            today = date.today()
+            event_start_date = event.start_datetime.date()
+            buffer_days = 0 if self.emergency_mode else self.SCHEDULING_WINDOW_DAYS
+            earliest_allowed = today + timedelta(days=buffer_days)
+
+            if event_start_date < today:
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Freeosk event start date {event_start_date} is in the past"
+                )
+                run.events_failed += 1
+                return
+
+            if event_start_date < earliest_allowed:
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Freeosk event start date {event_start_date} is within the "
+                    f"{self.SCHEDULING_WINDOW_DAYS}-day scheduling buffer (earliest: {earliest_allowed})"
+                )
+                run.events_failed += 1
+                return
+
+            schedule_date = event.start_datetime
+        else:
+            # Digital events and Freeosk Troubleshooting use earliest schedule date
+            schedule_date = self._get_earliest_schedule_date(event)
 
         # Determine time slot based on event name
         event_name_upper = event.project_name.upper()

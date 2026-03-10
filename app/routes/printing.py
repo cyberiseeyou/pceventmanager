@@ -592,6 +592,122 @@ def get_daily_item_list():
     return jsonify({'error': 'Not yet implemented'}), 501
 
 
+@printing_bp.route('/complete-paperwork-multi', methods=['POST'])
+@require_authentication()
+def get_complete_paperwork_multi():
+    """
+    Generate paperwork for multiple days in one PDF.
+
+    Each day's paperwork appears in order, followed by a combined item list
+    covering all days at the end.
+
+    Request Body:
+        {
+            "start_date": "YYYY-MM-DD",
+            "end_date": "YYYY-MM-DD"
+        }
+
+    Returns:
+        Merged PDF file
+    """
+    global edr_authenticator
+
+    logger.info("Multi-day complete paperwork request received")
+
+    if not edr_available:
+        return jsonify({'success': False, 'error': 'EDR modules not available'}), 500
+
+    if not edr_authenticator or not edr_authenticator.auth_token:
+        return jsonify({'success': False, 'error': 'Not authenticated. Please authenticate first.'}), 401
+
+    try:
+        from app.services.daily_paperwork_generator import DailyPaperworkGenerator
+        from app.integrations.external_api.session_api_service import SessionAPIService
+
+        data = request.get_json()
+        start_str = data.get('start_date')
+        end_str = data.get('end_date')
+
+        if not start_str or not end_str:
+            return jsonify({'success': False, 'error': 'start_date and end_date are required'}), 400
+
+        start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
+
+        if end_date < start_date:
+            return jsonify({'success': False, 'error': 'end_date must be on or after start_date'}), 400
+
+        if (end_date - start_date).days > 7:
+            return jsonify({'success': False, 'error': 'Maximum 7 days at a time'}), 400
+
+        # Build list of dates
+        dates = []
+        current = start_date
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=1)
+
+        models = get_models()
+        db = current_app.extensions['sqlalchemy']
+        models_dict = {
+            'Event': models['Event'],
+            'Schedule': models['Schedule'],
+            'Employee': models['Employee'],
+            'PaperworkTemplate': models['PaperworkTemplate'],
+            'SystemSetting': current_app.config.get('SystemSetting')
+        }
+
+        paperwork_generator = DailyPaperworkGenerator(
+            db_session=db.session,
+            models_dict=models_dict,
+            edr_generator=edr_authenticator
+        )
+
+        logger.info(f"Generating multi-day paperwork for {len(dates)} days: {start_str} to {end_str}")
+        output_path = paperwork_generator.generate_multi_day_paperwork(dates)
+
+        if not output_path or not os.path.exists(output_path):
+            return jsonify({'success': False, 'error': 'Failed to generate multi-day paperwork'}), 500
+
+        with open(output_path, 'rb') as f:
+            pdf_data = f.read()
+
+        output = BytesIO(pdf_data)
+        output.seek(0)
+
+        try:
+            os.unlink(output_path)
+            paperwork_generator.cleanup()
+        except:
+            pass
+
+        filename = f'Complete_Paperwork_{start_str}_to_{end_str}.pdf'
+
+        logger.info(f"Successfully generated multi-day paperwork PDF ({len(pdf_data)} bytes)")
+
+        return send_file(
+            output,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=filename
+        )
+
+    except CancelledEventError as cancelled_err:
+        logger.error(f"Paperwork generation blocked: {len(cancelled_err.cancelled_events)} cancelled event(s)")
+        return jsonify({
+            'success': False,
+            'error_type': 'cancelled_events',
+            'error': cancelled_err.message,
+            'cancelled_events': cancelled_err.cancelled_events
+        }), 409
+
+    except Exception as e:
+        logger.error(f"Failed to generate multi-day paperwork: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @printing_bp.route('/core-events-count', methods=['GET'])
 @require_authentication()
 def get_core_events_count():

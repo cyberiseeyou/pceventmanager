@@ -157,6 +157,21 @@
   .daily-tab-panel.active {
     display: block;
   }
+
+  .tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #ef4444;
+    color: white;
+    line-height: 1;
+  }
 </style>
 {% endblock %}
 
@@ -273,6 +288,9 @@
       <button role="tab" class="daily-tab" data-tab="coverage" aria-selected="false" aria-controls="tab-panel-coverage" id="tab-coverage">
         <span class="material-symbols-outlined">grid_on</span> Coverage
       </button>
+      <button role="tab" class="daily-tab hidden" data-tab="cancelled" aria-selected="false" aria-controls="tab-panel-cancelled" id="tab-cancelled">
+        <span class="material-symbols-outlined">cancel</span> Cancelled <span id="cancelled-tab-badge" class="tab-badge">0</span>
+      </button>
     </div>
 
     <!-- Tab Panels -->
@@ -346,6 +364,18 @@
           <div class="loading-state" role="status" aria-live="polite">
             <div class="spinner"></div>
             <span class="sr-only">Loading timeslots...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancelled Tab -->
+    <div role="tabpanel" id="tab-panel-cancelled" class="daily-tab-panel" aria-labelledby="tab-cancelled" hidden>
+      <div class="dashboard-section">
+        <h3 class="section-title">Cancelled Events</h3>
+        <div id="cancelled-events-container" class="event-cards">
+          <div class="empty-state" role="status">
+            <p class="empty-state__message">No cancelled events for this date</p>
           </div>
         </div>
       </div>

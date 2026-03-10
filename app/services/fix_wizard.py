@@ -87,12 +87,21 @@ _RULE_DISPATCHER = {
     'Primary Lead Not Scheduled': '_options_for_reassign',
     'Primary Lead Block Assignment': '_options_for_reschedule_time',
     'Time Slot Distribution': '_options_for_time_slot_distribution',
+    'Juicer Date Pinning': '_options_for_date_pinning',
+    'Freeosk Date Pinning': '_options_for_date_pinning',
 }
 
 # Rules that are info-only or not actionable
 _IGNORE_ONLY_RULES = {
     'Shift Balance', 'Schedule Randomization', 'Event Due Tomorrow',
     'Juicer Deep Clean Conflict',
+}
+
+# Rules that are soft warnings not worth auto-fixing
+_SKIP_IN_FIX_ALL = {
+    'Schedule Randomization', 'Shift Balance', 'Event Due Tomorrow',
+    'Juicer Deep Clean Conflict', 'Weekly Workload Balance',
+    'Week-to-Week Workload Spike',
 }
 
 # Severity sort order (critical first)
@@ -658,6 +667,131 @@ class FixWizardService:
                     ))
 
         return options
+
+    def _options_for_date_pinning(self, issue, date_str: Optional[str]) -> List[FixOption]:
+        """
+        Juicer/Freeosk event is scheduled on the wrong date.
+        Offer to reschedule to the correct start date or unschedule.
+        """
+        details = issue.details
+        schedule_id = details.get('schedule_id')
+        required_date = details.get('required_date')
+
+        if not schedule_id:
+            return []
+
+        schedule = self.db.query(self.Schedule).get(schedule_id)
+        if not schedule:
+            return []
+
+        event = self.db.query(self.Event).filter_by(
+            project_ref_num=schedule.event_ref_num
+        ).first()
+
+        options = []
+
+        if required_date:
+            req_date = datetime.strptime(required_date, '%Y-%m-%d').date()
+            # Only offer reschedule if the required date is today or in the future
+            if req_date >= date.today():
+                new_dt = datetime.combine(req_date, schedule.schedule_datetime.time())
+                options.append(FixOption(
+                    action_type=FixActionType.RESCHEDULE,
+                    description=f"Reschedule to correct date {required_date}",
+                    confidence=90,
+                    target={
+                        'schedule_id': schedule_id,
+                        'new_datetime': new_dt.isoformat(),
+                    },
+                ))
+
+        # Fallback: unschedule
+        options.append(FixOption(
+            action_type=FixActionType.UNSCHEDULE,
+            description=f"Unschedule this event",
+            confidence=30,
+            target={
+                'schedule_id': schedule_id,
+                'event_ref_num': schedule.event_ref_num,
+            },
+        ))
+
+        return options
+
+    # ------------------------------------------------------------------
+    # Fix All
+    # ------------------------------------------------------------------
+
+    def fix_all(self, start_date: date) -> Dict[str, Any]:
+        """
+        Attempt to fix all actionable issues by applying the recommended
+        (highest-confidence) option for each fixable issue.
+
+        Skips info-only and soft-warning issues.
+
+        Returns summary of actions taken.
+        """
+        issues = self.get_fixable_issues(start_date)
+
+        results = {
+            'fixed': 0,
+            'skipped': 0,
+            'failed': 0,
+            'actions': [],
+        }
+
+        for fixable in issues:
+            rule_name = fixable.issue.get('rule_name', '')
+            severity = fixable.issue.get('severity', 'info')
+
+            # Skip info-only and soft warnings
+            if rule_name in _SKIP_IN_FIX_ALL or severity == 'info':
+                results['skipped'] += 1
+                continue
+
+            # Find the recommended option (or highest confidence non-ignore)
+            best = None
+            for opt in fixable.options:
+                if opt.action_type == FixActionType.IGNORE:
+                    continue
+                if best is None or opt.confidence > best.confidence:
+                    best = opt
+
+            if not best:
+                results['skipped'] += 1
+                continue
+
+            try:
+                result = self.apply_fix(best.action_type, best.target)
+                if result.get('success'):
+                    results['fixed'] += 1
+                    results['actions'].append({
+                        'rule': rule_name,
+                        'action': best.action_type,
+                        'description': best.description,
+                        'status': 'success',
+                    })
+                else:
+                    results['failed'] += 1
+                    results['actions'].append({
+                        'rule': rule_name,
+                        'action': best.action_type,
+                        'description': best.description,
+                        'status': 'failed',
+                        'error': result.get('message', 'Unknown error'),
+                    })
+            except Exception as e:
+                logger.error(f"Fix all: error applying fix for {rule_name}: {e}")
+                results['failed'] += 1
+                results['actions'].append({
+                    'rule': rule_name,
+                    'action': best.action_type if best else 'unknown',
+                    'description': best.description if best else '',
+                    'status': 'error',
+                    'error': str(e),
+                })
+
+        return results
 
     # ------------------------------------------------------------------
     # Apply Fix

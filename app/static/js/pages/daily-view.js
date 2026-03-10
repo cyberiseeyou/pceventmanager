@@ -26,10 +26,12 @@ class DailyView {
         this.summaryContainer = document.getElementById('daily-summary');
         this.timeslotContainer = document.getElementById('timeslot-blocks');
         this.eventsContainer = document.getElementById('event-cards-container');  // NEW for Story 3.3
+        this.cancelledEventsContainer = document.getElementById('cancelled-events-container');
         this.attendanceContainer = document.getElementById('attendance-list-container');  // NEW for attendance
         this.typeFilter = document.getElementById('event-type-filter');  // Type filter dropdown
         this.employeeFilter = document.getElementById('event-employee-filter');  // Employee filter dropdown
-        this.allEvents = [];  // Store all events for filtering
+        this.allEvents = [];  // Store all events for filtering (excludes cancelled)
+        this.cancelledEvents = [];  // Store cancelled events separately
         this.viewMode = localStorage.getItem('dailyViewMode') || 'list';  // default to list view, persist preference
         this.init();
     }
@@ -801,9 +803,12 @@ class DailyView {
             }
 
             const data = await response.json();
-            this.allEvents = data.events;  // Store for filtering
+            // Separate cancelled events from active events
+            this.cancelledEvents = data.events.filter(e => e.is_cancelled || e.reporting_status === 'cancelled');
+            this.allEvents = data.events.filter(e => !e.is_cancelled && e.reporting_status !== 'cancelled');
             this.populateEmployeeFilter(); // Populate employee dropdown
             this.filterAndRenderEvents();  // Render with current filter
+            this.renderCancelledTab();     // Render cancelled events in their tab
         } catch (error) {
             console.error('Failed to load daily events:', error);
             this.showEventsError('Failed to load events. Please refresh the page.');
@@ -962,12 +967,6 @@ class DailyView {
             return;
         }
 
-        // Check for cancelled events
-        const cancelledEvents = events.filter(e => e.is_cancelled || e.reporting_status === 'cancelled');
-        const cancelledBannerHTML = cancelledEvents.length > 0
-            ? this.createCancelledEventsBanner(cancelledEvents)
-            : '';
-
         // Group events by category
         const grouped = this.groupEventsByCategory(events);
         const categoryOrder = ['Juicer', 'Core', 'Supervisor', 'Freeosk', 'Digital', 'Other'];
@@ -1024,7 +1023,7 @@ class DailyView {
             }
         });
 
-        this.eventsContainer.innerHTML = cancelledBannerHTML + cardsHTML;
+        this.eventsContainer.innerHTML = cardsHTML;
         this.attachEventCardListeners();
     }
 
@@ -1057,6 +1056,77 @@ class DailyView {
                 </p>
             </div>
         `;
+    }
+
+    /**
+     * Render cancelled events in the Cancelled tab and show/hide the tab
+     */
+    renderCancelledTab() {
+        const tabBtn = document.getElementById('tab-cancelled');
+        const badge = document.getElementById('cancelled-tab-badge');
+        const count = this.cancelledEvents.length;
+
+        if (count === 0) {
+            // Hide the Cancelled tab when no cancelled events
+            if (tabBtn) tabBtn.classList.add('hidden');
+            return;
+        }
+
+        // Show the tab and update badge count
+        if (tabBtn) tabBtn.classList.remove('hidden');
+        if (badge) badge.textContent = count;
+
+        if (!this.cancelledEventsContainer) return;
+
+        const cardsHTML = this.cancelledEvents.map(event => `
+            <div class="event-card event-card--cancelled"
+                 data-schedule-id="${event.schedule_id}"
+                 data-event-id="${event.event_id}">
+                <div class="event-card__header">
+                    <span class="event-card__type">${event.event_type}</span>
+                    <span class="badge-status badge-status--cancelled">CANCELLED</span>
+                </div>
+                <div class="event-card__body">
+                    <div class="event-card__name">${this.escapeHtml(event.event_name)}</div>
+                    <div class="event-card__detail"><strong>ID:</strong> ${event.event_id}</div>
+                    <div class="event-card__detail"><strong>Employee:</strong> ${event.employee_name}</div>
+                    <div class="event-card__detail"><strong>Time:</strong> ${event.start_time} - ${event.end_time}</div>
+                    ${event.location ? `<div class="event-card__detail"><strong>Location:</strong> ${this.escapeHtml(event.location)}</div>` : ''}
+                </div>
+                <div class="event-card__footer">
+                    <p class="cancelled-events-banner__action" style="margin: 0; font-size: 13px; color: #b91c1c;">
+                        Please <strong>unschedule</strong> this event and notify the assigned employee.
+                    </p>
+                    <button class="btn btn-secondary btn-sm btn-unschedule"
+                            data-schedule-id="${event.schedule_id}"
+                            data-event-name="${this.escapeHtml(event.event_name)}"
+                            title="Unschedule this cancelled event">
+                        <span class="material-symbols-outlined">event_busy</span> Unschedule
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        this.cancelledEventsContainer.innerHTML = `
+            <div class="cancelled-events-banner" role="alert" style="margin-bottom: 16px;">
+                <div class="cancelled-events-banner__header">
+                    <span class="cancelled-events-banner__icon"><span class="material-symbols-outlined">cancel</span></span>
+                    <strong>Action Required: ${count} Cancelled Event${count > 1 ? 's' : ''}</strong>
+                </div>
+                <p class="cancelled-events-banner__message">
+                    These events have been <strong>CANCELLED</strong>. Please unschedule them and notify the assigned employees.
+                </p>
+            </div>
+            <div class="event-cards">${cardsHTML}</div>
+        `;
+
+        // Attach unschedule button listeners
+        this.cancelledEventsContainer.querySelectorAll('.btn-unschedule').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
+                this.handleUnschedule(scheduleId);
+            });
+        });
     }
 
     /**
@@ -3203,16 +3273,40 @@ class DailyView {
                     eventCard.style.transform = 'translateX(20px)';
 
                     setTimeout(() => {
+                        // Check if card is in the cancelled tab
+                        const isInCancelledTab = this.cancelledEventsContainer?.contains(eventCard);
                         eventCard.remove();
 
-                        // Check if no more events, show empty state
-                        const remainingCards = this.eventsContainer?.querySelectorAll('.event-card');
-                        if (remainingCards?.length === 0) {
-                            this.eventsContainer.innerHTML = `
-                                <div class="empty-state" role="status">
-                                    <p class="empty-state__message">No events scheduled for this date</p>
-                                </div>
-                            `;
+                        if (isInCancelledTab) {
+                            // Update cancelled events count and tab visibility
+                            this.cancelledEvents = this.cancelledEvents.filter(e => String(e.schedule_id) !== String(scheduleId));
+                            const badge = document.getElementById('cancelled-tab-badge');
+                            const tabBtn = document.getElementById('tab-cancelled');
+                            if (this.cancelledEvents.length === 0) {
+                                if (tabBtn) tabBtn.classList.add('hidden');
+                                if (this.cancelledEventsContainer) {
+                                    this.cancelledEventsContainer.innerHTML = `
+                                        <div class="empty-state" role="status">
+                                            <p class="empty-state__message">No cancelled events for this date</p>
+                                        </div>
+                                    `;
+                                }
+                                // Switch back to events tab
+                                const eventsTab = document.getElementById('tab-events');
+                                if (eventsTab) eventsTab.click();
+                            } else {
+                                if (badge) badge.textContent = this.cancelledEvents.length;
+                            }
+                        } else {
+                            // Check if no more events in main container, show empty state
+                            const remainingCards = this.eventsContainer?.querySelectorAll('.event-card');
+                            if (remainingCards?.length === 0) {
+                                this.eventsContainer.innerHTML = `
+                                    <div class="empty-state" role="status">
+                                        <p class="empty-state__message">No events scheduled for this date</p>
+                                    </div>
+                                `;
+                            }
                         }
                     }, 300);
                 }
