@@ -293,6 +293,23 @@
   }
 }
 
+@media (max-width: 480px) {
+  .range-btn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .custom-range-inputs input,
+  .custom-range-inputs select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .custom-range-inputs button {
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 375px) {
   .workload-dashboard {
     padding: var(--spacing-md, 1rem);

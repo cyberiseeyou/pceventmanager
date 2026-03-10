@@ -106,6 +106,14 @@
     .btn-danger:hover {
         background-color: #c0392b;
     }
+
+    @media (max-width: 480px) {
+        .admin-section { padding: var(--spacing-md); }
+        .config-grid { grid-template-columns: 1fr; }
+        .action-buttons { flex-direction: column; }
+        .action-buttons .btn, .btn-danger { min-height: 44px; width: 100%; text-align: center; }
+        .sync-log { font-size: 0.8em; }
+    }
 </style>
 {% endblock %}
 

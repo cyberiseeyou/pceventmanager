@@ -115,6 +115,30 @@
 }
 .report-card .open-link:hover { text-decoration: underline; }
 
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+    .report-header { flex-direction: column; padding: 16px; text-align: center; gap: 12px; }
+    .report-header h1 { font-size: 18px; }
+    .report-actions { width: 100%; justify-content: center; }
+    .report-actions .btn { min-height: 44px; padding: 10px 16px; }
+    .date-range-form { flex-direction: column; align-items: stretch; }
+    .date-range-form input[type="date"] { min-height: 44px; font-size: 16px; width: 100%; }
+    .date-range-form .btn-generate { min-height: 44px; width: 100%; }
+    .stats-row { gap: 8px; }
+    .stat-card { padding: 14px; min-width: 0; flex: 1 1 calc(50% - 4px); }
+    .stat-card .value { font-size: 24px; }
+    .chart-container { padding: 14px; }
+    .report-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .reports-grid { grid-template-columns: 1fr; gap: 12px; }
+    .report-card { padding: 16px; }
+    .employee-section { padding: 14px; }
+}
+
+@media (max-width: 380px) {
+    .report-header h1 { font-size: 16px; }
+    .stat-card .value { font-size: 20px; }
+}
+
 /* Print styles */
 @media print {
     .sidebar, .sidebar-overlay, .top-bar, .report-actions,

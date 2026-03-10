@@ -168,6 +168,9 @@ function createEmployeeCard(employee) {
     if (!employee.is_active) {
         badges.push('<span class="employee-badge badge-inactive">INACTIVE</span>');
     }
+    if (employee.has_account) {
+        badges.push('<span class="employee-badge" style="background: #10b981; color: white;">LOGIN ENABLED</span>');
+    }
 
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     const availabilityGrid = days.map(day => {
@@ -212,10 +215,16 @@ function createEmployeeCard(employee) {
                     <button type="button" class="btn btn-sm btn-secondary" onclick="toggleEmployeeStatus('${employee.id}', ${!employee.is_active})">
                         ${employee.is_active ? 'Deactivate' : 'Activate'}
                     </button>
+                    ${employee.job_title !== 'Club Supervisor' ? `
+                    <button type="button" class="btn btn-sm ${employee.has_account ? 'btn-outline' : 'btn-success'}" onclick="openSetPinModal('${employee.id}', '${employee.name.replace(/'/g, "\\'")}', ${employee.has_account})" style="${!employee.has_account ? 'background:#10b981;border-color:#10b981;color:#fff;' : ''}">
+                        ${employee.has_account ? 'Reset PIN' : 'Set PIN'}
+                    </button>
+                    ` : ''}
                     <div class="overflow-menu" style="position: relative; display: inline-block;">
                         <button type="button" class="btn btn-sm btn-outline" onclick="toggleOverflowMenu(this)" style="padding: 4px 8px; font-size: 16px; line-height: 1;">&#8942;</button>
-                        <div class="overflow-menu-dropdown" style="display: none; position: absolute; right: 0; bottom: 100%; background: white; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 50; min-width: 140px;">
+                        <div class="overflow-menu-dropdown" style="display: none; position: absolute; right: 0; bottom: 100%; background: white; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 50; min-width: 180px;">
                             <button type="button" class="overflow-menu-item" onclick="deleteEmployee('${employee.id}')" style="display: block; width: 100%; padding: 8px 14px; border: none; background: none; text-align: left; cursor: pointer; font-size: 13px; color: #dc3545;">Delete Employee</button>
+                            ${employee.has_account ? `<button type="button" class="overflow-menu-item" onclick="revokeEmployeeAccess('${employee.id}', '${employee.name.replace(/'/g, "\\'")}')" style="display: block; width: 100%; padding: 8px 14px; border: none; background: none; text-align: left; cursor: pointer; font-size: 13px; color: #dc3545;">Revoke Login Access</button>` : ''}
                         </div>
                     </div>
                 </div>
@@ -248,6 +257,7 @@ function setupModalHandlers() {
             if (e.target === this) {
                 closeAddEmployeeModal();
                 closeImportEmployeesModal();
+                closeSetPinModal();
             }
         });
     });
@@ -888,6 +898,137 @@ async function deleteEmployee(employeeId) {
     } catch (error) {
         console.error('Error deleting employee:', error);
         showFlashMessage('Error deleting employee', 'error');
+    }
+}
+
+// ========================================
+// Set PIN / Revoke Access
+// ========================================
+
+/**
+ * Open the Set PIN modal for an employee.
+ *
+ * @param {string} employeeId - Employee ID
+ * @param {string} employeeName - Employee display name
+ * @param {boolean} hasAccount - Whether the employee already has login access
+ */
+function openSetPinModal(employeeId, employeeName, hasAccount) {
+    document.getElementById('set-pin-employee-id').value = employeeId;
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-confirm').value = '';
+    document.getElementById('set-pin-alerts').innerHTML = '';
+
+    const title = hasAccount ? `Reset PIN for ${employeeName}` : `Set PIN for ${employeeName}`;
+    document.getElementById('set-pin-title').textContent = title;
+
+    const desc = hasAccount
+        ? `Enter a new 4-digit PIN for ${employeeName}. This will replace their current PIN.`
+        : `Create a 4-digit PIN so ${employeeName} can log in at the employee login page.`;
+    document.getElementById('set-pin-description').textContent = desc;
+
+    document.getElementById('set-pin-modal').classList.add('modal-open');
+    document.getElementById('pin-input').focus();
+}
+
+/** Close the Set PIN modal and clear form state */
+function closeSetPinModal() {
+    document.getElementById('set-pin-modal').classList.remove('modal-open');
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-confirm').value = '';
+    document.getElementById('set-pin-alerts').innerHTML = '';
+}
+
+/**
+ * Handle the Set PIN form submission.
+ * Validates PIN format and match, then POSTs to /api/employee/set-pin.
+ *
+ * @param {SubmitEvent} e - Form submit event
+ */
+async function handleSetPinSubmit(e) {
+    e.preventDefault();
+
+    const employeeId = document.getElementById('set-pin-employee-id').value;
+    const pin = document.getElementById('pin-input').value;
+    const pinConfirm = document.getElementById('pin-confirm').value;
+    const alerts = document.getElementById('set-pin-alerts');
+
+    // Validate
+    if (!/^\d{4}$/.test(pin)) {
+        alerts.innerHTML = '<div class="alert alert-error" style="margin: 0 20px;">PIN must be exactly 4 digits</div>';
+        return;
+    }
+    if (pin !== pinConfirm) {
+        alerts.innerHTML = '<div class="alert alert-error" style="margin: 0 20px;">PINs do not match</div>';
+        document.getElementById('pin-confirm').value = '';
+        document.getElementById('pin-confirm').focus();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/employee/set-pin', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                employee_id: employeeId,
+                pin: pin
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alerts.innerHTML = `<div class="alert alert-error" style="margin: 0 20px;">${data.error || 'Failed to set PIN'}</div>`;
+            return;
+        }
+
+        closeSetPinModal();
+        showFlashMessage(data.message || 'PIN set successfully', 'success');
+        loadEmployees();
+
+    } catch (error) {
+        console.error('Error setting PIN:', error);
+        alerts.innerHTML = '<div class="alert alert-error" style="margin: 0 20px;">Error setting PIN. Please try again.</div>';
+    }
+}
+
+/**
+ * Revoke an employee's login access after confirmation.
+ * Clears their PIN and disables their account via /api/employee/revoke-access.
+ *
+ * @param {string} employeeId - Employee ID
+ * @param {string} employeeName - Employee display name
+ */
+async function revokeEmployeeAccess(employeeId, employeeName) {
+    if (!confirm(`Revoke login access for ${employeeName}? They will no longer be able to log in.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/employee/revoke-access', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ employee_id: employeeId })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            showFlashMessage(data.error || 'Failed to revoke access', 'error');
+            return;
+        }
+
+        showFlashMessage(data.message || `Login access revoked for ${employeeName}`, 'success');
+        loadEmployees();
+
+    } catch (error) {
+        console.error('Error revoking access:', error);
+        showFlashMessage('Error revoking access. Please try again.', 'error');
     }
 }
 

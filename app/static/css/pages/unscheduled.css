@@ -321,6 +321,10 @@
     min-width: 120px;
 }
 
+input[type="date"].mini-filter {
+    width: 145px;
+}
+
 .context-section {
     display: flex;
     align-items: flex-start;
@@ -659,4 +663,145 @@
     min-height: 16px;
     width: 16px;
     height: 16px;
+}
+
+/* Mobile (480px) */
+@media (max-width: 480px) {
+    /* Page title */
+    .page-title {
+        font-size: 1.5rem;
+    }
+
+    /* Condition tabs: horizontal scroll */
+    .condition-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 0;
+        scrollbar-width: none;
+    }
+    .condition-tabs::-webkit-scrollbar {
+        display: none;
+    }
+    .tab-btn {
+        padding: 8px 10px;
+        font-size: 13px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* Filter area stacks */
+    .filter-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-section {
+        flex-wrap: wrap;
+    }
+    .actions-section {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    .actions-section .btn {
+        min-height: 44px;
+        flex: 1 1 auto;
+    }
+
+    /* Search filters stack */
+    .search-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .mini-filter {
+        width: 100% !important;
+        min-width: unset;
+        min-height: 44px;
+    }
+
+    /* Context buttons scroll */
+    .context-buttons {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        max-width: 100%;
+    }
+    .context-btn {
+        flex-shrink: 0;
+        min-height: 44px;
+        padding: 8px 14px;
+    }
+
+    /* Event card compact */
+    .event-card {
+        padding: 12px;
+    }
+    .event-card-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .event-title {
+        font-size: 14px;
+        margin-right: 0;
+    }
+
+    /* Event actions stack */
+    .event-actions {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-top: 8px;
+    }
+    .event-actions .btn {
+        min-height: 44px;
+        font-size: 13px;
+        flex: 1 1 auto;
+    }
+
+    /* Modal responsive */
+    .action-modal {
+        max-width: calc(100vw - 24px) !important;
+        padding: 16px;
+    }
+    .modal-actions {
+        flex-direction: column;
+    }
+    .modal-actions .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    /* Bulk toolbar compact */
+    .bulk-toolbar {
+        padding: 8px 12px;
+    }
+    .bulk-toolbar-inner {
+        gap: 8px;
+    }
+    .bulk-toolbar .btn {
+        min-height: 40px;
+        font-size: 12px;
+    }
+
+    /* Schedule info */
+    .schedule-item {
+        flex-wrap: wrap;
+    }
+}
+
+/* Budget Android (380px) */
+@media (max-width: 380px) {
+    .page-title {
+        font-size: 1.25rem;
+    }
+    .tab-btn {
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+    .event-card {
+        padding: 10px;
+    }
+    .event-title {
+        font-size: 13px;
+    }
+    .action-modal {
+        padding: 12px;
+    }
 }

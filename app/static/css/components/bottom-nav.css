@@ -1,0 +1,172 @@
+/* ==========================================================================
+   Bottom Navigation Bar - Mobile Only
+   Hidden on desktop (>768px), visible on mobile as primary navigation.
+   Follows Material Design 3 bottom navigation patterns.
+   ========================================================================== */
+
+/* Hidden on desktop */
+.bottom-nav {
+    display: none;
+}
+
+/* Visible on mobile */
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: var(--z-fixed);
+        background: #fff;
+        border-top: 1px solid var(--color-neutral-200);
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        height: calc(60px + env(safe-area-inset-bottom, 0px));
+        align-items: stretch;
+        justify-content: space-around;
+    }
+
+    .bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        padding: 6px 0;
+        color: var(--color-neutral-500);
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 500;
+        gap: 2px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-family: inherit;
+        min-height: 48px;
+        min-width: 48px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        transition: color 0.15s ease;
+        position: relative;
+    }
+
+    .bottom-nav-item .material-symbols-outlined {
+        font-size: 24px;
+        line-height: 1;
+        overflow: hidden;
+        width: 24px;
+        height: 24px;
+        text-align: center;
+    }
+
+    .bottom-nav-label {
+        font-size: 11px;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    /* Active state */
+    .bottom-nav-item.active {
+        color: var(--color-primary);
+    }
+
+    .bottom-nav-item.active .material-symbols-outlined {
+        font-variation-settings: 'FILL' 1;
+    }
+
+    /* Active indicator pill */
+    .bottom-nav-item.active::before {
+        content: '';
+        position: absolute;
+        top: 4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 32px;
+        height: 28px;
+        background: var(--pc-light-blue);
+        border-radius: 14px;
+        z-index: -1;
+    }
+
+    /* Pressed state */
+    .bottom-nav-item:active {
+        color: var(--color-primary-dark);
+    }
+
+    /* Add bottom padding to main content so it's not hidden behind bottom nav */
+    body {
+        padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Hide footer on mobile (bottom nav replaces it) */
+    .footer {
+        display: none;
+    }
+}
+
+/* Budget Android (360px) - slightly more compact */
+@media (max-width: 380px) {
+    .bottom-nav-item .material-symbols-outlined {
+        font-size: 22px;
+    }
+
+    .bottom-nav-label {
+        font-size: 10px;
+    }
+}
+
+/* Landscape mobile - slimmer bottom nav */
+@media (max-height: 500px) and (orientation: landscape) {
+    .bottom-nav {
+        height: calc(48px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .bottom-nav-item {
+        flex-direction: row;
+        gap: 4px;
+        min-height: 40px;
+    }
+
+    .bottom-nav-item .material-symbols-outlined {
+        font-size: 20px;
+    }
+
+    .bottom-nav-label {
+        font-size: 11px;
+    }
+
+    body {
+        padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* Hide bottom nav during print */
+@media print {
+    .bottom-nav {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   Role-Based Visibility Classes
+   Used to conditionally show/hide UI elements based on user role.
+   These classes are applied via Jinja2 templates and controlled by
+   session data. The actual role checking happens server-side.
+   ========================================================================== */
+
+.supervisor-only {
+    /* Visible by default (current behavior - everyone is supervisor) */
+    /* When role-based auth is implemented, JS will add .role-specialist
+       or .role-lead to <body>, and these rules will hide elements */
+}
+
+body.role-specialist .supervisor-only,
+body.role-lead .supervisor-only {
+    display: none !important;
+}
+
+/* Lead can see team schedules but not edit */
+body.role-specialist .lead-only {
+    display: none !important;
+}

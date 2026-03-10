@@ -1057,6 +1057,77 @@
     .btn-outline-primary i {
         transition: transform 0.3s;
     }
+
+    /* Mobile (480px) */
+    @media (max-width: 480px) {
+        .container-fluid { padding-left: 12px; padding-right: 12px; }
+
+        /* Dashboard header — stack title and controls */
+        .dashboard-header .d-flex.justify-content-between {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 12px;
+        }
+        .dashboard-header .d-flex.justify-content-between > div[style*="display: flex"] {
+            flex-wrap: wrap;
+            width: 100%;
+            gap: 8px !important;
+        }
+        .dashboard-header .d-flex.justify-content-between > div > div[style*="display: flex"] {
+            flex-wrap: wrap;
+            width: 100%;
+        }
+        .dashboard-header h2 { font-size: 20px; }
+        #validation-date-picker { width: 100%; min-height: 44px; }
+
+        /* Health score card compact */
+        .health-score-card { padding: 24px 16px; }
+        .health-score-value { font-size: 48px; }
+        .health-score-label { font-size: 12px; }
+        .health-score-icon { font-size: 36px; }
+
+        /* Metric cards */
+        .metric-card { padding: 16px; }
+        .metric-card h6 { font-size: 12px; }
+        .metric-card .metric-value { font-size: 24px; }
+
+        /* Section headers */
+        .section-header h4 { font-size: 16px; }
+
+        /* Quick actions single column */
+        .quick-actions { grid-template-columns: 1fr; gap: 8px; }
+
+        /* Employee report cards - single column */
+        .employee-report-times-container {
+            grid-template-columns: 1fr;
+        }
+        .employee-report-card { padding: 14px; }
+
+        /* Nav tabs vertical */
+        .nav-tabs { flex-direction: column; }
+        .nav-tabs .nav-link {
+            padding: 10px 14px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+
+        /* Touch targets */
+        .btn, button { min-height: 44px; }
+
+        /* Event type rows */
+        .event-type-row { flex-direction: column; gap: 8px; }
+        .event-counts { width: 100%; }
+    }
+
+    /* Budget Android (380px) */
+    @media (max-width: 380px) {
+        .container-fluid { padding-left: 8px; padding-right: 8px; }
+        .health-score-card { padding: 20px 12px; }
+        .health-score-value { font-size: 40px; }
+        .metric-card { padding: 12px; }
+        .section-header h4 { font-size: 15px; }
+        .employee-report-card { padding: 12px; }
+    }
 </style>
 {% endblock %}
 

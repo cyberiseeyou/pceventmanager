@@ -117,10 +117,10 @@
         <!-- Row 3: Filters and actions -->
         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">From</label>
-            <input type="date" name="date_from" id="date-range-from" class="mini-filter" style="width: 145px;"
+            <input type="date" name="date_from" id="date-range-from" class="mini-filter"
                 value="{{ request.args.get('date_from', '') }}" data-action="auto-submit-form">
             <label style="font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap;">To</label>
-            <input type="date" name="date_to" id="date-range-to" class="mini-filter" style="width: 145px;"
+            <input type="date" name="date_to" id="date-range-to" class="mini-filter"
                 value="{{ request.args.get('date_to', '') }}" data-action="auto-submit-form">
             <select name="event_type" class="mini-filter" data-action="auto-submit-form">
                 <option value="">All Types</option>

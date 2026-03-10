@@ -10,6 +10,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#2E4C73">
+    <meta name="apple-mobile-web-app-title" content="PC Events">
+    <meta name="description" content="Product Connections Event Scheduler - Sam's Club Store #8135">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/pwa-icon-192.png') }}">
     <title>{% block title %}Product Connections - Scheduler{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
@@ -29,10 +34,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/notification-modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/sidebar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/bottom-nav.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 
-<body>
+<body class="{% if current_user_role == 'specialist' %}role-specialist{% elif current_user_role == 'lead' %}role-lead{% endif %}">
+    <!-- Offline status banner -->
+    <div id="offline-banner" class="offline-banner" role="alert" aria-live="polite" hidden>
+        You are currently offline. Some features may be unavailable.
+    </div>
     <a href="#main-content" class="skip-to-content">Skip to main content</a>
     <!-- Header -->
     <header class="header">
@@ -178,14 +188,16 @@
             </button>
         </div>
         <nav class="sidebar-nav">
-            <!-- Dashboard -->
+            {% if current_user_role != 'specialist' %}
+            <!-- Dashboard (supervisor + lead) -->
             <a href="{{ url_for('dashboard.command_center') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.command_center' or request.endpoint == 'main.index' %}active{% endif %}">
                 <span class="material-symbols-outlined">dashboard</span>
                 <span>Dashboard</span>
             </a>
+            {% endif %}
 
-            <!-- Schedule Group -->
+            <!-- Schedule Group (all roles) -->
             <div class="sidebar-group-label">Schedule</div>
             <a href="/schedule/daily/{{ today_date }}"
                 class="sidebar-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}">
@@ -197,19 +209,22 @@
                 <span class="material-symbols-outlined">calendar_month</span>
                 <span>Calendar</span>
             </a>
+            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('auto_scheduler.index') }}"
                 class="sidebar-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') %}active{% endif %}">
                 <span class="material-symbols-outlined">smart_toy</span>
                 <span>Auto-Scheduler</span>
             </a>
+            {% endif %}
 
-            <!-- Events Group -->
+            <!-- Events Group (all roles) -->
             <div class="sidebar-group-label">Events</div>
             <a href="{{ url_for('main.unscheduled_events') }}"
                 class="sidebar-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}">
                 <span class="material-symbols-outlined">list_alt</span>
-                <span>All Events</span>
+                <span>{% if current_user_role == 'specialist' %}My Events{% else %}All Events{% endif %}</span>
             </a>
+            {% if current_user_role != 'specialist' %}
             <a href="{{ url_for('main.unreported_events') }}"
                 class="sidebar-item {% if request.endpoint == 'main.unreported_events' %}active{% endif %}">
                 <span class="material-symbols-outlined">report</span>
@@ -225,37 +240,46 @@
                 <span class="material-symbols-outlined">event_busy</span>
                 <span>Lost Demos</span>
             </a>
+            {% endif %}
 
             <!-- Team Group -->
             <div class="sidebar-group-label">Team</div>
+            {% if current_user_role != 'specialist' %}
             <a href="{{ url_for('employees.employees') }}"
                 class="sidebar-item {% if request.endpoint == 'employees.employees' %}active{% endif %}">
                 <span class="material-symbols-outlined">group</span>
                 <span>Employees</span>
             </a>
+            {% endif %}
+            {% if current_user_role in ('supervisor', 'lead') %}
             <a href="{{ url_for('main.attendance_calendar') }}"
                 class="sidebar-item {% if request.endpoint == 'main.attendance_calendar' %}active{% endif %}">
                 <span class="material-symbols-outlined">how_to_reg</span>
                 <span>Attendance</span>
             </a>
+            {% endif %}
             <a href="{{ url_for('employees.time_off_requests') }}"
                 class="sidebar-item {% if request.endpoint == 'employees.time_off_requests' %}active{% endif %}">
                 <span class="material-symbols-outlined">event_busy</span>
-                <span>Availability</span>
+                <span>{% if current_user_role == 'specialist' %}Request Time Off{% else %}Availability{% endif %}</span>
             </a>
+            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('admin.employee_analytics') }}"
                 class="sidebar-item {% if request.endpoint == 'admin.employee_analytics' %}active{% endif %}">
                 <span class="material-symbols-outlined">analytics</span>
                 <span>Analytics</span>
             </a>
+            {% endif %}
 
-            <!-- Tools Group -->
+            {% if current_user_role != 'specialist' %}
+            <!-- Tools Group (supervisor + lead) -->
             <div class="sidebar-group-label">Tools</div>
             <a href="{{ url_for('printing.printing_home') }}"
                 class="sidebar-item {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}">
                 <span class="material-symbols-outlined">print</span>
                 <span>Printing</span>
             </a>
+            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('dashboard.weekly_validation') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
                 <span class="material-symbols-outlined">verified</span>
@@ -286,8 +310,11 @@
                 <span class="material-symbols-outlined">inventory_2</span>
                 <span>Demo Supplies</span>
             </a>
+            {% endif %}
+            {% endif %}
 
-            <!-- Admin Group -->
+            {% if current_user_role == 'supervisor' %}
+            <!-- Admin Group (supervisor only) -->
             <div class="sidebar-group-label">Admin</div>
             <a href="{{ url_for('admin.settings_page') }}"
                 class="sidebar-item {% if request.endpoint == 'admin.settings_page' %}active{% endif %}">
@@ -308,6 +335,7 @@
                 <span class="material-symbols-outlined">database</span>
                 <span>Refresh Database</span>
             </button>
+            {% endif %}
         </nav>
     </aside>
 
@@ -318,7 +346,100 @@
         </main>
     </div>
 
-    <!-- Footer -->
+    <!-- Mobile Bottom Navigation (role-aware) -->
+    <nav class="bottom-nav" id="bottomNav" aria-label="Mobile navigation">
+        {% if current_user_role == 'specialist' %}
+        {# Event Specialist: Today | My Events | Calendar | Time Off #}
+        <a href="/schedule/daily/{{ today_date }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
+            data-nav="today">
+            <span class="material-symbols-outlined">today</span>
+            <span class="bottom-nav-label">Today</span>
+        </a>
+        <a href="{{ url_for('main.unscheduled_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+            data-nav="events">
+            <span class="material-symbols-outlined">list_alt</span>
+            <span class="bottom-nav-label">My Events</span>
+        </a>
+        <a href="{{ url_for('main.calendar_view') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.calendar_view' %}active{% endif %}"
+            data-nav="calendar">
+            <span class="material-symbols-outlined">calendar_month</span>
+            <span class="bottom-nav-label">Calendar</span>
+        </a>
+        <a href="{{ url_for('main.time_off_requests') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.time_off_requests' %}active{% endif %}"
+            data-nav="timeoff">
+            <span class="material-symbols-outlined">event_busy</span>
+            <span class="bottom-nav-label">Time Off</span>
+        </a>
+        {% elif current_user_role == 'lead' %}
+        {# Lead: Today | Events | Team | Attendance | More #}
+        <a href="/schedule/daily/{{ today_date }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
+            data-nav="today">
+            <span class="material-symbols-outlined">today</span>
+            <span class="bottom-nav-label">Today</span>
+        </a>
+        <a href="{{ url_for('main.unscheduled_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+            data-nav="events">
+            <span class="material-symbols-outlined">list_alt</span>
+            <span class="bottom-nav-label">Events</span>
+        </a>
+        <a href="{{ url_for('employees.employees') }}"
+            class="bottom-nav-item {% if request.endpoint == 'employees.employees' %}active{% endif %}"
+            data-nav="team">
+            <span class="material-symbols-outlined">group</span>
+            <span class="bottom-nav-label">Team</span>
+        </a>
+        <a href="{{ url_for('main.attendance') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.attendance' %}active{% endif %}"
+            data-nav="attendance">
+            <span class="material-symbols-outlined">how_to_reg</span>
+            <span class="bottom-nav-label">Attendance</span>
+        </a>
+        <button class="bottom-nav-item" id="bottomNavMore" data-nav="more" aria-label="More options"
+            aria-expanded="false">
+            <span class="material-symbols-outlined">more_horiz</span>
+            <span class="bottom-nav-label">More</span>
+        </button>
+        {% else %}
+        {# Supervisor (default): Today | Events | Dashboard | Team | More #}
+        <a href="/schedule/daily/{{ today_date }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
+            data-nav="today">
+            <span class="material-symbols-outlined">today</span>
+            <span class="bottom-nav-label">Today</span>
+        </a>
+        <a href="{{ url_for('main.unscheduled_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+            data-nav="events">
+            <span class="material-symbols-outlined">list_alt</span>
+            <span class="bottom-nav-label">Events</span>
+        </a>
+        <a href="{{ url_for('dashboard.command_center') }}"
+            class="bottom-nav-item {% if request.endpoint == 'dashboard.command_center' or request.endpoint == 'main.index' %}active{% endif %}"
+            data-nav="dashboard">
+            <span class="material-symbols-outlined">dashboard</span>
+            <span class="bottom-nav-label">Dashboard</span>
+        </a>
+        <a href="{{ url_for('employees.employees') }}"
+            class="bottom-nav-item {% if request.endpoint == 'employees.employees' %}active{% endif %}"
+            data-nav="team">
+            <span class="material-symbols-outlined">group</span>
+            <span class="bottom-nav-label">Team</span>
+        </a>
+        <button class="bottom-nav-item" id="bottomNavMore" data-nav="more" aria-label="More options"
+            aria-expanded="false">
+            <span class="material-symbols-outlined">more_horiz</span>
+            <span class="bottom-nav-label">More</span>
+        </button>
+        {% endif %}
+    </nav>
+
+    <!-- Footer (hidden on mobile when bottom nav is visible) -->
     <footer class="footer">
         <div class="container">
             <p>&copy; {{ now().year if now is defined else 2026 }} Product Connections. All rights reserved.</p>
@@ -625,10 +746,56 @@
     <!-- Notification Modal Component (for same-week schedule changes) -->
     <script src="{{ url_for('static', filename='js/components/notification-modal.js') }}"></script>
 
+    <!-- Bottom Nav "More" button - opens sidebar on mobile -->
+    <script>
+        (function() {
+            const moreBtn = document.getElementById('bottomNavMore');
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+            if (moreBtn && hamburgerBtn) {
+                moreBtn.addEventListener('click', function() {
+                    hamburgerBtn.click();
+                });
+            }
+        })();
+    </script>
+
     <!-- Quick Note Widget -->
     {% include 'components/quick_note_widget.html' %}
 
     {% block scripts %}{% endblock %}
+
+    <!-- PWA Service Worker Registration & Offline Detection -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((reg) => {
+                        setInterval(() => reg.update(), 60 * 60 * 1000);
+                    })
+                    .catch((err) => console.warn('SW registration failed:', err));
+            });
+        }
+
+        // Offline/Online detection
+        (function() {
+            const banner = document.getElementById('offline-banner');
+            if (!banner) return;
+
+            function updateStatus() {
+                if (navigator.onLine) {
+                    banner.hidden = true;
+                    document.body.classList.remove('is-offline');
+                } else {
+                    banner.hidden = false;
+                    document.body.classList.add('is-offline');
+                }
+            }
+
+            window.addEventListener('online', updateStatus);
+            window.addEventListener('offline', updateStatus);
+            updateStatus();
+        })();
+    </script>
 </body>
 
 </html>

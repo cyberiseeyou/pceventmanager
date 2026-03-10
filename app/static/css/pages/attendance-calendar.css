@@ -654,6 +654,55 @@
     }
 }
 
+@media (max-width: 480px) {
+    /* Touch targets */
+    .nav-btn, .month-nav-btn {
+        min-height: 44px;
+    }
+    .employee-selector {
+        min-height: 44px;
+    }
+    .legend-item {
+        font-size: 12px;
+    }
+    .attendance-calendar-container {
+        padding: 8px;
+    }
+    .calendar-container {
+        padding: 8px;
+    }
+    /* Calendar days: override global min-width so 7 columns fit */
+    .calendar-day {
+        min-width: unset !important;
+        padding: 4px 2px;
+        aspect-ratio: auto;
+        min-height: 40px;
+    }
+    .calendar-day-no-data,
+    .calendar-day-count {
+        font-size: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .calendar-day-name {
+        min-width: unset !important;
+        font-size: 9px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .calendar-header {
+        grid-template-columns: repeat(7, 1fr) !important;
+        overflow: hidden;
+    }
+    /* Legend wraps */
+    .legend-items {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
+
 @media (max-width: 375px) {
     .stats-grid {
         grid-template-columns: 1fr;

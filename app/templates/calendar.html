@@ -718,6 +718,58 @@
     .legend-badge.badge-other {
         background: #6c757d;
     }
+
+    @media (max-width: 480px) {
+        .calendar-header {
+            flex-direction: column;
+            padding: 10px;
+            gap: 8px;
+            position: relative;
+        }
+        .calendar-nav {
+            position: static;
+            width: 100%;
+            justify-content: center;
+        }
+        .month-title {
+            font-size: 1.2rem;
+            min-width: unset;
+        }
+        .month-nav .btn { min-height: 44px; padding: 8px 12px; }
+        .calendar-grid { gap: 1px; }
+        .calendar-day-header { padding: 4px 2px; font-size: 0.65rem; }
+        .calendar-day {
+            min-height: 60px;
+            padding: 2px;
+            min-width: unset !important;
+        }
+        .day-number { font-size: 0.85rem; margin-bottom: 2px; }
+        .day-events {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: 1fr;
+            gap: 2px;
+        }
+        .event-badge { font-size: 0.6rem; min-height: 18px; padding: 2px; }
+        .unscheduled-warning { font-size: 0.9rem; }
+        .lock-indicator { font-size: 0.8rem; }
+        /* Modal */
+        .day-detail-content { padding: 16px; max-width: calc(100vw - 16px); }
+        .day-detail-title { font-size: 1.2rem; }
+        /* Legend */
+        .calendar-legend { flex-wrap: wrap; gap: 8px; padding: 10px; }
+        /* View controls */
+        .calendar-view-controls { flex-wrap: wrap; gap: 6px; }
+        .calendar-view-controls .btn { min-height: 44px; }
+        /* Week view */
+        .week-day-header { padding: 8px 10px; }
+        .week-event-item { padding: 6px 8px; font-size: 12px; }
+    }
+    @media (max-width: 380px) {
+        .calendar-day { min-height: 50px; }
+        .day-number { font-size: 0.75rem; }
+        .event-badge { font-size: 0.55rem; min-height: 16px; }
+        .month-title { font-size: 1rem; }
+    }
 </style>
 {% endblock %}
 
@@ -2241,5 +2293,19 @@
         const target = e.target.closest('[data-action="filter-events"]');
         if (target) filterEventsByType();
     });
+</script>
+<script src="{{ url_for('static', filename='js/utils/swipe-handler.js') }}"></script>
+<script>
+(function() {
+    var grid = document.getElementById('calendar-grid');
+    var prevBtn = document.getElementById('nav-prev');
+    var nextBtn = document.getElementById('nav-next');
+    if (grid && prevBtn && nextBtn) {
+        initSwipe(grid, {
+            onSwipeLeft: function() { nextBtn.click(); },
+            onSwipeRight: function() { prevBtn.click(); }
+        });
+    }
+})();
 </script>
 {% endblock %}

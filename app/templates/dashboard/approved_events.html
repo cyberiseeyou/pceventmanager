@@ -966,6 +966,49 @@
             order: 1;
         }
     }
+
+    @media (max-width: 480px) {
+        .container { padding: 12px !important; }
+        .dashboard-header { padding: 16px; border-radius: 8px; }
+        .dashboard-header h1 { font-size: 18px; gap: 8px; }
+        .dashboard-header h1 img { height: 24px; }
+        .dashboard-header .subtitle { font-size: 12px; }
+        .scanout-warning { flex-direction: column; padding: 12px; gap: 10px; text-align: center; }
+        .scanout-warning .deadline { font-size: 16px; }
+        .auth-section { padding: 20px 16px; }
+        .auth-section h2 { font-size: 18px; }
+        .mfa-input { width: 140px; font-size: 16px; margin-right: 0; margin-bottom: 10px; }
+        .session-info { flex-direction: column; gap: 8px; text-align: center; }
+        .filter-row { flex-direction: column; align-items: stretch; }
+        .filter-row select, .filter-row input { min-height: 44px; width: 100%; }
+        .filter-btn { min-height: 44px; width: 100%; }
+        .deadline-countdown { padding: 16px; border-radius: 8px; }
+        .deadline-countdown .countdown-timer { font-size: 28px; }
+        .stat-card { padding: 14px 16px; }
+        .stat-card .count { font-size: 24px; }
+        .stat-card .action-icon { font-size: 20px; }
+        .panel-header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+        .panel-header h3 { font-size: 14px; }
+        .panel-instruction { padding: 10px 16px; font-size: 12px; }
+        .panel-events { padding: 10px; }
+        .event-card { padding: 10px 12px; gap: 8px; }
+        .event-card .event-id { font-size: 12px; min-width: 60px; }
+        .event-card .event-name { white-space: normal; font-size: 13px; }
+        .event-card .event-date { font-size: 12px; min-width: unset; }
+        .event-card .roll-to-date { font-size: 11px; min-width: unset; padding: 3px 8px; }
+        .event-card .assigned-to { font-size: 12px; min-width: unset; }
+        .event-card .action-btn { min-height: 44px; padding: 8px 12px; }
+        .print-all-btn { min-height: 44px; width: 100%; justify-content: center; }
+        .table-header { flex-wrap: wrap; gap: 6px; }
+        .view-toggle { min-height: 44px; }
+    }
+    @media (max-width: 380px) {
+        .container { padding: 8px !important; }
+        .dashboard-header { padding: 12px; }
+        .dashboard-header h1 { font-size: 16px; }
+        .stat-card .count { font-size: 20px; }
+        .deadline-countdown .countdown-timer { font-size: 24px; }
+    }
 </style>
 {% endblock %}
 

@@ -156,6 +156,35 @@ def require_authentication():
     return decorator
 
 
+def require_role(*allowed_roles):
+    """
+    Decorator to require specific roles for route access.
+    Must be used AFTER @require_authentication().
+
+    Usage:
+        @require_authentication()
+        @require_role('supervisor')
+        def admin_view(): ...
+
+        @require_authentication()
+        @require_role('supervisor', 'lead')
+        def lead_view(): ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return redirect(url_for('auth.login_page'))
+            user_role = user.get('role', 'supervisor')  # Default to supervisor for legacy sessions
+            if user_role not in allowed_roles:
+                from flask import abort
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
 @auth_bp.route('/login')
 def login_page():
     """Display login page"""
@@ -261,6 +290,26 @@ def login():
                 user_info['last_name'] = last_name or ''
                 user_info['full_name'] = f"{first_name} {last_name}".strip() if (first_name and last_name) else (first_name or username)
 
+                # Determine role from Employee record if it exists
+                user_info['role'] = 'supervisor'  # Default for Crossmark users
+                try:
+                    from app.models.registry import get_models
+                    models = get_models()
+                    Employee = models['Employee']
+                    # Try to match by name or crossmark ID
+                    emp = Employee.query.filter(
+                        db.or_(
+                            Employee.crossmark_employee_id == username,
+                            db.func.lower(Employee.name) == user_info.get('full_name', '').lower()
+                        )
+                    ).first() if hasattr(db, 'or_') else None
+                    if emp:
+                        user_info['role'] = emp.role
+                        user_info['employee_id'] = emp.id
+                        user_info['job_title'] = emp.job_title
+                except Exception:
+                    pass  # Default to supervisor if lookup fails
+
                 # Create session
                 session_id = secrets.token_urlsafe(32)
                 session_data = {
@@ -344,6 +393,146 @@ def login():
         else:
             flash(error_message, 'error')
             return redirect(url_for('auth.login_page'))
+
+
+@auth_bp.route('/employee-login')
+def employee_login_page():
+    """Display employee self-service login page"""
+    if is_authenticated():
+        today = datetime.now().strftime('%Y-%m-%d')
+        return redirect(url_for('main.daily_schedule_view', date=today))
+    return render_template('auth/employee_login.html')
+
+
+@auth_bp.route('/employee-login', methods=['POST'])
+def employee_login():
+    """Authenticate employee via name + PIN"""
+    from app.models.registry import get_models, get_db
+
+    employee_id = request.form.get('employee_id', '').strip()
+    pin = request.form.get('pin', '').strip()
+
+    if not employee_id or not pin:
+        flash('Employee and PIN are required', 'error')
+        return redirect(url_for('auth.employee_login_page'))
+
+    models = get_models()
+    Employee = models['Employee']
+    employee = Employee.query.get(employee_id)
+
+    if not employee or not employee.has_account or not employee.check_pin(pin):
+        flash('Invalid credentials. Check your name and PIN.', 'error')
+        return redirect(url_for('auth.employee_login_page'))
+
+    if not employee.is_active:
+        flash('Your account has been deactivated. Contact your supervisor.', 'error')
+        return redirect(url_for('auth.employee_login_page'))
+
+    # Create session with role
+    session_id = secrets.token_urlsafe(32)
+    name_parts = employee.name.split(' ', 1)
+    first_name = name_parts[0] if name_parts else employee.name
+    last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+    session_data = {
+        'user_id': f'emp_{employee.id}',
+        'user_info': {
+            'username': employee.name,
+            'first_name': first_name,
+            'last_name': last_name,
+            'full_name': employee.name,
+            'role': employee.role,
+            'employee_id': employee.id,
+            'job_title': employee.job_title,
+            'authenticated': True
+        },
+        'created_at': datetime.utcnow().isoformat(),
+        'last_activity': datetime.utcnow().isoformat(),
+        'pin_authenticated': True,
+        'event_times_configured': True  # Employees don't need to configure this
+    }
+
+    save_session(session_id, session_data)
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    response = redirect(url_for('main.daily_schedule_view', date=today))
+    response.set_cookie(
+        'session_id', session_id,
+        max_age=86400, httponly=True,
+        secure=request.is_secure, samesite='Lax'
+    )
+    return response
+
+
+@auth_bp.route('/api/employee/set-pin', methods=['POST'])
+@require_authentication()
+def set_employee_pin():
+    """Supervisor sets a PIN for an employee (enables their self-service login)"""
+    user = get_current_user()
+    if not user or user.get('role', 'supervisor') not in ('supervisor',):
+        return jsonify({'success': False, 'error': 'Supervisor access required'}), 403
+
+    from app.models.registry import get_models, get_db
+
+    data = request.get_json()
+    employee_id = data.get('employee_id')
+    pin = data.get('pin', '').strip()
+
+    if not employee_id or not pin:
+        return jsonify({'success': False, 'error': 'Employee ID and PIN required'}), 400
+
+    if len(pin) < 4:
+        return jsonify({'success': False, 'error': 'PIN must be at least 4 characters'}), 400
+
+    models = get_models()
+    db = get_db()
+    Employee = models['Employee']
+    employee = Employee.query.get(employee_id)
+
+    if not employee:
+        return jsonify({'success': False, 'error': 'Employee not found'}), 404
+
+    employee.set_pin(pin)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'PIN set for {employee.name}. They can now log in at /employee-login.'
+    })
+
+
+@auth_bp.route('/api/employee/revoke-access', methods=['POST'])
+@require_authentication()
+def revoke_employee_access():
+    """Supervisor revokes an employee's login access (clears PIN and disables account)"""
+    user = get_current_user()
+    if not user or user.get('role', 'supervisor') not in ('supervisor',):
+        return jsonify({'success': False, 'error': 'Supervisor access required'}), 403
+
+    from app.models.registry import get_models, get_db
+
+    data = request.get_json()
+    employee_id = data.get('employee_id')
+
+    if not employee_id:
+        return jsonify({'success': False, 'error': 'Employee ID required'}), 400
+
+    models = get_models()
+    db = get_db()
+    Employee = models['Employee']
+    employee = Employee.query.get(employee_id)
+
+    if not employee:
+        return jsonify({'success': False, 'error': 'Employee not found'}), 404
+
+    employee.pin_hash = None
+    employee.has_account = False
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Login access revoked for {employee.name}.'
+    })
 
 
 @auth_bp.route('/api/session-info')

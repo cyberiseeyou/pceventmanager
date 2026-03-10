@@ -442,6 +442,16 @@
         font-family: monospace;
         font-size: 11px;
     }
+
+    @media (max-width: 480px) {
+        .wizard-header { flex-direction: column; padding: 16px; text-align: center; gap: 12px; }
+        .wizard-header h1 { font-size: 18px; }
+        .nav-btns { width: 100%; justify-content: center; flex-wrap: wrap; }
+        .nav-btns a { min-height: 44px; display: flex; align-items: center; padding: 10px 14px; }
+        .progress-section { flex-direction: column; padding: 12px; }
+        .btn { min-height: 44px; }
+        .keyboard-hint { display: none; }
+    }
 </style>
 {% endblock %}
 

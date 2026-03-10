@@ -500,4 +500,144 @@
     .stats-grid {
         grid-template-columns: 1fr;
     }
+
+    /* Employee grid: single column on mobile */
+    .employee-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    /* Section header stacks */
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .section-title {
+        font-size: 1.5rem;
+    }
+    .section-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .section-actions .btn {
+        min-height: 44px;
+        flex: 1 1 auto;
+    }
+
+    /* Filter bar stacks */
+    .employee-filter-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    .employee-filter-bar input,
+    .employee-filter-bar select {
+        width: 100% !important;
+        min-height: 44px;
+    }
+
+    /* Employee card compact */
+    .employee-card {
+        padding: 14px;
+    }
+    .employee-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .employee-name {
+        font-size: 16px;
+    }
+
+    /* Actions wrap */
+    .employee-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .employee-actions .btn {
+        min-height: 44px;
+        font-size: 13px;
+    }
+
+    /* Modal compact */
+    .modal-content {
+        padding: 16px;
+        width: 95%;
+    }
+    .modal-header h2 {
+        font-size: 18px;
+    }
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    /* Availability grid compact */
+    .availability-grid {
+        gap: 3px;
+    }
+    .day-cell {
+        padding: 4px 2px;
+        font-size: 10px;
+    }
+    .availability-form-grid {
+        gap: 6px;
+    }
+    .availability-form-cell input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Stats compact */
+    .employee-stats {
+        padding: 16px;
+        margin-top: 24px;
+    }
+    .stats-title {
+        font-size: 1.2rem;
+    }
+    .stat-value {
+        font-size: 1.75rem;
+    }
+
+    /* Import modal */
+    .import-actions {
+        flex-wrap: wrap;
+    }
+    .import-actions .btn {
+        min-height: 44px;
+    }
+    .import-employee-list {
+        max-height: 300px;
+    }
+
+    /* Checkboxes touch-friendly */
+    .checkbox-group {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .checkbox-group input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* Budget Android (380px) */
+@media (max-width: 380px) {
+    .employee-card {
+        padding: 12px;
+    }
+    .employee-name {
+        font-size: 15px;
+    }
+    .section-title {
+        font-size: 1.25rem;
+    }
+    .modal-content {
+        padding: 12px;
+    }
+    .employee-stats {
+        padding: 12px;
+    }
 }

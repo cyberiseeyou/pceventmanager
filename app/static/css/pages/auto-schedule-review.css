@@ -788,3 +788,25 @@
 .progress-detail-item.error {
     color: var(--color-danger);
 }
+
+@media (max-width: 480px) {
+    .review-container { padding: 10px; }
+    .review-header { padding: 16px; }
+    .review-header h1 { font-size: 1.3rem; }
+    .review-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-card { padding: 10px; }
+    .stat-card .value { font-size: 24px; }
+    .section { padding: 14px; }
+    .section h2 { flex-wrap: wrap; gap: 8px; font-size: 1.1rem; }
+    .event-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .btn { min-height: 44px; padding: 10px 16px; }
+    .form-control, select { min-height: 44px; font-size: 16px; }
+    .action-buttons { flex-direction: column; gap: 8px; }
+    .action-buttons .btn { width: 100%; }
+}
+
+@media (max-width: 380px) {
+    .review-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card .value { font-size: 20px; }
+    .section h2 { font-size: 1rem; }
+}

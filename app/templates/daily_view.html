@@ -172,6 +172,40 @@
     color: white;
     line-height: 1;
   }
+
+  /* Mobile: compact tabs */
+  @media (max-width: 480px) {
+    .daily-tabs {
+      gap: 2px;
+      padding: 3px;
+    }
+
+    .daily-tab {
+      padding: 8px 8px;
+      font-size: 13px;
+      gap: 4px;
+    }
+
+    .daily-tab .material-symbols-outlined {
+      font-size: 16px;
+    }
+
+    .summary-bar {
+      padding: 8px 12px !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .daily-tab {
+      padding: 8px 6px;
+      font-size: 12px;
+      gap: 3px;
+    }
+
+    .daily-tab .material-symbols-outlined {
+      font-size: 15px;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -676,5 +710,19 @@ if (savedTab) {
     var tabBtn = document.querySelector('.daily-tab[data-tab="' + savedTab + '"]');
     if (tabBtn) tabBtn.click();
 }
+</script>
+<script src="{{ url_for('static', filename='js/utils/swipe-handler.js') }}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var container = document.querySelector('.daily-view-container');
+    var prevBtn = document.querySelector('.btn-nav-prev');
+    var nextBtn = document.querySelector('.btn-nav-next');
+    if (container && prevBtn && nextBtn) {
+        initSwipe(container, {
+            onSwipeLeft: function() { window.location.href = nextBtn.href; },
+            onSwipeRight: function() { window.location.href = prevBtn.href; }
+        });
+    }
+});
 </script>
 {% endblock %}

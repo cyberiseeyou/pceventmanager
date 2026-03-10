@@ -378,6 +378,75 @@
     .progress-results .success { color: #059669; }
     .progress-results .failure { color: #dc2626; }
 
+    /* Mobile (480px) */
+    @media (max-width: 480px) {
+        .page-title { font-size: 1.5rem; }
+
+        /* Summary bar stacks */
+        .summary-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+        .summary-actions {
+            flex-direction: column;
+            gap: 8px;
+        }
+        .summary-actions .btn {
+            width: 100%;
+            min-height: 44px;
+        }
+
+        /* Table: horizontal scroll */
+        .events-table {
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .events-table thead,
+        .events-table tbody {
+            min-width: 600px;
+        }
+        .events-table th,
+        .events-table td {
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+
+        /* Action buttons compact */
+        .action-buttons {
+            gap: 4px;
+        }
+        .action-buttons .btn {
+            padding: 6px 10px;
+            font-size: 12px;
+            min-height: 44px;
+        }
+
+        /* Modal responsive */
+        .modal-content {
+            max-width: calc(100vw - 24px);
+            padding: 16px;
+        }
+        .modal-actions {
+            flex-direction: column;
+        }
+        .modal-actions .btn {
+            width: 100%;
+            min-height: 44px;
+        }
+    }
+
+    /* Budget Android (380px) */
+    @media (max-width: 380px) {
+        .page-title { font-size: 1.25rem; }
+        .events-table th,
+        .events-table td {
+            padding: 6px 8px;
+            font-size: 11px;
+        }
+    }
+
     @media print {
         .summary-actions,
         .action-buttons,

@@ -308,8 +308,14 @@ def setup_request_handlers(app):
 
     @app.context_processor
     def inject_user():
-        """Make get_current_user available in templates"""
-        return dict(get_current_user=get_current_user)
+        """Make get_current_user and role info available in templates"""
+        user = get_current_user()
+        user_role = user.get('role', 'supervisor') if user else None
+        return dict(
+            get_current_user=get_current_user,
+            current_user=user,
+            current_user_role=user_role
+        )
 
     @app.context_processor
     def inject_now():

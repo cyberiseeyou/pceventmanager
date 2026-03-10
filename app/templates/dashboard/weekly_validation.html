@@ -486,6 +486,86 @@
         font-size: 12px;
         color: #666;
     }
+
+    /* Mobile (480px) */
+    @media (max-width: 480px) {
+        /* Header stacks */
+        .validation-header {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 16px;
+            gap: 12px;
+        }
+        .validation-header h1 { font-size: 20px; }
+        .nav-btns {
+            flex-wrap: wrap;
+            gap: 6px;
+            width: 100%;
+        }
+        .nav-btns a, .rebalance-btn {
+            padding: 8px 12px;
+            font-size: 13px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Stats row compact */
+        .stats-row {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Days row wraps */
+        .days-row {
+            gap: 6px;
+        }
+        .day-pill {
+            min-width: 60px;
+            padding: 8px 6px;
+            font-size: 12px;
+        }
+
+        /* Issue items stack */
+        .issue-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .issue-actions {
+            width: 100%;
+            max-width: none;
+            justify-content: flex-start;
+        }
+        .issue-actions .btn {
+            min-height: 44px;
+            font-size: 13px;
+        }
+
+        /* Container padding */
+        .container-fluid { padding-left: 12px; padding-right: 12px; }
+
+        /* Filter buttons */
+        .filter-btns {
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        /* Modal responsive */
+        .modal-content, .assign-modal {
+            max-width: calc(100vw - 24px);
+            padding: 16px;
+        }
+    }
+
+    /* Budget Android (380px) */
+    @media (max-width: 380px) {
+        .validation-header { padding: 12px; }
+        .validation-header h1 { font-size: 18px; }
+        .nav-btns a, .rebalance-btn { padding: 6px 10px; font-size: 12px; }
+        .day-pill { min-width: 50px; font-size: 11px; }
+        .container-fluid { padding-left: 8px; padding-right: 8px; }
+    }
 </style>
 {% endblock %}
 

@@ -53,10 +53,13 @@
     border: none;
     cursor: pointer;
     color: #6b7280;
-    padding: 4px;
+    padding: 8px;
     border-radius: 6px;
     display: flex;
     align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
 }
 
 .sidebar-close:hover {

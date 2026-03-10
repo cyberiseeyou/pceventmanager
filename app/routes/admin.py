@@ -4,7 +4,7 @@ Handles admin operations, sync management, testing, and utility endpoints
 """
 from flask import Blueprint, render_template, request, jsonify, current_app, abort, make_response, redirect, url_for
 from app.models import get_models
-from app.routes.auth import require_authentication
+from app.routes.auth import require_authentication, require_role
 from app.utils.db_compat import disable_foreign_keys, is_sqlite
 from datetime import datetime, timedelta, date, time
 from io import BytesIO
@@ -2031,6 +2031,7 @@ def print_employee_schedule(employee_id, week_start_str):
 
 @admin_bp.route('/settings')
 @require_authentication()
+@require_role('supervisor')
 def settings_page():
     """Display settings page for Retail Link credentials and other configuration"""
     SystemSetting = current_app.config.get('SystemSetting')
@@ -2077,6 +2078,7 @@ def settings_page():
 
 @admin_bp.route('/event-times')
 @require_authentication()
+@require_role('supervisor')
 def event_times_page():
     """Display consolidated event time settings page"""
     return render_template('event_times.html')

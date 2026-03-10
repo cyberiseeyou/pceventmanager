@@ -258,6 +258,27 @@
             gap: 15px;
         }
     }
+
+    @media (max-width: 480px) {
+        .add-employee-container { padding: 12px; }
+        .page-title { font-size: 1.5rem; }
+        .form-card { padding: 16px; border-width: 1px; }
+        .form-section-title { font-size: 1.1rem; }
+        .form-group input[type="text"],
+        .form-group input[type="email"],
+        .form-group input[type="tel"],
+        .form-group select { min-height: 44px; padding: 10px 12px; }
+        .availability-grid { grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .availability-day input[type="checkbox"] { width: 28px; height: 28px; }
+        .availability-day label { font-size: 11px; }
+        .form-actions { flex-direction: column; align-items: stretch; }
+        .form-actions .btn { min-height: 44px; text-align: center; }
+        .checkbox-group input[type="checkbox"] { width: 24px; height: 24px; }
+    }
+    @media (max-width: 380px) {
+        .add-employee-container { padding: 8px; }
+        .form-card { padding: 12px; }
+    }
 </style>
 {% endblock %}
 

@@ -65,6 +65,13 @@
         color: #6b7280;
         margin-bottom: 8px;
     }
+    @media (max-width: 480px) {
+        .week-nav { flex-wrap: wrap; gap: 8px; justify-content: center; }
+        .week-nav button { min-height: 44px; padding: 10px 16px; }
+        .week-label { font-size: 15px; text-align: center; width: 100%; }
+        .lost-demos-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .undo-btn { min-height: 44px; padding: 8px 16px; }
+    }
     @media print {
         .week-nav button, .undo-btn, .report-actions { display: none !important; }
     }

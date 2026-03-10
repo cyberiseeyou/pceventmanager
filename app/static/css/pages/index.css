@@ -972,6 +972,91 @@
     }
 }
 
+@media (max-width: 480px) {
+    .welcome-section {
+        padding: var(--spacing-md);
+    }
+
+    .welcome-title {
+        font-size: 1.5rem;
+    }
+
+    .welcome-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .role-card {
+        padding: 0.75rem 1rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-sm);
+    }
+
+    .stat-card {
+        padding: var(--spacing-md);
+    }
+
+    .stat-number {
+        font-size: 2rem;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+        letter-spacing: 0.5px;
+    }
+
+    .dashboard-section {
+        padding: var(--spacing-md);
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+
+    .section-title {
+        font-size: 1.2rem;
+    }
+
+    .verification-date-row {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .verification-btn,
+    .btn {
+        min-height: 44px;
+        width: 100%;
+    }
+
+    .verification-date-input,
+    .form-control {
+        min-height: 44px;
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 380px) {
+    .welcome-title {
+        font-size: 1.3rem;
+    }
+
+    .stat-number {
+        font-size: 1.6rem;
+    }
+
+    .stats-grid {
+        gap: 6px;
+    }
+
+    .stat-card {
+        padding: var(--spacing-sm);
+    }
+}
+
 /* ============================================================================
    Print Styles
    ========================================================================= */

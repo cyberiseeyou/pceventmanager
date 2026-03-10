@@ -3,6 +3,7 @@ Employee model and related database schema
 Represents staff members who can be scheduled for events
 """
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 def create_employee_model(db):
@@ -43,6 +44,10 @@ def create_employee_model(db):
         # Crossmark/MV Retail import fields
         mv_retail_employee_number = db.Column(db.String(50), nullable=True)
         crossmark_employee_id = db.Column(db.String(50), nullable=True, unique=True)
+
+        # Employee self-service login fields
+        pin_hash = db.Column(db.String(256), nullable=True)
+        has_account = db.Column(db.Boolean, nullable=False, default=False)
 
         # Sync fields for API integration
         external_id = db.Column(db.String(100), unique=True)
@@ -94,6 +99,27 @@ def create_employee_model(db):
 
             # All employees can work other event types (Core, Other)
             return True
+
+        def set_pin(self, pin):
+            """Hash and store a PIN for employee self-service login."""
+            self.pin_hash = generate_password_hash(str(pin))
+            self.has_account = True
+
+        def check_pin(self, pin):
+            """Verify PIN against stored hash."""
+            if not self.pin_hash:
+                return False
+            return check_password_hash(self.pin_hash, str(pin))
+
+        @property
+        def role(self):
+            """Map job_title to a simplified role for access control."""
+            if self.job_title == 'Club Supervisor' or self.is_supervisor:
+                return 'supervisor'
+            elif self.job_title == 'Lead Event Specialist':
+                return 'lead'
+            else:
+                return 'specialist'
 
         def __repr__(self):
             return f'<Employee {self.id}: {self.name}>'

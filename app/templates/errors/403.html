@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Access Denied{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 3rem 1.5rem; max-width: 400px; margin: 0 auto;">
+    <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">&#x1F6AB;</div>
+    <h1 style="font-size: 1.5rem; color: var(--color-primary); margin-bottom: 0.75rem;">Access Denied</h1>
+    <p style="color: #666; line-height: 1.6; margin-bottom: 1.5rem;">
+        You don't have permission to view this page. This area is restricted to supervisors.
+    </p>
+    <a href="/" style="display: inline-block; padding: 0.75rem 2rem; background: var(--color-primary); color: #fff; border-radius: 8px; text-decoration: none; min-height: 44px; font-weight: 600;">
+        Go Home
+    </a>
+</div>
+{% endblock %}
