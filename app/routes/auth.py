@@ -501,6 +501,40 @@ def set_employee_pin():
     })
 
 
+@auth_bp.route('/api/employee/revoke-access', methods=['POST'])
+@require_authentication()
+def revoke_employee_access():
+    """Supervisor revokes an employee's login access (clears PIN and disables account)"""
+    user = get_current_user()
+    if not user or user.get('role', 'supervisor') not in ('supervisor',):
+        return jsonify({'success': False, 'error': 'Supervisor access required'}), 403
+
+    from app.models.registry import get_models, get_db
+
+    data = request.get_json()
+    employee_id = data.get('employee_id')
+
+    if not employee_id:
+        return jsonify({'success': False, 'error': 'Employee ID required'}), 400
+
+    models = get_models()
+    db = get_db()
+    Employee = models['Employee']
+    employee = Employee.query.get(employee_id)
+
+    if not employee:
+        return jsonify({'success': False, 'error': 'Employee not found'}), 404
+
+    employee.pin_hash = None
+    employee.has_account = False
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Login access revoked for {employee.name}.'
+    })
+
+
 @auth_bp.route('/api/session-info')
 def session_info():
     """Get session information including event times configuration status"""

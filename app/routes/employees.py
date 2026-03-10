@@ -79,6 +79,7 @@ def manage_employees(employee_id=None):
                 'job_title': emp.job_title,
                 'adult_beverage_trained': emp.adult_beverage_trained,
                 'juicer_trained': emp.juicer_trained,
+                'has_account': emp.has_account,
                 'weekly_availability': {
                     'monday': weekly_availability.monday if weekly_availability else True,
                     'tuesday': weekly_availability.tuesday if weekly_availability else True,
