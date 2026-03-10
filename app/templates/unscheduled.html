@@ -74,6 +74,10 @@
         class="tab-btn tab-btn-warning {% if condition == 'past_due' %}active{% endif %}">
         Past Due <span class="tab-count">{{ condition_counts.past_due }}</span>
     </a>
+    <a href="{{ url_for('main.unscheduled_events', condition='cancelled') }}"
+        class="tab-btn {% if condition == 'cancelled' %}active{% endif %}" style="color: #991b1b;">
+        Cancelled <span class="tab-count">{{ condition_counts.cancelled }}</span>
+    </a>
 </div>
 
 <!-- Time scope toggle (hidden on Past Due tab since it always shows past events) -->

@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app, fla
 from sqlalchemy import or_
 from app.routes.auth import require_authentication
 from app.models import init_models
+from app.constants import CANCELLED_VARIANTS
 from datetime import datetime, date, timedelta
 
 # Create blueprint
@@ -79,15 +80,16 @@ def unscheduled_events():
         'paused': 'Paused',
         'reissued': 'Reissued',
         'cannot_complete': 'Cannot Complete',
-        'past_due': 'Past Due'
+        'past_due': 'Past Due',
+        'cancelled': 'Cancelled'
     }
 
     today = date.today()
 
     # Build query based on condition
     if condition_filter == 'all':
-        # All events regardless of condition
-        query = Event.query
+        # All events except cancelled (cancelled have their own tab)
+        query = Event.query.filter(Event.condition.notin_(CANCELLED_VARIANTS))
     elif condition_filter == 'unstaffed':
         # Only Unstaffed events are truly unscheduled
         query = Event.query.filter_by(condition='Unstaffed')
@@ -106,12 +108,15 @@ def unscheduled_events():
     elif condition_filter == 'cannot_complete':
         query = Event.query.filter_by(condition='Cannot Complete')
     elif condition_filter == 'past_due':
-        # Events due today or earlier that haven't been submitted
+        # Events due today or earlier that haven't been submitted or cancelled
         today_end = datetime.combine(today, datetime.max.time())
         query = Event.query.filter(
             Event.due_datetime <= today_end,
-            Event.condition != 'Submitted'
+            Event.condition != 'Submitted',
+            Event.condition.notin_(CANCELLED_VARIANTS)
         )
+    elif condition_filter == 'cancelled':
+        query = Event.query.filter(Event.condition.in_(CANCELLED_VARIANTS))
     else:
         # Default to all events
         query = Event.query
@@ -369,7 +374,7 @@ def unscheduled_events():
         event.days_remaining = days_remaining
 
         # For scheduled events, fetch schedule and employee information
-        if condition_filter in ['all', 'scheduled', 'submitted', 'reissued', 'past_due']:
+        if condition_filter in ['all', 'scheduled', 'submitted', 'reissued', 'past_due', 'cancelled']:
             schedules = Schedule.query.filter_by(event_ref_num=event.project_ref_num).all()
             if schedules:
                 # Get employee names and times for all schedules
@@ -399,14 +404,15 @@ def unscheduled_events():
     today_start = datetime.combine(today, datetime.min.time())
     not_past_due = Event.due_datetime >= today_start
     condition_counts = {
-        'all': Event.query.filter(not_past_due).count(),
+        'all': Event.query.filter(not_past_due, Event.condition.notin_(CANCELLED_VARIANTS)).count(),
         'unstaffed': Event.query.filter_by(condition='Unstaffed').filter(not_past_due).count(),
         'scheduled': Event.query.filter_by(condition='Scheduled').filter(not_past_due).count(),
         'submitted': Event.query.filter_by(condition='Submitted').filter(not_past_due).count(),
         'paused': Event.query.filter_by(condition='Paused').filter(not_past_due).count(),
         'reissued': Event.query.filter_by(condition='Reissued').filter(not_past_due).count(),
         'cannot_complete': Event.query.filter_by(condition='Cannot Complete').filter(not_past_due).count(),
-        'past_due': Event.query.filter(Event.due_datetime <= datetime.combine(today, datetime.max.time()), Event.condition != 'Submitted').count(),
+        'past_due': Event.query.filter(Event.due_datetime <= datetime.combine(today, datetime.max.time()), Event.condition != 'Submitted', Event.condition.notin_(CANCELLED_VARIANTS)).count(),
+        'cancelled': Event.query.filter(Event.condition.in_(CANCELLED_VARIANTS)).count(),
     }
 
     # Map date filter display names
