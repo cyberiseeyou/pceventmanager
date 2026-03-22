@@ -483,8 +483,9 @@ class TestRunLifecycle:
 class TestRouteIntegration:
     """Test the auto-scheduler route with CP-SAT solver."""
 
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
     @patch('app.routes.auth.is_authenticated', return_value=True)
-    def test_solver_override_param(self, mock_auth, client, db_session, models):
+    def test_solver_override_param(self, mock_auth, mock_user, client, db_session, models):
         """Route accepts ?solver=cpsat override parameter."""
         _make_employee(models, db_session, 'emp1', 'Alice')
         _make_event(models, db_session, 100020, 'Core')
@@ -497,8 +498,9 @@ class TestRouteIntegration:
         assert data['success'] is True
         assert data.get('solver') == 'cpsat'
 
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
     @patch('app.routes.auth.is_authenticated', return_value=True)
-    def test_greedy_override_param(self, mock_auth, client, db_session, models):
+    def test_greedy_override_param(self, mock_auth, mock_user, client, db_session, models):
         """Route accepts ?solver=greedy override parameter."""
         _make_employee(models, db_session, 'emp1', 'Alice')
         _make_event(models, db_session, 100021, 'Core')
@@ -623,8 +625,9 @@ class TestSelfBumpFix:
 class TestApprovalRescheduledEvents:
     """Verify approval correctly handles rescheduled events with bumped_posted_schedule_id."""
 
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
     @patch('app.routes.auth.is_authenticated', return_value=True)
-    def test_approval_deletes_old_schedule_for_rescheduled_event(self, mock_auth, client, db_session, models):
+    def test_approval_deletes_old_schedule_for_rescheduled_event(self, mock_auth, mock_user, client, db_session, models):
         """When approving a rescheduled event (bumped_posted_schedule_id set, no bumped_event_ref_num),
         the old posted schedule should be deleted and the new one created."""
         import json

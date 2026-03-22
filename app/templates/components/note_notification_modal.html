@@ -1,0 +1,128 @@
+<!-- Note Notification Modal - Slide-in panel for due note reminders -->
+<div id="noteNotificationOverlay" style="display:none;">
+    <div id="noteNotificationPanel">
+        <!-- Header -->
+        <div id="noteNotifHeader">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:48px; height:48px; background:linear-gradient(135deg,#F59E0B,#D97706); border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                    <span class="material-symbols-outlined" style="color:white; font-size:24px;">notifications_active</span>
+                </div>
+                <div>
+                    <div style="font-weight:700; font-size:18px; color:#1F2937;">Reminder</div>
+                    <div id="noteNotifDueTime" style="color:#6B7280; font-size:12px;"></div>
+                </div>
+            </div>
+            <div id="noteNotifQueue" style="display:none; font-size:12px; color:#6B7280; margin-top:8px;"></div>
+        </div>
+
+        <!-- Note Content -->
+        <div id="noteNotifBody">
+            <div id="noteNotifContent">
+                <div id="noteNotifTitle" style="font-weight:700; color:#92400E; font-size:15px;"></div>
+                <div id="noteNotifDesc" style="color:#78716C; font-size:13px; margin-top:4px;"></div>
+            </div>
+            <div id="noteNotifMeta" style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;"></div>
+        </div>
+
+        <!-- Actions -->
+        <div id="noteNotifActions">
+            <button id="noteNotifDismissBtn" type="button">
+                <span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle;">check</span>
+                Got it — Dismiss
+            </button>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
+                <button type="button" class="snooze-btn" data-duration="5">5m</button>
+                <button type="button" class="snooze-btn" data-duration="15">15m</button>
+                <button type="button" class="snooze-btn" data-duration="30">30m</button>
+                <button type="button" class="snooze-btn" data-duration="60">1h</button>
+            </div>
+            <div style="text-align:center; color:#9CA3AF; font-size:11px; margin-top:4px;">Snooze for...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #noteNotificationOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    #noteNotificationOverlay.visible {
+        opacity: 1;
+    }
+    #noteNotificationPanel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 380px;
+        max-width: 90vw;
+        background: white;
+        border-radius: 16px 0 0 16px;
+        box-shadow: -8px 0 30px rgba(0,0,0,0.2);
+        display: flex;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    }
+    #noteNotificationOverlay.visible #noteNotificationPanel {
+        transform: translateX(0);
+    }
+    #noteNotifHeader {
+        padding: 24px 24px 16px;
+        border-bottom: 2px solid #FDE68A;
+    }
+    #noteNotifBody {
+        flex: 1;
+        padding: 20px 24px;
+    }
+    #noteNotifContent {
+        background: #FFFBEB;
+        border-left: 4px solid #F59E0B;
+        padding: 16px;
+        border-radius: 0 8px 8px 0;
+    }
+    #noteNotifActions {
+        padding: 20px 24px;
+        border-top: 1px solid #E5E7EB;
+    }
+    #noteNotifDismissBtn {
+        width: 100%;
+        padding: 12px;
+        background: #0071CE;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+    #noteNotifDismissBtn:hover {
+        background: #005ea6;
+    }
+    .snooze-btn {
+        padding: 8px 4px;
+        background: #F9FAFB;
+        color: #374151;
+        border: 1px solid #E5E7EB;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .snooze-btn:hover {
+        background: #F3F4F6;
+        border-color: #D1D5DB;
+    }
+    @media (max-width: 480px) {
+        #noteNotificationPanel {
+            width: 100vw;
+            max-width: 100vw;
+            border-radius: 0;
+        }
+    }
+</style>

@@ -90,6 +90,7 @@ python wsgi.py                              # Start server
 FLASK_ENV=development python wsgi.py        # Debug mode
 pytest -v                                   # Run tests
 pytest --cov=app                            # With coverage
+ruff check app/                             # Lint Python files
 ./backup_now.sh                             # Backup database
 ./start_test_instance.sh                    # Test instance (port 8001)
 
@@ -297,6 +298,21 @@ if not config.SYNC_ENABLED:
     return error_response
 ```
 
+### External API Singleton (`session_api_service`)
+The `session_api` in `app/integrations/external_api/session_api_service.py` is a **server-level singleton** that stores auth state (`phpsessid`, `authenticated`, `session.cookies`). Before any login attempt, **always clear its state first** to prevent session leakage between users:
+```python
+external_api.authenticated = False
+external_api.phpsessid = None
+if external_api.session:
+    external_api.session.cookies.clear()
+```
+
+### Auth System
+- Sessions stored in **Redis** with `session_id` cookie (24h TTL, 10-min inactivity timeout)
+- Three roles: `supervisor` > `lead` > `specialist`
+- Login pages must **never** auto-redirect authenticated users (shared device risk)
+- Always destroy old sessions before creating new ones on login
+
 ### Scheduling
 ```python
 # Always validate before creating schedules
@@ -329,7 +345,7 @@ Schedule
 
 PendingSchedule (approval workflow)
 ├── Event, Employee (many-to-one)
-└── Status: pending | approved | rejected
+└── Status: pending | approved | superseded | api_failed
 
 Auto-Scheduler: RotationAssignment, SchedulerRunHistory, ScheduleException, LockedDay
 System: AuditLog, SystemSetting, CompanyHoliday, ShiftBlockSetting, UserSession
@@ -364,7 +380,7 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 | rotations_bp | /rotations | Rotation management |
 | admin_bp | / | Admin panel |
 | printing_bp | /printing | PDF generation |
-| walmart_bp | /walmart | Walmart integration |
+| walmart_bp | /api/walmart | Walmart EDR integration (in `app/integrations/walmart_api/`) |
 | edr_sync_bp | /api/sync | EDR synchronization |
 | ai_bp | /api/ai | AI assistant |
 | inventory_bp | /inventory | Supply inventory |
@@ -377,6 +393,8 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 | api_shift_blocks_bp | /api/shift-blocks | Shift block endpoints |
 | api_company_holidays_bp | /api/company-holidays | Company holiday endpoints |
 | api_paperwork_templates_bp | /api/paperwork-templates | Paperwork template endpoints |
+| reports_bp | /reports | Reports |
+| lost_demos_bp | / | Lost demo tracking |
 
 ---
 
@@ -425,4 +443,4 @@ cp instance/scheduler.db instance/scheduler_test.db
 
 ---
 
-**Last updated**: 2026-02-18 | **Architecture docs**: `docs/CODEBASE_MAP.md`
+**Last updated**: 2026-03-21 | **Architecture docs**: `docs/CODEBASE_MAP.md`

@@ -645,36 +645,47 @@ class DailyView {
     }
 
     /**
-     * Attach event listeners to attendance section
+     * Attach event listeners to attendance section using event delegation.
+     * A single listener on the container handles all clicks regardless of
+     * when buttons are rendered, avoiding stale-handler issues on re-render.
      */
     attachAttendanceListeners() {
-        // Record attendance dropdowns
-        document.querySelectorAll('.attendance-dropdown .dropdown-toggle').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const dropdown = e.currentTarget.closest('.attendance-dropdown');
-                this.toggleAttendanceDropdown(dropdown);
-            });
-        });
+        // Guard: only attach the delegated handler once
+        if (this._attendanceListenerAttached) return;
+        this._attendanceListenerAttached = true;
 
-        // Attendance status options
-        document.querySelectorAll('.attendance-option').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const employeeId = e.currentTarget.getAttribute('data-employee-id');
-                const status = e.currentTarget.getAttribute('data-status');
-                this.handleAttendanceRecordForEmployee(employeeId, status);
-            });
-        });
+        const container = this.attendanceContainer;
+        if (!container) return;
 
-        // Edit attendance buttons
-        document.querySelectorAll('.btn-edit-attendance-row').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const employeeId = e.currentTarget.getAttribute('data-employee-id');
+        container.addEventListener('click', (e) => {
+            // Edit attendance button
+            const editBtn = e.target.closest('.btn-edit-attendance-row');
+            if (editBtn) {
+                const employeeId = editBtn.getAttribute('data-employee-id');
                 this.handleAttendanceEditForEmployee(employeeId);
-            });
+                return;
+            }
+
+            // Attendance dropdown toggle
+            const toggleBtn = e.target.closest('.attendance-dropdown .dropdown-toggle');
+            if (toggleBtn) {
+                e.stopPropagation();
+                const dropdown = toggleBtn.closest('.attendance-dropdown');
+                this.toggleAttendanceDropdown(dropdown);
+                return;
+            }
+
+            // Attendance status option
+            const optionBtn = e.target.closest('.attendance-option');
+            if (optionBtn) {
+                const employeeId = optionBtn.getAttribute('data-employee-id');
+                const status = optionBtn.getAttribute('data-status');
+                this.handleAttendanceRecordForEmployee(employeeId, status);
+                return;
+            }
         });
 
-        // Close dropdowns when clicking outside
+        // Close dropdowns when clicking outside (once)
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.attendance-dropdown')) {
                 this.closeAllAttendanceDropdowns();
@@ -726,10 +737,13 @@ class DailyView {
      * Handle attendance edit for employee
      */
     async handleAttendanceEditForEmployee(employeeId) {
-        const row = document.querySelector(`[data-employee-id="${employeeId}"]`);
+        // Scope query to attendance container to avoid matching event cards or buttons
+        const container = this.attendanceContainer || document;
+        const row = container.querySelector(`.attendance-row[data-employee-id="${employeeId}"]`);
         if (row) {
             // Replace edit button with record dropdown
             const actionsCell = row.querySelector('.attendance-row__actions');
+            if (!actionsCell) return;
             actionsCell.innerHTML = `
                 <div class="attendance-dropdown" data-employee-id="${employeeId}">
                     <button class="btn btn-primary btn-sm dropdown-toggle"
@@ -825,6 +839,9 @@ class DailyView {
             const data = await response.json();
             if (data.success && data.count > 0) {
                 this.renderNotesBanner(data.notes);
+            } else {
+                // Clear any stale banners when no notes
+                document.querySelectorAll('.daily-notes-banner').forEach(el => el.remove());
             }
         } catch (error) {
             console.error('Failed to load daily notes:', error);
@@ -832,6 +849,9 @@ class DailyView {
     }
 
     renderNotesBanner(notes) {
+        // Remove any existing banners (prevents duplication on re-init)
+        document.querySelectorAll('.daily-notes-banner').forEach(el => el.remove());
+
         const banner = document.createElement('div');
         banner.className = 'daily-notes-banner';
         banner.style.cssText = 'background: linear-gradient(135deg, #fefce8, #fef9c3); border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;';
@@ -1565,12 +1585,12 @@ class DailyView {
             });
         });
 
-        // Dropdown toggles
-        document.querySelectorAll('.dropdown-toggle').forEach(btn => {
+        // Dropdown toggles — only event card dropdowns (not attendance dropdowns)
+        document.querySelectorAll('.dropdown > .dropdown-toggle').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const dropdown = e.currentTarget.closest('.dropdown');
-                this.toggleDropdown(dropdown);
+                if (dropdown) this.toggleDropdown(dropdown);
             });
         });
 
@@ -1652,7 +1672,7 @@ class DailyView {
         document.querySelectorAll('.dropdown').forEach(dropdown => {
             dropdown.classList.remove('dropdown-open');
             const toggle = dropdown.querySelector('.dropdown-toggle');
-            toggle.setAttribute('aria-expanded', 'false');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
         });
     }
 
@@ -1731,7 +1751,8 @@ class DailyView {
                 eventId,
                 eventType,
                 eventName,
-                currentEmployeeId: employeeId
+                currentEmployeeId: employeeId,
+                originalDate: currentDate
             };
 
             document.getElementById('reschedule-schedule-id').value = scheduleId;
@@ -2227,7 +2248,10 @@ class DailyView {
 
             if (currentEmployeeId) {
                 params.push(`current_employee_id=${currentEmployeeId}`);
-                params.push(`current_date=${date}`);
+                // Pass the original event date so the backend knows when the
+                // employee is already scheduled (same-day exception).
+                const origDate = this.rescheduleContext ? this.rescheduleContext.originalDate : date;
+                params.push(`current_date=${origDate}`);
             }
 
             // Check override status
@@ -3724,6 +3748,7 @@ class DailyView {
      * Toggle the lock state of the current day
      */
     async toggleDayLock() {
+        if (this._lockInProgress) return;
         if (this.isLocked) {
             await this.unlockDay();
         } else {
@@ -3735,11 +3760,14 @@ class DailyView {
      * Lock the current day
      */
     async lockDay() {
+        if (this._lockInProgress) return;
+
         const reason = prompt('Enter a reason for locking this day (optional):', 'Schedule finalized');
 
         // User cancelled the prompt
         if (reason === null) return;
 
+        this._lockInProgress = true;
         try {
             const response = await fetch('/api/locked-days', {
                 method: 'POST',
@@ -3766,6 +3794,8 @@ class DailyView {
         } catch (error) {
             console.error('Error locking day:', error);
             this.showNotification('Failed to lock day', 'error');
+        } finally {
+            this._lockInProgress = false;
         }
     }
 
@@ -3773,10 +3803,13 @@ class DailyView {
      * Unlock the current day
      */
     async unlockDay() {
+        if (this._lockInProgress) return;
+
         if (!confirm('Are you sure you want to unlock this day? This will allow schedule modifications.')) {
             return;
         }
 
+        this._lockInProgress = true;
         try {
             const response = await fetch(`/api/locked-days/${this.date}`, {
                 method: 'DELETE',
@@ -3798,6 +3831,8 @@ class DailyView {
         } catch (error) {
             console.error('Error unlocking day:', error);
             this.showNotification('Failed to unlock day', 'error');
+        } finally {
+            this._lockInProgress = false;
         }
     }
 
@@ -4395,6 +4430,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+
+        // When the date changes, refresh time slots and available employees
+        const rescheduleDateInput = document.getElementById('reschedule-date');
+        if (rescheduleDateInput) {
+            rescheduleDateInput.addEventListener('change', function () {
+                if (!window.dailyView || !window.dailyView.rescheduleContext) return;
+                const newDate = this.value;
+                if (!newDate) return;
+
+                const ctx = window.dailyView.rescheduleContext;
+                const timeInput = document.getElementById('reschedule-time');
+                const timeDropdown = document.getElementById('reschedule-time-dropdown');
+                const currentTime = (timeDropdown && timeDropdown.style.display !== 'none')
+                    ? timeDropdown.value
+                    : (timeInput ? timeInput.value : '');
+
+                // Refresh time slot counts for the new date
+                window.dailyView.setupTimeRestrictions('reschedule', ctx.eventType, currentTime, ctx.eventName);
+
+                // Refresh available employees for the new date
+                const empSelect = document.getElementById('reschedule-employee');
+                const currentEmpId = empSelect ? empSelect.value : ctx.currentEmployeeId;
+                window.dailyView.loadAvailableEmployeesForReschedule(
+                    'reschedule-employee', newDate, ctx.eventType, currentEmpId
+                );
+            });
+        }
     }
 
     // Setup reissue form submission
@@ -4465,5 +4527,169 @@ document.addEventListener('DOMContentLoaded', () => {
         bulkReassignForm.addEventListener('submit', (e) => {
             window.dailyView.submitBulkReassign(e);
         });
+    }
+
+    // Fix Coverage Times button
+    const fixCoverageBtn = document.getElementById('btn-fix-coverage');
+    if (fixCoverageBtn && window.dailyView) {
+        fixCoverageBtn.addEventListener('click', async () => {
+            if (!confirm('This will reorder all Core event times to follow the shift 1–12 pattern and push changes to MVRetail.\n\nContinue?')) {
+                return;
+            }
+
+            fixCoverageBtn.disabled = true;
+            const icon = fixCoverageBtn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = 'hourglass_empty';
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                const response = await fetch(`/api/fix-coverage-times/${window.dailyView.date}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken || '',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    const d = data.data;
+                    let msg = `Fixed ${d.changes_made} of ${d.total_core} Core events.`;
+                    if (d.errors && d.errors.length > 0) {
+                        msg += `\n\nWarnings:\n• ${d.errors.join('\n• ')}`;
+                    }
+                    if (d.changes_made > 0) {
+                        alert(msg);
+                        location.reload();
+                    } else {
+                        window.toaster.info('All Core events are already at the correct times.');
+                    }
+                } else {
+                    window.toaster.error(data.error || 'Failed to fix coverage times');
+                }
+            } catch (err) {
+                console.error('Fix coverage times error:', err);
+                window.toaster.error('Network error fixing coverage times');
+            } finally {
+                fixCoverageBtn.disabled = false;
+                if (icon) icon.textContent = 'schedule';
+            }
+        });
+    }
+
+    // ===== DAY NOTES PANEL =====
+    const dayNotesBtn = document.getElementById('btn-day-notes');
+    const dayNotesPanel = document.getElementById('day-notes-panel');
+    const dayNotesClose = document.getElementById('day-notes-close');
+
+    if (dayNotesBtn && dayNotesPanel && window.dailyView) {
+        let dayNotesLoaded = false;
+
+        function escapeHtmlNote(text) {
+            if (!text) return '';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        async function loadDayNotes() {
+            const loading = document.getElementById('day-notes-loading');
+            const empty = document.getElementById('day-notes-empty');
+            const list = document.getElementById('day-notes-list');
+
+            loading.hidden = false;
+            empty.hidden = true;
+            list.innerHTML = '';
+
+            try {
+                const resp = await fetch(`/api/day-notes/${window.dailyView.date}`);
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                loading.hidden = true;
+                dayNotesLoaded = true;
+
+                if (!data.notes || data.notes.length === 0) {
+                    empty.hidden = false;
+                    return;
+                }
+
+                list.innerHTML = data.notes.map(function(n) {
+                    const del = n.can_delete
+                        ? ' <button class="day-note-delete-btn" data-note-id="' + n.id + '" title="Delete"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>'
+                        : '';
+                    return '<div class="day-note-item">' +
+                        '<div class="day-note-item__content">' + escapeHtmlNote(n.content) + '</div>' +
+                        '<div class="day-note-item__meta">' + escapeHtmlNote(n.created_by) + ' &middot; ' + escapeHtmlNote(n.created_at) + del + '</div>' +
+                    '</div>';
+                }).join('');
+
+                // Attach delete listeners
+                list.querySelectorAll('.day-note-delete-btn').forEach(function(btn) {
+                    btn.addEventListener('click', async function() {
+                        if (!confirm('Delete this note?')) return;
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                        try {
+                            const r = await fetch('/api/day-notes/' + this.dataset.noteId, {
+                                method: 'DELETE',
+                                headers: { 'X-CSRF-Token': csrfToken || '' },
+                                credentials: 'same-origin',
+                            });
+                            if (r.ok) loadDayNotes();
+                        } catch (e) { /* ignore */ }
+                    });
+                });
+            } catch (err) {
+                loading.hidden = true;
+                empty.hidden = false;
+            }
+        }
+
+        dayNotesBtn.addEventListener('click', function() {
+            const isHidden = dayNotesPanel.hidden;
+            dayNotesPanel.hidden = !isHidden;
+            if (isHidden && !dayNotesLoaded) loadDayNotes();
+        });
+
+        if (dayNotesClose) {
+            dayNotesClose.addEventListener('click', function() {
+                dayNotesPanel.hidden = true;
+            });
+        }
+
+        // Submit note
+        const noteSubmit = document.getElementById('day-note-submit');
+        const noteInput = document.getElementById('day-note-input');
+        if (noteSubmit && noteInput) {
+            noteSubmit.addEventListener('click', async function() {
+                const content = noteInput.value.trim();
+                if (!content) return;
+                noteSubmit.disabled = true;
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                try {
+                    const resp = await fetch(`/api/day-notes/${window.dailyView.date}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken || '',
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ content: content }),
+                    });
+                    if (resp.ok) {
+                        noteInput.value = '';
+                        loadDayNotes();
+                    } else {
+                        const data = await resp.json();
+                        window.toaster.error(data.error || 'Failed to add note');
+                    }
+                } catch (e) {
+                    window.toaster.error('Network error');
+                } finally {
+                    noteSubmit.disabled = false;
+                }
+            });
+        }
     }
 });

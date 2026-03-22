@@ -1,20 +1,21 @@
 ---
-last_mapped: 2026-02-09T06:30:00Z
-total_files: 376
-total_tokens: 1277614
+last_mapped: 2026-03-21T18:00:00Z
+total_files: 530
+total_tokens: 1887405
 ---
 
 # Codebase Map: Flask Schedule Webapp
 
-> Updated 2026-02-09
+> Updated 2026-03-21
 
 ## System Overview
 
-Flask Schedule Webapp is a **production-grade employee scheduling system** for Crossmark that manages event scheduling, employee availability, and integrates with external systems (Walmart Retail Link EDR, MVRetail API). It features an intelligent auto-scheduler with rotation management, ML-enhanced employee ranking, RAG-based AI assistant powered by local LLMs, inventory tracking, and comprehensive PDF report generation.
+Flask Schedule Webapp is a **production-grade employee scheduling system** for Crossmark that manages event scheduling, employee availability, and integrates with external systems (Walmart Retail Link EDR, MVRetail API). It features an intelligent auto-scheduler with both greedy and CP-SAT constraint solvers, rotation management, ML-enhanced employee ranking, RAG-based AI assistant powered by local LLMs, inventory tracking, comprehensive PDF report generation, and a mobile-first PWA with role-based views for supervisors, leads, and specialists.
 
-**Tech Stack**: Flask 3.0, SQLAlchemy, PostgreSQL/SQLite, Celery, Redis, Ollama AI, XGBoost/LightGBM ML
-**Architecture**: Application Factory Pattern, Model Registry, Blueprint-based routing
+**Tech Stack**: Flask 3.0, SQLAlchemy, PostgreSQL/SQLite, Celery, Redis, Ollama AI, XGBoost/LightGBM ML, Google OR-Tools CP-SAT
+**Architecture**: Application Factory Pattern, Model Registry, Blueprint-based routing, PWA (Service Worker + Manifest)
 **Deployment**: Docker Compose, Cloudflare Tunnel, Nginx, Gunicorn
+**Auth**: Redis sessions, role-based access (supervisor > lead > specialist), PIN-based employee login
 
 ```mermaid
 graph TB
@@ -28,6 +29,8 @@ graph TB
         TEMPLATES[Jinja2 Templates]
         JS[ES6 Frontend Modules]
         CSS[Design Token System]
+        PWA[PWA Service Worker]
+        MOBILE[Mobile Bottom Nav + Sidebar]
     end
 
     subgraph "Application Layer"
@@ -349,16 +352,16 @@ ProductionConfig:   PostgreSQL, strong SECRET_KEY (≥32 chars required), valida
 
 **Entry Point**: `app/models/__init__.py:init_models(db)`
 
-**Core Models (30 total)**:
+**Core Models (35 total)**:
 
 | Model | File | Purpose | Key Fields |
 |-------|------|---------|------------|
-| Employee | employee.py | Staff/representatives | name, job_title, is_active, external_id, juicer_trained |
+| Employee | employee.py | Staff/representatives | name, job_title, is_active, external_id, juicer_trained, pin_hash, has_account + `role` property |
 | Event | event.py | Work tasks/visits | project_ref_num, start/due_datetime, event_type, edr_status |
 | Schedule | schedule.py | Event-employee assignments | event_ref_num, employee_id, schedule_datetime, shift_block |
 | EmployeeWeeklyAvailability | availability.py | Recurring weekly pattern | monday-sunday booleans |
 | EmployeeAvailability | availability.py | Date-specific override | employee_id, date, is_available |
-| EmployeeTimeOff | availability.py | Time-off requests | start_date, end_date |
+| EmployeeTimeOff | availability.py | Time-off requests with approval workflow | start_date, end_date, status (pending/approved/denied), reviewed_by, reviewed_at, denial_reason |
 | EmployeeAvailabilityOverride | availability.py | Temporary weekly change | employee_id, per-day overrides (NULL = no change) |
 | RotationAssignment | auto_scheduler.py | Weekly rotations with backup | day_of_week, rotation_type, employee_id, backup_employee_id |
 | PendingSchedule | auto_scheduler.py | Auto-scheduler proposals | scheduler_run_id, status, bumped_event_ref_num |
@@ -370,7 +373,9 @@ ProductionConfig:   PostgreSQL, strong SECRET_KEY (≥32 chars required), valida
 | SystemSetting | system_setting.py | DB-backed config with encryption | key, value, setting_type (string/boolean/encrypted) |
 | CompanyHoliday | company_holiday.py | Holidays with recurrence | holiday_date, is_recurring, recurring_rule |
 | ShiftBlockSetting | shift_block_setting.py | 8 shift blocks | block_number, arrive_time, on_floor_time, lunch_time, depart_time |
-| Note / RecurringReminder | notes.py | Task/note tracking | title, content, priority, due_date, frequency |
+| ScheduleNotification | auto_scheduler.py | Short-notice assignment alerts | scheduler_run_id, event_ref_num, employee_id, days_notice, notified |
+| Note / RecurringReminder | notes.py | Task/note tracking | title, content, priority, due_date, frequency, snoozed_until |
+| LostDemo | lost_demo.py | Confirmed lost demo tracking | event_ref_num (unique FK), week_start_date, confirmed_at |
 | SupplyCategory / Supply / SupplyAdjustment / PurchaseOrder / OrderItem / InventoryReminder | inventory.py | Inventory management (6 models) | Various |
 
 **Availability Hierarchy** (checked in order):
@@ -381,32 +386,67 @@ ProductionConfig:   PostgreSQL, strong SECRET_KEY (≥32 chars required), valida
 
 **Business Logic on Models**:
 - `Employee.can_work_event_type(event_type)` — Role-based event restrictions
+- `Employee.role` — Computed property: `'supervisor'`, `'lead'`, or `'specialist'` (NOT a DB column — cannot query with SQLAlchemy)
+- `Employee.set_pin(pin)` / `check_pin(pin)` — bcrypt PIN auth for self-service login
 - `Event.detect_event_type()` — Auto-classify from project_name (keywords → duration fallback)
 - `CompanyHoliday.is_holiday(check_date)` — Check if date is holiday (handles recurrence)
 - `SystemSetting.get_setting(key, default)` — Retrieve with type conversion + encryption
+- `EmployeeTimeOff.status` — Approval workflow: `'pending'` → `'approved'`/`'denied'`. Only `'approved'` blocks scheduling.
 
 ---
 
 ### Services (Business Logic)
 
-#### SchedulingEngine (36,079 tokens)
+#### Two Scheduler Engines
+
+The app ships with **two** auto-scheduler implementations, selectable via `?solver=cpsat|greedy`:
+
+---
+
+#### CPSATSchedulingEngine (~42,378 tokens) — PRIMARY
+**File**: `app/services/cpsat_scheduler.py`
+
+**Purpose**: Google OR-Tools CP-SAT constraint-programming scheduler — optimal global assignment
+
+**Algorithm** (4 phases):
+```
+Phase 1: Due-date priority pre-pass (swap posted schedules)
+Phase 2: Solver WITHOUT bumping (assign unscheduled events)
+Phase 3: Solver WITH bumping (retry Phase 2 failures)
+Phase 4: Due-date priority post-pass (verification)
+```
+
+**Key Features**:
+- `_indicator_cache` — BoolVar cache for `(event, employee, day)` triples (~22% speedup)
+- `_inject_pending_as_existing(run)` — Bridges Phase 2 → Phase 3 data to prevent constraint double-counting
+- `_post_solve_review(run, phase_refs=...)` — Scopes defensive review to current phase only
+- 17 soft constraint weights (S1–S17), all user-overridable via `ConstraintModifier`
+- `MAX_HORIZON_WEEKS = 8` caps solver search space
+- Events scheduled today or earlier are never bumpable (in-progress protection)
+
+**Dependencies**: ortools, ConstraintModifier, ShiftBlockConfig, MLSchedulerAdapter (optional)
+
+---
+
+#### SchedulingEngine (~50,868 tokens) — FALLBACK
 **File**: `app/services/scheduling_engine.py`
 
-**Purpose**: Auto-scheduler orchestrator with multi-phase priority algorithm
+**Purpose**: Greedy wave-based auto-scheduler (fallback/non-CP-SAT path), records `solver_type='greedy'`
 
-**Algorithm**:
+**Algorithm** (5 waves):
 ```
-Phase 1: Rotation Events (Juicer, Digital) → Rotation employees
-Phase 2: Core Events (Lead priority) → 8 shift blocks
-Phase 3: Supervisor Events → Auto-pair with Core (parent_event_ref_num)
-Rescue:  Urgent events due within 3 days
+Wave 1: Juicer rotation events
+Wave 2: Core events (empty-slot-first, then bump) — active path: _schedule_core_events_wave2_new()
+Wave 3: Freeosk/Digital events
+Wave 4: Non-Production Juicer types
+Wave 5: Other events
 ```
 
-**Key Configuration**:
-- `SCHEDULING_WINDOW_DAYS = 3` (only schedules 3 days ahead)
-- `MAX_BUMPS_PER_EVENT = 3` (prevents infinite bump loops)
-- Shift block times loaded from database (`ShiftBlockConfig`)
-- ML integration via `MLSchedulerAdapter` (optional, graceful fallback)
+**Wave 2 Bump Logic**:
+- `bumped_event_refs` set tracks displaced events — bumped events **bypass the 3-day scheduling buffer**
+- `_try_bump_for_day()` tracks bumps without executing (actual bumps happen during approval)
+- Hard guards: cannot bump today-or-earlier (in-progress), cannot bump on locked days
+- Picks least-urgent candidate (latest due date) for bumping
 
 **Dependencies**: RotationManager, ConstraintValidator, ConflictResolver, ShiftBlockConfig, MLSchedulerAdapter
 
@@ -473,12 +513,18 @@ Rescue:  Urgent events due within 3 days
 | Sync Service | sync_service.py | 3,074 | MVRetail sync orchestration (Celery tasks) |
 | Event Time Settings | event_time_settings.py | 2,979 | Allowed time slots per event type |
 | Rotation Manager | rotation_manager.py | 2,338 | Rotation assignments + exceptions |
+| Fix Wizard | fix_wizard.py | 10,692 | Translates validation issues → actionable FixOptions with confidence scores |
+| Constraint Modifier | constraint_modifier.py | 1,500 | NL scheduling preferences → CP-SAT weight multipliers (via SystemSetting) |
+| Report Service | report_service.py | 2,100 | Data layer for 7 report types (event stats, workload, attendance, etc.) |
+| Weekly Planning | weekly_planning_service.py | 1,200 | Read-only availability queries for planning views |
+| Bakery Prep | bakery_prep_service.py | 900 | Walmart API bakery prep data + HTML email builder |
+| Email Service | email_service.py | 400 | SMTP wrapper for HTML emails (config from SystemSetting) |
 
 ---
 
 ### Routes (Flask Blueprints)
 
-**24 blueprints** organized by feature:
+**26 blueprints** organized by feature:
 
 | Blueprint | Prefix | File | Tokens | Purpose |
 |-----------|--------|------|--------|---------|
@@ -490,9 +536,11 @@ Rescue:  Urgent events due within 3 days
 | `dashboard_bp` | `/dashboard` | dashboard.py | 8,120 | Command center, daily/weekly validation |
 | `employees_bp` | `/` | employees.py | 7,287 | Employee CRUD + MVRetail import |
 | `scheduling_bp` | `/` | scheduling.py | 6,595 | Schedule form, available employees |
-| `main_bp` | `/` | main.py | 6,508 | Dashboard, calendar, unscheduled |
+| `main_bp` | `/` | main.py | 13,000 | Dashboard, calendar, unscheduled + specialist/lead personal views (my_dashboard, my_events, my_schedule, my_time_off, lead_daily_view) |
 | `api_notes_bp` | `/api/notes` | api_notes.py | 5,127 | Notes API |
-| `auth_bp` | `/` | auth.py | 4,640 | Login, session, timeout |
+| `reports_bp` | `/reports` | reports.py | 1,800 | 7 report types with CSV export |
+| `lost_demos_bp` | `/` | lost_demos.py | 900 | Lost demo confirmation + CSV export |
+| `auth_bp` | `/` | auth.py | 12,500 | Login (Crossmark + PIN), role-based auth, Redis sessions, inactivity timeout |
 | `inventory_bp` | `/inventory` | inventory.py | 3,839 | Inventory management |
 | `attendance_api_bp` | `/api/attendance` | api_attendance.py | 3,651 | Attendance API |
 | `api_paperwork_templates_bp` | `/api/paperwork-templates` | api_paperwork_templates.py | 2,823 | Paperwork templates |
@@ -637,6 +685,30 @@ responsive.css        → Responsive breakpoints (640/768/1024/1280px)
 - **State management**: localStorage (persistent prefs), sessionStorage (filters), History API (shareable URLs)
 - **CSRF protection**: `csrf_helper.js` auto-injects tokens into jQuery, Fetch, and XMLHttpRequest
 - **Accessibility**: Focus traps, ARIA live regions, keyboard navigation, screen reader announcements
+
+#### PWA Infrastructure (New since Feb 2026)
+
+| File | Purpose |
+|------|---------|
+| `static/manifest.json` | Web App Manifest — `display: standalone`, shortcuts, 4 icon sizes (192/512 + maskable) |
+| `static/service-worker.js` | 3-strategy caching: cache-first (static), network-first (API), network-first+offline (HTML) |
+| `templates/offline.html` | Standalone offline fallback page (no base.html dependency) |
+| `css/components/bottom-nav.css` | Mobile bottom nav — 5-tab, 48px touch targets, safe-area-inset-bottom |
+| `css/components/sidebar.css` | Slide-out sidebar nav — replaces inline nav on all screen sizes |
+| `js/components/schedule-change-notifier.js` | Polls `/api/my-schedule-updates` fingerprint, fires browser notification on change |
+| `js/components/note-notifications.js` | Global 60s polling for due notes, slide-in panel with snooze |
+
+#### Role-Based Templates (New since Feb 2026)
+
+| Template | Role | Purpose |
+|----------|------|---------|
+| `my_dashboard.html` | specialist, lead | Personal home: today's events, weekly stats, calendar grid |
+| `my_events.html` | specialist, lead | Weekly event list (simpler than calendar) |
+| `my_schedule_monthly.html` | specialist, lead | Monthly calendar with click-to-expand day detail |
+| `my_time_off.html` | specialist, lead | Submit time-off requests, view history with status badges |
+| `schedule_notifications.html` | supervisor | Short-notice assignment alerts with acknowledge workflow |
+| `lead/daily_view.html` | lead | 3-tab view: Schedule + Attendance + Notes for a date |
+| `lead/attendance.html` | lead | Monthly attendance calendar with submit/view |
 
 ---
 
@@ -797,7 +869,7 @@ Gunicorn WSGI (1 gevent worker, 120s timeout, 10k max requests)
 
 ## Testing Strategy
 
-**13 test files** with function-level DB isolation:
+**29 test files** (319 passing, 2 skipped) with function-level DB isolation:
 
 ```bash
 pytest                              # All tests
@@ -808,7 +880,7 @@ pytest -k "schedule"                # Pattern match
 
 **Key Fixtures**: `app`, `client`, `db_session`, `models` (from `get_models()`)
 
-**Coverage Areas**: Models, routes, scheduling engine, constraint validation, rotation management, ML (5 dedicated test files)
+**Coverage Areas**: Models, routes, scheduling engine, constraint validation, rotation management, ML (5 dedicated test files), CP-SAT solver (38 stress tests), fix wizard, weekly planning, security, templates
 
 **Gaps**: No frontend JS tests (Jest), no E2E tests (Playwright), no integration tests for external APIs
 
@@ -826,6 +898,10 @@ pytest -k "schedule"                # Pattern match
 | **Configure ML** | Set `ML_ENABLED=true` → Train: `python app/ml/training/train_employee_ranker.py` → Shadow mode first |
 | **Add model** | `models/your_model.py` → `models/__init__.py` (register) → migration → service → route |
 | **Add inventory items** | `models/inventory.py` → `services/inventory_service.py` → `routes/inventory.py` → `templates/inventory/` |
+| **Add specialist/lead page** | `routes/main.py` (new route with `@require_role`) → `templates/my_*.html` or `templates/lead/*.html` → CSS in `css/pages/` |
+| **Add report** | `services/report_service.py` (query method) → `routes/reports.py` (route + CSV export) → `templates/reports/*.html` |
+| **Modify auth/sessions** | `routes/auth.py` (login, session management) → Clear `external_api` state before login |
+| **Add CP-SAT constraint** | `services/cpsat_scheduler.py` (`_build_model` or `_add_*` methods) → Use `_get_indicator()` for BoolVars |
 
 ---
 
@@ -851,12 +927,16 @@ pytest -k "schedule"                # Pattern match
 ### Critical
 1. **Model Access**: ALWAYS use `get_models()` — never direct imports (causes circular imports)
 2. **Single Gunicorn Worker**: Required for EDR MFA global session state
-3. **Supervisor Pairing**: Matches 6-digit event number prefix, requires date window overlap
-4. **Shift Block Order**: First 8 sequential [1-8], overflow priority [1,3,5,7,2,4,6,8], Primary Lead always Block 1
-5. **Scheduler Window**: Only schedules 3 days ahead
-6. **Locked Days**: Check BOTH target date AND bump source date before approval
-7. **Superseded PendingSchedules**: MUST skip during approval (bumped events)
-8. **Trade events**: Use integer comparison for event IDs (recent fix for string/int mismatch)
+3. **External API Singleton**: `session_api_service.session_api` stores auth state (phpsessid, cookies) at the server level — MUST clear before each login attempt to prevent session leakage between users
+4. **Login Pages**: NEVER auto-redirect authenticated users on login page GET — shared device risk
+5. **Supervisor Pairing**: Matches 6-digit event number prefix, requires date window overlap
+6. **Shift Block Order**: First 8 sequential [1-8], overflow priority [1,3,5,7,2,4,6,8], Primary Lead always Block 1
+7. **Locked Days**: Check BOTH target date AND bump source date before approval
+8. **Superseded PendingSchedules**: MUST skip during approval (bumped events)
+9. **CP-SAT Phase 2→3**: Must call `_inject_pending_as_existing()` before Phase 3 to prevent constraint double-counting
+10. **Employee.role is a property**: NOT a DB column — cannot use in SQLAlchemy queries (filter on `job_title` instead)
+11. **EmployeeTimeOff status**: Only `status='approved'` blocks scheduling — denied requests must be ignored in constraint checks
+12. **Bumped events bypass 3-day buffer**: `bumped_event_refs` set exempts displaced events from the scheduling buffer
 
 ### Configuration
 1. **SECRET_KEY**: Must be ≥32 characters in production
@@ -894,7 +974,7 @@ pytest -k "schedule"                # Pattern match
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-21
 **Generated By**: Cartographer (Claude Code)
-**Codebase Size**: 376 files, ~1,277,614 tokens
-**Architecture**: Production-grade Flask application with AI + ML integration
+**Codebase Size**: 530 files, ~1,887,405 tokens (excl. foundation/)
+**Architecture**: Production-grade Flask PWA with AI + ML integration, role-based views, dual scheduler engines

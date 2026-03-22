@@ -7,6 +7,7 @@
     <title>Employee Login - PC Events</title>
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='img/favicon-48x48.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
@@ -21,83 +22,82 @@
                     alt="Product Connections" class="login-logo">
             </div>
             <h1 class="login-title">Team Login</h1>
-            <p class="login-subtitle">Event Specialists & Leads — enter your name and PIN</p>
+            <p class="login-subtitle">Event Specialists &amp; Leads &mdash; enter your Employee ID and PIN</p>
         </div>
 
-        <form method="POST" action="{{ url_for('auth.employee_login') }}" class="login-form" aria-label="Employee login form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="login-form-container">
+            <form method="POST" action="{{ url_for('auth.employee_login') }}" class="login-form" aria-label="Employee login form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div class="login-alert login-alert-{{ category }}" role="alert">
-                <div class="login-alert-content">
-                    {{ message }}
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="error-container" style="margin-bottom: var(--spacing-lg);">
+                    <div class="{{ 'error-message' if category == 'error' else 'success-message' if category == 'success' else 'info-message' }}">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            {% if category == 'error' %}
+                            <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                            {% else %}
+                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                            {% endif %}
+                        </svg>
+                        <span>{{ message }}</span>
+                    </div>
                 </div>
-            </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
 
-            <div class="login-field">
-                <label class="login-label" for="employee_id">Your Name <span class="required">*</span></label>
-                <select id="employee_id" name="employee_id" required class="login-input" style="height: 48px; font-size: 16px;">
-                    <option value="">Select your name...</option>
-                </select>
-                <span class="login-hint">Choose your name from the list</span>
-            </div>
+                <div class="form-group">
+                    <label for="employee_id" class="form-label">
+                        <span class="label-text">Employee ID</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <div class="input-container">
+                        <input type="text" id="employee_id" name="employee_id" required
+                            class="form-input" placeholder="Enter your Employee ID"
+                            inputmode="numeric" pattern="[0-9]*" autocomplete="username"
+                            aria-describedby="employee-id-help">
+                    </div>
+                    <small id="employee-id-help" class="form-help">Your numeric ID without the US prefix</small>
+                </div>
 
-            <div class="login-field">
-                <label class="login-label" for="pin">PIN <span class="required">*</span></label>
-                <input type="password" id="pin" name="pin" required
-                    class="login-input" placeholder="Enter your PIN"
-                    inputmode="numeric" pattern="[0-9]*" minlength="4"
-                    autocomplete="current-password"
-                    style="font-size: 20px; letter-spacing: 0.3em; text-align: center;">
-                <span class="login-hint">The PIN your supervisor gave you</span>
-            </div>
+                <div class="form-group">
+                    <label for="pin" class="form-label">
+                        <span class="label-text">PIN</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <div class="input-container">
+                        <input type="password" id="pin" name="pin" required
+                            class="form-input" placeholder="Enter your PIN"
+                            inputmode="numeric" pattern="[0-9]*" minlength="4"
+                            autocomplete="current-password"
+                            aria-describedby="pin-help"
+                            style="letter-spacing: 0.3em; text-align: center;">
+                    </div>
+                    <small id="pin-help" class="form-help">The PIN your supervisor gave you</small>
+                </div>
 
-            <button type="submit" class="login-submit-btn">
-                <span class="login-submit-text">Sign In</span>
-            </button>
-        </form>
+                <button type="submit" class="login-button">
+                    <span>Sign In</span>
+                </button>
+            </form>
+        </div>
 
         <div class="login-footer">
-            <p class="login-footer-text">
+            <p class="footer-text">
                 <strong>Supervisor?</strong>
-                <a href="{{ url_for('auth.login_page') }}" class="login-link">Use Crossmark login</a>
+                <a href="{{ url_for('auth.login_page') }}" class="footer-link">Use Crossmark login</a>
             </p>
         </div>
     </div>
 
-    <script>
-        // Load active employees with accounts for the dropdown
-        fetch('/api/employees/with-accounts')
-            .then(r => r.json())
-            .then(data => {
-                const select = document.getElementById('employee_id');
-                if (data.employees) {
-                    data.employees.forEach(emp => {
-                        const opt = document.createElement('option');
-                        opt.value = emp.id;
-                        opt.textContent = emp.name;
-                        select.appendChild(opt);
-                    });
-                }
-            })
-            .catch(() => {
-                // If API fails, show text input instead
-                const select = document.getElementById('employee_id');
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.name = 'employee_id';
-                input.id = 'employee_id';
-                input.required = true;
-                input.className = 'login-input';
-                input.placeholder = 'Enter your Employee ID';
-                select.parentNode.replaceChild(input, select);
-            });
-    </script>
+    <!-- Background Shapes -->
+    <div class="login-background" aria-hidden="true">
+        <div class="bg-shape shape-1"></div>
+        <div class="bg-shape shape-2"></div>
+        <div class="bg-shape shape-3"></div>
+    </div>
 </body>
 
 </html>

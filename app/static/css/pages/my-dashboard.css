@@ -1,0 +1,845 @@
+/**
+ * My Dashboard - Employee Personal Dashboard
+ * A warm, personal work-planner aesthetic for non-lead employees.
+ */
+
+/* =============================================
+   LAYOUT & PAGE STRUCTURE
+   ============================================= */
+
+.my-dash {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-4) var(--space-16);
+}
+
+/* =============================================
+   GREETING HEADER
+   ============================================= */
+
+.my-dash__greeting {
+  padding: var(--space-8) 0 var(--space-6);
+}
+
+.my-dash__hello {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary-light);
+  margin: 0 0 var(--space-1);
+}
+
+.my-dash__name {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-weight: 700;
+  color: var(--color-neutral-900);
+  margin: 0 0 var(--space-2);
+  line-height: 1.15;
+}
+
+.my-dash__date {
+  font-size: var(--font-size-lg);
+  color: var(--color-neutral-600);
+  margin: 0;
+  font-weight: 500;
+}
+
+/* =============================================
+   TODAY BANNER — the hero section
+   ============================================= */
+
+.my-dash__today-banner {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  color: #fff;
+  margin-bottom: var(--space-6);
+  position: relative;
+  overflow: hidden;
+}
+
+.my-dash__today-banner::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.my-dash__today-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin: 0 0 var(--space-3);
+}
+
+.my-dash__today-summary {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-1);
+}
+
+.my-dash__today-detail {
+  font-size: var(--font-size-sm);
+  opacity: 0.85;
+  margin: 0;
+}
+
+/* No events state in hero */
+.my-dash__today-banner--off {
+  background: linear-gradient(135deg, #475569 0%, #64748b 100%);
+}
+
+/* Next event state in hero */
+.my-dash__today-banner--next {
+  background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
+}
+
+.my-dash__next-details {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
+
+.my-dash__next-date {
+  font-weight: 600;
+}
+
+.my-dash__next-time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-dash__next-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+/* =============================================
+   TODAY'S EVENTS LIST (inside banner)
+   ============================================= */
+
+.my-dash__today-events {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.my-dash__today-event {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  backdrop-filter: blur(4px);
+}
+
+.my-dash__today-time {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 72px;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-dash__today-event-name {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-dash__today-event-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* =============================================
+   SECTION HEADINGS
+   ============================================= */
+
+.my-dash__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.my-dash__section-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-neutral-800);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.my-dash__section-title .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--color-primary-light);
+}
+
+.my-dash__section-link {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-light);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.my-dash__section-link:hover {
+  text-decoration: underline;
+}
+
+/* =============================================
+   STATS CARD (This Week — 3-column)
+   ============================================= */
+
+.my-dash__stats-card {
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.my-dash__stats-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-400);
+  margin: 0 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.my-dash__stats-title .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.my-dash__stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.my-dash__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.my-dash__stat-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-neutral-900);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-dash__stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-500);
+  line-height: 1.3;
+}
+
+/* =============================================
+   WEEKLY CALENDAR GRID
+   ============================================= */
+
+.my-dash__weekly {
+  margin-bottom: var(--space-8);
+}
+
+.my-dash__weekly .my-dash__section-header {
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.my-dash__week-nav {
+  background: none;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-neutral-600);
+  transition: all var(--transition-fast);
+}
+
+.my-dash__week-nav:hover {
+  background: var(--color-neutral-100);
+  border-color: var(--color-neutral-300);
+}
+
+.my-dash__week-nav .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.my-dash__week-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  margin-bottom: 1px;
+}
+
+.my-dash__week-day-header {
+  text-align: center;
+  padding: var(--space-2) var(--space-1);
+  background: var(--color-neutral-100);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.my-dash__week-day-header--today {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.my-dash__week-day-name {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-neutral-500);
+}
+
+.my-dash__week-day-header--today .my-dash__week-day-name {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.my-dash__week-day-num {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-neutral-800);
+  line-height: 1.3;
+}
+
+.my-dash__week-day-header--today .my-dash__week-day-num {
+  color: #fff;
+}
+
+.my-dash__week-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--color-neutral-200);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+}
+
+.my-dash__week-cell {
+  background: #fff;
+  min-height: 80px;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.my-dash__week-cell--today {
+  background: rgba(27, 155, 216, 0.04);
+  border-top: 2px solid var(--color-primary);
+}
+
+.my-dash__week-empty {
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-300);
+  text-align: center;
+  padding-top: var(--space-4);
+}
+
+/* Event chips inside day cells */
+.my-dash__week-event {
+  border-left: 3px solid var(--color-neutral-400);
+  padding: 3px 6px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-neutral-50);
+}
+
+.my-dash__week-event--core { border-left-color: var(--color-core); }
+.my-dash__week-event--juicer { border-left-color: var(--color-juicer); }
+.my-dash__week-event--digital { border-left-color: var(--color-digital); }
+.my-dash__week-event--supervisor { border-left-color: var(--color-supervisor); }
+.my-dash__week-event--freeosk { border-left-color: var(--color-freeosk); }
+.my-dash__week-event--other { border-left-color: var(--color-neutral-400); }
+
+.my-dash__week-event-time {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.my-dash__week-event-name {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-neutral-700);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =============================================
+   INFO CARDS ROW (Time Off Form + Status)
+   ============================================= */
+
+.my-dash__info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+@media (max-width: 600px) {
+  .my-dash__info-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.my-dash__info-card {
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.my-dash__info-card-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-400);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.my-dash__info-card-title .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* =============================================
+   TIME OFF REQUEST FORM
+   ============================================= */
+
+.my-dash__timeoff-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.my-dash__form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.my-dash__form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.my-dash__form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-neutral-500);
+}
+
+.my-dash__form-input {
+  font-family: var(--font-primary);
+  font-size: var(--font-size-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-50);
+  color: var(--color-neutral-800);
+  transition: border-color var(--transition-fast);
+}
+
+.my-dash__form-input:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 3px rgba(27, 155, 216, 0.12);
+}
+
+.my-dash__submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  font-family: var(--font-primary);
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.my-dash__submit-btn:hover {
+  background: var(--color-primary-dark);
+}
+
+.my-dash__submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.my-dash__form-message {
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  line-height: 1.4;
+}
+
+.my-dash__form-message--success {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.my-dash__form-message--error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+/* =============================================
+   TIME OFF REQUESTS LIST (status tracking)
+   ============================================= */
+
+.my-dash__timeoff-req {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-neutral-50);
+}
+
+.my-dash__timeoff-req + .my-dash__timeoff-req {
+  margin-top: var(--space-2);
+}
+
+.my-dash__timeoff-req-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.my-dash__timeoff-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.my-dash__timeoff-req--pending .my-dash__timeoff-status-dot { background: #F59E0B; }
+.my-dash__timeoff-req--approved .my-dash__timeoff-status-dot { background: #10B981; }
+.my-dash__timeoff-req--denied .my-dash__timeoff-status-dot { background: #EF4444; }
+
+.my-dash__timeoff-dates {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-neutral-800);
+  margin: 0;
+}
+
+.my-dash__timeoff-reason {
+  font-size: 0.8rem;
+  color: var(--color-neutral-500);
+  margin: 2px 0 0;
+}
+
+.my-dash__timeoff-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.my-dash__timeoff-req--pending .my-dash__timeoff-status-badge {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.my-dash__timeoff-req--approved .my-dash__timeoff-status-badge {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.my-dash__timeoff-req--denied .my-dash__timeoff-status-badge {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.my-dash__timeoff-denial {
+  font-size: 0.75rem;
+  color: #991B1B;
+  margin: 2px 0 0;
+  font-style: italic;
+}
+
+/* =============================================
+   EMPTY STATE
+   ============================================= */
+
+.my-dash__empty {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-neutral-400);
+  font-size: var(--font-size-sm);
+}
+
+.my-dash__empty .material-symbols-outlined {
+  font-size: 32px;
+  display: block;
+  margin: 0 auto var(--space-2);
+  opacity: 0.5;
+}
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+
+@media (max-width: 768px) {
+  /* ── Page layout ── */
+  .my-dash {
+    padding: var(--space-3) var(--space-3) 100px;
+  }
+
+  .my-dash__greeting {
+    padding: var(--space-4) 0 var(--space-3);
+  }
+
+  /* ── Today banner ── */
+  .my-dash__today-banner {
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  .my-dash__today-event {
+    padding: var(--space-3);
+    min-height: 44px;
+    flex-wrap: wrap;
+  }
+
+  .my-dash__today-time {
+    font-size: 0.9rem;
+    min-width: auto;
+  }
+
+  .my-dash__today-event-name {
+    font-size: 0.9rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  /* ── Stats card ── */
+  .my-dash__stats-row {
+    gap: var(--space-2);
+  }
+
+  .my-dash__stat-value {
+    font-size: var(--font-size-xl);
+  }
+
+  /* ── Weekly grid: collapse to vertical list ── */
+  .my-dash__week-header {
+    display: none;
+  }
+
+  .my-dash__week-cells {
+    grid-template-columns: 1fr;
+    gap: 0;
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .my-dash__week-cell {
+    min-height: auto;
+    padding: var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--color-neutral-200);
+  }
+
+  .my-dash__week-cell:last-child {
+    border-bottom: none;
+  }
+
+  .my-dash__week-cell::before {
+    content: attr(data-day-label);
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-neutral-500);
+    margin-bottom: var(--space-2);
+  }
+
+  .my-dash__week-cell--today {
+    border-top: none;
+    background: rgba(27, 155, 216, 0.06);
+    border-left: 3px solid var(--color-primary);
+  }
+
+  .my-dash__week-cell--today::before {
+    color: var(--color-primary);
+  }
+
+  /* Larger event chips for touch */
+  .my-dash__week-event {
+    padding: var(--space-2) var(--space-3);
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border-left-width: 4px;
+  }
+
+  .my-dash__week-event-time {
+    font-size: 0.85rem;
+    min-width: 72px;
+    flex-shrink: 0;
+  }
+
+  .my-dash__week-event-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: normal;
+  }
+
+  .my-dash__week-empty {
+    text-align: left;
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--color-neutral-400);
+    font-style: italic;
+  }
+
+  /* ── Week nav arrows: bigger touch targets ── */
+  .my-dash__week-nav {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* =============================================
+   TEAM TIME OFF WIDGET (Lead only)
+   ============================================= */
+
+.my-dash__team-timeoff {
+  margin-bottom: var(--space-8);
+}
+
+.my-dash__team-timeoff-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-neutral-50);
+}
+
+.my-dash__team-timeoff-item + .my-dash__team-timeoff-item {
+  margin-top: var(--space-2);
+}
+
+.my-dash__team-timeoff-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10B981;
+  flex-shrink: 0;
+}
+
+.my-dash__team-timeoff-details {
+  min-width: 0;
+}
+
+.my-dash__team-timeoff-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-neutral-800);
+  margin: 0;
+}
+
+.my-dash__team-timeoff-dates {
+  font-size: 0.8rem;
+  color: var(--color-neutral-500);
+  margin: 2px 0 0;
+}
+
+.my-dash__team-timeoff-viewall {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-light);
+  text-decoration: none;
+}
+
+.my-dash__team-timeoff-viewall:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}My Events - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+    .my-events {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: var(--space-4) var(--space-4) 100px;
+    }
+
+    .my-events__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-6) 0 var(--space-4);
+    }
+
+    .my-events__title {
+        font-size: clamp(1.25rem, 4vw, 1.5rem);
+        font-weight: 700;
+        color: var(--color-neutral-900);
+        margin: 0;
+    }
+
+    .my-events__nav {
+        display: flex;
+        gap: var(--space-2);
+    }
+
+    .my-events__nav-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid var(--color-neutral-200);
+        background: var(--color-neutral-50);
+        color: var(--color-neutral-700);
+        cursor: pointer;
+        min-height: 44px;
+        font-family: var(--font-primary);
+        transition: all var(--transition-fast);
+    }
+
+    .my-events__nav-btn:hover {
+        background: var(--color-neutral-100);
+    }
+
+    .my-events__nav-btn .material-symbols-outlined {
+        font-size: 18px;
+    }
+
+    .my-events__week-label {
+        font-size: var(--font-size-sm);
+        color: var(--color-neutral-500);
+        margin: 0 0 var(--space-4);
+    }
+
+    /* Day groups */
+    .my-events__day {
+        margin-bottom: var(--space-4);
+    }
+
+    .my-events__day-header {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-neutral-400);
+        padding-bottom: var(--space-2);
+        border-bottom: 1px solid var(--color-neutral-100);
+        margin-bottom: var(--space-2);
+    }
+
+    .my-events__day-header--today {
+        color: var(--color-primary);
+        border-bottom-color: var(--color-primary);
+    }
+
+    .my-events__event {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--color-neutral-50);
+    }
+
+    .my-events__event:last-child {
+        border-bottom: none;
+    }
+
+    .my-events__time {
+        font-size: var(--font-size-sm);
+        font-weight: 700;
+        color: var(--color-primary);
+        min-width: 72px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .my-events__name {
+        font-size: var(--font-size-sm);
+        color: var(--color-neutral-800);
+        font-weight: 500;
+        flex: 1;
+        min-width: 0;
+        word-break: break-word;
+    }
+
+    .my-events__type {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 2px 8px;
+        border-radius: var(--radius-full);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .my-events__type--core { background: #dbeafe; color: #1e40af; }
+    .my-events__type--juicer { background: #ede9fe; color: #5b21b6; }
+    .my-events__type--digital,
+    .my-events__type--digital_setup,
+    .my-events__type--digital_refresh,
+    .my-events__type--digital_teardown { background: #ccfbf1; color: #0f766e; }
+    .my-events__type--freeosk { background: #fef3c7; color: #92400e; }
+    .my-events__type--supervisor { background: #fce7f3; color: #9d174d; }
+    .my-events__type--other { background: #f3f4f6; color: #4b5563; }
+
+    .my-events__no-events {
+        color: var(--color-neutral-400);
+        font-size: var(--font-size-sm);
+        font-style: italic;
+        padding: var(--space-2) 0;
+    }
+
+    .my-events__empty {
+        text-align: center;
+        padding: var(--space-8) var(--space-4);
+        color: var(--color-neutral-400);
+    }
+
+    .my-events__empty .material-symbols-outlined {
+        font-size: 32px;
+        display: block;
+        margin: 0 auto var(--space-2);
+        opacity: 0.5;
+    }
+
+    .my-events__loading {
+        text-align: center;
+        padding: var(--space-8);
+        color: var(--color-neutral-400);
+        font-size: var(--font-size-sm);
+    }
+
+    @media (max-width: 480px) {
+        .my-events__event {
+            flex-wrap: wrap;
+            gap: var(--space-1);
+        }
+        .my-events__time {
+            min-width: auto;
+        }
+        .my-events__name {
+            width: 100%;
+            order: 3;
+            padding-left: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="my-events">
+
+    <div class="my-events__header">
+        <h1 class="my-events__title">My Events</h1>
+        <div class="my-events__nav">
+            <button class="my-events__nav-btn" id="weekPrev" aria-label="Previous week">
+                <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button class="my-events__nav-btn" id="weekNext" aria-label="Next week">
+                <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+        </div>
+    </div>
+
+    <p class="my-events__week-label" id="weekLabel"></p>
+
+    <div id="eventsContainer">
+        <div class="my-events__loading">Loading schedule...</div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const container = document.getElementById('eventsContainer');
+    const weekLabel = document.getElementById('weekLabel');
+
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    let currentWeekStart = new Date(todayDate);
+    currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+
+    function formatDateISO(d) {
+        return d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getDate()).padStart(2, '0');
+    }
+
+    function typeClass(eventType) {
+        const t = (eventType || '').toLowerCase().replace(/\s+/g, '_');
+        if (t.includes('core')) return 'core';
+        if (t.includes('juicer')) return 'juicer';
+        if (t.includes('digital')) return 'digital';
+        if (t.includes('freeosk')) return 'freeosk';
+        if (t.includes('supervisor')) return 'supervisor';
+        return 'other';
+    }
+
+    function updateLabel() {
+        const end = new Date(currentWeekStart);
+        end.setDate(end.getDate() + 6);
+        const opts = { month: 'short', day: 'numeric' };
+        weekLabel.textContent = currentWeekStart.toLocaleDateString('en-US', opts) +
+            ' \u2013 ' + end.toLocaleDateString('en-US', opts);
+    }
+
+    async function loadWeek() {
+        updateLabel();
+        container.innerHTML = '<div class="my-events__loading">Loading schedule...</div>';
+
+        try {
+            const resp = await fetch('/api/my-schedule/weekly?week_start=' + formatDateISO(currentWeekStart));
+            if (!resp.ok) throw new Error('Failed');
+            const data = await resp.json();
+            renderWeek(data);
+        } catch (err) {
+            container.innerHTML = '<div class="my-events__empty"><span class="material-symbols-outlined">error</span>Error loading schedule</div>';
+        }
+    }
+
+    function renderWeek(data) {
+        const todayStr = formatDateISO(todayDate);
+        let hasAnyEvents = false;
+        let html = '';
+
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(currentWeekStart);
+            d.setDate(d.getDate() + i);
+            const dateStr = formatDateISO(d);
+            const isToday = dateStr === todayStr;
+            const events = data.days[dateStr] || [];
+
+            const dayName = DAY_NAMES[i] + ', ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            html += '<div class="my-events__day">';
+            html += '<div class="my-events__day-header' + (isToday ? ' my-events__day-header--today' : '') + '">' +
+                dayName + (isToday ? ' (Today)' : '') + '</div>';
+
+            if (events.length === 0) {
+                html += '<p class="my-events__no-events">No events</p>';
+            } else {
+                hasAnyEvents = true;
+                for (const ev of events) {
+                    const safeName = (ev.event_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const tc = typeClass(ev.event_type);
+                    html += '<div class="my-events__event">' +
+                        '<span class="my-events__time">' + ev.time + '</span>' +
+                        '<span class="my-events__name">' + safeName + '</span>' +
+                        '<span class="my-events__type my-events__type--' + tc + '">' + (ev.event_type || 'Other') + '</span>' +
+                        '</div>';
+                }
+            }
+
+            html += '</div>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    document.getElementById('weekPrev').addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+        loadWeek();
+    });
+
+    document.getElementById('weekNext').addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        loadWeek();
+    });
+
+    loadWeek();
+})();
+</script>
+{% endblock %}

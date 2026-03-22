@@ -127,6 +127,26 @@
     color: #0071ce;
 }
 
+.sidebar-logout {
+    margin-top: auto;
+    border-top: 1px solid #e5e7eb;
+    border-radius: 0 0 8px 8px;
+    color: #dc2626;
+}
+
+.sidebar-logout .material-symbols-outlined {
+    color: #dc2626;
+}
+
+.sidebar-logout:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.sidebar-logout:hover .material-symbols-outlined {
+    color: #b91c1c;
+}
+
 /* Desktop: sidebar is a slide-out panel toggled by hamburger, same as mobile */
 @media (min-width: 1200px) {
     .sidebar {

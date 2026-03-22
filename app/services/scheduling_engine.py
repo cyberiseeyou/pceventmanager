@@ -377,6 +377,9 @@ class SchedulingEngine:
         else:
             current_app.logger.info("Skipping database refresh in test environment")
 
+        # === CLEANUP: Expire old unapproved runs ===
+        self._cleanup_stale_runs()
+
         # Create run history record
         run = self.SchedulerRunHistory(
             run_type=run_type,
@@ -449,13 +452,44 @@ class SchedulingEngine:
             self.db.commit()
             raise
 
+    def _cleanup_stale_runs(self):
+        """Expire old unapproved scheduler runs and delete their PendingSchedule records."""
+        cutoff = datetime.utcnow() - timedelta(hours=48)
+        stale_runs = self.db.query(self.SchedulerRunHistory).filter(
+            and_(
+                self.SchedulerRunHistory.approved_at.is_(None),
+                self.SchedulerRunHistory.status == 'completed',
+                self.SchedulerRunHistory.started_at < cutoff,
+            )
+        ).all()
+
+        if not stale_runs:
+            return
+
+        stale_ids = [r.id for r in stale_runs]
+        deleted = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id.in_(stale_ids),
+        ).delete(synchronize_session='fetch')
+
+        for r in stale_runs:
+            r.status = 'expired'
+
+        self.db.flush()
+        current_app.logger.info(
+            f"Cleaned up {len(stale_runs)} stale run(s), "
+            f"deleted {deleted} orphaned PendingSchedule record(s)"
+        )
+
     def _get_unscheduled_events(self) -> List[object]:
         """
         Get ALL unscheduled/unstaffed events that are not expired
+        and don't already have active pending proposals.
 
         Returns all unscheduled events that:
-        1. Are not scheduled/unstaffed
-        2. Have not passed their due date (not expired)
+        1. Are not scheduled (is_scheduled == False)
+        2. Are unstaffed (condition == 'Unstaffed')
+        3. Have not passed their due date (not expired)
+        4. Don't have active pending proposals from unapproved runs
 
         The scheduling logic will ensure the earliest assignment date is 3 days from today.
 
@@ -466,13 +500,39 @@ class SchedulingEngine:
 
         events = self.db.query(self.Event).filter(
             and_(
-                self.Event.is_scheduled == False,  # Only unscheduled events
-                self.Event.condition == 'Unstaffed',  # Only unstaffed events
-                self.Event.due_datetime >= today  # Only events that haven't expired yet
+                self.Event.is_scheduled == False,
+                self.Event.condition == 'Unstaffed',
+                self.Event.due_datetime >= today
             )
         ).all()
 
-        current_app.logger.info(f"Found {len(events)} unscheduled events (expired events filtered out)")
+        # Exclude events that already have active pending proposals
+        already_pending_refs = set()
+        active_pending = self.db.query(self.PendingSchedule.event_ref_num).join(
+            self.SchedulerRunHistory,
+            self.PendingSchedule.scheduler_run_id == self.SchedulerRunHistory.id,
+        ).filter(
+            and_(
+                self.PendingSchedule.employee_id.isnot(None),
+                self.PendingSchedule.failure_reason.is_(None),
+                self.SchedulerRunHistory.status.in_(['completed', 'running']),
+                self.SchedulerRunHistory.approved_at.is_(None),
+            )
+        ).all()
+        for (ref,) in active_pending:
+            already_pending_refs.add(ref)
+
+        if already_pending_refs:
+            before = len(events)
+            events = [e for e in events
+                      if e.project_ref_num not in already_pending_refs]
+            skipped = before - len(events)
+            if skipped:
+                current_app.logger.info(
+                    f"Skipped {skipped} event(s) with active pending proposals"
+                )
+
+        current_app.logger.info(f"Found {len(events)} unscheduled events (expired/pending filtered out)")
         return events
 
     def _sort_events_by_priority(self, events: List[object]) -> List[object]:
@@ -934,8 +994,9 @@ class SchedulingEngine:
         # - Must not be in the past
         today = datetime.now()
 
-        # Search window: from start_date (or today if start is in past) to day before due_date
-        search_start = max(new_event.start_datetime.date(), today.date())
+        # Search window: from TOMORROW (never bump today's in-progress schedules)
+        # to day before due_date
+        search_start = max(new_event.start_datetime.date(), today.date() + timedelta(days=1))
         # Since we need schedule_datetime < due_datetime, we search up to but not including due date
         # The query will filter by date, so we use due_date - 1 day as the end
         search_end = new_event.due_datetime.date() - timedelta(days=1)
@@ -1836,27 +1897,29 @@ class SchedulingEngine:
 
     def _schedule_core_events_wave2_new(self, run: object, events: List[object]) -> List[object]:
         """
-        Wave 2: Schedule Core events using day-by-day bump-first logic with cascading
+        Wave 2: Schedule Core events using day-by-day empty-slot-first logic
 
-        NEW LOGIC:
-        1. Process unstaffed Core events in due date order (earliest first)
-        2. For each event, search day-by-day starting tomorrow:
-           - Days 1-3: ONLY try to bump (short notice - no empty slot filling)
-           - Day 4+: Try empty slots FIRST, then bump if no empty slots
-        3. Cascading bumps: Bumped events re-inserted into queue and re-sorted by due date
-        4. Failed events (reached due date without scheduling) returned for user review
+        For each unstaffed Core event (sorted by due date, most urgent first):
+        1. Search day-by-day from max(start_date, tomorrow) through due_date
+        2. On each day:
+           a. Skip if within 3 days and not emergency mode
+           b. Skip if day is locked
+           c. Try to fill an empty slot (leads first, then specialists by weekly count)
+           d. If no empty slots, try to bump an event with a later due date
+        3. If bump succeeds, put bumped event back in queue
+        4. If scheduled within 7 days, create a ScheduleNotification
 
         Employee Pool:
-        - Leads: Always available (priority)
-        - Specialists: Always available
+        - Leads: Always available (priority, primary lead at 10:15)
+        - Specialists: Only after all leads are scheduled
         - Juicers: Only if they don't have a Juicer event that day (treated as Specialists)
 
         Returns:
             List of events that could not be scheduled (for user review)
         """
-        current_app.logger.info("=== WAVE 2: Core Events (Day-by-Day Bump-First Logic) ===")
+        current_app.logger.info("=== WAVE 2: Core Events (Empty-Slot-First Logic) ===")
 
-        # Get all unstaffed Core events and sort by due date
+        # Get all unstaffed Core events and sort by due date (most urgent first)
         unstaffed_core = [e for e in events if e.event_type == 'Core' and not e.is_scheduled]
         unstaffed_core.sort(key=lambda e: e.due_datetime)
 
@@ -1865,22 +1928,27 @@ class SchedulingEngine:
 
         current_app.logger.info(f"Processing {len(unstaffed_core)} unstaffed Core events")
 
+        # Track which events were bumped so they can bypass the 3-day buffer.
+        # The scheduler created the need for rescheduling, so the buffer should
+        # not block their only available slots.
+        bumped_event_refs = set()
+
         while unstaffed_core:
-            # Get most urgent event
             event = unstaffed_core.pop(0)
+            was_bumped = event.project_ref_num in bumped_event_refs
 
             current_app.logger.info(
                 f"Processing Core event {event.project_ref_num} "
                 f"(start: {event.start_datetime.date()}, due: {event.due_datetime.date()})"
+                f"{' [BUMPED - buffer exemption]' if was_bumped else ''}"
             )
 
             scheduled = False
-            locked_days_encountered = []  # Track which days were locked
+            locked_days_encountered = []
 
-            # Day-by-day search from tomorrow to due date
+            # Start from event's start date or tomorrow, whichever is later
             search_start = max(event.start_datetime, today + timedelta(days=1))
             search_end = event.due_datetime
-
             current_date = search_start
 
             while current_date < search_end and not scheduled:
@@ -1890,15 +1958,46 @@ class SchedulingEngine:
                     f"  Checking date {current_date.date()} (day {days_from_now} from now)"
                 )
 
-                # Days 1-3: SHORT NOTICE - Only try to bump (bumping allowed on locked days)
-                if days_from_now <= 3:
-                    current_app.logger.info("  Short notice window (days 1-3): BUMP ONLY")
+                # Within 3 days: skip unless emergency mode or event was bumped
+                # Bumped events bypass the buffer because the scheduler itself
+                # displaced them and they need a new slot.
+                if days_from_now <= 3 and not self.emergency_mode and not was_bumped:
+                    current_app.logger.info(
+                        f"  Skipping {current_date.date()} — within 3-day buffer (use emergency mode to override)"
+                    )
+                    current_date += timedelta(days=1)
+                    continue
+
+                # Skip locked days entirely
+                if self._is_day_locked(current_date):
+                    locked_info = self._get_locked_day_info(current_date)
+                    reason = locked_info.reason if locked_info else "Unknown"
+                    locked_days_encountered.append(current_date.date())
+                    current_app.logger.info(
+                        f"  Skipping {current_date.date()} — day is LOCKED (reason: {reason})"
+                    )
+                    current_date += timedelta(days=1)
+                    continue
+
+                # STEP 1: Try to fill an empty slot (unscheduled employee)
+                if self._try_fill_empty_slot(run, event, current_date, events):
+                    scheduled = True
+                    event.is_scheduled = True
+                    current_app.logger.info(
+                        f"  SUCCESS: Filled empty slot for {event.project_ref_num}"
+                    )
+
+                    # Create short-notice notification if within 7 days
+                    if days_from_now <= 7:
+                        self._create_short_notice_notification(run, event, current_date)
+                else:
+                    # STEP 2: No empty slots available — try to bump
                     bumped_event = self._try_bump_for_day(run, event, current_date, events)
                     if bumped_event:
-                        # Success! Event scheduled, bumped event back to queue
                         scheduled = True
                         event.is_scheduled = True
-                        # Re-insert bumped event and re-sort
+                        # Re-insert bumped event into queue and re-sort by due date
+                        bumped_event_refs.add(bumped_event.project_ref_num)
                         unstaffed_core.append(bumped_event)
                         unstaffed_core.sort(key=lambda e: e.due_datetime)
                         current_app.logger.info(
@@ -1906,63 +2005,28 @@ class SchedulingEngine:
                             f"bumped {bumped_event.project_ref_num} back to queue"
                         )
 
-                # Day 4+: Try empty slots FIRST, then bump
-                else:
-                    current_app.logger.info("  Normal window (day 4+): Try empty slots first, then bump")
-
-                    # Check if day is locked (for empty slot filling - bumping still allowed)
-                    is_locked = self._is_day_locked(current_date)
-                    if is_locked:
-                        locked_days_encountered.append(current_date.date())
-                        current_app.logger.info(f"  Day {current_date.date()} is locked - skipping empty slot fill, trying bump")
-                        # Can still bump on locked days
-                        bumped_event = self._try_bump_for_day(run, event, current_date, events)
-                        if bumped_event:
-                            scheduled = True
-                            event.is_scheduled = True
-                            unstaffed_core.append(bumped_event)
-                            unstaffed_core.sort(key=lambda e: e.due_datetime)
-                            current_app.logger.info(
-                                f"  SUCCESS: Scheduled {event.project_ref_num} via bump on locked day, "
-                                f"bumped {bumped_event.project_ref_num} back to queue"
-                            )
-                    else:
-                        # Try empty slots first
-                        if self._try_fill_empty_slot(run, event, current_date, events):
-                            scheduled = True
-                            event.is_scheduled = True
-                            current_app.logger.info(f"  SUCCESS: Filled empty slot for {event.project_ref_num}")
-                        else:
-                            # No empty slots, try to bump
-                            bumped_event = self._try_bump_for_day(run, event, current_date, events)
-                            if bumped_event:
-                                scheduled = True
-                                event.is_scheduled = True
-                                # Re-insert bumped event and re-sort
-                                unstaffed_core.append(bumped_event)
-                                unstaffed_core.sort(key=lambda e: e.due_datetime)
-                                current_app.logger.info(
-                                    f"  SUCCESS: Scheduled {event.project_ref_num}, "
-                                    f"bumped {bumped_event.project_ref_num} back to queue"
-                                )
+                        # Create short-notice notification if within 7 days
+                        if days_from_now <= 7:
+                            self._create_short_notice_notification(run, event, current_date)
 
                 # Move to next day
                 current_date += timedelta(days=1)
 
-            # If not scheduled by due date, add to failed list with detailed reason
+            # If not scheduled by due date, add to failed list
             if not scheduled:
-                # Build detailed failure reason
-                failure_reason = f"Could not find slot or event to bump within valid window (start: {event.start_datetime.date()}, due: {event.due_datetime.date()})"
+                failure_reason = (
+                    f"Could not find slot or event to bump within valid window "
+                    f"(start: {event.start_datetime.date()}, due: {event.due_datetime.date()})"
+                )
                 if locked_days_encountered:
                     locked_str = ", ".join(str(d) for d in locked_days_encountered)
-                    failure_reason += f". Days locked (empty slot fill blocked): {locked_str}"
+                    failure_reason += f". Days locked: {locked_str}"
 
                 current_app.logger.warning(
                     f"FAILED: Could not schedule Core event {event.project_ref_num} "
                     f"(due {event.due_datetime.date()}). {failure_reason}"
                 )
                 failed_events.append(event)
-                # Create failure record in PendingSchedule
                 self._create_failed_pending_schedule(run, event, failure_reason)
                 run.events_failed += 1
 
@@ -1985,6 +2049,13 @@ class SchedulingEngine:
         Returns the bumped event if successful, None otherwise
         """
         target_date_obj = target_date.date()
+
+        # CHECK TODAY: Cannot bump events scheduled for today — they may be in progress
+        if target_date_obj <= date.today():
+            current_app.logger.info(
+                f"    Day {target_date_obj} is today or earlier. Cannot bump in-progress schedules."
+            )
+            return None
 
         # CHECK LOCKED DAYS: Cannot bump events on a locked day
         # Locked days must remain unchanged to preserve printed paperwork/finalized schedules
@@ -2208,11 +2279,16 @@ class SchedulingEngine:
                     )
                     continue
 
-            # Find the time slot with fewest scheduled employees
-            time_slot = self._find_least_busy_time_slot(run, target_date_obj)
+            # Primary lead for this day gets the first Core time slot (10:15)
+            primary_lead = self.rotation_manager.get_rotation_employee(target_date, 'primary_lead')
+            if primary_lead and employee.id == primary_lead.id:
+                first_slot = self.CORE_TIME_SLOTS[0] if self.CORE_TIME_SLOTS else time(10, 15)
+                time_slot = first_slot
+            else:
+                time_slot = self._find_least_busy_time_slot(run, target_date_obj)
 
             if not time_slot:
-                current_app.logger.error(f"    ERROR: _find_least_busy_time_slot returned None for {target_date_obj}")
+                current_app.logger.error(f"    ERROR: Could not determine time slot for {target_date_obj}")
                 continue
 
             schedule_datetime = datetime.combine(target_date_obj, time_slot)
@@ -3659,6 +3735,57 @@ class SchedulingEngine:
         )
         self.db.add(pending)
         self.db.flush()
+
+    def _create_short_notice_notification(self, run: object, event: object,
+                                          schedule_date: datetime) -> None:
+        """
+        Create a ScheduleNotification for a short-notice schedule (within 7 days).
+
+        The supervisor must acknowledge they have notified the employee.
+        """
+        ScheduleNotification = self.models.get('ScheduleNotification')
+        if not ScheduleNotification:
+            current_app.logger.warning(
+                "ScheduleNotification model not available — skipping notification"
+            )
+            return
+
+        # Find the pending schedule we just created for this event
+        pending = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.event_ref_num == event.project_ref_num,
+            self.PendingSchedule.failure_reason.is_(None),
+            self.PendingSchedule.status != 'superseded',
+        ).first()
+
+        if not pending or not pending.employee_id:
+            return
+
+        # Only create notifications for Core and Juicer Production events
+        if event.event_type not in ('Core', 'Juicer Production'):
+            return
+
+        # Skip bumped events — only notify for new schedules
+        if pending.is_swap:
+            return
+
+        days_notice = (schedule_date.date() - datetime.now().date()).days
+
+        notification = ScheduleNotification(
+            scheduler_run_id=run.id,
+            event_ref_num=event.project_ref_num,
+            employee_id=pending.employee_id,
+            schedule_date=schedule_date.date(),
+            schedule_time=pending.schedule_time,
+            days_notice=days_notice,
+        )
+        self.db.add(notification)
+        self.db.flush()
+
+        current_app.logger.info(
+            f"  SHORT NOTICE: Created notification for {event.project_ref_num} "
+            f"({days_notice} days notice, employee {pending.employee.name})"
+        )
 
     def schedule_single_event(self, event: object) -> Optional[dict]:
         """

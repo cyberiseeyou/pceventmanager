@@ -4,7 +4,7 @@ Handles dashboard, events list, and calendar views
 """
 from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for, send_from_directory
 from sqlalchemy import or_
-from app.routes.auth import require_authentication
+from app.routes.auth import require_authentication, require_role
 from app.models import init_models
 from app.constants import CANCELLED_VARIANTS
 from datetime import datetime, date, timedelta
@@ -40,19 +40,306 @@ def offline():
 @main_bp.route('/')
 @require_authentication()
 def index():
-    """Redirect to dashboard command center"""
+    """Redirect to appropriate dashboard based on role"""
+    from app.routes.auth import get_current_user
+    user = get_current_user()
+    if user and user.get('role') in ('specialist', 'lead'):
+        return redirect(url_for('main.my_dashboard'))
     return redirect(url_for('dashboard.command_center'))
 
 
 @main_bp.route('/dashboard')
 @require_authentication()
 def dashboard():
-    """Redirect to dashboard command center"""
+    """Redirect to appropriate dashboard based on role"""
+    from app.routes.auth import get_current_user
+    user = get_current_user()
+    if user and user.get('role') in ('specialist', 'lead'):
+        return redirect(url_for('main.my_dashboard'))
     return redirect(url_for('dashboard.command_center'))
+
+
+@main_bp.route('/my-dashboard')
+@require_authentication()
+def my_dashboard():
+    """Personal dashboard for non-lead employees showing their own schedule,
+    time off requests, and weekly stats."""
+    from flask import current_app
+    from app.models import get_models
+    from app.routes.auth import get_current_user
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    first_name = user.get('first_name', 'there') if user else 'there'
+
+    today = date.today()
+    now = datetime.now()
+
+    # Greeting based on time of day
+    hour = now.hour
+    if hour < 12:
+        greeting_label = 'Good morning'
+    elif hour < 17:
+        greeting_label = 'Good afternoon'
+    else:
+        greeting_label = 'Good evening'
+
+    today_events = []
+    next_event = None
+    week_event_count = 0
+    upcoming_days_working = 0
+    scheduled_hours = 0.0
+    all_time_off_requests = []
+
+    if employee_id:
+        # ── Today's events ──
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
+
+        today_schedules = db.session.query(Schedule, Event).join(
+            Event, Schedule.event_ref_num == Event.project_ref_num
+        ).filter(
+            Schedule.employee_id == employee_id,
+            Schedule.schedule_datetime >= today_start,
+            Schedule.schedule_datetime <= today_end
+        ).order_by(Schedule.schedule_datetime).all()
+
+        for schedule, event in today_schedules:
+            today_events.append({
+                'time': schedule.schedule_datetime.strftime('%I:%M %p'),
+                'event_name': event.project_name,
+                'event_type': event.event_type,
+            })
+
+        # ── Next upcoming event (if no events today) ──
+        if not today_events:
+            next_row = db.session.query(Schedule, Event).join(
+                Event, Schedule.event_ref_num == Event.project_ref_num
+            ).filter(
+                Schedule.employee_id == employee_id,
+                Schedule.schedule_datetime > today_end
+            ).order_by(Schedule.schedule_datetime).first()
+
+            if next_row:
+                schedule, event = next_row
+                next_event = {
+                    'date': schedule.schedule_datetime.strftime('%A, %B %-d'),
+                    'time': schedule.schedule_datetime.strftime('%I:%M %p'),
+                    'event_name': event.project_name,
+                    'event_type': event.event_type,
+                }
+
+        # ── Week stats (Sun-Sat containing today) ──
+        week_start_date = today - timedelta(days=(today.weekday() + 1) % 7)
+        week_end_date = week_start_date + timedelta(days=6)
+        week_start = datetime.combine(week_start_date, datetime.min.time())
+        week_end = datetime.combine(week_end_date, datetime.max.time())
+
+        week_schedules = db.session.query(Schedule, Event).join(
+            Event, Schedule.event_ref_num == Event.project_ref_num
+        ).filter(
+            Schedule.employee_id == employee_id,
+            Schedule.schedule_datetime >= week_start,
+            Schedule.schedule_datetime <= week_end
+        ).all()
+
+        week_event_count = len(week_schedules)
+        working_dates = set()
+        total_minutes = 0
+        for schedule, event in week_schedules:
+            working_dates.add(schedule.schedule_datetime.date())
+            total_minutes += event.estimated_time or Event.get_default_duration(event.event_type)
+        upcoming_days_working = len(working_dates)
+        scheduled_hours = round(total_minutes / 60, 1)
+
+        # ── All time off requests (for status tracking) ──
+        all_time_off_requests = EmployeeTimeOff.query.filter(
+            EmployeeTimeOff.employee_id == employee_id,
+            EmployeeTimeOff.end_date >= today
+        ).order_by(EmployeeTimeOff.start_date).all()
+
+    # ── Lead-only: team time off ──
+    user_role = user.get('role', '') if user else ''
+    is_lead = user_role == 'lead'
+    team_time_off = []
+    team_time_off_query = []
+
+    if is_lead and employee_id:
+        thirty_days = today + timedelta(days=30)
+        team_time_off_query = EmployeeTimeOff.query.join(
+            Employee, EmployeeTimeOff.employee_id == Employee.id
+        ).filter(
+            EmployeeTimeOff.status == 'approved',
+            EmployeeTimeOff.start_date >= today,
+            EmployeeTimeOff.start_date <= thirty_days,
+        ).order_by(EmployeeTimeOff.start_date.asc()).all()
+
+        for req in team_time_off_query:
+            emp = Employee.query.get(req.employee_id)
+            emp_name = emp.name if emp else 'Unknown'
+            team_time_off.append({
+                'employee_name': emp_name,
+                'start_date': req.start_date,
+                'end_date': req.end_date,
+            })
+
+    return render_template('my_dashboard.html',
+        first_name=first_name,
+        greeting_label=greeting_label,
+        today=today,
+        today_events=today_events,
+        next_event=next_event,
+        week_event_count=week_event_count,
+        upcoming_days_working=upcoming_days_working,
+        scheduled_hours=scheduled_hours,
+        all_time_off_requests=all_time_off_requests,
+        is_lead=is_lead,
+        team_time_off=team_time_off,
+    )
+
+
+@main_bp.route('/lead/daily/<date>')
+@require_authentication()
+@require_role('lead', 'supervisor')
+def lead_daily_view(date):
+    """Lead daily view - read-only schedule for all employees on a given date."""
+    from app.models import get_models
+    from app.routes.auth import get_current_user
+
+    # Validate date format
+    try:
+        selected_date = datetime.strptime(date, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        flash('Invalid date format', 'error')
+        return redirect(url_for('main.my_dashboard'))
+
+    today_dt = datetime.now().date()
+    prev_date = (selected_date - timedelta(days=1)).strftime('%Y-%m-%d')
+    next_date = (selected_date + timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = today_dt.strftime('%Y-%m-%d')
+    day_label = selected_date.strftime('%A, %B %-d, %Y')
+
+    user = get_current_user()
+    user_role = user.get('role') if user else None
+
+    return render_template('lead/daily_view.html',
+        selected_date=date,
+        day_label=day_label,
+        prev_date=prev_date,
+        next_date=next_date,
+        today_str=today_str,
+        is_today=(selected_date == today_dt),
+        user_role=user_role,
+    )
+
+
+@main_bp.route('/my-schedule/monthly')
+@require_authentication()
+def my_schedule_monthly():
+    """Monthly calendar view for specialists showing their own schedule."""
+    return render_template('my_schedule_monthly.html')
+
+
+@main_bp.route('/my-events')
+@require_authentication()
+def my_events():
+    """Simple weekly schedule view showing the employee's own events."""
+    return render_template('my_events.html')
+
+
+@main_bp.route('/my-time-off')
+@require_authentication()
+def my_time_off():
+    """Read-only view of the employee's own time-off requests with submit form."""
+    from app.models import get_models
+    from app.routes.auth import get_current_user
+
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+
+    requests = []
+    if employee_id:
+        requests = EmployeeTimeOff.query.filter(
+            EmployeeTimeOff.employee_id == employee_id,
+        ).order_by(EmployeeTimeOff.start_date.desc()).all()
+
+    return render_template('my_time_off.html',
+                           requests=requests,
+                           today=date.today())
+
+
+@main_bp.route('/api/my-schedule-updates')
+@require_authentication()
+def my_schedule_updates():
+    """Return a fingerprint of the employee's upcoming schedule (next 7 days).
+
+    The JS client stores the previous fingerprint in localStorage and compares.
+    When it changes, a browser notification is shown.
+
+    Response: { fingerprint: "<hash>", events: [...], count: N }
+    """
+    from flask import current_app
+    from app.models import get_models
+    from app.routes.auth import get_current_user
+    import hashlib
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    if not employee_id:
+        return jsonify({'fingerprint': '', 'events': [], 'count': 0})
+
+    today = date.today()
+    week_end = today + timedelta(days=7)
+    start_dt = datetime.combine(today, datetime.min.time())
+    end_dt = datetime.combine(week_end, datetime.max.time())
+
+    rows = db.session.query(Schedule, Event).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).filter(
+        Schedule.employee_id == employee_id,
+        Schedule.schedule_datetime >= start_dt,
+        Schedule.schedule_datetime <= end_dt,
+    ).order_by(Schedule.schedule_datetime).all()
+
+    events_list = []
+    fingerprint_parts = []
+    for schedule, event in rows:
+        events_list.append({
+            'date': schedule.schedule_datetime.strftime('%Y-%m-%d'),
+            'time': schedule.schedule_datetime.strftime('%I:%M %p'),
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+        })
+        fingerprint_parts.append(f'{schedule.id}:{schedule.schedule_datetime.isoformat()}:{event.project_ref_num}')
+
+    fp = hashlib.md5('|'.join(fingerprint_parts).encode()).hexdigest() if fingerprint_parts else ''
+
+    return jsonify({
+        'fingerprint': fp,
+        'events': events_list,
+        'count': len(events_list),
+    })
 
 
 @main_bp.route('/events')
 @main_bp.route('/unscheduled')  # Keep old route for compatibility
+@require_authentication()
+@require_role('supervisor')
 def unscheduled_events():
     """Events list view with filtering by condition and type"""
     from flask import current_app
@@ -68,7 +355,7 @@ def unscheduled_events():
     search_query = request.args.get('search', '').strip()  # Smart search query
     date_from_str = request.args.get('date_from', '').strip()  # Date range picker
     date_to_str = request.args.get('date_to', '').strip()
-    show_past = request.args.get('show_past', '0') == '1'  # Default: hide past events
+    hide_past = request.args.get('hide_past', '0') == '1'  # Default: show past events
     sort_by = request.args.get('sort_by', 'date')  # date, due_date, event_type, employee
 
     # Map condition display names
@@ -156,10 +443,9 @@ def unscheduled_events():
         except ValueError:
             pass
 
-    # Default: filter to current/upcoming events (due date >= today)
-    # unless user explicitly set date filters, search query, or toggled show_past
+    # Filter out past events only when user explicitly checks "Hide past events"
     # Skip for past_due tab since it explicitly shows past events
-    if not show_past and not date_filter and not date_from_str and not date_to_str and not search_query and condition_filter != 'past_due':
+    if hide_past and condition_filter != 'past_due':
         query = query.filter(Event.due_datetime >= datetime.combine(today, datetime.min.time()))
 
     # Apply intelligent search if specified
@@ -423,6 +709,23 @@ def unscheduled_events():
         '': 'All'
     }
 
+    # Build filter_params for preserving state across tab switches
+    filter_params = {}
+    if search_query:
+        filter_params['search'] = search_query
+    if event_type_filter:
+        filter_params['event_type'] = event_type_filter
+    if sort_by and sort_by != 'date':
+        filter_params['sort_by'] = sort_by
+    if date_from_str:
+        filter_params['date_from'] = date_from_str
+    if date_to_str:
+        filter_params['date_to'] = date_to_str
+    if date_filter:
+        filter_params['date_filter'] = date_filter
+    if hide_past:
+        filter_params['hide_past'] = '1'
+
     return render_template('unscheduled.html',
                          events=events_with_priority,
                          event_types=event_types,
@@ -430,7 +733,8 @@ def unscheduled_events():
                          condition=condition_filter,
                          condition_display=condition_display_map.get(condition_filter, 'Unscheduled'),
                          condition_counts=condition_counts,
-                         show_past=show_past,
+                         hide_past=hide_past,
+                         filter_params=filter_params,
                          sort_by=sort_by,
                          date_filter=date_filter,
                          date_filter_display=date_filter_display.get(date_filter, 'All'))
@@ -438,6 +742,7 @@ def unscheduled_events():
 
 @main_bp.route('/unreported-events')
 @require_authentication()
+@require_role('supervisor')
 def unreported_events():
     """Display unreported events from the last 2 weeks"""
     from flask import current_app
@@ -492,6 +797,8 @@ def unreported_events():
 
 
 @main_bp.route('/calendar')
+@require_authentication()
+@require_role('supervisor')
 def calendar_view():
     """Display calendar view of scheduled events"""
     from flask import current_app
@@ -601,6 +908,8 @@ def calendar_view():
 
 
 @main_bp.route('/calendar/day/<date>')
+@require_authentication()
+@require_role('supervisor')
 def calendar_day_view(date):
     """Get events for a specific day (AJAX endpoint)"""
     from flask import current_app
@@ -709,6 +1018,7 @@ def calendar_day_view(date):
 
 @main_bp.route('/employees/workload')
 @require_authentication()
+@require_role('supervisor')
 def workload_dashboard():
     """
     Employee workload dashboard page.
@@ -720,6 +1030,7 @@ def workload_dashboard():
 
 @main_bp.route('/schedule/daily/<date>')
 @require_authentication()
+@require_role('supervisor')
 def daily_schedule_view(date: str) -> str:
     """
     Display full-screen daily schedule view.
@@ -815,6 +1126,7 @@ def daily_schedule_view(date: str) -> str:
 @main_bp.route('/attendance')
 @main_bp.route('/attendance/<employee_id>')
 @require_authentication()
+@require_role('supervisor')
 def attendance_calendar(employee_id=None):
     """
     Employee attendance calendar view.

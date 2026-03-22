@@ -4,6 +4,7 @@ Handles system notifications for scheduling alerts and validation status
 """
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime, date, timedelta
+from app.routes.auth import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -236,6 +237,25 @@ def init_notification_routes(db, models):
                         'action_url': '/notes?filter=due_today',
                         'action_text': 'View Notes'
                     })
+
+            # Check 9: Pending time off requests awaiting supervisor review
+            user = get_current_user()
+            if user and user.get('role') == 'supervisor':
+                EmployeeTimeOff = models.get('EmployeeTimeOff')
+                if EmployeeTimeOff:
+                    pending_time_off = EmployeeTimeOff.query.filter_by(
+                        status='pending'
+                    ).count()
+
+                    if pending_time_off > 0:
+                        notifications['warning'].append({
+                            'id': 'pending_time_off',
+                            'type': 'pending_time_off',
+                            'title': f'{pending_time_off} Pending Time Off Request(s)',
+                            'message': f'{pending_time_off} employee time off request(s) awaiting your review',
+                            'action_url': '/time-off?tab=pending',
+                            'action_text': 'Review Requests'
+                        })
 
             # Calculate total count
             notifications['count'] = (

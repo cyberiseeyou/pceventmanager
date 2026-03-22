@@ -67,10 +67,13 @@
                 </button>
 
                 <div class="nav-user-section">
+                    {% if current_user_role == 'supervisor' %}
                     <button id="aiPanelToggle" class="notifications-btn" title="AI Assistant (Ctrl+K)"
                         aria-label="AI Assistant" style="margin-right: var(--spacing-sm);">
                         <span class="nav-icon"><span class="material-symbols-outlined">auto_awesome</span></span>
                     </button>
+                    {% endif %}
+                    {% if current_user_role == 'supervisor' %}
                     <div class="notifications-dropdown">
                         <button id="notificationsBtn" class="notifications-btn" title="View notifications"
                             aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
@@ -91,6 +94,7 @@
                             </div>
                         </div>
                     </div>
+                    {% endif %}
                     <div class="user-dropdown">
                         <button class="user-dropdown-toggle" id="userDropdownToggle" aria-haspopup="true"
                             aria-expanded="false">
@@ -99,11 +103,13 @@
                             <span class="dropdown-arrow">▼</span>
                         </button>
                         <div class="user-dropdown-menu" id="userDropdownMenu" hidden>
+                            {% if current_user_role == 'supervisor' %}
                             <a href="{{ url_for('help.help_home') }}" class="dropdown-item">
                                 <span class="dropdown-icon"><span class="material-symbols-outlined">help</span></span>
                                 Help
                             </a>
                             <div class="dropdown-divider"></div>
+                            {% endif %}
                             <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
                                 <span class="dropdown-icon"><span class="material-symbols-outlined">logout</span></span>
                                 Logout
@@ -188,16 +194,77 @@
             </button>
         </div>
         <nav class="sidebar-nav">
-            {% if current_user_role != 'specialist' %}
-            <!-- Dashboard (supervisor + lead) -->
+            {% if current_user_role == 'specialist' %}
+            {# ── SPECIALIST SIDEBAR (locked down — 4 items only) ── #}
+            <a href="{{ url_for('main.my_dashboard') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_dashboard' %}active{% endif %}">
+                <span class="material-symbols-outlined">home</span>
+                <span>My Dashboard</span>
+            </a>
+            <a href="{{ url_for('main.my_events') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_events' %}active{% endif %}">
+                <span class="material-symbols-outlined">list_alt</span>
+                <span>My Events</span>
+            </a>
+            <a href="{{ url_for('main.my_schedule_monthly') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_schedule_monthly' %}active{% endif %}">
+                <span class="material-symbols-outlined">calendar_month</span>
+                <span>Monthly Schedule</span>
+            </a>
+            <a href="{{ url_for('main.my_time_off') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_time_off' %}active{% endif %}">
+                <span class="material-symbols-outlined">event_busy</span>
+                <span>My Time Off</span>
+            </a>
+            <div class="sidebar-group-label" style="margin-top: auto;"></div>
+            <a href="{{ url_for('auth.logout') }}" class="sidebar-item sidebar-logout">
+                <span class="material-symbols-outlined">logout</span>
+                <span>Logout</span>
+            </a>
+
+            {% elif current_user_role == 'lead' %}
+            <!-- Lead Navigation -->
+            <a href="{{ url_for('main.my_dashboard') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_dashboard' %}active{% endif %}">
+                <span class="material-symbols-outlined">home</span>
+                <span>My Dashboard</span>
+            </a>
+            <a href="/lead/daily/{{ today_date }}"
+                class="sidebar-item {% if request.endpoint == 'main.lead_daily_view' %}active{% endif %}">
+                <span class="material-symbols-outlined">today</span>
+                <span>Team Daily View</span>
+            </a>
+            <a href="{{ url_for('main.my_events') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_events' %}active{% endif %}">
+                <span class="material-symbols-outlined">list_alt</span>
+                <span>My Events</span>
+            </a>
+            <a href="/my-schedule/monthly"
+                class="sidebar-item {% if request.endpoint == 'main.my_schedule_monthly' %}active{% endif %}">
+                <span class="material-symbols-outlined">calendar_month</span>
+                <span>Monthly Schedule</span>
+            </a>
+            <a href="{{ url_for('main.my_time_off') }}"
+                class="sidebar-item {% if request.endpoint == 'main.my_time_off' %}active{% endif %}">
+                <span class="material-symbols-outlined">event_busy</span>
+                <span>My Time Off</span>
+            </a>
+            <div class="sidebar-group-label" style="margin-top: auto;"></div>
+            <a href="{{ url_for('auth.logout') }}" class="sidebar-item sidebar-logout">
+                <span class="material-symbols-outlined">logout</span>
+                <span>Logout</span>
+            </a>
+
+            {% else %}
+            {# ── SUPERVISOR SIDEBAR (full access) ── #}
+            <!-- Dashboard -->
             <a href="{{ url_for('dashboard.command_center') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.command_center' or request.endpoint == 'main.index' %}active{% endif %}">
                 <span class="material-symbols-outlined">dashboard</span>
                 <span>Dashboard</span>
             </a>
-            {% endif %}
 
-            <!-- Schedule Group (all roles) -->
+            <!-- Schedule Group -->
             <div class="sidebar-group-label">Schedule</div>
             <a href="/schedule/daily/{{ today_date }}"
                 class="sidebar-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}">
@@ -209,22 +276,24 @@
                 <span class="material-symbols-outlined">calendar_month</span>
                 <span>Calendar</span>
             </a>
-            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('auto_scheduler.index') }}"
-                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') %}active{% endif %}">
+                class="sidebar-item {% if request.endpoint and request.endpoint.startswith('auto_scheduler.') and request.endpoint != 'auto_scheduler.notifications' %}active{% endif %}">
                 <span class="material-symbols-outlined">smart_toy</span>
                 <span>Auto-Scheduler</span>
             </a>
-            {% endif %}
+            <a href="{{ url_for('auto_scheduler.notifications') }}"
+                class="sidebar-item {% if request.endpoint == 'auto_scheduler.notifications' %}active{% endif %}">
+                <span class="material-symbols-outlined">notifications</span>
+                <span>Notifications</span>
+            </a>
 
-            <!-- Events Group (all roles) -->
+            <!-- Events Group -->
             <div class="sidebar-group-label">Events</div>
             <a href="{{ url_for('main.unscheduled_events') }}"
                 class="sidebar-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}">
                 <span class="material-symbols-outlined">list_alt</span>
-                <span>{% if current_user_role == 'specialist' %}My Events{% else %}All Events{% endif %}</span>
+                <span>All Events</span>
             </a>
-            {% if current_user_role != 'specialist' %}
             <a href="{{ url_for('main.unreported_events') }}"
                 class="sidebar-item {% if request.endpoint == 'main.unreported_events' %}active{% endif %}">
                 <span class="material-symbols-outlined">report</span>
@@ -240,46 +309,37 @@
                 <span class="material-symbols-outlined">event_busy</span>
                 <span>Lost Demos</span>
             </a>
-            {% endif %}
 
             <!-- Team Group -->
             <div class="sidebar-group-label">Team</div>
-            {% if current_user_role != 'specialist' %}
             <a href="{{ url_for('employees.employees') }}"
                 class="sidebar-item {% if request.endpoint == 'employees.employees' %}active{% endif %}">
                 <span class="material-symbols-outlined">group</span>
                 <span>Employees</span>
             </a>
-            {% endif %}
-            {% if current_user_role in ('supervisor', 'lead') %}
             <a href="{{ url_for('main.attendance_calendar') }}"
                 class="sidebar-item {% if request.endpoint == 'main.attendance_calendar' %}active{% endif %}">
                 <span class="material-symbols-outlined">how_to_reg</span>
                 <span>Attendance</span>
             </a>
-            {% endif %}
             <a href="{{ url_for('employees.time_off_requests') }}"
                 class="sidebar-item {% if request.endpoint == 'employees.time_off_requests' %}active{% endif %}">
                 <span class="material-symbols-outlined">event_busy</span>
-                <span>{% if current_user_role == 'specialist' %}Request Time Off{% else %}Availability{% endif %}</span>
+                <span>Availability</span>
             </a>
-            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('admin.employee_analytics') }}"
                 class="sidebar-item {% if request.endpoint == 'admin.employee_analytics' %}active{% endif %}">
                 <span class="material-symbols-outlined">analytics</span>
                 <span>Analytics</span>
             </a>
-            {% endif %}
 
-            {% if current_user_role != 'specialist' %}
-            <!-- Tools Group (supervisor + lead) -->
+            <!-- Tools Group -->
             <div class="sidebar-group-label">Tools</div>
             <a href="{{ url_for('printing.printing_home') }}"
                 class="sidebar-item {% if request.endpoint and request.endpoint.startswith('printing.') %}active{% endif %}">
                 <span class="material-symbols-outlined">print</span>
                 <span>Printing</span>
             </a>
-            {% if current_user_role == 'supervisor' %}
             <a href="{{ url_for('dashboard.weekly_validation') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
                 <span class="material-symbols-outlined">verified</span>
@@ -310,11 +370,8 @@
                 <span class="material-symbols-outlined">inventory_2</span>
                 <span>Demo Supplies</span>
             </a>
-            {% endif %}
-            {% endif %}
 
-            {% if current_user_role == 'supervisor' %}
-            <!-- Admin Group (supervisor only) -->
+            <!-- Admin Group -->
             <div class="sidebar-group-label">Admin</div>
             <a href="{{ url_for('admin.settings_page') }}"
                 class="sidebar-item {% if request.endpoint == 'admin.settings_page' %}active{% endif %}">
@@ -335,6 +392,11 @@
                 <span class="material-symbols-outlined">database</span>
                 <span>Refresh Database</span>
             </button>
+            <div class="sidebar-group-label"></div>
+            <a href="{{ url_for('auth.logout') }}" class="sidebar-item sidebar-logout">
+                <span class="material-symbols-outlined">logout</span>
+                <span>Logout</span>
+            </a>
             {% endif %}
         </nav>
     </aside>
@@ -349,56 +411,50 @@
     <!-- Mobile Bottom Navigation (role-aware) -->
     <nav class="bottom-nav" id="bottomNav" aria-label="Mobile navigation">
         {% if current_user_role == 'specialist' %}
-        {# Event Specialist: Today | My Events | Calendar | Time Off #}
-        <a href="/schedule/daily/{{ today_date }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
-            data-nav="today">
-            <span class="material-symbols-outlined">today</span>
-            <span class="bottom-nav-label">Today</span>
+        {# Specialist: Home | My Events | Monthly | Time Off #}
+        <a href="{{ url_for('main.my_dashboard') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_dashboard' %}active{% endif %}"
+            data-nav="home">
+            <span class="material-symbols-outlined">home</span>
+            <span class="bottom-nav-label">Home</span>
         </a>
-        <a href="{{ url_for('main.unscheduled_events') }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+        <a href="{{ url_for('main.my_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_events' %}active{% endif %}"
             data-nav="events">
             <span class="material-symbols-outlined">list_alt</span>
             <span class="bottom-nav-label">My Events</span>
         </a>
-        <a href="{{ url_for('main.calendar_view') }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.calendar_view' %}active{% endif %}"
-            data-nav="calendar">
+        <a href="{{ url_for('main.my_schedule_monthly') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_schedule_monthly' %}active{% endif %}"
+            data-nav="monthly">
             <span class="material-symbols-outlined">calendar_month</span>
-            <span class="bottom-nav-label">Calendar</span>
+            <span class="bottom-nav-label">Monthly</span>
         </a>
-        <a href="{{ url_for('main.time_off_requests') }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.time_off_requests' %}active{% endif %}"
+        <a href="{{ url_for('main.my_time_off') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_time_off' %}active{% endif %}"
             data-nav="timeoff">
             <span class="material-symbols-outlined">event_busy</span>
             <span class="bottom-nav-label">Time Off</span>
         </a>
         {% elif current_user_role == 'lead' %}
-        {# Lead: Today | Events | Team | Attendance | More #}
-        <a href="/schedule/daily/{{ today_date }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.daily_schedule_view' %}active{% endif %}"
-            data-nav="today">
-            <span class="material-symbols-outlined">today</span>
-            <span class="bottom-nav-label">Today</span>
+        {# Lead: Home | Team Daily | My Events | More #}
+        <a href="{{ url_for('main.my_dashboard') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_dashboard' %}active{% endif %}"
+            data-nav="home">
+            <span class="material-symbols-outlined">home</span>
+            <span class="bottom-nav-label">Home</span>
         </a>
-        <a href="{{ url_for('main.unscheduled_events') }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.unscheduled_events' %}active{% endif %}"
+        <a href="/lead/daily/{{ today_date }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.lead_daily_view' %}active{% endif %}"
+            data-nav="daily">
+            <span class="material-symbols-outlined">today</span>
+            <span class="bottom-nav-label">Team Daily</span>
+        </a>
+        <a href="{{ url_for('main.my_events') }}"
+            class="bottom-nav-item {% if request.endpoint == 'main.my_events' %}active{% endif %}"
             data-nav="events">
             <span class="material-symbols-outlined">list_alt</span>
-            <span class="bottom-nav-label">Events</span>
-        </a>
-        <a href="{{ url_for('employees.employees') }}"
-            class="bottom-nav-item {% if request.endpoint == 'employees.employees' %}active{% endif %}"
-            data-nav="team">
-            <span class="material-symbols-outlined">group</span>
-            <span class="bottom-nav-label">Team</span>
-        </a>
-        <a href="{{ url_for('main.attendance') }}"
-            class="bottom-nav-item {% if request.endpoint == 'main.attendance' %}active{% endif %}"
-            data-nav="attendance">
-            <span class="material-symbols-outlined">how_to_reg</span>
-            <span class="bottom-nav-label">Attendance</span>
+            <span class="bottom-nav-label">My Events</span>
         </a>
         <button class="bottom-nav-item" id="bottomNavMore" data-nav="more" aria-label="More options"
             aria-expanded="false">
@@ -548,8 +604,10 @@
         })();
     </script>
 
-    <!-- Notifications -->
+    {% if current_user_role == 'supervisor' %}
+    <!-- Notifications (supervisor bell + panel) -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    {% endif %}
 
     <!-- AI Assistant Panel -->
     {% include 'components/ai_panel.html' %}
@@ -746,6 +804,11 @@
     <!-- Notification Modal Component (for same-week schedule changes) -->
     <script src="{{ url_for('static', filename='js/components/notification-modal.js') }}"></script>
 
+    {% if current_user_role in ('specialist', 'lead') %}
+    <!-- Schedule Change Notifier (browser push notifications for schedule changes within 7 days) -->
+    <script src="{{ url_for('static', filename='js/components/schedule-change-notifier.js') }}"></script>
+    {% endif %}
+
     <!-- Bottom Nav "More" button - opens sidebar on mobile -->
     <script>
         (function() {
@@ -759,12 +822,22 @@
         })();
     </script>
 
-    <!-- Quick Note Widget -->
+    <!-- Quick Note Widget (supervisor only) -->
+    {% if current_user_role == 'supervisor' %}
     {% include 'components/quick_note_widget.html' %}
+    {% endif %}
+
+    <!-- Friday Bakery Prep Modal -->
+    {% include 'components/bakery_prep_modal.html' %}
+
+    {% if current_user_role == 'supervisor' %}
+    <!-- Note Notification Modal -->
+    {% include 'components/note_notification_modal.html' %}
+    {% endif %}
 
     {% block scripts %}{% endblock %}
 
-    <!-- PWA Service Worker Registration & Offline Detection -->
+    <!-- PWA Service Worker Registration, Install Prompt & Offline Detection -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -775,6 +848,100 @@
                     .catch((err) => console.warn('SW registration failed:', err));
             });
         }
+
+        // PWA Install Prompt
+        (function() {
+            let deferredPrompt = null;
+
+            // Don't show if already installed (standalone mode) or previously dismissed
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                || window.navigator.standalone === true;
+            if (isStandalone || localStorage.getItem('pwaInstallDismissed')) return;
+
+            // Android/Chrome: capture the beforeinstallprompt event
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                showInstallBanner('android');
+            });
+
+            // iOS Safari: detect and show manual instructions
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|Chrome/.test(navigator.userAgent);
+            if (isIOS && isSafari) {
+                setTimeout(() => showInstallBanner('ios'), 2000);
+            }
+
+            function showInstallBanner(platform) {
+                const banner = document.createElement('div');
+                banner.id = 'pwaInstallBanner';
+                banner.setAttribute('role', 'alert');
+                banner.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);' +
+                    'width:calc(100% - 32px);max-width:400px;background:#fff;border-radius:16px;' +
+                    'box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:16px 20px;z-index:9999;' +
+                    'display:flex;align-items:center;gap:14px;font-family:inherit;';
+
+                const icon = document.createElement('img');
+                icon.src = '{{ url_for("static", filename="img/pwa-icon-192.png") }}';
+                icon.alt = 'PC Events';
+                icon.style.cssText = 'width:48px;height:48px;border-radius:12px;flex-shrink:0;';
+
+                const textDiv = document.createElement('div');
+                textDiv.style.cssText = 'flex:1;min-width:0;';
+
+                const title = document.createElement('div');
+                title.textContent = 'Install PC Events';
+                title.style.cssText = 'font-weight:600;font-size:15px;color:#1f2937;';
+
+                const desc = document.createElement('div');
+                desc.style.cssText = 'font-size:13px;color:#6b7280;margin-top:2px;';
+                if (platform === 'ios') {
+                    desc.innerHTML = 'Tap <strong>Share</strong> <span style="font-size:16px;">&#x2B06;&#xFE0F;</span> then <strong>"Add to Home Screen"</strong>';
+                } else {
+                    desc.textContent = 'Add to your home screen for quick access';
+                }
+
+                textDiv.appendChild(title);
+                textDiv.appendChild(desc);
+
+                const btnWrap = document.createElement('div');
+                btnWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex-shrink:0;';
+
+                if (platform !== 'ios') {
+                    const installBtn = document.createElement('button');
+                    installBtn.textContent = 'Install';
+                    installBtn.style.cssText = 'background:#2E4C73;color:#fff;border:none;border-radius:8px;' +
+                        'padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;';
+                    installBtn.addEventListener('click', async () => {
+                        if (deferredPrompt) {
+                            deferredPrompt.prompt();
+                            const result = await deferredPrompt.userChoice;
+                            if (result.outcome === 'accepted') {
+                                localStorage.setItem('pwaInstallDismissed', '1');
+                            }
+                            deferredPrompt = null;
+                        }
+                        banner.remove();
+                    });
+                    btnWrap.appendChild(installBtn);
+                }
+
+                const dismissBtn = document.createElement('button');
+                dismissBtn.textContent = platform === 'ios' ? 'Got it' : 'Not now';
+                dismissBtn.style.cssText = 'background:none;border:none;color:#6b7280;font-size:12px;' +
+                    'cursor:pointer;padding:4px;font-family:inherit;';
+                dismissBtn.addEventListener('click', () => {
+                    localStorage.setItem('pwaInstallDismissed', '1');
+                    banner.remove();
+                });
+                btnWrap.appendChild(dismissBtn);
+
+                banner.appendChild(icon);
+                banner.appendChild(textDiv);
+                banner.appendChild(btnWrap);
+                document.body.appendChild(banner);
+            }
+        })();
 
         // Offline/Online detection
         (function() {
@@ -796,6 +963,8 @@
             updateStatus();
         })();
     </script>
+    <script src="{{ url_for('static', filename='js/friday-bakery-prep.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/note-notifications.js') }}"></script>
 </body>
 
 </html>

@@ -401,4 +401,58 @@ def create_auto_scheduler_models(db):
             ),
         )
 
-    return RotationAssignment, PendingSchedule, SchedulerRunHistory, ScheduleException, EventSchedulingOverride, LockedDay, EventTypeOverride
+    class ScheduleNotification(db.Model):
+        """
+        Tracks short-notice schedule assignments that need supervisor acknowledgment.
+
+        When the auto-scheduler assigns an employee to an event within 7 days,
+        a notification record is created. The supervisor must acknowledge they
+        have notified the employee. Records within 3 days are only created
+        when emergency mode is active.
+        """
+        __tablename__ = 'schedule_notifications'
+
+        id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+        scheduler_run_id = db.Column(
+            db.Integer,
+            db.ForeignKey('scheduler_run_history.id', ondelete='CASCADE'),
+            nullable=False
+        )
+        event_ref_num = db.Column(
+            db.Integer,
+            db.ForeignKey('events.project_ref_num'),
+            nullable=False
+        )
+        employee_id = db.Column(
+            db.String,
+            db.ForeignKey('employees.id'),
+            nullable=False
+        )
+        schedule_date = db.Column(db.Date, nullable=False)
+        schedule_time = db.Column(db.Time, nullable=False)
+        days_notice = db.Column(db.Integer, nullable=False)
+
+        # Supervisor acknowledgment
+        notified = db.Column(db.Boolean, default=False, nullable=False)
+        notified_at = db.Column(db.DateTime, nullable=True)
+        notified_by = db.Column(db.String(100), nullable=True)
+
+        created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+        # Relationships
+        event = db.relationship('Event', foreign_keys=[event_ref_num])
+        employee = db.relationship('Employee', backref='schedule_notifications')
+        scheduler_run = db.relationship('SchedulerRunHistory', foreign_keys=[scheduler_run_id])
+
+        __table_args__ = (
+            db.Index('idx_schedule_notifications_run', 'scheduler_run_id'),
+            db.Index('idx_schedule_notifications_notified', 'notified'),
+        )
+
+        def __repr__(self):
+            status = "notified" if self.notified else "pending"
+            return f'<ScheduleNotification {self.id}: Event {self.event_ref_num} ({status})>'
+
+    return (RotationAssignment, PendingSchedule, SchedulerRunHistory,
+            ScheduleException, EventSchedulingOverride, LockedDay,
+            EventTypeOverride, ScheduleNotification)

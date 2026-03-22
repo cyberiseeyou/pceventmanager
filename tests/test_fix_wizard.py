@@ -238,6 +238,10 @@ def _auth_bypass():
     """Patch target for bypassing require_authentication in route tests."""
     return 'app.routes.auth.is_authenticated'
 
+def _role_bypass():
+    """Patch target for bypassing require_role in route tests."""
+    return 'app.routes.auth.get_current_user'
+
 
 class TestFixWizardRoutes:
 
@@ -246,21 +250,24 @@ class TestFixWizardRoutes:
         resp = client.get('/dashboard/fix-wizard')
         assert resp.status_code == 302
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_wizard_page_renders(self, mock_auth, client):
+    def test_wizard_page_renders(self, mock_auth, mock_user, client):
         """GET /dashboard/fix-wizard should return 200 when authenticated."""
         resp = client.get('/dashboard/fix-wizard')
         assert resp.status_code == 200
         assert b'Fix Wizard' in resp.data
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_wizard_page_with_date(self, mock_auth, client):
+    def test_wizard_page_with_date(self, mock_auth, mock_user, client):
         """GET /dashboard/fix-wizard?start_date= should return 200."""
         resp = client.get('/dashboard/fix-wizard?start_date=2026-03-01')
         assert resp.status_code == 200
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_issues_api_returns_json(self, mock_auth, client, db_session):
+    def test_issues_api_returns_json(self, mock_auth, mock_user, client, db_session):
         """GET /dashboard/api/fix-wizard/issues should return JSON with issues key."""
         resp = client.get('/dashboard/api/fix-wizard/issues?start_date=2026-03-01')
         assert resp.status_code == 200
@@ -269,8 +276,9 @@ class TestFixWizardRoutes:
         assert 'issues' in data
         assert 'total' in data
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_apply_requires_action_type(self, mock_auth, client):
+    def test_apply_requires_action_type(self, mock_auth, mock_user, client):
         """POST /dashboard/api/fix-wizard/apply without action_type -> 400."""
         resp = client.post('/dashboard/api/fix-wizard/apply',
                           json={'target': {'schedule_id': 1}},
@@ -279,8 +287,9 @@ class TestFixWizardRoutes:
         data = resp.get_json()
         assert 'action_type' in data.get('error', '')
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_apply_invalid_action_type(self, mock_auth, client):
+    def test_apply_invalid_action_type(self, mock_auth, mock_user, client):
         """SEC-CRT-04: Invalid action_type must be rejected."""
         resp = client.post('/dashboard/api/fix-wizard/apply',
                           json={'action_type': 'DROP TABLE', 'target': {'id': 1}},
@@ -289,22 +298,25 @@ class TestFixWizardRoutes:
         data = resp.get_json()
         assert 'Invalid action_type' in data.get('error', '')
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_apply_requires_target(self, mock_auth, client):
+    def test_apply_requires_target(self, mock_auth, mock_user, client):
         """POST /dashboard/api/fix-wizard/apply without target -> 400."""
         resp = client.post('/dashboard/api/fix-wizard/apply',
                           json={'action_type': 'reassign'},
                           content_type='application/json')
         assert resp.status_code == 400
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_apply_no_data_returns_400(self, mock_auth, client):
+    def test_apply_no_data_returns_400(self, mock_auth, mock_user, client):
         """POST /dashboard/api/fix-wizard/apply with no JSON body -> 400."""
         resp = client.post('/dashboard/api/fix-wizard/apply')
         assert resp.status_code == 400
 
+    @patch(_role_bypass(), return_value={'role': 'supervisor'})
     @patch(_auth_bypass(), return_value=True)
-    def test_skip_api_works(self, mock_auth, client, db_session):
+    def test_skip_api_works(self, mock_auth, mock_user, client, db_session):
         """POST /dashboard/api/fix-wizard/skip should accept issue data."""
         resp = client.post('/dashboard/api/fix-wizard/skip',
                           json={

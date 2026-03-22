@@ -10,6 +10,8 @@
     condition_display   (str)        - Human-readable condition name
     date_filter         (str)        - Date filter ('today', 'tomorrow', 'week', '')
     date_filter_display (str)        - Human-readable date filter name
+    hide_past           (bool)       - Whether past events are hidden
+    filter_params       (dict)       - Current filters for preserving across tab switches
 #}
 {% extends "base.html" %}
 
@@ -40,60 +42,45 @@
     <h1 class="page-title">{{ condition_display }} Events</h1>
 </div>
 
-<!-- Condition Tabs -->
+<!-- Condition Tabs (preserve current filters across tab switches) -->
 <div class="condition-tabs">
-    <a href="{{ url_for('main.unscheduled_events', condition='all') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='all', **filter_params) }}"
         class="tab-btn {% if condition == 'all' or not condition %}active{% endif %}">
         All <span class="tab-count">{{ condition_counts.all }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='scheduled') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='scheduled', **filter_params) }}"
         class="tab-btn {% if condition == 'scheduled' %}active{% endif %}">
         Scheduled <span class="tab-count">{{ condition_counts.scheduled }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='unstaffed') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='unstaffed', **filter_params) }}"
         class="tab-btn {% if condition == 'unstaffed' %}active{% endif %}">
         Unscheduled <span class="tab-count">{{ condition_counts.unstaffed }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='submitted') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='submitted', **filter_params) }}"
         class="tab-btn {% if condition == 'submitted' %}active{% endif %}">
         Submitted <span class="tab-count">{{ condition_counts.submitted }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='paused') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='paused', **filter_params) }}"
         class="tab-btn {% if condition == 'paused' %}active{% endif %}">
         Paused <span class="tab-count">{{ condition_counts.paused }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='reissued') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='reissued', **filter_params) }}"
         class="tab-btn {% if condition == 'reissued' %}active{% endif %}">
         Reissued <span class="tab-count">{{ condition_counts.reissued }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='cannot_complete') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='cannot_complete', **filter_params) }}"
         class="tab-btn {% if condition == 'cannot_complete' %}active{% endif %}">
         Cannot Complete <span class="tab-count">{{ condition_counts.cannot_complete }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='past_due') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='past_due', **filter_params) }}"
         class="tab-btn tab-btn-warning {% if condition == 'past_due' %}active{% endif %}">
         Past Due <span class="tab-count">{{ condition_counts.past_due }}</span>
     </a>
-    <a href="{{ url_for('main.unscheduled_events', condition='cancelled') }}"
+    <a href="{{ url_for('main.unscheduled_events', condition='cancelled', **filter_params) }}"
         class="tab-btn {% if condition == 'cancelled' %}active{% endif %}" style="color: #991b1b;">
         Cancelled <span class="tab-count">{{ condition_counts.cancelled }}</span>
     </a>
 </div>
-
-<!-- Time scope toggle (hidden on Past Due tab since it always shows past events) -->
-{% if condition != 'past_due' %}
-<div style="display: flex; justify-content: flex-end; margin-bottom: var(--spacing-sm);">
-    {% if show_past %}
-    <a href="{{ url_for('main.unscheduled_events', condition=condition) }}" class="btn btn-sm btn-outline" style="font-size: 12px; padding: 4px 12px; border-radius: 6px; text-decoration: none; color: #6b7280; border: 1px solid #d1d5db;">
-        Hide Past Events
-    </a>
-    {% else %}
-    <a href="{{ url_for('main.unscheduled_events', condition=condition, show_past='1') }}" class="btn btn-sm btn-outline" style="font-size: 12px; padding: 4px 12px; border-radius: 6px; text-decoration: none; color: #6b7280; border: 1px solid #d1d5db;">
-        Show Past Events
-    </a>
-    {% endif %}
-</div>
-{% endif %}
 
 <!-- Smart Search and Filter -->
 <div class="filter-actions" style="display: block;">
@@ -139,9 +126,16 @@
                 <option value="due_date" {% if sort_by == 'due_date' %}selected{% endif %}>Sort: Due Date</option>
                 <option value="event_type" {% if sort_by == 'event_type' %}selected{% endif %}>Sort: Event Type</option>
             </select>
+            {% if condition != 'past_due' %}
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; color: #6b7280; font-weight: 500; margin-left: 4px;">
+                <input type="checkbox" name="hide_past" value="1" {% if hide_past %}checked{% endif %}
+                    data-action="auto-submit-form" style="width: 16px; height: 16px; accent-color: #3b82f6;">
+                Hide past events
+            </label>
+            {% endif %}
             <button type="submit" class="btn btn-primary">Search</button>
             {% if request.args.get('search') or selected_event_type or request.args.get('date_from') or request.args.get('date_to') %}
-            <a href="{{ url_for('main.unscheduled_events', condition=condition, date_filter=date_filter if date_filter else '') }}"
+            <a href="{{ url_for('main.unscheduled_events', condition=condition, date_filter=date_filter if date_filter else '', hide_past='1' if hide_past else '') }}"
                 class="btn btn-outline">Clear</a>
             {% endif %}
             <a href="{{ url_for('api.export_events', condition=condition, event_type=selected_event_type, date_filter=date_filter if date_filter else '', search=request.args.get('search', ''), date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"

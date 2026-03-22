@@ -395,7 +395,7 @@ class AttendanceCalendar {
                             ${record.notes ? `<div class="record-notes">📝 ${this.escapeHtml(record.notes)}</div>` : ''}
                             ${record.recorded_by ? `<div class="record-by">Recorded by: ${this.escapeHtml(record.recorded_by)}</div>` : ''}
                             <div class="record-actions">
-                                <button class="btn-edit-record" data-record-id="${record.id}" data-record='${JSON.stringify(record)}' aria-label="Edit record">
+                                <button class="btn-edit-record" data-record-id="${record.id}" data-record="${encodeURIComponent(JSON.stringify(record))}" aria-label="Edit record">
                                     ✏️ Edit
                                 </button>
                                 <button class="btn-delete-record" data-record-id="${record.id}" aria-label="Delete record">
@@ -427,8 +427,14 @@ class AttendanceCalendar {
         // Attach edit button listeners
         detailContainer.querySelectorAll('.btn-edit-record').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const recordData = JSON.parse(e.currentTarget.getAttribute('data-record'));
-                this.showEditModal(recordData);
+                try {
+                    const raw = decodeURIComponent(e.currentTarget.getAttribute('data-record'));
+                    const recordData = JSON.parse(raw);
+                    this.showEditModal(recordData);
+                } catch (err) {
+                    console.error('Failed to parse record data:', err);
+                    this.showNotification('Unable to open edit form. Please reload the page.', 'error');
+                }
             });
         });
 
@@ -571,6 +577,7 @@ class AttendanceCalendar {
                                 <option value="late" ${record.status === 'late' ? 'selected' : ''}>🟡 Late</option>
                                 <option value="called_in" ${record.status === 'called_in' ? 'selected' : ''}>📞 Called-In</option>
                                 <option value="no_call_no_show" ${record.status === 'no_call_no_show' ? 'selected' : ''}>🔴 No-Call-No-Show</option>
+                                <option value="excused_absence" ${record.status === 'excused_absence' ? 'selected' : ''}>🔵 Excused Absence</option>
                             </select>
                         </div>
                         <div class="form-group">

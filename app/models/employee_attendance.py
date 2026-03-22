@@ -61,6 +61,8 @@ def create_employee_attendance_model(db):
         recorded_by = db.Column(db.String(100), nullable=True)
         recorded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
         updated_at = db.Column(db.DateTime, nullable=True, onupdate=datetime.utcnow)
+        modified_by = db.Column(db.String(100), nullable=True)
+        modified_at = db.Column(db.DateTime, nullable=True)
 
         # Table constraints
         __table_args__ = (
@@ -104,7 +106,10 @@ def create_employee_attendance_model(db):
                 'notes': self.notes,
                 'recorded_by': self.recorded_by,
                 'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None,
-                'updated_at': self.updated_at.isoformat() if self.updated_at else None
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+                'modified_by': self.modified_by,
+                'modified_at': self.modified_at.isoformat() if self.modified_at else None,
+                'is_modified': self.modified_by is not None,
             }
 
         def __repr__(self):

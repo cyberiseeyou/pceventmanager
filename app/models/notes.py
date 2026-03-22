@@ -56,6 +56,8 @@ def create_notes_models(db):
 
         # Notification tracking
         reminder_sent = db.Column(db.Boolean, nullable=False, default=False)
+        # Snooze tracking for push notifications
+        snoozed_until = db.Column(db.DateTime, nullable=True, default=None)
 
         __table_args__ = (
             # Index for querying by type
@@ -111,15 +113,15 @@ def create_notes_models(db):
 
         @property
         def type_icon(self):
-            """Get icon for note type"""
+            """Get Material Symbol icon name for note type"""
             icons = {
-                'employee': 'fa-user',
-                'event': 'fa-calendar',
-                'task': 'fa-check-square',
-                'followup': 'fa-bell',
-                'management': 'fa-briefcase'
+                'employee': 'person',
+                'event': 'calendar_today',
+                'task': 'check_box',
+                'followup': 'notifications',
+                'management': 'work'
             }
-            return icons.get(self.note_type, 'fa-sticky-note')
+            return icons.get(self.note_type, 'sticky_note_2')
 
         @property
         def priority_color(self):
@@ -162,7 +164,8 @@ def create_notes_models(db):
                 'linked_event_ref_num': self.linked_event_ref_num,
                 'created_at': self.created_at.isoformat() if self.created_at else None,
                 'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-                'reminder_sent': self.reminder_sent
+                'reminder_sent': self.reminder_sent,
+                'snoozed_until': self.snoozed_until.isoformat() if self.snoozed_until else None
             }
 
         def __repr__(self):

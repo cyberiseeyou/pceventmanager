@@ -3,6 +3,7 @@ Attendance API Blueprint
 Handles all attendance-related API endpoints for tracking employee attendance
 """
 from flask import Blueprint, request, jsonify, session
+from app.routes.auth import get_current_user
 from datetime import datetime, date
 from calendar import monthrange
 import logging
@@ -77,11 +78,23 @@ def init_attendance_routes(db, models):
                 attendance_date=attendance_date
             ).first()
 
+            user = get_current_user()
+            recorder_name = user.get('full_name') or user.get('username', 'Unknown') if user else 'Unknown'
+
             if attendance:
-                # Update existing record
+                # Existing record — only supervisor can modify
+                is_supervisor = user and user.get('role') == 'supervisor'
+
+                if not is_supervisor:
+                    return jsonify({
+                        'error': f'This attendance record was already submitted by {attendance.recorded_by}. Only the club supervisor can modify it.'
+                    }), 403
+
+                # Supervisor update: set audit trail fields
                 attendance.status = status
                 attendance.notes = notes
-                attendance.updated_at = datetime.utcnow()
+                attendance.modified_by = recorder_name
+                attendance.modified_at = datetime.utcnow()
                 action = 'updated'
                 status_code = 200
             else:
@@ -91,7 +104,7 @@ def init_attendance_routes(db, models):
                     attendance_date=attendance_date,
                     status=status,
                     notes=notes,
-                    recorded_by=session.get('username', 'Unknown')
+                    recorded_by=recorder_name
                 )
                 db.session.add(attendance)
                 action = 'created'
@@ -209,6 +222,15 @@ def init_attendance_routes(db, models):
         try:
             attendance = EmployeeAttendance.query.get_or_404(record_id)
 
+            # Only supervisor can modify existing records
+            user = get_current_user()
+            is_supervisor = user and user.get('role') == 'supervisor'
+
+            if not is_supervisor:
+                return jsonify({
+                    'error': f'This attendance record was already submitted by {attendance.recorded_by}. Only the club supervisor can modify it.'
+                }), 403
+
             data = request.get_json()
             status = data.get('status')
             notes = data.get('notes')
@@ -225,10 +247,12 @@ def init_attendance_routes(db, models):
             if notes is not None:
                 attendance.notes = notes
 
-            attendance.updated_at = datetime.utcnow()
+            # Set audit trail fields
+            attendance.modified_by = session.get('username', 'Unknown')
+            attendance.modified_at = datetime.utcnow()
             db.session.commit()
 
-            logger.info(f"Updated attendance record {record_id}")
+            logger.info(f"Updated attendance record {record_id} by {attendance.modified_by}")
 
             return jsonify({
                 'success': True,
@@ -250,6 +274,15 @@ def init_attendance_routes(db, models):
         """
         try:
             attendance = EmployeeAttendance.query.get_or_404(record_id)
+
+            # Only supervisor can delete records
+            user = get_current_user()
+            is_supervisor = user and user.get('role') == 'supervisor'
+
+            if not is_supervisor:
+                return jsonify({
+                    'error': 'Only the club supervisor can delete attendance records.'
+                }), 403
 
             db.session.delete(attendance)
             db.session.commit()
@@ -491,6 +524,11 @@ def init_attendance_routes(db, models):
                     employees_scheduled[record.employee_id]['attendance_notes'] = record.notes
                     employees_scheduled[record.employee_id]['attendance_id'] = record.id
                     employees_scheduled[record.employee_id]['status_label'] = record.STATUS_LABELS.get(record.status)
+                    employees_scheduled[record.employee_id]['recorded_by'] = record.recorded_by
+                    employees_scheduled[record.employee_id]['modified_by'] = getattr(record, 'modified_by', None)
+                    modified_at = getattr(record, 'modified_at', None)
+                    employees_scheduled[record.employee_id]['modified_at'] = modified_at.isoformat() if modified_at else None
+                    employees_scheduled[record.employee_id]['is_modified'] = getattr(record, 'modified_by', None) is not None
 
             # Convert to list and sort by earliest start time, then by employee name
             result = sorted(

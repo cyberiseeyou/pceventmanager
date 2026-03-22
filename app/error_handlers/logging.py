@@ -5,7 +5,7 @@ Provides centralized error handling, logging, and debugging capabilities
 import logging
 import traceback
 from datetime import datetime
-from flask import jsonify, request, current_app, render_template
+from flask import jsonify, request, current_app, render_template, flash, redirect, url_for
 from functools import wraps
 import os
 
@@ -65,6 +65,13 @@ def register_error_handlers(app):
                 'message': 'The request could not be understood by the server',
                 'status_code': 400
             }), 400
+        # For form submissions (e.g. CSRF failures), redirect back to login with error
+        if request.endpoint and 'employee_login' in request.endpoint:
+            flash('Your session expired. Please try again.', 'error')
+            return redirect(url_for('auth.employee_login_page'))
+        if request.endpoint and 'login' in request.endpoint:
+            flash('Your session expired. Please try again.', 'error')
+            return redirect(url_for('auth.login_page'))
         return "Bad Request", 400
 
     @app.errorhandler(401)

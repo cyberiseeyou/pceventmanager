@@ -187,12 +187,12 @@ def require_role(*allowed_roles):
 
 @auth_bp.route('/login')
 def login_page():
-    """Display login page"""
-    # Redirect to today's daily view if already authenticated
-    if is_authenticated():
-        today = datetime.now().strftime('%Y-%m-%d')
-        return redirect(url_for('main.daily_schedule_view', date=today))
+    """Display login page.
 
+    Always shows the login form regardless of existing session.
+    On shared devices, auto-redirecting an authenticated session would let
+    anyone bypass authentication by simply visiting this URL.
+    """
     return render_template('login.html')
 
 
@@ -241,6 +241,16 @@ def login():
         original_username = external_api.username
         original_password = external_api.password
         auth_success = False  # Initialize auth_success outside try block
+
+        # CRITICAL: Clear any previous session state on the singleton before
+        # attempting fresh authentication.  Without this, the requests.Session
+        # may send the previous user's PHPSESSID cookie, and the Crossmark API
+        # may accept it — allowing anyone to authenticate as the prior user.
+        external_api.authenticated = False
+        external_api.phpsessid = None
+        external_api.user_info = None
+        if external_api.session:
+            external_api.session.cookies.clear()
 
         external_api.username = username
         external_api.password = password
@@ -309,6 +319,11 @@ def login():
                         user_info['job_title'] = emp.job_title
                 except Exception:
                     pass  # Default to supervisor if lookup fails
+
+                # Destroy any existing session to prevent session leakage on shared devices
+                old_session_id = request.cookies.get('session_id')
+                if old_session_id:
+                    delete_session(old_session_id)
 
                 # Create session
                 session_id = secrets.token_urlsafe(32)
@@ -397,36 +412,49 @@ def login():
 
 @auth_bp.route('/employee-login')
 def employee_login_page():
-    """Display employee self-service login page"""
-    if is_authenticated():
-        today = datetime.now().strftime('%Y-%m-%d')
-        return redirect(url_for('main.daily_schedule_view', date=today))
+    """Display employee self-service login page.
+
+    Always shows the login form regardless of existing session.
+    On shared devices, auto-redirecting an authenticated session would let
+    anyone bypass authentication by simply visiting this URL.
+    """
     return render_template('auth/employee_login.html')
 
 
 @auth_bp.route('/employee-login', methods=['POST'])
 def employee_login():
-    """Authenticate employee via name + PIN"""
+    """Authenticate employee via Employee ID + PIN"""
     from app.models.registry import get_models, get_db
 
-    employee_id = request.form.get('employee_id', '').strip()
+    employee_id_input = request.form.get('employee_id', '').strip()
     pin = request.form.get('pin', '').strip()
 
-    if not employee_id or not pin:
-        flash('Employee and PIN are required', 'error')
+    if not employee_id_input or not pin:
+        flash('Employee ID and PIN are required', 'error')
         return redirect(url_for('auth.employee_login_page'))
+
+    # Prepend "US" prefix if user entered just the numeric portion
+    if employee_id_input.upper().startswith('US'):
+        employee_id = employee_id_input.upper()
+    else:
+        employee_id = f'US{employee_id_input}'
 
     models = get_models()
     Employee = models['Employee']
     employee = Employee.query.get(employee_id)
 
     if not employee or not employee.has_account or not employee.check_pin(pin):
-        flash('Invalid credentials. Check your name and PIN.', 'error')
+        flash('Invalid credentials. Check your Employee ID and PIN.', 'error')
         return redirect(url_for('auth.employee_login_page'))
 
     if not employee.is_active:
         flash('Your account has been deactivated. Contact your supervisor.', 'error')
         return redirect(url_for('auth.employee_login_page'))
+
+    # Destroy any existing session to prevent session leakage on shared devices
+    old_session_id = request.cookies.get('session_id')
+    if old_session_id:
+        delete_session(old_session_id)
 
     # Create session with role
     session_id = secrets.token_urlsafe(32)
@@ -454,8 +482,13 @@ def employee_login():
 
     save_session(session_id, session_data)
 
-    today = datetime.now().strftime('%Y-%m-%d')
-    response = redirect(url_for('main.daily_schedule_view', date=today))
+    # Specialists and leads land on their personal dashboard; supervisors get the daily view
+    if employee.role in ('specialist', 'lead'):
+        response = redirect(url_for('main.my_dashboard'))
+    else:
+        today = datetime.now().strftime('%Y-%m-%d')
+        response = redirect(url_for('main.daily_schedule_view', date=today))
+
     response.set_cookie(
         'session_id', session_id,
         max_age=86400, httponly=True,
@@ -736,13 +769,20 @@ def loading_page():
     }
     save_refresh_progress(task_id, progress_data)
 
-    # Get today's date for redirect after completion
-    today = datetime.now().strftime('%Y-%m-%d')
+    # Redirect after completion: leads/specialists go to my-dashboard, supervisors to daily view
+    user = get_current_user()
+    user_role = user.get('role') if user else None
+
+    if user_role in ('specialist', 'lead'):
+        redirect_url = url_for('main.my_dashboard')
+    else:
+        today = datetime.now().strftime('%Y-%m-%d')
+        redirect_url = url_for('main.daily_schedule_view', date=today)
 
     return render_template(
         'auth/loading.html',
         task_id=task_id,
-        redirect_url=url_for('main.daily_schedule_view', date=today)
+        redirect_url=redirect_url
     )
 
 

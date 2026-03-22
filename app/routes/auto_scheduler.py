@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import func
 
 from app.services.scheduling_engine import SchedulingEngine
-from app.routes.auth import require_authentication
+from app.routes.auth import require_authentication, require_role
 from app.utils.timezone import to_local_time
 
 auto_scheduler_bp = Blueprint('auto_scheduler', __name__, url_prefix='/auto-schedule')
@@ -20,6 +20,7 @@ auto_scheduler_bp = Blueprint('auto_scheduler', __name__, url_prefix='/auto-sche
 
 @auto_scheduler_bp.route('/')
 @require_authentication()
+@require_role('supervisor')
 def index():
     """Main auto-scheduler page with scheduling progress"""
     db = current_app.extensions['sqlalchemy']
@@ -81,6 +82,7 @@ def index():
 
 @auto_scheduler_bp.route('/run', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def run_scheduler():
     """Manually trigger auto-scheduler run"""
     from app.models import get_models
@@ -144,6 +146,7 @@ def run_scheduler():
 
 @auto_scheduler_bp.route('/status/<int:run_id>', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def get_run_status(run_id):
     """Get status of a scheduler run"""
     models = get_models()
@@ -170,6 +173,7 @@ def get_run_status(run_id):
 
 @auto_scheduler_bp.route('/review')
 @require_authentication()
+@require_role('supervisor')
 def review():
     """Render proposal review page"""
     db = current_app.extensions['sqlalchemy']
@@ -192,6 +196,7 @@ def review():
 
 @auto_scheduler_bp.route('/api/pending', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def get_pending_schedules():
     """Get pending schedule data for review (AJAX)"""
     from datetime import date, timedelta
@@ -392,6 +397,7 @@ def get_pending_schedules():
 
 @auto_scheduler_bp.route('/api/pending/<int:pending_id>', methods=['PUT'])
 @require_authentication()
+@require_role('supervisor')
 def edit_pending_schedule(pending_id):
     """Edit a pending schedule before approval"""
     db = current_app.extensions['sqlalchemy']
@@ -436,6 +442,7 @@ def edit_pending_schedule(pending_id):
 
 @auto_scheduler_bp.route('/api/pending/by-ref/<event_ref_num>', methods=['DELETE'])
 @require_authentication()
+@require_role('supervisor')
 def delete_pending_by_ref(event_ref_num):
     """Delete a pending schedule by event reference number after manual scheduling"""
     db = current_app.extensions['sqlalchemy']
@@ -479,6 +486,7 @@ def delete_pending_by_ref(event_ref_num):
 
 @auto_scheduler_bp.route('/approve', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def approve_schedule():
     """Approve proposed schedule and submit to Crossmark API"""
     from app.integrations.external_api.session_api_service import session_api as external_api
@@ -968,6 +976,7 @@ def approve_schedule():
 
 @auto_scheduler_bp.route('/approve-single/<int:pending_id>', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def approve_single_schedule(pending_id):
     """Approve and submit a single pending schedule to Crossmark API"""
     from app.integrations.external_api.session_api_service import session_api as external_api
@@ -1268,6 +1277,7 @@ def approve_single_schedule(pending_id):
 
 @auto_scheduler_bp.route('/mark-approved/<int:run_id>', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def mark_run_approved(run_id):
     """Mark a scheduler run as approved after all schedules are processed"""
     db = current_app.extensions['sqlalchemy']
@@ -1303,6 +1313,7 @@ def mark_run_approved(run_id):
 
 @auto_scheduler_bp.route('/reject', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def reject_schedule():
     """Reject/discard ALL pending schedule proposals"""
     db = current_app.extensions['sqlalchemy']
@@ -1420,6 +1431,7 @@ def reject_schedule():
 
 @auto_scheduler_bp.route('/api/dashboard-status', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def dashboard_status():
     """Check if there are pending scheduler runs for dashboard notification"""
     db = current_app.extensions['sqlalchemy']
@@ -1440,6 +1452,7 @@ def dashboard_status():
 
 @auto_scheduler_bp.route('/api/verify/<int:run_id>', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def verify_pending_run(run_id):
     """Verify pending schedules for a scheduler run (pre-approval)"""
     from app.services.schedule_verification import ScheduleVerificationService
@@ -1496,6 +1509,7 @@ def verify_pending_run(run_id):
 
 @auto_scheduler_bp.route('/api/verify-date', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def verify_date():
     """Verify schedules for a specific date (dashboard widget)"""
     from app.services.schedule_verification import ScheduleVerificationService
@@ -1541,6 +1555,7 @@ def verify_date():
 
 @auto_scheduler_bp.route('/api/verify-date-range', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def verify_date_range_endpoint():
     """Verify schedules for a date range (post-approval audit)"""
     from app.services.schedule_verification import ScheduleVerificationService
@@ -1591,6 +1606,7 @@ def verify_date_range_endpoint():
 
 @auto_scheduler_bp.route('/history')
 @require_authentication()
+@require_role('supervisor')
 def history():
     """Page showing all scheduler run history with scheduled events"""
     db = current_app.extensions['sqlalchemy']
@@ -1631,6 +1647,7 @@ def history():
 
 @auto_scheduler_bp.route('/api/history/<int:run_id>')
 @require_authentication()
+@require_role('supervisor')
 def get_run_history(run_id):
     """Get detailed event list for a specific scheduler run
 
@@ -1717,6 +1734,7 @@ def get_run_history(run_id):
 
 @auto_scheduler_bp.route('/api/history/<int:run_id>/export')
 @require_authentication()
+@require_role('supervisor')
 def export_run_history(run_id):
     """Export scheduler run events to CSV
 
@@ -1805,6 +1823,7 @@ def export_run_history(run_id):
 
 @auto_scheduler_bp.route('/api/review/export')
 @require_authentication()
+@require_role('supervisor')
 def export_review_category():
     """Export auto-schedule review category to CSV
 
@@ -1996,4 +2015,79 @@ def export_review_category():
             'Content-Type': 'text/csv; charset=utf-8'
         }
     )
+
+
+@auto_scheduler_bp.route('/notifications')
+@require_authentication()
+@require_role('supervisor')
+def notifications():
+    """Page showing short-notice schedule notifications that need supervisor acknowledgment."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    ScheduleNotification = models.get('ScheduleNotification')
+
+    if not ScheduleNotification:
+        return render_template('schedule_notifications.html', notifications=[], error="Notifications not available")
+
+    Event = models['Event']
+    Employee = models['Employee']
+    PendingSchedule = models['PendingSchedule']
+
+    show_acknowledged = request.args.get('show_acknowledged', '0') == '1'
+
+    # Only show Core/Juicer Production, exclude bumped events (is_swap)
+    query = db.session.query(ScheduleNotification).join(
+        Event, ScheduleNotification.event_ref_num == Event.project_ref_num
+    ).join(
+        Employee, ScheduleNotification.employee_id == Employee.id
+    ).outerjoin(
+        PendingSchedule,
+        db.and_(
+            PendingSchedule.scheduler_run_id == ScheduleNotification.scheduler_run_id,
+            PendingSchedule.event_ref_num == ScheduleNotification.event_ref_num,
+            PendingSchedule.employee_id == ScheduleNotification.employee_id,
+        )
+    ).filter(
+        Event.event_type.in_(['Core', 'Juicer Production']),
+        db.or_(PendingSchedule.is_swap == False, PendingSchedule.id.is_(None))
+    )
+
+    if not show_acknowledged:
+        query = query.filter(ScheduleNotification.notified == False)
+
+    notifications_list = query.order_by(
+        ScheduleNotification.schedule_date.asc()
+    ).all()
+
+    return render_template('schedule_notifications.html',
+                         notifications=notifications_list,
+                         show_acknowledged=show_acknowledged)
+
+
+@auto_scheduler_bp.route('/api/notifications/<int:notification_id>/acknowledge', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def acknowledge_notification(notification_id):
+    """Mark a schedule notification as acknowledged by supervisor."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    ScheduleNotification = models.get('ScheduleNotification')
+
+    if not ScheduleNotification:
+        return jsonify({'status': 'error', 'error': 'Notifications not available'}), 400
+
+    notification = db.session.query(ScheduleNotification).get(notification_id)
+    if not notification:
+        return jsonify({'status': 'error', 'error': 'Notification not found'}), 404
+
+    notification.notified = True
+    notification.notified_at = datetime.utcnow()
+    notification.notified_by = request.form.get('acknowledged_by', 'supervisor')
+
+    try:
+        db.session.commit()
+        return jsonify({'status': 'success', 'data': {'id': notification.id, 'notified': True}})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 

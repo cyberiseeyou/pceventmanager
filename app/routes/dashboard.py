@@ -6,13 +6,15 @@ from flask import Blueprint, render_template, jsonify, current_app, redirect, ur
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
 from urllib.parse import quote
-from app.routes.auth import require_authentication
+from app.routes.auth import require_authentication, require_role
 
 # Create blueprint
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
 
 @dashboard_bp.route('/command-center')
+@require_authentication()
+@require_role('supervisor')
 def command_center():
     """
     Morning Command Center - Unified view of everything that needs attention.
@@ -47,6 +49,8 @@ def command_center():
 
 
 @dashboard_bp.route('/api/command-center')
+@require_authentication()
+@require_role('supervisor')
 def command_center_api():
     """API endpoint for command center data (for AJAX refresh)"""
     from app.services.command_center_service import CommandCenterService
@@ -72,6 +76,8 @@ def command_center_api():
 
 
 @dashboard_bp.route('/daily-validation')
+@require_authentication()
+@require_role('supervisor')
 def daily_validation():
     """
     Daily validation dashboard showing scheduling status for selected date
@@ -534,6 +540,7 @@ def _calculate_health_score(total_events, total_unscheduled, validation_issues):
 
 @dashboard_bp.route('/api/validation-summary')
 @require_authentication()
+@require_role('supervisor')
 def validation_summary_api():
     """
     API endpoint for validation summary (for widgets or external monitoring)
@@ -587,6 +594,8 @@ def validation_summary_api():
 
 
 @dashboard_bp.route('/weekly-validation')
+@require_authentication()
+@require_role('supervisor')
 def weekly_validation():
     """
     Weekly validation dashboard showing 7-day schedule validation overview
@@ -649,6 +658,8 @@ def weekly_validation():
 
 
 @dashboard_bp.route('/api/weekly-validation')
+@require_authentication()
+@require_role('supervisor')
 def weekly_validation_api():
     """
     API endpoint for weekly validation (JSON)
@@ -704,6 +715,8 @@ def weekly_validation_api():
 
 
 @dashboard_bp.route('/api/validation/ignore', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def ignore_validation_issue():
     """
     Ignore a validation issue so it won't appear in future validations
@@ -785,6 +798,8 @@ def ignore_validation_issue():
 
 
 @dashboard_bp.route('/api/validation/unignore', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def unignore_validation_issue():
     """
     Remove an issue from the ignored list
@@ -826,6 +841,8 @@ def unignore_validation_issue():
 
 
 @dashboard_bp.route('/api/validation/ignored')
+@require_authentication()
+@require_role('supervisor')
 def list_ignored_issues():
     """
     Get list of all currently ignored validation issues
@@ -864,6 +881,8 @@ def list_ignored_issues():
 
 
 @dashboard_bp.route('/api/validation/assign-supervisor', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def assign_supervisor_event():
     """
     Automatically assign a Supervisor event for a Core event.
@@ -1051,6 +1070,7 @@ def _get_fix_wizard_models():
 
 @dashboard_bp.route('/fix-wizard')
 @require_authentication()
+@require_role('supervisor')
 def fix_wizard():
     """
     Interactive Fix Wizard - walks through validation issues one-by-one
@@ -1080,6 +1100,7 @@ def fix_wizard():
 
 @dashboard_bp.route('/api/fix-wizard/issues')
 @require_authentication()
+@require_role('supervisor')
 def fix_wizard_issues():
     """
     API: Returns all fixable issues with options as JSON.
@@ -1119,6 +1140,7 @@ def fix_wizard_issues():
 
 @dashboard_bp.route('/api/fix-wizard/apply', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def fix_wizard_apply():
     """
     API: Apply a selected fix.
@@ -1161,6 +1183,7 @@ def fix_wizard_apply():
 
 @dashboard_bp.route('/api/fix-wizard/skip', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def fix_wizard_skip():
     """
     API: Skip/ignore a validation issue.
@@ -1192,6 +1215,7 @@ def fix_wizard_skip():
 
 @dashboard_bp.route('/api/fix-wizard/fix-all', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def fix_wizard_fix_all():
     """
     API: Attempt to auto-fix all actionable validation issues for a week.
@@ -1229,6 +1253,8 @@ def fix_wizard_fix_all():
 
 
 @dashboard_bp.route('/approved-events')
+@require_authentication()
+@require_role('supervisor')
 def approved_events():
     """
     Left In Approved Dashboard for Walmart scan-out tracking.
@@ -1256,6 +1282,8 @@ def approved_events():
 
 
 @dashboard_bp.route('/employee-availability')
+@require_authentication()
+@require_role('supervisor')
 def employee_availability():
     """
     Employee Availability weekly view - capacity planning tool.
@@ -1314,6 +1342,8 @@ def employee_availability():
 
 
 @dashboard_bp.route('/available-blocks')
+@require_authentication()
+@require_role('supervisor')
 def available_blocks():
     """
     Available Schedule Blocks weekly view - scheduling action tool.
@@ -1373,6 +1403,8 @@ def available_blocks():
 
 @dashboard_bp.route('/scan-out-checklist')
 @dashboard_bp.route('/scan-out-checklist/<selected_date>')
+@require_authentication()
+@require_role('supervisor')
 def scan_out_checklist(selected_date=None):
     """Scan-Out Checklist - minimal event list for end-of-day scan-out."""
     from app.models import get_models
@@ -1415,6 +1447,7 @@ def scan_out_checklist(selected_date=None):
         emp = sched.employee
         events.append({
             'schedule_id': sched.id,
+            'event_ref_num': sched.event_ref_num,
             'event_number': getattr(evt, 'walmart_event_id', None) or '',
             'event_name': evt.project_name,
             'event_type': evt.event_type,

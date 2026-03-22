@@ -4,6 +4,199 @@
 
 {% block extra_head %}
 <style>
+    /* Tab styles (from design system - unscheduled.css) */
+    .condition-tabs {
+        display: flex;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-lg);
+        border-bottom: 2px solid var(--pc-light-blue);
+        padding-bottom: 0;
+    }
+
+    .tab-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-weight: var(--font-weight-bold);
+        transition: all 0.2s ease;
+        margin-bottom: -2px;
+        cursor: pointer;
+    }
+
+    .tab-btn:hover {
+        color: var(--pc-blue);
+        background: rgba(27, 155, 216, 0.05);
+    }
+
+    .tab-btn.active {
+        color: var(--pc-navy);
+        border-bottom-color: var(--pc-navy);
+        background: rgba(46, 76, 115, 0.05);
+    }
+
+    .tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #e5e7eb;
+        color: #6b7280;
+        margin-left: 4px;
+    }
+
+    .tab-btn.active .tab-count {
+        background: var(--pc-navy);
+        color: white;
+    }
+
+    .tab-btn-warning {
+        color: #b45309;
+    }
+
+    .tab-btn-warning:hover {
+        color: #92400e;
+        background: rgba(245, 158, 11, 0.08);
+    }
+
+    .tab-btn-warning.active {
+        color: #92400e;
+        border-bottom-color: #d97706;
+        background: rgba(245, 158, 11, 0.08);
+    }
+
+    .tab-btn-warning .tab-count {
+        background: rgba(245, 158, 11, 0.15);
+        color: #b45309;
+    }
+
+    .tab-btn-warning.active .tab-count {
+        background: #d97706;
+        color: white;
+    }
+
+    /* Pending Approval Cards */
+    .approval-card {
+        background: var(--bg-secondary);
+        border-left: 4px solid #f59e0b;
+        border-radius: var(--border-radius-md);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        transition: all 0.2s ease;
+    }
+
+    .approval-card:hover {
+        box-shadow: var(--shadow-sm);
+        transform: translateX(4px);
+    }
+
+    .approval-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .approval-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .approval-card-employee {
+        font-size: var(--font-size-body);
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+    }
+
+    .approval-card-submitted {
+        font-size: var(--font-size-small);
+        color: var(--text-muted);
+    }
+
+    .approval-card-dates {
+        font-size: var(--font-size-small);
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .approval-card-reason {
+        font-size: var(--font-size-small);
+        color: var(--text-muted);
+        font-style: italic;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .approval-card-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .btn-approve {
+        background: #fff;
+        border: 1px solid #16a34a;
+        color: #16a34a;
+        padding: 6px 16px;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        font-size: var(--font-size-small);
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .btn-approve:hover {
+        background: #16a34a;
+        color: white;
+    }
+
+    .btn-deny {
+        background: #fff;
+        border: 1px solid #dc3545;
+        color: #dc3545;
+        padding: 6px 16px;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        font-size: var(--font-size-small);
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .btn-deny:hover {
+        background: #dc3545;
+        color: white;
+    }
+
+    /* Deny Reason Modal */
+    #deny-reason-modal .modal-body {
+        padding: var(--spacing-lg);
+    }
+
+    #deny-reason-modal .modal-title {
+        color: var(--pc-navy);
+    }
+
+    #deny-reason-modal .modal-header {
+        border-bottom: 2px solid #dc3545;
+    }
+
+    .deny-employee-name {
+        font-weight: var(--font-weight-bold);
+        color: var(--pc-navy);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .deny-date-range {
+        font-size: var(--font-size-small);
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-md);
+    }
+
     .page-header {
         text-align: center;
         margin-bottom: var(--spacing-lg);
@@ -247,6 +440,12 @@
         .modal-footer { flex-direction: column; }
         .modal-footer .btn { min-height: 44px; width: 100%; text-align: center; }
     }
+    @media (max-width: 480px) {
+        .approval-card { padding: 14px; }
+        .approval-card-header { flex-direction: column; gap: 4px; }
+        .approval-card-actions { width: 100%; }
+        .approval-card-actions button { flex: 1; min-height: 44px; text-align: center; }
+    }
     @media (max-width: 380px) {
         .page-title { font-size: 1.25rem; }
         .time-off-request-card { padding: 10px; }
@@ -263,6 +462,11 @@
 <!-- Tab Navigation -->
 <div class="condition-tabs" style="margin-bottom: var(--spacing-lg);">
     <button class="tab-btn active" data-action="show-tab" data-tab="time-off">Time Off Requests</button>
+    {% if is_supervisor %}
+    <button class="tab-btn tab-btn-warning" data-action="show-tab" data-tab="pending">
+        Pending Approvals <span id="pending-count" class="tab-count" style="display:none;">0</span>
+    </button>
+    {% endif %}
     <button class="tab-btn" data-action="show-tab" data-tab="overrides">Availability Overrides</button>
 </div>
 
@@ -279,6 +483,15 @@
                 <option value="all">All Employees</option>
             </select>
         </div>
+        <div class="filter-section">
+            <label for="status-filter">Filter by Status:</label>
+            <select id="status-filter">
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="denied">Denied</option>
+            </select>
+        </div>
         <button id="add-request-btn" class="btn btn-primary">
             + Add Request
         </button>
@@ -291,6 +504,17 @@
         </div>
     </div>
 </div>
+
+{% if is_supervisor %}
+<!-- ===== PENDING APPROVALS TAB ===== -->
+<div id="tab-pending" style="display: none;">
+    <div class="time-off-list">
+        <div id="pending-container">
+            <div class="empty-state">Loading pending requests...</div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- ===== OVERRIDES TAB ===== -->
 <div id="tab-overrides" style="display: none;">
@@ -429,6 +653,32 @@
         </div>
     </div>
 </div>
+{% if is_supervisor %}
+<!-- Deny Time Off Modal -->
+<div id="deny-reason-modal" class="modal">
+    <div class="modal-overlay" data-action="close-deny-modal"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2 class="modal-title">Deny Time Off Request</h2>
+            <button class="modal-close" data-action="close-deny-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="deny-employee-name" id="deny-employee-name"></div>
+            <div class="deny-date-range" id="deny-date-range"></div>
+            <div class="form-group">
+                <label for="deny-reason-input">Reason for Denial (optional)</label>
+                <textarea id="deny-reason-input" rows="3"
+                    placeholder="e.g., Too many employees off that week"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-action="close-deny-modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirm-deny-btn"
+                    style="background: #dc3545; border-color: #dc3545;">Deny Request</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -450,17 +700,26 @@
     });
 
     async function initializePage() {
-        // Load employees
         await loadEmployees();
-
-        // Load time off requests
         await loadAllTimeOffRequests();
-
-        // Setup event listeners
         setupEventListeners();
-
-        // Setup end date default behavior
         setupDateInputs();
+
+        // Supervisor-only: load pending count and wire deny button
+        if (typeof loadPendingRequests === 'function') {
+            await loadPendingRequests();
+            var confirmDenyBtn = document.getElementById('confirm-deny-btn');
+            if (confirmDenyBtn) {
+                confirmDenyBtn.addEventListener('click', confirmDeny);
+            }
+        }
+
+        // Check for tab parameter in URL (e.g., ?tab=pending from notification link)
+        var urlParams = new URLSearchParams(window.location.search);
+        var tabParam = urlParams.get('tab');
+        if (tabParam) {
+            showTab(tabParam);
+        }
     }
 
     function setupEventListeners() {
@@ -482,6 +741,12 @@
             const filterSelect = document.getElementById('employee-filter');
             if (filterSelect) {
                 filterSelect.addEventListener('change', filterRequests);
+            }
+
+            // Status filter
+            const statusFilterSelect = document.getElementById('status-filter');
+            if (statusFilterSelect) {
+                statusFilterSelect.addEventListener('change', filterRequests);
             }
 
             // Add request form submission
@@ -590,14 +855,19 @@
     }
 
     function filterRequests() {
-        const filterValue = document.getElementById('employee-filter').value;
+        const employeeFilter = document.getElementById('employee-filter').value;
+        const statusFilter = document.getElementById('status-filter').value;
 
-        if (filterValue === 'all') {
-            displayRequests(allRequests);
-        } else {
-            const filtered = allRequests.filter(req => req.employee_id === filterValue);
-            displayRequests(filtered);
+        let filtered = allRequests;
+
+        if (employeeFilter !== 'all') {
+            filtered = filtered.filter(req => req.employee_id === employeeFilter);
         }
+        if (statusFilter !== 'all') {
+            filtered = filtered.filter(req => (req.status || 'approved') === statusFilter);
+        }
+
+        displayRequests(filtered);
     }
 
     function displayRequests(requests) {
@@ -626,12 +896,38 @@
             ? formatDate(startDate)
             : `${formatDate(startDate)} - ${formatDate(endDate)}`;
 
+        // Status badge
+        const status = request.status || 'approved';
+        const statusColors = {
+            pending: 'background:#fef3c7;color:#92400e;',
+            approved: 'background:#d1fae5;color:#065f46;',
+            denied: 'background:#fee2e2;color:#991b1b;'
+        };
+        const statusLabels = { pending: 'Pending', approved: 'Approved', denied: 'Denied' };
+        const statusBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;${statusColors[status] || ''}">${statusLabels[status] || status}</span>`;
+
+        // Review info
+        let reviewInfo = '';
+        if (status !== 'pending' && request.reviewed_by) {
+            const reviewedAt = request.reviewed_at ? new Date(request.reviewed_at).toLocaleDateString() : '';
+            reviewInfo = `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+                ${status === 'approved' ? 'Approved' : 'Denied'} by ${request.reviewed_by}${reviewedAt ? ` on ${reviewedAt}` : ''}
+            </div>`;
+        }
+
+        // Denial reason
+        const denialInfo = (status === 'denied' && request.denial_reason)
+            ? `<div style="font-size:12px;color:#991b1b;margin-top:4px;font-style:italic;">Reason: ${request.denial_reason}</div>`
+            : '';
+
         return `
-        <div class="time-off-request-card">
+        <div class="time-off-request-card" data-status="${status}">
             <div class="time-off-info">
-                <div class="time-off-employee">${toTitleCase(request.employee_name)}</div>
-                <div class="time-off-dates">🗓️ ${dateDisplay}</div>
+                <div class="time-off-employee">${toTitleCase(request.employee_name)} ${statusBadge}</div>
+                <div class="time-off-dates">${dateDisplay}</div>
                 ${request.reason ? `<div class="time-off-reason">Comments: ${request.reason}</div>` : ''}
+                ${reviewInfo}
+                ${denialInfo}
             </div>
             <div class="time-off-actions">
                 <button class="btn-delete" data-action="delete-request" data-request-id="${request.id}">Delete</button>
@@ -842,11 +1138,14 @@
     // ===== TAB SWITCHING =====
     function showTab(tabName) {
         document.getElementById('tab-time-off').style.display = tabName === 'time-off' ? '' : 'none';
+        var pendingTab = document.getElementById('tab-pending');
+        if (pendingTab) pendingTab.style.display = tabName === 'pending' ? '' : 'none';
         document.getElementById('tab-overrides').style.display = tabName === 'overrides' ? '' : 'none';
         document.querySelectorAll('[data-action="show-tab"]').forEach(function(btn) {
             btn.classList.toggle('active', btn.dataset.tab === tabName);
         });
         if (tabName === 'overrides') loadOverrides();
+        if (tabName === 'pending' && typeof loadPendingRequests === 'function') loadPendingRequests();
     }
 
     // ===== OVERRIDES MANAGEMENT =====
@@ -989,6 +1288,151 @@
 
     document.getElementById('override-employee-filter').addEventListener('change', loadOverrides);
 
+    {% if is_supervisor %}
+    // ===== PENDING APPROVALS TAB =====
+    let pendingRequests = [];
+    let denyingRequestId = null;
+
+    async function loadPendingRequests() {
+        const container = document.getElementById('pending-container');
+        container.innerHTML = '<div class="empty-state">Loading pending requests...</div>';
+
+        try {
+            const response = await fetch('/api/time-off/pending');
+            if (!response.ok) throw new Error('Failed to load pending requests');
+
+            pendingRequests = await response.json();
+            updatePendingCount(pendingRequests.length);
+            displayPendingRequests();
+        } catch (error) {
+            console.error('Error loading pending requests:', error);
+            container.innerHTML = '<div class="alert alert-error">Error loading pending requests</div>';
+        }
+    }
+
+    function updatePendingCount(count) {
+        const badge = document.getElementById('pending-count');
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function displayPendingRequests() {
+        const container = document.getElementById('pending-container');
+
+        if (pendingRequests.length === 0) {
+            container.innerHTML = '<div class="empty-state">No pending time off requests</div>';
+            return;
+        }
+
+        container.innerHTML = pendingRequests.map(req => createApprovalCard(req)).join('');
+    }
+
+    function createApprovalCard(req) {
+        const formatDate = (dateStr) => {
+            const [year, month, day] = dateStr.split('-');
+            return new Date(year, month - 1, day).toLocaleDateString();
+        };
+
+        const dateDisplay = req.start_date === req.end_date
+            ? formatDate(req.start_date)
+            : `${formatDate(req.start_date)} - ${formatDate(req.end_date)}`;
+
+        const submittedDate = new Date(req.created_at).toLocaleDateString();
+
+        return `
+            <div class="approval-card" data-request-id="${req.id}">
+                <div class="approval-card-header">
+                    <div class="approval-card-employee">${toTitleCase(req.employee_name)}</div>
+                    <div class="approval-card-submitted">Submitted ${submittedDate}</div>
+                </div>
+                <div class="approval-card-dates">${escapeHtml(dateDisplay)}</div>
+                ${req.reason ? `<div class="approval-card-reason">Reason: ${escapeHtml(req.reason)}</div>` : ''}
+                <div class="approval-card-actions">
+                    <button class="btn-approve" data-action="approve-request" data-request-id="${req.id}">Approve</button>
+                    <button class="btn-deny" data-action="deny-request" data-request-id="${req.id}"
+                        data-employee-name="${escapeHtml(req.employee_name)}"
+                        data-date-range="${escapeHtml(dateDisplay)}">Deny</button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function approveRequest(requestId) {
+        try {
+            const response = await fetch(`/api/time-off/${requestId}/review`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'approve' })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                showFlashMessage(`Error: ${data.error}`, 'error');
+                return;
+            }
+
+            showFlashMessage(data.message, 'success');
+            await loadPendingRequests();
+            await loadAllTimeOffRequests();
+            filterRequests();
+        } catch (error) {
+            console.error('Error approving request:', error);
+            showFlashMessage('Error approving request. Please try again.', 'error');
+        }
+    }
+
+    function openDenyModal(requestId, employeeName, dateRange) {
+        denyingRequestId = requestId;
+        document.getElementById('deny-employee-name').textContent = toTitleCase(employeeName);
+        document.getElementById('deny-date-range').textContent = dateRange;
+        document.getElementById('deny-reason-input').value = '';
+
+        const modal = document.getElementById('deny-reason-modal');
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        modal.classList.add('modal-open');
+    }
+
+    function closeDenyModal() {
+        denyingRequestId = null;
+        document.getElementById('deny-reason-modal').classList.remove('modal-open');
+    }
+
+    async function confirmDeny() {
+        if (!denyingRequestId) return;
+
+        const reason = document.getElementById('deny-reason-input').value.trim();
+
+        try {
+            const response = await fetch(`/api/time-off/${denyingRequestId}/review`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'deny', reason: reason })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                showFlashMessage(`Error: ${data.error}`, 'error');
+                return;
+            }
+
+            closeDenyModal();
+            showFlashMessage(data.message, 'success');
+            await loadPendingRequests();
+            await loadAllTimeOffRequests();
+            filterRequests();
+        } catch (error) {
+            console.error('Error denying request:', error);
+            showFlashMessage('Error denying request. Please try again.', 'error');
+        }
+    }
+    {% endif %}
+
     // Delegated click handler for data-action buttons
     document.addEventListener('click', function(e) {
         var target = e.target.closest('[data-action]');
@@ -1012,6 +1456,19 @@
                 break;
             case 'delete-override':
                 deleteOverride(parseInt(target.dataset.overrideId));
+                break;
+            case 'approve-request':
+                approveRequest(parseInt(target.dataset.requestId));
+                break;
+            case 'deny-request':
+                openDenyModal(
+                    parseInt(target.dataset.requestId),
+                    target.dataset.employeeName,
+                    target.dataset.dateRange
+                );
+                break;
+            case 'close-deny-modal':
+                closeDenyModal();
                 break;
         }
     });

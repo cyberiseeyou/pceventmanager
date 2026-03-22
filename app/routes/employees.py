@@ -4,8 +4,8 @@ Handles employee management, availability, and time off operations
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from app.models import get_models
-from app.routes.auth import require_authentication
-from datetime import datetime, timedelta
+from app.routes.auth import require_authentication, get_current_user, require_role
+from datetime import datetime, date, timedelta
 from sqlalchemy import func
 
 # Create blueprint
@@ -13,6 +13,8 @@ employees_bp = Blueprint('employees', __name__)
 
 
 @employees_bp.route('/employees')
+@require_authentication()
+@require_role('supervisor')
 def employees():
     """Display employee management page"""
     models = get_models()
@@ -22,9 +24,13 @@ def employees():
 
 
 @employees_bp.route('/time-off')
+@require_authentication()
+@require_role('supervisor')
 def time_off_requests():
     """Display time off requests management page"""
-    return render_template('time_off_requests.html')
+    user = get_current_user()
+    is_supervisor = user.get('role') == 'supervisor' if user else False
+    return render_template('time_off_requests.html', is_supervisor=is_supervisor)
 
 
 @employees_bp.route('/api/employees/active', methods=['GET'])
@@ -468,6 +474,10 @@ def manage_employee_time_off(employee_id):
                 'start_date': req.start_date.isoformat(),
                 'end_date': req.end_date.isoformat(),
                 'reason': req.reason,
+                'status': req.status,
+                'reviewed_by': req.reviewed_by,
+                'reviewed_at': req.reviewed_at.isoformat() if req.reviewed_at else None,
+                'denial_reason': req.denial_reason,
                 'created_at': req.created_at.isoformat()
             })
 
@@ -500,7 +510,19 @@ def manage_employee_time_off(employee_id):
             ).first()
 
             if overlapping:
-                return jsonify({'error': f'Time off request overlaps with existing request from {overlapping.start_date} to {overlapping.end_date}'}), 400
+                status_msg = {
+                    'pending': 'already pending review',
+                    'approved': 'already approved',
+                    'denied': 'was previously denied',
+                }.get(overlapping.status, 'already exists')
+                error_detail = f'A time off request for {overlapping.start_date} to {overlapping.end_date} is {status_msg}.'
+                if overlapping.status == 'denied' and overlapping.denial_reason:
+                    error_detail += f' Reason: {overlapping.denial_reason}'
+                return jsonify({
+                    'error': error_detail,
+                    'existing_status': overlapping.status,
+                    'existing_id': overlapping.id,
+                }), 400
 
             # Check for conflicting scheduled events
             Schedule = models['Schedule']
@@ -621,6 +643,182 @@ def delete_time_off(time_off_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+
+@employees_bp.route('/api/my-time-off', methods=['GET'])
+@require_authentication()
+def my_time_off_requests():
+    """Get time off requests for the currently logged-in employee."""
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    if not employee_id:
+        return jsonify({'error': 'Employee ID not found in session'}), 400
+
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    requests = EmployeeTimeOff.query.filter_by(
+        employee_id=employee_id
+    ).order_by(EmployeeTimeOff.start_date.desc()).all()
+
+    return jsonify([{
+        'id': r.id,
+        'start_date': r.start_date.isoformat(),
+        'end_date': r.end_date.isoformat(),
+        'reason': r.reason,
+        'status': r.status,
+        'denial_reason': r.denial_reason,
+        'reviewed_by': r.reviewed_by,
+        'reviewed_at': r.reviewed_at.isoformat() if r.reviewed_at else None,
+        'created_at': r.created_at.isoformat(),
+    } for r in requests])
+
+
+@employees_bp.route('/api/my-time-off', methods=['POST'])
+@require_authentication()
+def submit_time_off_request():
+    """Employee self-service: submit a new time off request (status=pending)."""
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    if not employee_id:
+        return jsonify({'error': 'Employee ID not found in session'}), 400
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    data = request.get_json()
+    start_date_str = data.get('start_date')
+    end_date_str = data.get('end_date')
+    reason = (data.get('reason') or '').strip()
+
+    if not start_date_str or not end_date_str:
+        return jsonify({'error': 'Start date and end date are required'}), 400
+
+    try:
+        start_dt = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_dt = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    if start_dt > end_dt:
+        return jsonify({'error': 'Start date cannot be after end date'}), 400
+
+    if start_dt < date.today():
+        return jsonify({'error': 'Cannot request time off in the past'}), 400
+
+    # Check for overlapping requests (any status)
+    overlapping = EmployeeTimeOff.query.filter(
+        EmployeeTimeOff.employee_id == employee_id,
+        EmployeeTimeOff.start_date <= end_dt,
+        EmployeeTimeOff.end_date >= start_dt
+    ).first()
+
+    if overlapping:
+        status_msg = {
+            'pending': 'already pending review',
+            'approved': 'already approved',
+            'denied': 'was previously denied',
+        }.get(overlapping.status, 'already exists')
+        error_detail = f'A request for {overlapping.start_date.strftime("%b %-d")} – {overlapping.end_date.strftime("%b %-d")} is {status_msg}.'
+        if overlapping.status == 'denied' and overlapping.denial_reason:
+            error_detail += f' Reason: {overlapping.denial_reason}'
+        return jsonify({
+            'error': error_detail,
+            'existing_status': overlapping.status,
+            'existing_id': overlapping.id,
+        }), 409
+
+    new_request = EmployeeTimeOff(
+        employee_id=employee_id,
+        start_date=start_dt,
+        end_date=end_dt,
+        reason=reason,
+        status='pending',
+    )
+    db.session.add(new_request)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Time off request submitted for review.',
+        'id': new_request.id,
+        'status': 'pending',
+    }), 201
+
+
+@employees_bp.route('/api/time-off/<int:request_id>/review', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def review_time_off_request(request_id):
+    """Supervisor approves or denies a time off request."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    time_off = EmployeeTimeOff.query.get(request_id)
+    if not time_off:
+        return jsonify({'error': 'Request not found'}), 404
+
+    if time_off.status != 'pending':
+        return jsonify({'error': f'Request is already {time_off.status}'}), 400
+
+    data = request.get_json()
+    action = data.get('action')  # 'approve' or 'deny'
+    if action not in ('approve', 'deny'):
+        return jsonify({'error': 'action must be "approve" or "deny"'}), 400
+
+    user = get_current_user()
+    reviewer_name = user.get('full_name', user.get('username', 'Unknown')) if user else 'Unknown'
+
+    if action == 'approve':
+        time_off.status = 'approved'
+    else:
+        time_off.status = 'denied'
+        time_off.denial_reason = (data.get('reason') or '').strip() or None
+
+    time_off.reviewed_by = reviewer_name
+    time_off.reviewed_at = datetime.utcnow()
+    db.session.commit()
+
+    Employee = models['Employee']
+    emp = Employee.query.get(time_off.employee_id)
+    emp_name = emp.name if emp else time_off.employee_id
+
+    return jsonify({
+        'success': True,
+        'message': f'Time off request for {emp_name} has been {time_off.status}.',
+        'status': time_off.status,
+    })
+
+
+@employees_bp.route('/api/time-off/pending', methods=['GET'])
+@require_authentication()
+@require_role('supervisor')
+def get_pending_time_off():
+    """Get all pending time off requests for supervisor review."""
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+    Employee = models['Employee']
+
+    pending = EmployeeTimeOff.query.filter_by(
+        status='pending'
+    ).order_by(EmployeeTimeOff.created_at.asc()).all()
+
+    result = []
+    for req in pending:
+        emp = Employee.query.get(req.employee_id)
+        result.append({
+            'id': req.id,
+            'employee_id': req.employee_id,
+            'employee_name': emp.name if emp else req.employee_id,
+            'start_date': req.start_date.isoformat(),
+            'end_date': req.end_date.isoformat(),
+            'reason': req.reason,
+            'created_at': req.created_at.isoformat(),
+        })
+
+    return jsonify(result)
 
 
 @employees_bp.route('/api/get_available_reps', methods=['GET'])

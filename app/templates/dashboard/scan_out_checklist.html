@@ -225,9 +225,9 @@
         </thead>
         <tbody>
             {% for event in events %}
-            <tr data-schedule-id="{{ event.schedule_id }}">
+            <tr data-ref-num="{{ event.event_ref_num }}">
                 <td class="check-cell">
-                    <input type="checkbox" data-schedule-id="{{ event.schedule_id }}" aria-label="Mark scanned out">
+                    <input type="checkbox" data-ref-num="{{ event.event_ref_num }}" aria-label="Mark scanned out">
                 </td>
                 <td>
                     {% if event.event_number %}
@@ -267,10 +267,10 @@
     const clubNumber = '{{ club_number }}';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-    // Load saved state
+    // Load saved state (keyed by event_ref_num which is stable across DB refreshes)
     const saved = JSON.parse(localStorage.getItem(dateKey) || '{}');
     checkboxes.forEach(cb => {
-        const id = cb.getAttribute('data-schedule-id');
+        const id = cb.getAttribute('data-ref-num');
         if (saved[id]) {
             cb.checked = true;
             cb.closest('tr').classList.add('checked-off');
@@ -289,7 +289,7 @@
     // Save state on change
     checkboxes.forEach(cb => {
         cb.addEventListener('change', () => {
-            const id = cb.getAttribute('data-schedule-id');
+            const id = cb.getAttribute('data-ref-num');
             const state = JSON.parse(localStorage.getItem(dateKey) || '{}');
             if (cb.checked) {
                 state[id] = true;

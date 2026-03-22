@@ -41,6 +41,7 @@ def _get_edr_credentials():
 
 @admin_bp.route('/api/refresh/database', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def refresh_database():
     """
     Completely refresh database with latest planning events from Crossmark API
@@ -91,6 +92,7 @@ def refresh_database():
 
 @admin_bp.route('/api/refresh/status')
 @require_authentication()
+@require_role('supervisor')
 def refresh_status():
     """Get status of database refresh progress"""
     try:
@@ -118,6 +120,8 @@ def refresh_status():
         }), 500
 
 @admin_bp.route('/delete_event/<int:event_id>', methods=['DELETE'])
+@require_authentication()
+@require_role('supervisor')
 def delete_event(event_id):
     """Delete an event from the database"""
     try:
@@ -155,6 +159,8 @@ def delete_event(event_id):
         }), 500
 
 @admin_bp.route('/api/sync/health')
+@require_authentication()
+@require_role('supervisor')
 def sync_health():
     """Check sync system health and API connectivity"""
     try:
@@ -176,6 +182,8 @@ def sync_health():
         }), 500
 
 @admin_bp.route('/api/sync/trigger', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def trigger_sync():
     """Manually trigger a complete synchronization"""
     from error_handlers import requires_sync_enabled, api_error_handler, sync_logger
@@ -199,6 +207,8 @@ def trigger_sync():
     return jsonify(result), status_code
 
 @admin_bp.route('/api/sync/status')
+@require_authentication()
+@require_role('supervisor')
 def sync_status():
     """Get synchronization status overview"""
     try:
@@ -313,11 +323,15 @@ def webhook_schedule_update():
         }), 500
 
 @admin_bp.route('/sync/admin')
+@require_authentication()
+@require_role('supervisor')
 def sync_admin():
     """Sync administration interface"""
     return render_template('sync_admin.html', config=current_app.config)
 
 @admin_bp.route('/api/universal_search')
+@require_authentication()
+@require_role('supervisor')
 def universal_search():
     """Universal search endpoint for events, employees, and schedules"""
     db = current_app.extensions['sqlalchemy']
@@ -467,11 +481,15 @@ def universal_search():
     return jsonify(results)
 
 @admin_bp.route('/api/test')
+@require_authentication()
+@require_role('supervisor')
 def api_tester():
     """API testing and request capture tool"""
     return render_template('api_tester.html')
 
 @admin_bp.route('/api/test/login', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def test_login():
     """Test login endpoint for capturing session data"""
     try:
@@ -515,6 +533,8 @@ def test_login():
         return jsonify({'success': False, 'error': str(e)})
 
 @admin_bp.route('/api/test/request', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
 def test_request():
     """Test generic API requests with session"""
     try:
@@ -871,6 +891,7 @@ def generate_edr_documents(event_numbers, credentials=None):
 
 @admin_bp.route('/api/edr/request_code', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def edr_request_code():
     """
     Request MFA code to be sent to phone
@@ -933,6 +954,7 @@ def edr_request_code():
 
 @admin_bp.route('/api/edr/authenticate', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def edr_authenticate():
     """
     Authenticate with Walmart Retail Link using MFA code
@@ -1048,6 +1070,7 @@ def edr_authenticate():
 
 @admin_bp.route('/api/edr/sync-cache', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def edr_sync_cache():
     """
     Sync EDR cache using browse_events() API
@@ -1126,6 +1149,7 @@ def edr_sync_cache():
 
 @admin_bp.route('/api/edr/cache-status', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def edr_cache_status():
     """
     Get current EDR cache status
@@ -1177,6 +1201,8 @@ def edr_cache_status():
 
 
 @admin_bp.route('/api/print_paperwork/<paperwork_type>')
+@require_authentication()
+@require_role('supervisor')
 def print_paperwork(paperwork_type):
     """
     Print paperwork for Core events (today or tomorrow)
@@ -1384,6 +1410,7 @@ def print_paperwork_internal(paperwork_type, target_date_override=None):
 
 @admin_bp.route('/api/print_paperwork_by_date/<date_str>')
 @require_authentication()
+@require_role('supervisor')
 def print_paperwork_by_date(date_str):
     """
     Print paperwork for Core events on a specific date
@@ -1399,6 +1426,7 @@ def print_paperwork_by_date(date_str):
 
 @admin_bp.route('/api/print_salestools_by_date/<date_str>')
 @require_authentication()
+@require_role('supervisor')
 def print_salestools_by_date(date_str):
     """
     Download and merge sales tool PDFs for all Core events on a specific date
@@ -1499,6 +1527,7 @@ def print_salestools_by_date(date_str):
 
 @admin_bp.route('/api/print_event_paperwork/<int:event_id>')
 @require_authentication()
+@require_role('supervisor')
 def print_event_paperwork(event_id):
     """Print paperwork for a single event"""
     try:
@@ -1564,6 +1593,7 @@ def print_event_paperwork(event_id):
 
 @admin_bp.route('/api/auto_schedule_event/<int:event_id>', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def auto_schedule_event(event_id):
     """Auto-schedule a single event using SchedulingEngine"""
     try:
@@ -1642,6 +1672,7 @@ def auto_schedule_event(event_id):
 
 @admin_bp.route('/employees/analytics', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def employee_analytics():
     """Display employee scheduling analytics for the selected week"""
     from datetime import datetime, timedelta
@@ -1698,6 +1729,7 @@ def employee_analytics():
 
 @admin_bp.route('/api/print_weekly_summary/<week_start_str>')
 @require_authentication()
+@require_role('supervisor')
 def print_weekly_summary(week_start_str):
     """Print weekly schedule summary for all employees (Core events with Juicer days highlighted in orange)"""
     try:
@@ -1882,6 +1914,7 @@ def print_weekly_summary(week_start_str):
 
 @admin_bp.route('/api/print_employee_schedule/<int:employee_id>/<week_start_str>')
 @require_authentication()
+@require_role('supervisor')
 def print_employee_schedule(employee_id, week_start_str):
     """Print detailed weekly schedule for a single employee (all event types)"""
     try:
@@ -2047,6 +2080,16 @@ def settings_page():
         settings['ai_api_key'] = '***' if SystemSetting.get_setting('ai_api_key') else ''
         settings['auto_scheduler_enabled'] = SystemSetting.get_setting('auto_scheduler_enabled', True)
         settings['auto_scheduler_require_approval'] = SystemSetting.get_setting('auto_scheduler_require_approval', True)
+        # SMTP settings
+        settings['smtp_host'] = SystemSetting.get_setting('smtp_host') or ''
+        settings['smtp_port'] = SystemSetting.get_setting('smtp_port') or '587'
+        settings['smtp_username'] = SystemSetting.get_setting('smtp_username') or ''
+        settings['smtp_password'] = '***' if SystemSetting.get_setting('smtp_password') else ''
+        settings['smtp_sender_email'] = SystemSetting.get_setting('smtp_sender_email') or 'mat.conder@productconnections.com'
+        settings['smtp_use_tls'] = SystemSetting.get_setting('smtp_use_tls', True)
+        # Bakery prep settings
+        settings['bakery_friday_enabled'] = SystemSetting.get_setting('bakery_friday_enabled', True)
+        settings['bakery_prep_recipients'] = SystemSetting.get_setting('bakery_prep_recipients') or ''
     else:
         settings['edr_username'] = current_app.config.get('WALMART_EDR_USERNAME', '')
         settings['edr_password'] = '***' if current_app.config.get('WALMART_EDR_PASSWORD') else ''
@@ -2056,6 +2099,14 @@ def settings_page():
         settings['ai_api_key'] = '***' if current_app.config.get('AI_API_KEY') else ''
         settings['auto_scheduler_enabled'] = current_app.config.get('AUTO_SCHEDULER_ENABLED', True)
         settings['auto_scheduler_require_approval'] = current_app.config.get('AUTO_SCHEDULER_REQUIRE_APPROVAL', True)
+        settings['smtp_host'] = ''
+        settings['smtp_port'] = '587'
+        settings['smtp_username'] = ''
+        settings['smtp_password'] = ''
+        settings['smtp_sender_email'] = 'mat.conder@productconnections.com'
+        settings['smtp_use_tls'] = True
+        settings['bakery_friday_enabled'] = True
+        settings['bakery_prep_recipients'] = ''
 
     # Load event time settings
     event_times = {}
@@ -2087,6 +2138,7 @@ def event_times_page():
 # Keep old route for backwards compatibility
 @admin_bp.route('/shift-blocks')
 @require_authentication()
+@require_role('supervisor')
 def shift_blocks_page():
     """Redirect to new event times page"""
     from flask import redirect, url_for
@@ -2095,6 +2147,7 @@ def shift_blocks_page():
 
 @admin_bp.route('/api/settings/edr', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def save_edr_settings():
     """Save Retail Link EDR credentials to database"""
     try:
@@ -2148,6 +2201,7 @@ def save_edr_settings():
 
 @admin_bp.route('/api/settings/ai', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def save_ai_settings():
     """Save AI Assistant provider and API key to database"""
     try:
@@ -2190,6 +2244,7 @@ def save_ai_settings():
 
 @admin_bp.route('/api/settings/auto-scheduler', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def save_auto_scheduler_settings():
     """Save Auto-Scheduler configuration settings to database"""
     try:
@@ -2222,8 +2277,112 @@ def save_auto_scheduler_settings():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@admin_bp.route('/api/settings/smtp', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def save_smtp_settings():
+    """Save SMTP email configuration to database"""
+    try:
+        SystemSetting = current_app.config.get('SystemSetting')
+        if not SystemSetting:
+            return jsonify({'success': False, 'message': 'SystemSetting model not available'}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        host = (data.get('smtp_host') or '').strip()
+        port = (data.get('smtp_port') or '587').strip()
+        username = (data.get('smtp_username') or '').strip()
+        password = data.get('smtp_password', '').strip() if data.get('smtp_password') else None
+        sender_email = (data.get('smtp_sender_email') or '').strip()
+        use_tls = data.get('smtp_use_tls', True)
+
+        if not host:
+            return jsonify({'success': False, 'message': 'SMTP host is required'}), 400
+
+        SystemSetting.set_setting('smtp_host', host)
+        SystemSetting.set_setting('smtp_port', port)
+        SystemSetting.set_setting('smtp_username', username)
+        if password:
+            SystemSetting.set_setting('smtp_password', password, setting_type='encrypted')
+        SystemSetting.set_setting('smtp_sender_email', sender_email or 'mat.conder@productconnections.com')
+        SystemSetting.set_setting('smtp_use_tls', use_tls, setting_type='boolean')
+
+        current_app.logger.info("SMTP settings saved successfully")
+        return jsonify({'success': True, 'message': 'SMTP settings saved successfully'})
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to save SMTP settings: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@admin_bp.route('/api/settings/smtp/test', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def test_smtp_settings():
+    """Send a test email to verify SMTP configuration works"""
+    try:
+        SystemSetting = current_app.config.get('SystemSetting')
+        if not SystemSetting:
+            return jsonify({'success': False, 'message': 'SystemSetting model not available'}), 500
+
+        data = request.get_json() or {}
+        test_recipient = (data.get('recipient') or '').strip()
+        if not test_recipient:
+            return jsonify({'success': False, 'message': 'Test recipient email is required'}), 400
+
+        from app.services.email_service import EmailService
+        email_svc = EmailService.from_settings(SystemSetting)
+        if not email_svc:
+            return jsonify({'success': False, 'message': 'SMTP is not configured. Save SMTP settings first.'}), 400
+
+        html = (
+            '<html><body style="font-family:Arial,sans-serif;">'
+            '<h2 style="color:#2E4C73;">SMTP Test Email</h2>'
+            '<p>If you received this email, your SMTP configuration is working correctly.</p>'
+            '</body></html>'
+        )
+        email_svc.send_html_email(test_recipient, 'SMTP Test - Product Connections Scheduler', html)
+
+        return jsonify({'success': True, 'message': f'Test email sent to {test_recipient}'})
+
+    except Exception as e:
+        current_app.logger.error(f"SMTP test failed: {str(e)}")
+        return jsonify({'success': False, 'message': f'SMTP test failed: {str(e)}'}), 500
+
+
+@admin_bp.route('/api/settings/bakery-prep', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def save_bakery_prep_settings():
+    """Save Friday bakery prep email settings"""
+    try:
+        SystemSetting = current_app.config.get('SystemSetting')
+        if not SystemSetting:
+            return jsonify({'success': False, 'message': 'SystemSetting model not available'}), 500
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        enabled = data.get('bakery_friday_enabled', True)
+        recipients = (data.get('bakery_prep_recipients') or '').strip()
+
+        SystemSetting.set_setting('bakery_friday_enabled', enabled, setting_type='boolean')
+        SystemSetting.set_setting('bakery_prep_recipients', recipients)
+
+        current_app.logger.info(f"Bakery prep settings saved: enabled={enabled}")
+        return jsonify({'success': True, 'message': 'Bakery prep settings saved successfully'})
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to save bakery prep settings: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @admin_bp.route('/api/settings/event-times', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def save_event_time_settings():
     """Save event time configuration settings to database"""
     try:
@@ -2307,6 +2466,7 @@ def save_event_time_settings():
 
 @admin_bp.route('/api/event-times', methods=['GET'])
 @require_authentication()
+@require_role('supervisor')
 def get_event_times():
     """Get all event time settings"""
     try:
@@ -2337,6 +2497,7 @@ def get_event_times():
 
 @admin_bp.route('/api/sync/employees', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def sync_employees_from_api():
     """
     Sync employee data from Crossmark API
@@ -2419,6 +2580,7 @@ def sync_employees_from_api():
 
 @admin_bp.route('/api/daily_paperwork/request_mfa', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def request_daily_paperwork_mfa():
     """
     Request MFA code for daily paperwork generation
@@ -2432,6 +2594,7 @@ def request_daily_paperwork_mfa():
 
 @admin_bp.route('/api/edr_reports/request_mfa', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def request_edr_reports_mfa():
     """
     Request MFA code for EDR reports generation
@@ -2442,6 +2605,7 @@ def request_edr_reports_mfa():
 
 @admin_bp.route('/api/edr_reports/generate_by_date', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def generate_edr_reports_by_date():
     """
     Generate EDR reports for all CORE events on a specific date
@@ -2647,6 +2811,7 @@ def generate_edr_reports_by_date():
 
 @admin_bp.route('/api/daily_paperwork/generate', methods=['POST'])
 @require_authentication()
+@require_role('supervisor')
 def generate_daily_paperwork():
     """
     Generate daily paperwork using authenticated EDR session
@@ -2795,6 +2960,7 @@ def generate_daily_paperwork():
 
 @admin_bp.route('/schedule-verification')
 @require_authentication()
+@require_role('supervisor')
 def schedule_verification():
     """
     Schedule Verification page - redirects to Weekly Validation

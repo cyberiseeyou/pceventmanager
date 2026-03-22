@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block title %}Short-Notice Notifications - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+    .notifications-container {
+        padding: var(--spacing-lg);
+    }
+
+    .notifications-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-lg);
+        flex-wrap: wrap;
+        gap: var(--spacing-md);
+    }
+
+    .notifications-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        color: var(--pc-navy);
+    }
+
+    .header-actions {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--primary-color);
+        color: white;
+        text-decoration: none;
+        border-radius: var(--border-radius);
+        font-weight: 600;
+    }
+
+    .back-btn:hover {
+        background: var(--primary-dark);
+    }
+
+    .toggle-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--gray-100);
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+        border-radius: var(--border-radius);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .toggle-btn:hover {
+        background: var(--gray-200);
+    }
+
+    .notifications-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .notifications-table th {
+        background: var(--pc-navy);
+        color: white;
+        padding: var(--spacing-sm) var(--spacing-md);
+        text-align: left;
+        font-weight: 600;
+    }
+
+    .notifications-table td {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .notifications-table tbody tr:hover {
+        background: var(--gray-50);
+    }
+
+    .days-notice-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .days-notice-badge.urgent {
+        background: var(--danger-light, #fee2e2);
+        color: var(--danger-color, #dc2626);
+    }
+
+    .days-notice-badge.warning {
+        background: var(--warning-light, #fef3c7);
+        color: var(--warning-dark, #92400e);
+    }
+
+    .acknowledge-btn {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--success-color, #16a34a);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .acknowledge-btn:hover {
+        opacity: 0.9;
+    }
+
+    .acknowledge-btn:disabled {
+        background: var(--gray-400);
+        cursor: not-allowed;
+    }
+
+    .acknowledged-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--success-color, #16a34a);
+        font-weight: 500;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl);
+        color: var(--gray-500);
+    }
+
+    .empty-state h3 {
+        margin-bottom: var(--spacing-sm);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="notifications-container">
+    <div class="notifications-header">
+        <h1>Short-Notice Notifications</h1>
+        <div class="header-actions">
+            {% if show_acknowledged %}
+            <a href="{{ url_for('auto_scheduler.notifications') }}" class="toggle-btn">Hide Acknowledged</a>
+            {% else %}
+            <a href="{{ url_for('auto_scheduler.notifications', show_acknowledged='1') }}" class="toggle-btn">Show Acknowledged</a>
+            {% endif %}
+            <a href="{{ url_for('auto_scheduler.index') }}" class="back-btn">Back to Auto-Scheduler</a>
+        </div>
+    </div>
+
+    {% if notifications %}
+    <table class="notifications-table">
+        <thead>
+            <tr>
+                <th>Event</th>
+                <th>Employee</th>
+                <th>Scheduled Date</th>
+                <th>Time</th>
+                <th>Days Notice</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for notif in notifications %}
+            <tr>
+                <td>
+                    <strong>{{ notif.event.project_name if notif.event else notif.event_ref_num }}</strong>
+                    <br><small class="text-muted">#{{ notif.event_ref_num }}</small>
+                </td>
+                <td>{{ notif.employee.name if notif.employee else notif.employee_id }}</td>
+                <td>{{ notif.schedule_date.strftime('%a %b %d, %Y') }}</td>
+                <td>{{ notif.schedule_time.strftime('%I:%M %p') }}</td>
+                <td>
+                    <span class="days-notice-badge {{ 'urgent' if notif.days_notice <= 3 else 'warning' }}">
+                        {{ notif.days_notice }} day{{ 's' if notif.days_notice != 1 }}
+                    </span>
+                </td>
+                <td>
+                    {% if notif.notified %}
+                    <span class="acknowledged-badge">
+                        Notified
+                        {% if notif.notified_by %}by {{ notif.notified_by }}{% endif %}
+                    </span>
+                    {% else %}
+                    <button class="acknowledge-btn" data-notification-id="{{ notif.id }}"
+                            data-action="acknowledge-notification">
+                        Mark Notified
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <h3>No pending notifications</h3>
+        <p>All short-notice schedule changes have been acknowledged.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action="acknowledge-notification"]');
+    if (!btn) return;
+
+    const notificationId = btn.dataset.notificationId;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    fetch(`/auto-schedule/api/notifications/${notificationId}/acknowledge`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-Token': csrfToken,
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'acknowledged_by=supervisor'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const td = btn.parentElement;
+            td.innerHTML = '<span class="acknowledged-badge">Notified by supervisor</span>';
+        } else {
+            btn.disabled = false;
+            btn.textContent = 'Mark Notified';
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'Mark Notified';
+        alert('Failed to acknowledge notification');
+    });
+});
+</script>
+{% endblock %}

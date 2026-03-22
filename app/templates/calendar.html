@@ -196,7 +196,7 @@
     .lock-indicator {
         position: absolute;
         top: 4px;
-        left: 4px;
+        right: 4px;
         font-size: 1rem;
         color: #dc3545;
         text-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
@@ -1032,6 +1032,9 @@
     let lockedDaysData = {};  // Will be populated by loadLockedDays
     let currentModalDate = null;  // Track current modal date for lock toggle
     let currentModalLocked = false;  // Track current modal lock state
+    let rescheduleOriginalDate = null;  // Track original date for reschedule
+    let rescheduleEventType = null;  // Track event type for reschedule
+    let rescheduleEmployeeId = null;  // Track original employee for reschedule
 
     // Initialize calendar
     document.addEventListener('DOMContentLoaded', async function() {
@@ -1040,6 +1043,24 @@
         // Restore saved view mode
         if (currentCalendarView === 'week') {
             switchCalendarView('week');
+        }
+
+        // When reschedule date changes, refresh time slots and employee list
+        const rescheduleDateInput = document.getElementById('reschedule-date');
+        if (rescheduleDateInput) {
+            rescheduleDateInput.addEventListener('change', function () {
+                const newDate = this.value;
+                if (!newDate || !rescheduleEventType) return;
+
+                // Refresh time slot counts
+                setupTimeRestrictions('reschedule', rescheduleEventType, null);
+
+                // Refresh employees — pass original date so same-day exception works correctly
+                loadAvailableEmployeesForReschedule(
+                    'reschedule-employee', newDate, rescheduleEventType,
+                    rescheduleEmployeeId, rescheduleOriginalDate
+                );
+            });
         }
     });
 
@@ -1631,11 +1652,20 @@
     // Reschedule Modal Functions
     function openRescheduleModal(scheduleId, eventName, eventType, currentTime, employeeName, employeeId, currentDate) {
         try {
+            // Store context for date-change refresh
+            rescheduleOriginalDate = currentDate;
+            rescheduleEventType = eventType;
+            rescheduleEmployeeId = employeeId;
+
             document.getElementById('reschedule-schedule-id').value = scheduleId;
             document.getElementById('reschedule-event-info').innerHTML = `
                 <strong>${escapeHtml(eventName)}</strong> (${escapeHtml(eventType)})<br>
                 Current: ${escapeHtml(currentDate)} at ${escapeHtml(currentTime)} with ${escapeHtml(employeeName)}
             `;
+
+            // Pre-populate date
+            const dateInput = document.getElementById('reschedule-date');
+            if (dateInput) dateInput.value = currentDate;
 
             // Convert displayed time to 24-hour format for comparison
             const time24 = convertTo24Hour(currentTime);

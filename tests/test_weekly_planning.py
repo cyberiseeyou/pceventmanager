@@ -1,6 +1,7 @@
 """Tests for WeeklyPlanningService"""
 import pytest
 from datetime import date, datetime, timedelta
+from unittest.mock import patch
 
 
 class TestGetAvailableEmployees:
@@ -302,18 +303,26 @@ class TestGetAvailableForMainEvents:
 class TestRoutes:
     """Test the dashboard routes return 200"""
 
-    def test_employee_availability_route(self, client, db_session):
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_employee_availability_route(self, mock_auth, mock_user, client, db_session):
         response = client.get('/dashboard/employee-availability')
         assert response.status_code == 200
 
-    def test_employee_availability_with_date(self, client, db_session):
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_employee_availability_with_date(self, mock_auth, mock_user, client, db_session):
         response = client.get('/dashboard/employee-availability?start_date=2026-02-22')
         assert response.status_code == 200
 
-    def test_available_blocks_route(self, client, db_session):
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_available_blocks_route(self, mock_auth, mock_user, client, db_session):
         response = client.get('/dashboard/available-blocks')
         assert response.status_code == 200
 
-    def test_available_blocks_with_date(self, client, db_session):
+    @patch('app.routes.auth.get_current_user', return_value={'role': 'supervisor'})
+    @patch('app.routes.auth.is_authenticated', return_value=True)
+    def test_available_blocks_with_date(self, mock_auth, mock_user, client, db_session):
         response = client.get('/dashboard/available-blocks?start_date=2026-02-22')
         assert response.status_code == 200

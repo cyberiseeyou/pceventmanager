@@ -839,61 +839,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ===== REBALANCE WEEK =====
-var rebalanceBtn = document.getElementById('rebalance-week-btn');
-if (rebalanceBtn) {
-    rebalanceBtn.addEventListener('click', async function () {
-        var weekStart = rebalanceBtn.getAttribute('data-week-start');
-
-        if (!confirm('Rebalance Core events for this week? This will immediately move events to balance time slots and employee workloads.')) {
-            return;
-        }
-
-        rebalanceBtn.disabled = true;
-        rebalanceBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rebalancing...';
-        showLoading();
-
-        try {
-            var response = await fetch('/api/rebalance-week', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': getCsrfToken()
-                },
-                body: JSON.stringify({ week_start: weekStart })
-            });
-
-            var data = await response.json();
-
-            if (response.ok && data.status === 'success') {
-                var r = data.data;
-                var msg = 'Rebalance complete: ';
-                var parts = [];
-                if (r.time_slot_moves > 0) parts.push(r.time_slot_moves + ' time slot move(s)');
-                if (r.employee_swaps > 0) parts.push(r.employee_swaps + ' employee swap(s)');
-                if (parts.length === 0) parts.push('no changes needed');
-                msg += parts.join(', ');
-
-                hideLoading();
-                alert(msg);
-
-                if (r.moves_made > 0) {
-                    location.reload();
-                }
-            } else {
-                hideLoading();
-                alert('Rebalance failed: ' + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            hideLoading();
-            alert('Rebalance error: ' + err.message);
-        } finally {
-            rebalanceBtn.disabled = false;
-            rebalanceBtn.innerHTML = '<i class="fas fa-balance-scale"></i> Rebalance';
-        }
-    });
-}
-
 // ===== FIX ALL ISSUES =====
 var fixAllBtn = document.getElementById('fix-all-btn');
 if (fixAllBtn) {

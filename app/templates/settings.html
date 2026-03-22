@@ -309,6 +309,95 @@
             <div id="auto-scheduler-save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
         </section>
 
+        <!-- SMTP Email Configuration Section -->
+        <section class="settings-section" id="smtp-settings">
+            <h3>SMTP Email Configuration</h3>
+            <p class="section-description">Configure outgoing email settings for automated notifications (bakery prep list, etc.)</p>
+
+            <div class="form-group">
+                <label for="smtp_host">SMTP Host:</label>
+                <input type="text" id="smtp_host" class="form-control"
+                    value="{{ settings.get('smtp_host', '') }}"
+                    placeholder="e.g. smtp.gmail.com or smtp.office365.com">
+            </div>
+
+            <div class="form-group">
+                <label for="smtp_port">SMTP Port:</label>
+                <input type="text" id="smtp_port" class="form-control"
+                    value="{{ settings.get('smtp_port', '587') }}"
+                    placeholder="587">
+                <small class="form-text">587 for STARTTLS (recommended), 465 for SSL, 25 for unencrypted</small>
+            </div>
+
+            <div class="form-group">
+                <label for="smtp_username">SMTP Username:</label>
+                <input type="text" id="smtp_username" class="form-control"
+                    value="{{ settings.get('smtp_username', '') }}"
+                    placeholder="Enter SMTP username or email">
+            </div>
+
+            <div class="form-group">
+                <label for="smtp_password">SMTP Password:</label>
+                <input type="password" id="smtp_password" class="form-control"
+                    placeholder="{% if settings.get('smtp_password') %}Leave blank to keep current{% else %}Enter SMTP password{% endif %}">
+                <small class="form-text">
+                    {% if settings.get('smtp_password') %}Leave blank to keep current password{% else %}Enter your SMTP password or app password{% endif %}
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="smtp_sender_email">Sender Email:</label>
+                <input type="email" id="smtp_sender_email" class="form-control"
+                    value="{{ settings.get('smtp_sender_email', 'mat.conder@productconnections.com') }}"
+                    placeholder="mat.conder@productconnections.com">
+                <small class="form-text">The "From" address on outgoing emails</small>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="smtp_use_tls"
+                        {% if settings.get('smtp_use_tls', True) %}checked{% endif %}>
+                    <label for="smtp_use_tls">Use STARTTLS encryption</label>
+                </div>
+            </div>
+
+            <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" id="save-smtp-btn" class="btn btn-primary">Save SMTP Settings</button>
+                <button type="button" id="test-smtp-btn" class="btn btn-secondary">Send Test Email</button>
+            </div>
+
+            <div id="smtp-save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
+        </section>
+
+        <!-- Friday Bakery Prep List Section -->
+        <section class="settings-section" id="bakery-prep-settings">
+            <h3>Friday Bakery Prep List</h3>
+            <p class="section-description">Automatically email the bakery prep list every Friday. A prompt will appear until the list is sent.</p>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="bakery_friday_enabled"
+                        {% if settings.get('bakery_friday_enabled', True) %}checked{% endif %}>
+                    <label for="bakery_friday_enabled">Enable Friday bakery prep list reminder</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="bakery_prep_recipients">Email Recipients:</label>
+                <input type="text" id="bakery_prep_recipients" class="form-control"
+                    value="{{ settings.get('bakery_prep_recipients', '') }}"
+                    placeholder="bakery@store.com, manager@store.com">
+                <small class="form-text">Comma-separated list of email addresses to receive the bakery prep list</small>
+            </div>
+
+            <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" id="save-bakery-prep-btn" class="btn btn-primary">Save Bakery Prep Settings</button>
+                <button type="button" id="send-bakery-prep-now-btn" class="btn btn-secondary">Send Bakery Prep List Now</button>
+            </div>
+
+            <div id="bakery-prep-save-status" style="display: none; padding: 10px; margin-top: 15px; border-radius: 4px;"></div>
+        </section>
+
         <!-- Form Actions -->
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save Settings</button>
@@ -1522,6 +1611,120 @@
         if (saveAutoSchedulerBtn) {
             saveAutoSchedulerBtn.addEventListener('click', saveAutoSchedulerSettings);
             loadAutoSchedulerSettings();
+        }
+
+        // ---- SMTP Settings ----
+        const saveSmtpBtn = document.getElementById('save-smtp-btn');
+        const testSmtpBtn = document.getElementById('test-smtp-btn');
+        const smtpSaveStatus = document.getElementById('smtp-save-status');
+
+        function showSmtpStatus(message, type) {
+            smtpSaveStatus.textContent = message;
+            smtpSaveStatus.style.display = 'block';
+            smtpSaveStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+            smtpSaveStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+            smtpSaveStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+            setTimeout(() => { smtpSaveStatus.style.display = 'none'; }, 5000);
+        }
+
+        if (saveSmtpBtn) {
+            saveSmtpBtn.addEventListener('click', async () => {
+                const payload = {
+                    smtp_host: document.getElementById('smtp_host').value,
+                    smtp_port: document.getElementById('smtp_port').value,
+                    smtp_username: document.getElementById('smtp_username').value,
+                    smtp_password: document.getElementById('smtp_password').value || null,
+                    smtp_sender_email: document.getElementById('smtp_sender_email').value,
+                    smtp_use_tls: document.getElementById('smtp_use_tls').checked
+                };
+
+                try {
+                    saveSmtpBtn.disabled = true;
+                    saveSmtpBtn.textContent = 'Saving...';
+                    const response = await fetch('/api/settings/smtp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+                    showSmtpStatus(data.message || (data.success ? 'Saved!' : 'Error'), data.success ? 'success' : 'error');
+                } catch (err) {
+                    showSmtpStatus('Error saving SMTP settings.', 'error');
+                } finally {
+                    saveSmtpBtn.disabled = false;
+                    saveSmtpBtn.textContent = 'Save SMTP Settings';
+                }
+            });
+        }
+
+        if (testSmtpBtn) {
+            testSmtpBtn.addEventListener('click', async () => {
+                const recipient = prompt('Enter an email address to send a test email to:');
+                if (!recipient) return;
+
+                try {
+                    testSmtpBtn.disabled = true;
+                    testSmtpBtn.textContent = 'Sending...';
+                    const response = await fetch('/api/settings/smtp/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                        body: JSON.stringify({ recipient: recipient })
+                    });
+                    const data = await response.json();
+                    showSmtpStatus(data.message || (data.success ? 'Test email sent!' : 'Failed'), data.success ? 'success' : 'error');
+                } catch (err) {
+                    showSmtpStatus('Error sending test email.', 'error');
+                } finally {
+                    testSmtpBtn.disabled = false;
+                    testSmtpBtn.textContent = 'Send Test Email';
+                }
+            });
+        }
+
+        // ---- Bakery Prep Settings ----
+        const saveBakeryPrepBtn = document.getElementById('save-bakery-prep-btn');
+        const sendBakeryPrepNowBtn = document.getElementById('send-bakery-prep-now-btn');
+        const bakeryPrepSaveStatus = document.getElementById('bakery-prep-save-status');
+
+        if (sendBakeryPrepNowBtn) {
+            sendBakeryPrepNowBtn.addEventListener('click', function () {
+                if (window.triggerBakeryPrepSend) window.triggerBakeryPrepSend();
+            });
+        }
+
+        function showBakeryPrepStatus(message, type) {
+            bakeryPrepSaveStatus.textContent = message;
+            bakeryPrepSaveStatus.style.display = 'block';
+            bakeryPrepSaveStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+            bakeryPrepSaveStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+            bakeryPrepSaveStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+            setTimeout(() => { bakeryPrepSaveStatus.style.display = 'none'; }, 5000);
+        }
+
+        if (saveBakeryPrepBtn) {
+            saveBakeryPrepBtn.addEventListener('click', async () => {
+                const payload = {
+                    bakery_friday_enabled: document.getElementById('bakery_friday_enabled').checked,
+                    bakery_prep_recipients: document.getElementById('bakery_prep_recipients').value
+                };
+
+                try {
+                    saveBakeryPrepBtn.disabled = true;
+                    saveBakeryPrepBtn.textContent = 'Saving...';
+                    const response = await fetch('/api/settings/bakery-prep', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+                    showBakeryPrepStatus(data.message || (data.success ? 'Saved!' : 'Error'), data.success ? 'success' : 'error');
+                } catch (err) {
+                    showBakeryPrepStatus('Error saving bakery prep settings.', 'error');
+                } finally {
+                    saveBakeryPrepBtn.disabled = false;
+                    saveBakeryPrepBtn.textContent = 'Save Bakery Prep Settings';
+                }
+            });
         }
     });
 </script>

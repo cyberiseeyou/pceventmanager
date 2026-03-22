@@ -5,7 +5,7 @@ Handles all API endpoints for schedule operations, imports, exports, and AJAX ca
 from flask import Blueprint, request, jsonify, current_app, make_response
 from app.models import get_models
 from app.constants import CANCELLED_VARIANTS, INACTIVE_CONDITIONS
-from app.routes.auth import require_authentication
+from app.routes.auth import require_authentication, require_role
 from datetime import datetime, timedelta, date
 import csv
 import io
@@ -931,17 +931,14 @@ def available_employees_for_change(date, event_type):
              })
          return jsonify(employees_data)
 
-    # For Core events, get employees already scheduled for Core events that day
-    if event_type == 'Core':
-        core_scheduled_employees = db.session.query(Schedule.employee_id).join(
-            Event, Schedule.event_ref_num == Event.project_ref_num
-        ).filter(
-            db.func.date(Schedule.schedule_datetime) == parsed_date,
-            Event.event_type == 'Core'
-        ).all()
-        core_scheduled_employee_ids = {emp[0] for emp in core_scheduled_employees}
-    else:
-        core_scheduled_employee_ids = set()
+    # Get employees already scheduled for Core or Juicer events on this date
+    busy_employees = db.session.query(Schedule.employee_id).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).filter(
+        db.func.date(Schedule.schedule_datetime) == parsed_date,
+        Event.event_type.in_(['Core', 'Juicer'])
+    ).all()
+    busy_employee_ids = {emp[0] for emp in busy_employees}
 
     # Get employees marked as unavailable on the specified date
     unavailable_employees = db.session.query(EmployeeAvailability.employee_id).filter(
@@ -975,29 +972,20 @@ def available_employees_for_change(date, event_type):
     # Filter available employees
     available_employees_list = []
     for emp in all_employees:
-        # Special exception for current employee when rescheduling
-        is_current_employee = (current_employee_id and emp.id == current_employee_id)
-        is_same_day = (current_date and current_date == parsed_date)
+        # Special exception: when rescheduling on the SAME day the event already
+        # lives on, the current employee should still appear (they're already there).
+        # On a DIFFERENT day, apply all normal filters — no free pass.
+        is_current_on_same_day = (
+            current_employee_id and emp.id == current_employee_id
+            and current_date and current_date == parsed_date
+        )
 
-        # Allow current employee if it's the same day OR a day they're not scheduled
-        allow_current_employee = False
-        if is_current_employee:
-            if is_same_day:
-                # Same day - always allow
-                allow_current_employee = True
-            else:
-                # Different day - only allow if they're not scheduled for a Core event on the new date
-                allow_current_employee = (emp.id not in core_scheduled_employee_ids)
-
-        # Normal availability checks (skip for allowed current employee on same day)
-        if not (is_current_employee and is_same_day):
-            if (emp.id in core_scheduled_employee_ids or
+        if not is_current_on_same_day:
+            if (emp.id in busy_employee_ids or
                 emp.id in unavailable_employee_ids or
                 emp.id in time_off_employee_ids or
                 emp.id in weekly_unavailable_ids):
-                # Skip unless this is the current employee being allowed
-                if not allow_current_employee:
-                    continue
+                continue
 
         # Role-based restrictions
         # Special handling for "Other" events - only Lead Event Specialist and Club Supervisor
@@ -5977,38 +5965,572 @@ def bulk_unschedule():
     })
 
 
-@api_bp.route('/rebalance-week', methods=['POST'])
-def rebalance_week():
-    """Rebalance Core events for a given week."""
-    from app.services.schedule_rebalancer import ScheduleRebalancer
+@api_bp.route('/fix-coverage-times/<date_str>', methods=['POST'])
+def fix_coverage_times(date_str):
+    """Fix Core event times to follow the shift 1-12 pattern.
+
+    Lead gets shift 1, remaining employees fill shifts 2-12 in order.
+    Shift times: 10:15, 10:15, 10:45, 10:45, 11:15, 11:15, 11:45, 11:45,
+                 10:15, 10:45, 11:15, 11:45
+    Each change is pushed to MVRetail before updating locally.
+    """
     from app.models import get_db
+    from app.integrations.external_api.session_api_service import session_api as external_api
+
+    db = get_db()
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    RotationAssignment = models.get('RotationAssignment')
+    LockedDay = models.get('LockedDay')
+
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'status': 'error', 'error': 'Invalid date format'}), 400
+
+    # Check if day is locked
+    if LockedDay:
+        locked = LockedDay.query.filter_by(locked_date=target_date).first()
+        if locked:
+            return jsonify({'status': 'error', 'error': 'Day is locked'}), 400
+
+    # Shift time pattern (shifts 1-12)
+    SHIFT_TIMES = [
+        (10, 15), (10, 15), (10, 45), (10, 45),
+        (11, 15), (11, 15), (11, 45), (11, 45),
+        (10, 15), (10, 45), (11, 15), (11, 45),
+    ]
+
+    # Get all Core schedules for the date
+    core_schedules = Schedule.query.join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).filter(
+        db.func.date(Schedule.schedule_datetime) == target_date,
+        Event.event_type == 'Core'
+    ).all()
+
+    if not core_schedules:
+        return jsonify({'status': 'error', 'error': 'No Core events found for this date'}), 400
+
+    # Identify primary lead for this day of week
+    lead_employee_id = None
+    if RotationAssignment:
+        day_of_week = target_date.weekday()
+        lead_assignment = RotationAssignment.query.filter_by(
+            day_of_week=day_of_week,
+            rotation_type='primary_lead'
+        ).first()
+        if lead_assignment:
+            lead_employee_id = lead_assignment.employee_id
+
+    # Sort: lead first, then alphabetically by employee name
+    def sort_key(sched):
+        if lead_employee_id and sched.employee_id == lead_employee_id:
+            return (0, '')
+        emp = Employee.query.get(sched.employee_id)
+        return (1, emp.name.lower() if emp else 'zzz')
+
+    core_schedules.sort(key=sort_key)
+
+    # Authenticate with external API
+    config = current_app.config
+    sync_enabled = config.get('SYNC_ENABLED', False)
+    if sync_enabled:
+        try:
+            if not external_api.ensure_authenticated():
+                return jsonify({'status': 'error', 'error': 'Failed to authenticate with Crossmark API'}), 500
+        except Exception as auth_err:
+            current_app.logger.error(f"Auth error: {auth_err}")
+            return jsonify({'status': 'error', 'error': 'Failed to authenticate with Crossmark API'}), 500
+
+    changes = []
+    errors = []
+
+    for i, schedule in enumerate(core_schedules):
+        if i >= len(SHIFT_TIMES):
+            break
+
+        hour, minute = SHIFT_TIMES[i]
+        new_datetime = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+
+        # Skip if already at the correct time
+        if schedule.schedule_datetime == new_datetime:
+            continue
+
+        old_time = schedule.schedule_datetime.strftime('%I:%M %p') if schedule.schedule_datetime else 'N/A'
+        new_time = new_datetime.strftime('%I:%M %p')
+        emp = Employee.query.get(schedule.employee_id)
+        emp_name = emp.name if emp else 'Unknown'
+
+        # Get event for API call
+        event = Event.query.filter_by(project_ref_num=schedule.event_ref_num).first()
+        if not event:
+            errors.append(f"Event not found for schedule {schedule.id}")
+            continue
+
+        # Push to MVRetail
+        if sync_enabled:
+            rep_id = str(emp.external_id) if emp and emp.external_id else None
+            mplan_id = str(event.external_id) if event.external_id else None
+            location_id = str(event.location_mvid) if event.location_mvid else None
+
+            if not rep_id or not mplan_id or not location_id:
+                errors.append(f"Missing API IDs for {emp_name} - shift {i + 1}")
+                continue
+
+            estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            end_datetime = new_datetime + timedelta(minutes=estimated_minutes)
+
+            try:
+                api_result = external_api.schedule_mplan_event(
+                    rep_id=rep_id,
+                    mplan_id=mplan_id,
+                    location_id=location_id,
+                    start_datetime=new_datetime,
+                    end_datetime=end_datetime,
+                    planning_override=True
+                )
+                if not api_result.get('success'):
+                    errors.append(f"API error for {emp_name}: {api_result.get('message', 'Unknown')}")
+                    continue
+            except Exception as api_err:
+                errors.append(f"API error for {emp_name}: {str(api_err)}")
+                continue
+
+        # Update local record
+        schedule.schedule_datetime = new_datetime
+        schedule.shift_block = None
+        schedule.shift_block_assigned_at = None
+
+        changes.append({
+            'shift': i + 1,
+            'employee': emp_name,
+            'old_time': old_time,
+            'new_time': new_time,
+        })
+
+    if changes:
+        try:
+            db.session.commit()
+        except Exception as commit_err:
+            db.session.rollback()
+            current_app.logger.error(f"Commit error: {commit_err}")
+            return jsonify({'status': 'error', 'error': 'Database error saving changes'}), 500
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'total_core': len(core_schedules),
+            'changes_made': len(changes),
+            'changes': changes,
+            'errors': errors,
+        }
+    })
+
+
+# --- Friday Bakery Prep List Endpoints ---
+
+@api_bp.route('/bakery-prep/friday-status', methods=['GET'])
+@require_authentication()
+def bakery_prep_friday_status():
+    """Check whether the Friday bakery prep flow should be shown."""
+    SystemSetting = current_app.config.get('SystemSetting')
+    today = date.today()
+    is_friday = today.weekday() == 4  # Monday=0 ... Friday=4
+
+    enabled = True
+    completed = False
+    email_configured = False
+    recipients_configured = False
+
+    if SystemSetting:
+        enabled = SystemSetting.get_setting('bakery_friday_enabled', True)
+        completed_date = SystemSetting.get_setting('bakery_prep_completed_date')
+        completed = completed_date == today.isoformat() if completed_date else False
+        email_configured = bool(SystemSetting.get_setting('smtp_host'))
+        recipients_configured = bool(SystemSetting.get_setting('bakery_prep_recipients'))
+
+    return jsonify({
+        'is_friday': is_friday,
+        'is_completed': completed,
+        'is_enabled': enabled,
+        'email_configured': email_configured,
+        'recipients_configured': recipients_configured,
+    })
+
+
+@api_bp.route('/bakery-prep/send-email', methods=['POST'])
+@require_authentication()
+def bakery_prep_send_email():
+    """Fetch bakery prep list and email it to configured recipients."""
+    SystemSetting = current_app.config.get('SystemSetting')
+    if not SystemSetting:
+        return jsonify({'success': False, 'error': 'SystemSetting not available'}), 500
+
+    # Validate SMTP config
+    from app.services.email_service import EmailService
+    email_svc = EmailService.from_settings(SystemSetting)
+    if not email_svc:
+        return jsonify({'success': False, 'error': 'SMTP is not configured. Go to Settings to set it up.'}), 400
+
+    recipients = SystemSetting.get_setting('bakery_prep_recipients')
+    if not recipients:
+        return jsonify({'success': False, 'error': 'No bakery prep recipients configured. Go to Settings.'}), 400
+
+    # Validate Walmart session
+    from app.routes.printing import edr_authenticator, edr_available
+    if not edr_available:
+        return jsonify({'success': False, 'error': 'EDR modules not available'}), 500
+
+    if not edr_authenticator or not edr_authenticator.auth_token:
+        return jsonify({'success': False, 'error': 'Not authenticated with Walmart. Complete MFA first.'}), 401
+
+    # Fetch bakery prep data
+    from app.services.bakery_prep_service import fetch_bakery_prep_items, build_bakery_prep_html_email
+
+    store_number = SystemSetting.get_setting('store_number') or '8135'
+
+    try:
+        result = fetch_bakery_prep_items(edr_authenticator.session, store_number)
+    except RuntimeError as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    items = result['items']
+    date_range = result['date_range']
+    html = build_bakery_prep_html_email(items, date_range, store_number)
+
+    today_str = date.today().strftime('%B %d, %Y')
+    subject = f"Bakery Prep List - Store {store_number} - {today_str}"
+
+    try:
+        email_svc.send_html_email(recipients, subject, html)
+    except Exception as e:
+        logger.error(f"Failed to send bakery prep email: {e}")
+        return jsonify({'success': False, 'error': f'Email send failed: {str(e)}'}), 500
+
+    # Mark as completed for today
+    SystemSetting.set_setting('bakery_prep_completed_date', date.today().isoformat())
+
+    return jsonify({
+        'success': True,
+        'message': f'Bakery prep list emailed to {recipients}',
+        'total_items': len(items),
+    })
+
+
+# ── Specialist Personal Schedule Endpoints ──
+
+@api_bp.route('/my-schedule/weekly', methods=['GET'])
+@require_authentication()
+def my_schedule_weekly():
+    """Return the logged-in employee's schedule for a Sun-Sat week.
+
+    Query params:
+        week_start: YYYY-MM-DD (defaults to current week's Sunday)
+
+    Returns JSON with days dict, stats (total_hours, days_scheduled, event_count).
+    """
+    from app.routes.auth import get_current_user
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    if not employee_id:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    # Determine week boundaries (Sunday to Saturday)
+    week_start_str = request.args.get('week_start')
+    if week_start_str:
+        try:
+            week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid week_start format. Use YYYY-MM-DD'}), 400
+        # Snap to Sunday
+        week_start = week_start - timedelta(days=week_start.weekday() + 1) if week_start.weekday() != 6 else week_start
+    else:
+        today = date.today()
+        # Calculate this week's Sunday
+        week_start = today - timedelta(days=(today.weekday() + 1) % 7)
+
+    week_end = week_start + timedelta(days=6)
+
+    start_dt = datetime.combine(week_start, datetime.min.time())
+    end_dt = datetime.combine(week_end, datetime.max.time())
+
+    rows = db.session.query(Schedule, Event).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).filter(
+        Schedule.employee_id == employee_id,
+        Schedule.schedule_datetime >= start_dt,
+        Schedule.schedule_datetime <= end_dt,
+    ).order_by(Schedule.schedule_datetime).all()
+
+    # Build days dict with all 7 days pre-populated
+    days = {}
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        days[d.isoformat()] = []
+
+    total_minutes = 0
+    scheduled_dates = set()
+
+    for schedule, event in rows:
+        d = schedule.schedule_datetime.date()
+        duration = event.estimated_time or Event.get_default_duration(event.event_type)
+        total_minutes += duration
+        scheduled_dates.add(d)
+        days[d.isoformat()].append({
+            'schedule_id': schedule.id,
+            'time': schedule.schedule_datetime.strftime('%I:%M %p'),
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+            'store_name': event.store_name,
+            'estimated_time': duration,
+        })
+
+    return jsonify({
+        'week_start': week_start.isoformat(),
+        'week_end': week_end.isoformat(),
+        'days': days,
+        'stats': {
+            'total_hours': round(total_minutes / 60, 1),
+            'days_scheduled': len(scheduled_dates),
+            'event_count': len(rows),
+        },
+    })
+
+
+@api_bp.route('/my-schedule/monthly', methods=['GET'])
+@require_authentication()
+def my_schedule_monthly():
+    """Return the logged-in employee's schedule for an entire month.
+
+    Query params:
+        month: YYYY-MM (defaults to current month)
+
+    Returns JSON with month string and days dict.
+    """
+    from app.routes.auth import get_current_user
+    import calendar
+
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    if not employee_id:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    month_str = request.args.get('month')
+    if month_str:
+        try:
+            year, month = int(month_str.split('-')[0]), int(month_str.split('-')[1])
+        except (ValueError, IndexError):
+            return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
+    else:
+        today = date.today()
+        year, month = today.year, today.month
+
+    _, last_day = calendar.monthrange(year, month)
+    month_start = date(year, month, 1)
+    month_end = date(year, month, last_day)
+
+    start_dt = datetime.combine(month_start, datetime.min.time())
+    end_dt = datetime.combine(month_end, datetime.max.time())
+
+    rows = db.session.query(Schedule, Event).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).filter(
+        Schedule.employee_id == employee_id,
+        Schedule.schedule_datetime >= start_dt,
+        Schedule.schedule_datetime <= end_dt,
+    ).order_by(Schedule.schedule_datetime).all()
+
+    days = {}
+    for schedule, event in rows:
+        d = schedule.schedule_datetime.date().isoformat()
+        if d not in days:
+            days[d] = []
+        duration = event.estimated_time or Event.get_default_duration(event.event_type)
+        days[d].append({
+            'schedule_id': schedule.id,
+            'time': schedule.schedule_datetime.strftime('%I:%M %p'),
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+            'store_name': event.store_name,
+            'estimated_time': duration,
+        })
+
+    return jsonify({
+        'month': f'{year:04d}-{month:02d}',
+        'days': days,
+    })
+
+
+@api_bp.route('/lead/daily-schedule/<date>', methods=['GET'])
+@require_authentication()
+@require_role('lead', 'supervisor')
+def lead_daily_schedule(date):
+    """Get all employee schedules for a given date (lead/supervisor only).
+    Returns a simple list of employee name, event name, and scheduled time."""
+    from app.routes.auth import get_current_user
 
     models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    db = current_app.extensions['sqlalchemy']
+
+    # Validate date format
+    try:
+        selected_date = datetime.strptime(date, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    day_start = datetime.combine(selected_date, datetime.min.time())
+    day_end = datetime.combine(selected_date, datetime.max.time())
+
+    rows = db.session.query(Schedule, Event, Employee).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).outerjoin(
+        Employee, Schedule.employee_id == Employee.id
+    ).filter(
+        Schedule.schedule_datetime >= day_start,
+        Schedule.schedule_datetime <= day_end
+    ).order_by(Schedule.schedule_datetime).all()
+
+    schedules = []
+    for schedule, event, employee in rows:
+        emp_name = employee.name if employee else (schedule.employee_name or 'Unassigned')
+        schedules.append({
+            'employee_name': emp_name,
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+            'time': schedule.schedule_datetime.strftime('%I:%M %p').lstrip('0'),
+        })
+
+    day_label = selected_date.strftime('%A, %B %-d, %Y')
+
+    return jsonify({
+        'date': date,
+        'day_label': day_label,
+        'schedules': schedules,
+    })
+
+
+@api_bp.route('/day-notes/<date_str>', methods=['GET'])
+@require_authentication()
+@require_role('lead', 'supervisor')
+def get_day_notes(date_str):
+    """Get notes attached to a specific date."""
+    from app.routes.auth import get_current_user
+
+    models = get_models()
+    Note = models.get('Note')
+    if not Note:
+        return jsonify({'notes': []})
+
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date'}), 400
+
+    notes = Note.query.filter_by(
+        note_type='daily',
+        due_date=target_date,
+    ).order_by(Note.created_at.desc()).all()
+
+    user = get_current_user()
+    user_role = user.get('role') if user else None
+
+    return jsonify({
+        'notes': [{
+            'id': n.id,
+            'content': n.title,
+            'created_by': n.content or 'Unknown',
+            'created_at': n.created_at.strftime('%I:%M %p').lstrip('0') if n.created_at else '',
+            'can_delete': user_role == 'supervisor',
+        } for n in notes],
+    })
+
+
+@api_bp.route('/day-notes/<date_str>', methods=['POST'])
+@require_authentication()
+@require_role('lead', 'supervisor')
+def add_day_note(date_str):
+    """Add a note attached to a specific date."""
+    from app.routes.auth import get_current_user
+    from app.models import get_db
+
     db = get_db()
+    models = get_models()
+    Note = models.get('Note')
+    if not Note:
+        return jsonify({'error': 'Notes not available'}), 500
+
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date'}), 400
 
     data = request.get_json(silent=True) or {}
-    week_start_str = data.get('week_start')
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': 'Note content is required'}), 400
 
-    if not week_start_str:
-        return jsonify({'status': 'error', 'error': 'week_start is required'}), 400
+    user = get_current_user()
+    author = user.get('full_name') or user.get('username', 'Unknown') if user else 'Unknown'
 
-    try:
-        week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'status': 'error', 'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    note = Note(
+        note_type='daily',
+        title=content,
+        content=author,
+        due_date=target_date,
+        priority='normal',
+    )
+    db.session.add(note)
+    db.session.commit()
 
-    try:
-        rebalancer = ScheduleRebalancer(db.session, models)
-        result = rebalancer.rebalance_week(week_start)
+    return jsonify({
+        'status': 'success',
+        'note': {
+            'id': note.id,
+            'content': note.title,
+            'created_by': author,
+            'created_at': note.created_at.strftime('%I:%M %p').lstrip('0') if note.created_at else '',
+        },
+    }), 201
 
-        return jsonify({
-            'status': 'success',
-            'data': result
-        })
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Rebalance failed: {e}", exc_info=True)
-        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+@api_bp.route('/day-notes/<int:note_id>', methods=['DELETE'])
+@require_authentication()
+@require_role('supervisor')
+def delete_day_note(note_id):
+    """Delete a daily note (supervisor only)."""
+    from app.models import get_db
+
+    db = get_db()
+    models = get_models()
+    Note = models.get('Note')
+    if not Note:
+        return jsonify({'error': 'Notes not available'}), 500
+
+    note = Note.query.get(note_id)
+    if not note or note.note_type != 'daily':
+        return jsonify({'error': 'Note not found'}), 404
+
+    db.session.delete(note)
+    db.session.commit()
+
+    return jsonify({'status': 'success'})
 
 
 # Register modular API endpoint routes

@@ -299,7 +299,7 @@
         color: #6b7280;
     }
 
-    .notes-empty i {
+    .notes-empty span {
         font-size: 32px;
         margin-bottom: 8px;
         opacity: 0.5;
@@ -323,26 +323,26 @@
 
 <!-- Floating Button -->
 <button id="quickNoteBtn" data-action="toggle-quick-note" title="Add Note / View Tasks">
-    <i class="fas fa-sticky-note"></i>
+    <span class="material-symbols-outlined" style="font-size:24px;">sticky_note_2</span>
     <span class="badge" id="pendingNotesBadge" style="display: none;">0</span>
 </button>
 
 <!-- Quick Note Modal -->
 <div id="quickNoteModal">
     <div class="quick-note-header">
-        <h3><i class="fas fa-sticky-note"></i> Quick Notes</h3>
-        <button class="close-btn" data-action="toggle-quick-note"><i class="fas fa-times"></i></button>
+        <h3><span class="material-symbols-outlined" style="font-size:18px;">sticky_note_2</span> Quick Notes</h3>
+        <button class="close-btn" data-action="toggle-quick-note"><span class="material-symbols-outlined">close</span></button>
     </div>
 
     <div class="quick-note-tabs">
         <button class="active" data-action="switch-tab" data-tab="add">
-            <i class="fas fa-plus"></i> Add
+            <span class="material-symbols-outlined" style="font-size:16px;">add</span> Add
         </button>
         <button data-action="switch-tab" data-tab="pending">
-            <i class="fas fa-list"></i> Pending
+            <span class="material-symbols-outlined" style="font-size:16px;">list</span> Pending
         </button>
         <button data-action="switch-tab" data-tab="completed">
-            <i class="fas fa-check"></i> Done
+            <span class="material-symbols-outlined" style="font-size:16px;">check</span> Done
         </button>
     </div>
 
@@ -398,7 +398,7 @@
         </div>
 
         <button class="btn-submit" data-action="submit-quick-note">
-            <i class="fas fa-save"></i> Save Note
+            <span class="material-symbols-outlined" style="font-size:16px;">save</span> Save Note
         </button>
     </div>
 
@@ -505,7 +505,7 @@ function renderQuickNotesList(listType) {
     if (notes.length === 0) {
         container.innerHTML = `
             <div class="notes-empty">
-                <i class="fas fa-${listType === 'pending' ? 'check-circle' : 'clipboard-list'}"></i>
+                <span class="material-symbols-outlined" style="font-size:32px;opacity:0.5;">${listType === 'pending' ? 'check_circle' : 'assignment'}</span>
                 <div>${listType === 'pending' ? 'No pending tasks!' : 'No completed tasks'}</div>
             </div>
         `;
@@ -518,14 +518,14 @@ function renderQuickNotesList(listType) {
             <div class="content">
                 <div class="title">${escapeHtml(note.title)}</div>
                 <div class="meta">
-                    <span><i class="${note.type_icon}"></i> ${note.display_type}</span>
+                    <span><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">${note.type_icon}</span> ${note.display_type}</span>
                     ${note.due_date ? `<span class="due-date ${note.is_due_today ? 'today' : ''}">${formatNoteDate(note.due_date)}</span>` : ''}
                     ${note.linked_employee_id ? `<span title="Linked to employee">👤</span>` : ''}
                     ${note.linked_event_ref_num ? `<span title="Event #${note.linked_event_ref_num}">📋 #${note.linked_event_ref_num}</span>` : ''}
                 </div>
             </div>
             <button class="delete-btn" data-action="delete-note" data-note-id="${note.id}">
-                <i class="fas fa-trash"></i>
+                <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
             </button>
         </div>
     `).join('');

@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+
+{% block title %}Team Daily View - {{ day_label }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/lead-daily-view.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="lead-daily">
+
+    {# ── HEADER ── #}
+    <div class="lead-daily__header">
+        <h1 class="lead-daily__title">{{ day_label }}</h1>
+        {% if is_today %}
+        <span class="lead-daily__today-badge">Today</span>
+        {% endif %}
+    </div>
+
+    {# ── DATE NAVIGATION ── #}
+    <div class="lead-daily__nav">
+        <a href="/lead/daily/{{ prev_date }}" class="lead-daily__nav-btn" aria-label="Previous day">
+            <span class="material-symbols-outlined">chevron_left</span>
+            Prev
+        </a>
+        {% if not is_today %}
+        <a href="/lead/daily/{{ today_str }}" class="lead-daily__nav-btn lead-daily__nav-btn--today">
+            Today
+        </a>
+        {% endif %}
+        <a href="/lead/daily/{{ next_date }}" class="lead-daily__nav-btn" aria-label="Next day">
+            Next
+            <span class="material-symbols-outlined">chevron_right</span>
+        </a>
+    </div>
+
+    {# ── TABS ── #}
+    <div class="lead-daily__tabs" role="tablist" aria-label="Daily view sections">
+        <button role="tab" class="lead-daily__tab active" data-tab="schedule" aria-selected="true" aria-controls="tab-panel-schedule" id="tab-schedule">
+            <span class="material-symbols-outlined">event</span> Schedule
+        </button>
+        <button role="tab" class="lead-daily__tab" data-tab="attendance" aria-selected="false" aria-controls="tab-panel-attendance" id="tab-attendance">
+            <span class="material-symbols-outlined">how_to_reg</span> Attendance
+        </button>
+        <button role="tab" class="lead-daily__tab" data-tab="notes" aria-selected="false" aria-controls="tab-panel-notes" id="tab-notes">
+            <span class="material-symbols-outlined">sticky_note_2</span> Notes
+        </button>
+    </div>
+
+    {# ── SCHEDULE TAB ── #}
+    <div role="tabpanel" id="tab-panel-schedule" class="lead-daily__panel" aria-labelledby="tab-schedule">
+        <div id="schedule-content"></div>
+    </div>
+
+    {# ── ATTENDANCE TAB ── #}
+    <div role="tabpanel" id="tab-panel-attendance" class="lead-daily__panel" aria-labelledby="tab-attendance" hidden>
+        <div id="attendance-content"></div>
+    </div>
+
+    {# ── NOTES TAB ── #}
+    <div role="tabpanel" id="tab-panel-notes" class="lead-daily__panel" aria-labelledby="tab-notes" hidden>
+        <div class="lead-daily__notes-add">
+            <textarea id="note-input" class="lead-daily__note-input" placeholder="Add a note for this day..." rows="2" maxlength="500"></textarea>
+            <button id="note-submit" class="btn btn-primary btn-sm">Add Note</button>
+        </div>
+        <div id="notes-content"></div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Lead Daily View — self-contained, no async/await, maximum compatibility
+(function() {
+    var DATE = '{{ selected_date }}';
+    var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+    // ── Utilities ──
+    function esc(text) {
+        if (!text) return '';
+        var d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    function titleCase(s) {
+        if (!s) return '';
+        return s.toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function typeAccent(eventType) {
+        var t = (eventType || '').toLowerCase();
+        if (t.indexOf('core') !== -1) return 'core';
+        if (t.indexOf('juicer') !== -1) return 'juicer';
+        if (t.indexOf('digital') !== -1) return 'digital';
+        if (t.indexOf('supervisor') !== -1) return 'supervisor';
+        if (t.indexOf('freeosk') !== -1) return 'freeosk';
+        return 'other';
+    }
+
+    function showSpinner(el) {
+        el.innerHTML = '<div class="lead-daily__loading"><div class="lead-daily__spinner"></div>Loading...</div>';
+    }
+
+    function showError(el, msg) {
+        el.innerHTML = '<div class="lead-daily__error"><span class="material-symbols-outlined">error</span><p>' + (msg || 'Error loading data. Please try again.') + '</p></div>';
+    }
+
+    function showEmpty(el, icon, msg) {
+        el.innerHTML = '<div class="lead-daily__empty"><span class="material-symbols-outlined">' + icon + '</span><p>' + msg + '</p></div>';
+    }
+
+    // ── Simple XHR helper (no fetch, no async/await) ──
+    function apiGet(url, callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    callback(null, JSON.parse(xhr.responseText));
+                } catch (e) {
+                    callback('Invalid response from server');
+                }
+            } else if (xhr.status === 302 || xhr.status === 0) {
+                callback('Session expired. Please log in again.');
+            } else {
+                callback('Server error (' + xhr.status + ')');
+            }
+        };
+        xhr.onerror = function() { callback('Network error'); };
+        xhr.ontimeout = function() { callback('Request timed out'); };
+        xhr.send();
+    }
+
+    function apiPost(url, body, callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-CSRF-Token', CSRF);
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    callback(null, data);
+                } else {
+                    callback(data.error || 'Server error');
+                }
+            } catch (e) {
+                callback('Invalid response');
+            }
+        };
+        xhr.onerror = function() { callback('Network error'); };
+        xhr.ontimeout = function() { callback('Request timed out'); };
+        xhr.send(JSON.stringify(body));
+    }
+
+    // ── TAB SWITCHING ──
+    var tabs = document.querySelectorAll('.lead-daily__tab');
+    var panels = document.querySelectorAll('.lead-daily__panel');
+    var attendanceLoaded = false;
+    var notesLoaded = false;
+
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].addEventListener('click', (function(tab) {
+            return function() {
+                var target = tab.getAttribute('data-tab');
+                for (var j = 0; j < tabs.length; j++) {
+                    var isActive = tabs[j].getAttribute('data-tab') === target;
+                    tabs[j].classList.toggle('active', isActive);
+                    tabs[j].setAttribute('aria-selected', isActive ? 'true' : 'false');
+                }
+                for (var k = 0; k < panels.length; k++) {
+                    panels[k].hidden = panels[k].id !== 'tab-panel-' + target;
+                }
+                if (target === 'attendance' && !attendanceLoaded) loadAttendance();
+                if (target === 'notes' && !notesLoaded) loadNotes();
+            };
+        })(tabs[i]));
+    }
+
+    // ── SCHEDULE TAB ──
+    function loadSchedule() {
+        var container = document.getElementById('schedule-content');
+        if (!container) return;
+        showSpinner(container);
+
+        apiGet('/api/lead/daily-schedule/' + DATE, function(err, data) {
+            if (err) { showError(container, err); return; }
+
+            var schedules = data.schedules || [];
+            if (schedules.length === 0) {
+                showEmpty(container, 'event_busy', 'No events scheduled for this date');
+                return;
+            }
+
+            var html = '<div class="lead-daily__schedule-list">';
+            for (var i = 0; i < schedules.length; i++) {
+                var s = schedules[i];
+                var accent = typeAccent(s.event_type);
+                var typeLabel = s.event_type || 'Other';
+                html += '<div class="lead-daily__schedule-card lead-daily__schedule-card--' + accent + '">' +
+                    '<div>' +
+                        '<span class="lead-daily__schedule-time">' + esc(s.time) + '</span>' +
+                        '<span class="lead-daily__schedule-type lead-daily__schedule-type--' + accent + '">' + esc(typeLabel) + '</span>' +
+                    '</div>' +
+                    '<div class="lead-daily__schedule-employee">' + esc(titleCase(s.employee_name)) + '</div>' +
+                    '<div class="lead-daily__schedule-event">' + esc(s.event_name) + '</div>' +
+                '</div>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        });
+    }
+
+    // ── ATTENDANCE TAB ──
+    function loadAttendance() {
+        var container = document.getElementById('attendance-content');
+        if (!container) return;
+        showSpinner(container);
+
+        apiGet('/api/attendance/scheduled-employees/' + DATE, function(err, data) {
+            if (err) { showError(container, err); return; }
+            attendanceLoaded = true;
+
+            var employees = data.scheduled_employees || [];
+            if (employees.length === 0) {
+                showEmpty(container, 'event_busy', 'No employees scheduled for this date');
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < employees.length; i++) {
+                html += buildAttendanceRow(employees[i]);
+            }
+            container.innerHTML = html;
+            attachAttendanceListeners(container);
+        });
+    }
+
+    function buildAttendanceRow(emp) {
+        var name = esc(titleCase(emp.employee_name));
+        var timeHtml = emp.earliest_start_time
+            ? '<span class="att-start-time">' + esc(emp.earliest_start_time) + '</span>' : '';
+
+        if (emp.attendance_status !== null) {
+            var badge = '<span class="att-badge att-badge--' + emp.attendance_status + '">' +
+                (emp.status_label || emp.attendance_status) + '</span>';
+            var notes = emp.attendance_notes
+                ? '<div class="att-notes">' + esc(emp.attendance_notes) + '</div>' : '';
+            var recorded = emp.recorded_by
+                ? '<span class="att-audit">Recorded by ' + esc(emp.recorded_by) + '</span>' : '';
+            var modified = emp.is_modified && emp.modified_by
+                ? '<span class="att-audit att-audit--modified">Modified by ' + esc(emp.modified_by) + '</span>' : '';
+
+            return '<div class="att-row att-row--locked">' +
+                '<div class="att-row__info">' +
+                    '<div class="att-row__name"><span class="material-symbols-outlined att-lock-icon">lock</span> ' + name + ' ' + timeHtml + '</div>' +
+                    '<div class="att-row__details">' + badge + notes + '</div>' +
+                    '<div class="att-row__audit">' + recorded + modified + '</div>' +
+                '</div></div>';
+        }
+
+        return '<div class="att-row att-row--open" data-employee-id="' + emp.employee_id + '">' +
+            '<div class="att-row__info"><div class="att-row__name">' + name + ' ' + timeHtml + '</div></div>' +
+            '<div class="att-row__actions"><div class="att-dropdown">' +
+                '<button class="btn btn-primary btn-sm att-dropdown-toggle">Record Attendance &#9660;</button>' +
+                '<div class="att-dropdown-menu" hidden>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="on_time">On-Time</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="late">Late</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="called_in">Called-In</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="no_call_no_show">No-Call-No-Show</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="excused_absence">Excused Absence</button>' +
+                '</div></div></div></div>';
+    }
+
+    function attachAttendanceListeners(container) {
+        container.addEventListener('click', function(e) {
+            var toggle = e.target.closest('.att-dropdown-toggle');
+            if (toggle) {
+                e.stopPropagation();
+                var menu = toggle.nextElementSibling;
+                var wasHidden = menu.hidden;
+                var allMenus = container.querySelectorAll('.att-dropdown-menu');
+                for (var i = 0; i < allMenus.length; i++) allMenus[i].hidden = true;
+                menu.hidden = !wasHidden;
+                return;
+            }
+            var option = e.target.closest('.att-option');
+            if (option) {
+                submitAttendance(option.getAttribute('data-employee-id'), option.getAttribute('data-status'));
+                return;
+            }
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.att-dropdown')) {
+                var allMenus = container.querySelectorAll('.att-dropdown-menu');
+                for (var i = 0; i < allMenus.length; i++) allMenus[i].hidden = true;
+            }
+        });
+    }
+
+    function submitAttendance(employeeId, status) {
+        apiPost('/api/attendance', {
+            employee_id: employeeId,
+            attendance_date: DATE,
+            status: status
+        }, function(err) {
+            if (err) { alert(err); return; }
+            loadAttendance();
+        });
+    }
+
+    // ── NOTES TAB ──
+    function loadNotes() {
+        var container = document.getElementById('notes-content');
+        if (!container) return;
+        showSpinner(container);
+
+        apiGet('/api/day-notes/' + DATE, function(err, data) {
+            if (err) { showError(container, err); return; }
+            notesLoaded = true;
+
+            var notes = data.notes || [];
+            if (notes.length === 0) {
+                showEmpty(container, 'sticky_note_2', 'No notes for this date');
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < notes.length; i++) {
+                var n = notes[i];
+                var del = n.can_delete
+                    ? ' <button class="note-delete-btn" data-note-id="' + n.id + '"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>'
+                    : '';
+                html += '<div class="note-item">' +
+                    '<div class="note-item__content">' + esc(n.content) + '</div>' +
+                    '<div class="note-item__meta">' + esc(n.created_by) + ' &middot; ' + esc(n.created_at) + del + '</div>' +
+                '</div>';
+            }
+            container.innerHTML = html;
+
+            container.addEventListener('click', function(e) {
+                var btn = e.target.closest('.note-delete-btn');
+                if (btn) {
+                    if (!confirm('Delete this note?')) return;
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('DELETE', '/api/day-notes/' + btn.getAttribute('data-note-id'), true);
+                    xhr.setRequestHeader('X-CSRF-Token', CSRF);
+                    xhr.onload = function() { if (xhr.status < 300) loadNotes(); else alert('Failed to delete'); };
+                    xhr.send();
+                }
+            });
+        });
+    }
+
+    // Submit new note
+    var noteBtn = document.getElementById('note-submit');
+    if (noteBtn) {
+        noteBtn.addEventListener('click', function() {
+            var input = document.getElementById('note-input');
+            var content = (input.value || '').trim();
+            if (!content) return;
+            noteBtn.disabled = true;
+
+            apiPost('/api/day-notes/' + DATE, { content: content }, function(err) {
+                noteBtn.disabled = false;
+                if (err) { alert(err); return; }
+                input.value = '';
+                loadNotes();
+            });
+        });
+    }
+
+    // ── INIT: Load schedule immediately ──
+    loadSchedule();
+
+})();
+</script>
+{% endblock %}

@@ -46,36 +46,6 @@
         background: rgba(255, 255, 255, 0.3);
     }
 
-    .rebalance-btn {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 500;
-        border: none;
-        cursor: pointer;
-        font-size: inherit;
-        font-family: inherit;
-    }
-
-    .rebalance-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    .rebalance-btn--has-issues {
-        background: rgba(255, 193, 7, 0.4);
-        border: 1px solid rgba(255, 193, 7, 0.6);
-    }
-
-    .rebalance-btn--has-issues:hover {
-        background: rgba(255, 193, 7, 0.5);
-    }
-
-    .rebalance-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
-
     .fix-all-btn {
         background: rgba(220, 53, 69, 0.8);
         color: white;
@@ -502,7 +472,7 @@
             gap: 6px;
             width: 100%;
         }
-        .nav-btns a, .rebalance-btn {
+        .nav-btns a {
             padding: 8px 12px;
             font-size: 13px;
             min-height: 44px;
@@ -562,7 +532,7 @@
     @media (max-width: 380px) {
         .validation-header { padding: 12px; }
         .validation-header h1 { font-size: 18px; }
-        .nav-btns a, .rebalance-btn { padding: 6px 10px; font-size: 12px; }
+        .nav-btns a { padding: 6px 10px; font-size: 12px; }
         .day-pill { min-width: 50px; font-size: 11px; }
         .container-fluid { padding-left: 8px; padding-right: 8px; }
     }
@@ -590,12 +560,6 @@
             <a href="{{ url_for('dashboard.fix_wizard', start_date=start_date.isoformat()) }}">
                 <i class="fas fa-magic"></i> Fix Wizard
             </a>
-            <button type="button" id="rebalance-week-btn"
-                    class="rebalance-btn{% if result.weekly_issues %} rebalance-btn--has-issues{% endif %}"
-                    data-week-start="{{ start_date.isoformat() }}"
-                    title="Rebalance Core events for this week">
-                <i class="fas fa-balance-scale"></i> Rebalance
-            </button>
             <button type="button" id="fix-all-btn"
                     class="fix-all-btn"
                     data-week-start="{{ start_date.isoformat() }}"

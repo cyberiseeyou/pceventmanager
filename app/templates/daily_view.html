@@ -206,6 +206,101 @@
       font-size: 15px;
     }
   }
+
+  /* Day Notes Panel */
+  .day-notes-panel {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    box-shadow: var(--shadow-sm);
+  }
+  .day-notes-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+  }
+  .day-notes-panel__title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+  }
+  .day-notes-panel__title .material-symbols-outlined { font-size: 20px; }
+  .day-notes-panel__close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+  }
+  .day-notes-panel__close:hover { background: var(--bg-secondary); }
+  .day-notes-panel__add {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+    align-items: flex-start;
+  }
+  .day-notes-panel__input {
+    flex: 1;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-family: var(--font-primary);
+    font-size: var(--font-size-sm);
+    resize: vertical;
+    min-height: 36px;
+  }
+  .day-notes-panel__input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+  .day-notes-panel__loading,
+  .day-notes-panel__empty {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    padding: var(--spacing-sm) 0;
+  }
+  .day-notes-panel__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  .day-note-item {
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+  }
+  .day-note-item__content {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+  .day-note-item__meta {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .day-note-delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    margin-left: auto;
+    line-height: 1;
+  }
+  .day-note-delete-btn:hover { color: #991b1b; }
 </style>
 {% endblock %}
 
@@ -266,6 +361,18 @@
         data-tooltip="Reassign Supervisors">
         <span class="material-symbols-outlined">sync</span>
       </button>
+
+      <button type="button" class="quick-action-btn" id="btn-fix-coverage"
+        aria-label="Fix Core coverage times to shift order"
+        data-tooltip="Fix Coverage Times">
+        <span class="material-symbols-outlined">schedule</span>
+      </button>
+
+      <button type="button" class="quick-action-btn" id="btn-day-notes"
+        aria-label="View and add daily notes"
+        data-tooltip="Daily Notes">
+        <span class="material-symbols-outlined">sticky_note_2</span>
+      </button>
     </div>
 
     <!-- Role Assignments -->
@@ -310,6 +417,25 @@
 
     <!-- Daily Notes Banner (injected by JS) -->
     <div id="daily-notes-banner"></div>
+
+    <!-- Day Notes Panel (toggled by toolbar button) -->
+    <div id="day-notes-panel" class="day-notes-panel" hidden>
+      <div class="day-notes-panel__header">
+        <h3 class="day-notes-panel__title">
+          <span class="material-symbols-outlined">sticky_note_2</span> Daily Notes
+        </h3>
+        <button type="button" class="day-notes-panel__close" id="day-notes-close" aria-label="Close notes">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="day-notes-panel__add">
+        <textarea id="day-note-input" class="day-notes-panel__input" placeholder="Add a note for this day..." rows="2" maxlength="500"></textarea>
+        <button id="day-note-submit" class="btn btn-primary btn-sm">Add</button>
+      </div>
+      <div id="day-notes-loading" class="day-notes-panel__loading" hidden>Loading notes...</div>
+      <div id="day-notes-empty" class="day-notes-panel__empty" hidden>No notes for this date</div>
+      <div id="day-notes-list" class="day-notes-panel__list"></div>
+    </div>
 
     <!-- Tabbed Section Navigation -->
     <div class="daily-tabs" role="tablist" aria-label="Daily schedule sections">

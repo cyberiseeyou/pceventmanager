@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Monthly Schedule - Product Connections{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/my-schedule-monthly.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="monthly">
+    <div class="monthly__header">
+        <button class="monthly__nav" id="monthPrev" aria-label="Previous month">
+            <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <h1 class="monthly__title" id="monthTitle">Loading...</h1>
+        <button class="monthly__nav" id="monthNext" aria-label="Next month">
+            <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+        <button class="monthly__today-btn" id="monthToday">Today</button>
+    </div>
+
+    <div class="monthly__grid-wrapper">
+        {# Desktop: 7-column calendar grid #}
+        <div class="monthly__day-names">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="monthly__grid" id="monthGrid">
+            <div class="monthly__loading">
+                <span class="material-symbols-outlined">hourglass_empty</span>
+                Loading schedule...
+            </div>
+        </div>
+    </div>
+
+    {# Mobile: list view fallback #}
+    <div class="monthly__list" id="monthList" style="display:none;"></div>
+
+    {# Day detail expansion (shown when clicking a day) #}
+    <div class="monthly__detail" id="dayDetail" hidden>
+        <div class="monthly__detail-header">
+            <h3 class="monthly__detail-title" id="detailTitle"></h3>
+            <button class="monthly__detail-close" id="detailClose" aria-label="Close details">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="monthly__detail-body" id="detailBody"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const monthGrid = document.getElementById('monthGrid');
+    const monthList = document.getElementById('monthList');
+    const monthTitle = document.getElementById('monthTitle');
+    const monthPrev = document.getElementById('monthPrev');
+    const monthNext = document.getElementById('monthNext');
+    const monthToday = document.getElementById('monthToday');
+    const dayDetail = document.getElementById('dayDetail');
+    const detailTitle = document.getElementById('detailTitle');
+    const detailBody = document.getElementById('detailBody');
+    const detailClose = document.getElementById('detailClose');
+
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    let currentYear = todayDate.getFullYear();
+    let currentMonth = todayDate.getMonth(); // 0-based
+    let monthData = {};
+
+    const MONTH_NAMES = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    function formatDateISO(y, m, d) {
+        return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+
+    function eventAccent(eventType) {
+        const t = (eventType || '').toLowerCase();
+        if (t.includes('core')) return 'core';
+        if (t.includes('juicer')) return 'juicer';
+        if (t.includes('digital')) return 'digital';
+        if (t.includes('supervisor')) return 'supervisor';
+        if (t.includes('freeosk')) return 'freeosk';
+        return 'other';
+    }
+
+    function isMobile() {
+        return window.innerWidth <= 480;
+    }
+
+    async function loadMonth() {
+        const monthStr = currentYear + '-' + String(currentMonth + 1).padStart(2, '0');
+        monthTitle.textContent = MONTH_NAMES[currentMonth] + ' ' + currentYear;
+        dayDetail.hidden = true;
+
+        try {
+            const resp = await fetch('/api/my-schedule/monthly?month=' + monthStr);
+            if (!resp.ok) throw new Error('Failed to load');
+            const data = await resp.json();
+            monthData = data.days || {};
+
+            if (isMobile()) {
+                renderListView();
+            } else {
+                renderCalendarGrid();
+            }
+        } catch (err) {
+            monthGrid.innerHTML = '<div class="monthly__loading"><span class="material-symbols-outlined">error</span>Error loading schedule</div>';
+        }
+    }
+
+    function renderCalendarGrid() {
+        monthGrid.style.display = '';
+        monthList.style.display = 'none';
+
+        const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0=Sun
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const todayStr = formatDateISO(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+
+        let html = '';
+
+        // Leading empty cells
+        for (let i = 0; i < firstDay; i++) {
+            html += '<div class="monthly__cell monthly__cell--empty"></div>';
+        }
+
+        // Day cells
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = formatDateISO(currentYear, currentMonth, d);
+            const isToday = dateStr === todayStr;
+            const events = monthData[dateStr] || [];
+
+            html += '<div class="monthly__cell' + (isToday ? ' monthly__cell--today' : '') + '" data-date="' + dateStr + '">';
+            html += '<span class="monthly__cell-num">' + d + '</span>';
+
+            if (events.length > 0) {
+                html += '<span class="monthly__cell-badge">' + events.length + '</span>';
+                html += '<div class="monthly__cell-dots">';
+                // Show unique type dots (max 4)
+                const types = [...new Set(events.map(e => eventAccent(e.event_type)))];
+                for (const t of types.slice(0, 4)) {
+                    html += '<span class="monthly__dot monthly__dot--' + t + '"></span>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>';
+        }
+
+        // Trailing empty cells to fill last row
+        const totalCells = firstDay + daysInMonth;
+        const remainder = totalCells % 7;
+        if (remainder > 0) {
+            for (let i = 0; i < 7 - remainder; i++) {
+                html += '<div class="monthly__cell monthly__cell--empty"></div>';
+            }
+        }
+
+        monthGrid.innerHTML = html;
+
+        // Click handler for day cells
+        monthGrid.querySelectorAll('.monthly__cell[data-date]').forEach(function(cell) {
+            cell.addEventListener('click', function() {
+                showDayDetail(this.dataset.date);
+            });
+        });
+    }
+
+    function renderListView() {
+        monthGrid.style.display = 'none';
+        monthList.style.display = '';
+
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const todayStr = formatDateISO(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+        let html = '';
+        let hasAny = false;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = formatDateISO(currentYear, currentMonth, d);
+            const events = monthData[dateStr] || [];
+            if (events.length === 0) continue;
+
+            hasAny = true;
+            const dayName = DAY_NAMES[new Date(currentYear, currentMonth, d).getDay()];
+            const isToday = dateStr === todayStr;
+
+            html += '<div class="monthly__list-day' + (isToday ? ' monthly__list-day--today' : '') + '">';
+            html += '<div class="monthly__list-day-header">';
+            html += '<span class="monthly__list-day-name">' + dayName + '</span>';
+            html += '<span class="monthly__list-day-date">' + MONTH_NAMES[currentMonth] + ' ' + d + '</span>';
+            html += '</div>';
+
+            for (const ev of events) {
+                const accent = eventAccent(ev.event_type);
+                const safeName = (ev.event_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeStore = (ev.store_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += '<div class="monthly__list-event monthly__list-event--' + accent + '">';
+                html += '<span class="monthly__list-event-time">' + ev.time + '</span>';
+                html += '<span class="monthly__list-event-name">' + safeName + '</span>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+        }
+
+        if (!hasAny) {
+            html = '<div class="monthly__loading">No events scheduled this month</div>';
+        }
+
+        monthList.innerHTML = html;
+    }
+
+    function showDayDetail(dateStr) {
+        const events = monthData[dateStr] || [];
+        const d = new Date(dateStr + 'T00:00:00');
+        detailTitle.textContent = DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+
+        if (events.length === 0) {
+            detailBody.innerHTML = '<div class="monthly__loading">No events scheduled</div>';
+        } else {
+            let html = '';
+            for (const ev of events) {
+                const accent = eventAccent(ev.event_type);
+                const safeName = (ev.event_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeStore = (ev.store_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const hours = ev.estimated_time ? (ev.estimated_time / 60).toFixed(1) + ' hrs' : '';
+
+                html += '<div class="monthly__detail-event monthly__detail-event--' + accent + '">';
+                html += '<div class="monthly__detail-event-time">' + ev.time + '</div>';
+                html += '<div class="monthly__detail-event-info">';
+                html += '<div class="monthly__detail-event-name">' + safeName + '</div>';
+                html += '<div class="monthly__detail-event-meta">';
+                html += '<span>' + (ev.event_type || '') + '</span>';
+                if (hours) html += '<span>&middot; ' + hours + '</span>';
+                html += '</div></div></div>';
+            }
+            detailBody.innerHTML = html;
+        }
+
+        dayDetail.hidden = false;
+        dayDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Navigation
+    monthPrev.addEventListener('click', function() {
+        currentMonth--;
+        if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+        loadMonth();
+    });
+
+    monthNext.addEventListener('click', function() {
+        currentMonth++;
+        if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+        loadMonth();
+    });
+
+    monthToday.addEventListener('click', function() {
+        currentYear = todayDate.getFullYear();
+        currentMonth = todayDate.getMonth();
+        loadMonth();
+    });
+
+    detailClose.addEventListener('click', function() {
+        dayDetail.hidden = true;
+    });
+
+    // Responsive: switch between grid and list on resize
+    let lastMobile = isMobile();
+    window.addEventListener('resize', function() {
+        const nowMobile = isMobile();
+        if (nowMobile !== lastMobile) {
+            lastMobile = nowMobile;
+            if (nowMobile) {
+                renderListView();
+            } else {
+                renderCalendarGrid();
+            }
+        }
+    });
+
+    // Initial load
+    loadMonth();
+})();
+</script>
+{% endblock %}

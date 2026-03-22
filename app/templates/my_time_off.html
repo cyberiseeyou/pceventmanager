@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}My Time Off - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+    .my-to {
+        max-width: 560px;
+        margin: 0 auto;
+        padding: var(--space-4) var(--space-4) 100px;
+    }
+
+    .my-to__title {
+        font-size: clamp(1.25rem, 4vw, 1.5rem);
+        font-weight: 700;
+        color: var(--color-neutral-900);
+        margin: 0;
+        padding: var(--space-6) 0 var(--space-4);
+    }
+
+    /* ── Request Form ── */
+    .my-to__form-card {
+        background: var(--color-neutral-50);
+        border: 1px solid var(--color-neutral-100);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        margin-bottom: var(--space-6);
+    }
+
+    .my-to__form-heading {
+        font-size: var(--font-size-base);
+        font-weight: 700;
+        color: var(--color-neutral-800);
+        margin: 0 0 var(--space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .my-to__form-heading .material-symbols-outlined {
+        font-size: 20px;
+        color: var(--color-primary);
+    }
+
+    .my-to__form-row {
+        display: flex;
+        gap: var(--space-3);
+        margin-bottom: var(--space-3);
+    }
+
+    .my-to__form-group {
+        flex: 1;
+    }
+
+    .my-to__label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-neutral-500);
+        margin-bottom: var(--space-1);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .my-to__input {
+        width: 100%;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--color-neutral-200);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-base);
+        font-family: var(--font-primary);
+        box-sizing: border-box;
+        min-height: 44px;
+    }
+
+    .my-to__input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.15);
+    }
+
+    .my-to__submit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--space-3) var(--space-4);
+        min-height: 44px;
+        background: var(--color-primary);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-base);
+        font-weight: 600;
+        font-family: var(--font-primary);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+
+    .my-to__submit:hover {
+        background: var(--color-primary-dark);
+    }
+
+    .my-to__submit .material-symbols-outlined {
+        font-size: 16px;
+    }
+
+    .my-to__msg {
+        margin-top: var(--space-2);
+        font-size: var(--font-size-sm);
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-md);
+    }
+
+    .my-to__msg--success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .my-to__msg--error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    /* ── Request List ── */
+    .my-to__list-heading {
+        font-size: var(--font-size-base);
+        font-weight: 700;
+        color: var(--color-neutral-800);
+        margin: 0 0 var(--space-3);
+    }
+
+    .my-to__req {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--color-neutral-100);
+    }
+
+    .my-to__req:last-child {
+        border-bottom: none;
+    }
+
+    .my-to__dates {
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--color-neutral-800);
+    }
+
+    .my-to__denial {
+        font-size: 0.75rem;
+        color: #991b1b;
+        margin-top: 2px;
+    }
+
+    .my-to__badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .my-to__badge--pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .my-to__badge--approved {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .my-to__badge--denied {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .my-to__empty {
+        text-align: center;
+        padding: var(--space-6);
+        color: var(--color-neutral-400);
+        font-size: var(--font-size-sm);
+    }
+
+    @media (max-width: 480px) {
+        .my-to__form-row {
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+        .my-to__req {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--space-1);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="my-to">
+
+    <h1 class="my-to__title">My Time Off</h1>
+
+    {# ── Submit Form ── #}
+    <div class="my-to__form-card">
+        <h2 class="my-to__form-heading">
+            <span class="material-symbols-outlined">beach_access</span>
+            Request Time Off
+        </h2>
+        <form id="toForm">
+            <div class="my-to__form-row">
+                <div class="my-to__form-group">
+                    <label class="my-to__label" for="toStart">From</label>
+                    <input type="date" id="toStart" class="my-to__input" required
+                           min="{{ today.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="my-to__form-group">
+                    <label class="my-to__label" for="toEnd">To</label>
+                    <input type="date" id="toEnd" class="my-to__input" required
+                           min="{{ today.strftime('%Y-%m-%d') }}">
+                </div>
+            </div>
+            <button type="submit" class="my-to__submit" id="toSubmitBtn">
+                <span class="material-symbols-outlined">send</span>
+                Submit Request
+            </button>
+            <div id="toMsg" class="my-to__msg" hidden></div>
+        </form>
+    </div>
+
+    {# ── Request List ── #}
+    <h2 class="my-to__list-heading">My Requests</h2>
+
+    {% if requests %}
+        {% for req in requests %}
+        <div class="my-to__req">
+            <div>
+                <div class="my-to__dates">
+                    {{ req.start_date.strftime('%b %-d') }}{% if req.start_date != req.end_date %} &ndash; {{ req.end_date.strftime('%b %-d, %Y') }}{% else %}, {{ req.start_date.strftime('%Y') }}{% endif %}
+                </div>
+                {% if req.status == 'denied' and req.denial_reason %}
+                <div class="my-to__denial">Denied: {{ req.denial_reason }}</div>
+                {% endif %}
+            </div>
+            <span class="my-to__badge my-to__badge--{{ req.status }}">{{ req.status | capitalize }}</span>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="my-to__empty">No time off requests</div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const form = document.getElementById('toForm');
+    const startInput = document.getElementById('toStart');
+    const endInput = document.getElementById('toEnd');
+    const msgEl = document.getElementById('toMsg');
+    const submitBtn = document.getElementById('toSubmitBtn');
+
+    startInput.addEventListener('change', function() {
+        endInput.min = this.value;
+        if (endInput.value && endInput.value < this.value) endInput.value = this.value;
+    });
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        msgEl.hidden = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+        try {
+            const resp = await fetch('/api/my-time-off', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken || '',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    start_date: startInput.value,
+                    end_date: endInput.value,
+                }),
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok) {
+                msgEl.textContent = data.message || 'Request submitted!';
+                msgEl.className = 'my-to__msg my-to__msg--success';
+                msgEl.hidden = false;
+                form.reset();
+                setTimeout(function() { location.reload(); }, 1200);
+            } else {
+                msgEl.textContent = data.error || 'Something went wrong.';
+                msgEl.className = 'my-to__msg my-to__msg--error';
+                msgEl.hidden = false;
+            }
+        } catch (err) {
+            msgEl.textContent = 'Network error. Please try again.';
+            msgEl.className = 'my-to__msg my-to__msg--error';
+            msgEl.hidden = false;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">send</span> Submit Request';
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -451,9 +451,10 @@
             swapsContainer.innerHTML = html;
         }
 
-        // Render daily preview
+        // Render daily preview (exclude past dates)
         const dailyContainer = document.getElementById('daily-preview-container');
-        const sortedDates = Object.keys(data.daily_preview).sort();
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const sortedDates = Object.keys(data.daily_preview).filter(d => d >= todayStr).sort();
         if (sortedDates.length === 0) {
             dailyContainer.innerHTML = '<div class="empty-state">No scheduled events to preview.</div>';
         } else {

@@ -3,6 +3,7 @@ Notes and Tasks API Routes
 Manages notes, tasks, reminders, and recurring reminders
 """
 from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy import or_
 from app.models import get_models
 from datetime import datetime, date, time, timedelta
 from app.routes.auth import require_authentication
@@ -468,7 +469,8 @@ def get_pending_notifications():
         pending_notes = db.session.query(Note).filter(
             Note.due_date <= today,
             Note.is_completed == False,
-            Note.reminder_sent == False
+            Note.reminder_sent == False,
+            or_(Note.snoozed_until.is_(None), Note.snoozed_until <= datetime.now())
         ).all()
 
         # Filter to only include notes that are due now or past due
@@ -526,6 +528,46 @@ def mark_notification_sent(note_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error marking notification: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_notes_bp.route('/<int:note_id>/snooze', methods=['POST'])
+@require_authentication()
+def snooze_note(note_id):
+    """Snooze a note notification for a specified duration"""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    Note = models['Note']
+
+    VALID_DURATIONS = [5, 15, 30, 60]
+
+    try:
+        data = request.get_json() or {}
+        duration = data.get('duration')
+
+        if duration not in VALID_DURATIONS:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid duration. Must be one of: {VALID_DURATIONS}'
+            }), 400
+
+        note = db.session.query(Note).get(note_id)
+        if not note:
+            return jsonify({'success': False, 'error': 'Note not found'}), 404
+
+        note.snoozed_until = datetime.now() + timedelta(minutes=duration)
+        note.reminder_sent = False
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Note snoozed for {duration} minutes',
+            'snoozed_until': note.snoozed_until.isoformat()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error snoozing note: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

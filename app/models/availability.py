@@ -55,8 +55,14 @@ def create_availability_models(db):
 
     class EmployeeTimeOff(db.Model):
         """
-        Time off requests and scheduled absences
-        Employees are unavailable during these date ranges
+        Time off requests and scheduled absences.
+        Employees are unavailable during these date ranges.
+
+        Status workflow:
+          - Supervisor-created records default to 'approved'
+          - Employee self-service requests start as 'pending'
+          - Supervisor reviews pending → approved / denied
+          - Denied records do NOT block scheduling
         """
         __tablename__ = 'employee_time_off'
 
@@ -67,12 +73,20 @@ def create_availability_models(db):
         reason = db.Column(db.String(200))
         created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
+        # Approval workflow
+        status = db.Column(db.String(20), nullable=False, default='approved',
+                           server_default='approved')  # pending | approved | denied
+        reviewed_by = db.Column(db.String(100), nullable=True)
+        reviewed_at = db.Column(db.DateTime, nullable=True)
+        denial_reason = db.Column(db.String(500), nullable=True)
+
         __table_args__ = (
             db.Index('idx_employee_time_off_dates', 'employee_id', 'start_date', 'end_date'),
+            db.Index('idx_employee_time_off_status', 'status'),
         )
 
         def __repr__(self):
-            return f'<EmployeeTimeOff {self.employee_id}: {self.start_date} to {self.end_date}>'
+            return f'<EmployeeTimeOff {self.employee_id}: {self.start_date} to {self.end_date} ({self.status})>'
 
     class EmployeeAvailabilityOverride(db.Model):
         """

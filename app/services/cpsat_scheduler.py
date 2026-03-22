@@ -266,6 +266,33 @@ class CPSATSchedulingEngine:
             self.Event.due_datetime > earliest,
         ).all()
 
+        # --- Exclude events that already have active pending proposals ---
+        # Events with successful proposals in non-expired runs should not be
+        # re-proposed.  Without this filter, every run re-proposes the same
+        # events if the previous run hasn't been approved/rejected yet.
+        already_pending_refs = set()
+        active_pending = self.db.query(self.PendingSchedule.event_ref_num).join(
+            self.SchedulerRunHistory,
+            self.PendingSchedule.scheduler_run_id == self.SchedulerRunHistory.id,
+        ).filter(
+            self.PendingSchedule.employee_id.isnot(None),       # actual proposal (not failure)
+            self.PendingSchedule.failure_reason.is_(None),       # not a failure record
+            self.SchedulerRunHistory.status.in_(['completed', 'running']),
+            self.SchedulerRunHistory.approved_at.is_(None),      # not yet approved/rejected
+        ).all()
+        for (ref,) in active_pending:
+            already_pending_refs.add(ref)
+
+        if already_pending_refs:
+            before = len(all_events)
+            all_events = [e for e in all_events
+                          if e.project_ref_num not in already_pending_refs]
+            skipped = before - len(all_events)
+            if skipped:
+                logger.info(
+                    f"Skipped {skipped} event(s) with active pending proposals"
+                )
+
         # Apply EventTypeOverride
         overrides = {}
         if self.EventTypeOverride:
@@ -320,6 +347,20 @@ class CPSATSchedulingEngine:
                     event_ref_num=e.project_ref_num
                 ).all()
                 if not schedules:
+                    continue
+
+                # Protect events scheduled for today or earlier — they may
+                # already be in progress and must not be displaced.
+                earliest_sched = min(
+                    (s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime)
+                     else s.schedule_datetime)
+                    for s in schedules
+                )
+                if earliest_sched <= today:
+                    logger.info(
+                        f"Protecting event {e.project_ref_num} from bumping — "
+                        f"scheduled for {earliest_sched} (today or earlier)"
+                    )
                     continue
 
                 # Apply type override
@@ -493,11 +534,8 @@ class CPSATSchedulingEngine:
                                 self.unavailable.add((ov.employee_id, d))
 
         # Time off
-        # TODO Fix #3: When EmployeeTimeOff gains an 'approved' or 'status'
-        # column, filter here: .filter_by(status='approved') or
-        # .filter(EmployeeTimeOff.approved == True)
         if self.EmployeeTimeOff:
-            for to in self.EmployeeTimeOff.query.all():
+            for to in self.EmployeeTimeOff.query.filter_by(status='approved').all():
                 # TODO Fix #2: When partial-day time-off is supported
                 # (start_time/end_time fields), only block the employee for
                 # events whose scheduled time overlaps the time-off window
@@ -644,6 +682,61 @@ class CPSATSchedulingEngine:
                         self.existing_juicer_count_by_emp_week[(emp_id, week_idx)] += juicer_count
                     self.existing_minutes_by_emp_week[(emp_id, week_idx)] += total_minutes
 
+    def _inject_pending_as_existing(self, run):
+        """Inject Phase 2 pending schedules into existing-schedule tracking.
+
+        Phase 3 re-runs _load_data() which only reads posted Schedule records.
+        This method adds successful PendingSchedule records from the current run
+        into existing_by_emp_day, existing_core_count_by_emp_day/week,
+        existing_juicer_count_by_emp_day/week, and existing_minutes_by_emp_week
+        so that Phase 3 constraints correctly account for Phase 2 assignments.
+        """
+        if not self.valid_days:
+            return
+        first = self.valid_days[0]
+        days_since_sunday = (first.weekday() + 1) % 7
+        week_start_ref = first - timedelta(days=days_since_sunday)
+
+        pending = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.employee_id.isnot(None),
+            self.PendingSchedule.schedule_datetime.isnot(None),
+            self.PendingSchedule.failure_reason.is_(None),
+        ).all()
+
+        for ps in pending:
+            emp_id = ps.employee_id
+            sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
+
+            event = self.Event.query.filter_by(project_ref_num=ps.event_ref_num).first()
+            if not event:
+                continue
+            etype = self._get_event_type(event)
+            est_time = event.estimated_time or 60
+
+            self.existing_by_emp_day[(emp_id, sd)].append({
+                'event_ref': ps.event_ref_num,
+                'event_type': etype,
+                'estimated_time': est_time,
+            })
+
+            if etype == 'Core':
+                self.existing_core_count_by_emp_day[(emp_id, sd)] += 1
+            if etype in JUICER_PRODUCTION_TYPES:
+                self.existing_juicer_count_by_emp_day[(emp_id, sd)] += 1
+
+            days_since = (sd - week_start_ref).days
+            if days_since >= 0:
+                week_idx = days_since // 7
+                if week_idx in self.weeks:
+                    if etype == 'Core':
+                        self.existing_core_count_by_emp_week[(emp_id, week_idx)] += 1
+                    if etype in JUICER_PRODUCTION_TYPES:
+                        self.existing_juicer_count_by_emp_week[(emp_id, week_idx)] += 1
+                    self.existing_minutes_by_emp_week[(emp_id, week_idx)] += est_time
+
+        logger.info(f"Phase 3: Injected {len(pending)} Phase 2 pending schedules as existing")
+
     def _compute_pairings(self):
         """Match Core events to their Supervisor events."""
         self.core_sup_pairs = {}  # core_event.id -> supervisor_event
@@ -781,14 +874,18 @@ class CPSATSchedulingEngine:
         start = max(e_start, earliest)
         valid = [d for d in self.valid_days if start <= d < e_due]
 
-        # For bumpable events, ensure their currently-scheduled date is valid
+        # Bumpable events are pinned to their currently-scheduled day(s) ONLY.
+        # The solver can displace them (replace with a higher-priority event in
+        # the same slot) but cannot move them to a different day — this protects
+        # the employee's existing day/time assignment.
         if event.id in self.bumpable_event_ids:
             schedules = self.bumpable_schedule_map.get(event.project_ref_num, [])
+            pinned_days = set()
             for s in schedules:
                 sd = s.schedule_datetime.date() if isinstance(s.schedule_datetime, datetime) else s.schedule_datetime
-                if sd in self.valid_days and sd not in valid and sd >= today:
-                    valid.append(sd)
-            valid.sort()
+                if sd in self.valid_days and sd > today:
+                    pinned_days.add(sd)
+            return sorted(pinned_days) if pinned_days else []
 
         return valid
 
@@ -810,6 +907,11 @@ class CPSATSchedulingEngine:
         self.v_assign_block = {}
         # scheduled[event_id] = BoolVar: event is scheduled at all
         self.v_scheduled = {}
+
+        # Indicator cache: (eid, emp_id, d) -> BoolVar meaning
+        # "event eid is assigned to employee emp_id on day d".
+        # Shared across all constraint methods to avoid redundant variables.
+        self._indicator_cache = {}
 
         # Variables for supervisor events (co-scheduled with Core)
         self.v_sup_day = {}
@@ -982,7 +1084,11 @@ class CPSATSchedulingEngine:
         # H14: Juicer Deep Clean and Production can't be on same calendar day
         deep_clean_events = [e for e in self.events
                              if self._get_event_type(e) == 'Juicer Deep Clean']
-        self._add_day_exclusion(model, deep_clean_events, juicer_prod_events)
+        self._add_day_exclusion(
+            model, deep_clean_events, juicer_prod_events,
+            type_a_names={'Juicer Deep Clean'},
+            type_b_names=JUICER_PRODUCTION_TYPES,
+        )
 
         # H16: Core-Supervisor pairing (same day)
         self._add_core_supervisor_pairing(model)
@@ -1015,6 +1121,30 @@ class CPSATSchedulingEngine:
         # limit is ever raised, add a constraint here enforcing block
         # contiguity (e.g. blocks {3,4} allowed but not {2,5}).
 
+    def _get_indicator(self, model, eid, emp_id, d, prefix='ind'):
+        """Get or create a cached indicator BoolVar for (event, employee, day).
+
+        Returns a BoolVar that is True iff the event is assigned to the
+        employee on the given day.  Re-uses previously created indicators
+        to avoid redundant variables and channeling constraints in the model.
+        """
+        key = (eid, emp_id, d)
+        if key in self._indicator_cache:
+            return self._indicator_cache[key]
+        if (eid, emp_id) not in self.v_assign_emp or (eid, d) not in self.v_assign_day:
+            return None
+        ind = model.NewBoolVar(f'{prefix}_{eid}_{emp_id}_{d}')
+        model.AddBoolAnd([
+            self.v_assign_emp[(eid, emp_id)],
+            self.v_assign_day[(eid, d)]
+        ]).OnlyEnforceIf(ind)
+        model.AddBoolOr([
+            self.v_assign_emp[(eid, emp_id)].Not(),
+            self.v_assign_day[(eid, d)].Not()
+        ]).OnlyEnforceIf(ind.Not())
+        self._indicator_cache[key] = ind
+        return ind
+
     def _add_emp_day_limits(self, model, typed_events, limit, existing_counts=None):
         """Limit events of a type per employee per day.
 
@@ -1031,28 +1161,14 @@ class CPSATSchedulingEngine:
 
                 indicators = []
                 for event in typed_events:
-                    eid = event.id
-                    if (eid, emp_id) not in self.v_assign_emp:
-                        continue
-                    if (eid, d) not in self.v_assign_day:
-                        continue
-                    # Create indicator: event assigned to emp on day d
-                    ind = model.NewBoolVar(f'ind_{eid}_{emp_id}_{d}')
-                    model.AddBoolAnd([
-                        self.v_assign_emp[(eid, emp_id)],
-                        self.v_assign_day[(eid, d)]
-                    ]).OnlyEnforceIf(ind)
-                    model.AddBoolOr([
-                        self.v_assign_emp[(eid, emp_id)].Not(),
-                        self.v_assign_day[(eid, d)].Not()
-                    ]).OnlyEnforceIf(ind.Not())
-                    indicators.append(ind)
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
+                        indicators.append(ind)
 
                 if not indicators:
                     continue
 
                 if effective_limit <= 0:
-                    # Employee already at/over limit — forbid all new assignments
                     for ind in indicators:
                         model.Add(ind == 0)
                 else:
@@ -1074,22 +1190,10 @@ class CPSATSchedulingEngine:
 
                 indicators = []
                 for event in typed_events:
-                    eid = event.id
-                    if (eid, emp_id) not in self.v_assign_emp:
-                        continue
                     for d in week_days:
-                        if (eid, d) not in self.v_assign_day:
-                            continue
-                        ind = model.NewBoolVar(f'wk_{eid}_{emp_id}_{w_idx}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
-                        indicators.append(ind)
+                        ind = self._get_indicator(model, event.id, emp_id, d)
+                        if ind is not None:
+                            indicators.append(ind)
 
                 if not indicators:
                     continue
@@ -1116,80 +1220,77 @@ class CPSATSchedulingEngine:
                 if remaining <= 0:
                     # Already at/over cap — forbid all new assignments this week
                     for event in self.events:
-                        eid = event.id
-                        if (eid, emp_id) not in self.v_assign_emp:
-                            continue
                         for d in week_days:
-                            if (eid, d) not in self.v_assign_day:
-                                continue
-                            ind = model.NewBoolVar(f'wh_{eid}_{emp_id}_{w_idx}_{d}')
-                            model.AddBoolAnd([
-                                self.v_assign_emp[(eid, emp_id)],
-                                self.v_assign_day[(eid, d)]
-                            ]).OnlyEnforceIf(ind)
-                            model.AddBoolOr([
-                                self.v_assign_emp[(eid, emp_id)].Not(),
-                                self.v_assign_day[(eid, d)].Not()
-                            ]).OnlyEnforceIf(ind.Not())
-                            model.Add(ind == 0)
+                            ind = self._get_indicator(model, event.id, emp_id, d)
+                            if ind is not None:
+                                model.Add(ind == 0)
                     continue
 
                 # Sum estimated_time × indicator for all events in this week
                 time_terms = []
                 for event in self.events:
-                    eid = event.id
                     est = event.estimated_time or 60
-                    if (eid, emp_id) not in self.v_assign_emp:
-                        continue
                     for d in week_days:
-                        if (eid, d) not in self.v_assign_day:
-                            continue
-                        ind = model.NewBoolVar(f'wh_{eid}_{emp_id}_{w_idx}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
-                        time_terms.append(ind * est)
+                        ind = self._get_indicator(model, event.id, emp_id, d)
+                        if ind is not None:
+                            time_terms.append(ind * est)
 
                 if time_terms:
                     model.Add(sum(time_terms) <= remaining)
 
     def _add_mutual_exclusion_per_day(self, model, type_a_events, type_b_events):
-        """H13: Two event types can't share the same employee on the same day."""
+        """H13: Two event types can't share the same employee on the same day.
+
+        Also checks existing/pending schedules: if an employee already has
+        a type-B event on day d, all type-A events for that employee on
+        that day are forbidden (and vice versa).
+        """
+        type_a_names = {self._get_event_type(e) for e in type_a_events} or set()
+        type_b_names = {self._get_event_type(e) for e in type_b_events} or set()
+        # Also include the canonical type names for Juicer-Core exclusion
+        # so Phase 3 can detect existing Juicer/Core assignments
+        if not type_a_names:
+            type_a_names = JUICER_PRODUCTION_TYPES
+        if not type_b_names:
+            type_b_names = {'Core'}
+
+        # Pre-compute existing (emp_id, day) with type-A or type-B
+        existing_a = set()  # (emp_id, day) pairs
+        existing_b = set()
+        for (emp_id, day), entries in self.existing_by_emp_day.items():
+            for entry in entries:
+                if entry['event_type'] in type_a_names:
+                    existing_a.add((emp_id, day))
+                if entry['event_type'] in type_b_names:
+                    existing_b.add((emp_id, day))
+
         for emp_id in self.employee_ids:
             for d in self.valid_days:
+                # If existing type-B on this emp+day, forbid all type-A
+                if (emp_id, d) in existing_b:
+                    for event in type_a_events:
+                        ind = self._get_indicator(model, event.id, emp_id, d)
+                        if ind is not None:
+                            model.Add(ind == 0)
+                    continue
+                # If existing type-A on this emp+day, forbid all type-B
+                if (emp_id, d) in existing_a:
+                    for event in type_b_events:
+                        ind = self._get_indicator(model, event.id, emp_id, d)
+                        if ind is not None:
+                            model.Add(ind == 0)
+                    continue
+
                 a_inds = []
                 for event in type_a_events:
-                    eid = event.id
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        ind = model.NewBoolVar(f'mx_a_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
                         a_inds.append(ind)
 
                 b_inds = []
                 for event in type_b_events:
-                    eid = event.id
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        ind = model.NewBoolVar(f'mx_b_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
                         b_inds.append(ind)
 
                 if a_inds and b_inds:
@@ -1199,13 +1300,50 @@ class CPSATSchedulingEngine:
                     model.AddMaxEquality(has_b, b_inds)
                     model.Add(has_a + has_b <= 1)
 
-    def _add_day_exclusion(self, model, type_a_events, type_b_events):
-        """H14: Two event types can't share the same calendar day (global)."""
+    def _add_day_exclusion(self, model, type_a_events, type_b_events,
+                           type_a_names=None, type_b_names=None):
+        """H14: Two event types can't share the same calendar day (global).
+
+        Also checks existing/pending schedules: if an existing schedule
+        already has a type-B event on day d, all type-A events on day d
+        are forbidden (and vice versa).
+
+        Args:
+            type_a_names: Explicit set of type names for group A. If None,
+                          derived from type_a_events (which may be empty in
+                          Phase 3 when events were handled in Phase 2).
+            type_b_names: Same for group B.
+        """
+        # Pre-compute which days already have existing type-A or type-B events
+        if type_a_names is None:
+            type_a_names = {self._get_event_type(e) for e in type_a_events}
+        if type_b_names is None:
+            type_b_names = {self._get_event_type(e) for e in type_b_events}
+        existing_a_days = set()
+        existing_b_days = set()
+        for (_emp, day), entries in self.existing_by_emp_day.items():
+            for entry in entries:
+                if entry['event_type'] in type_a_names:
+                    existing_a_days.add(day)
+                if entry['event_type'] in type_b_names:
+                    existing_b_days.add(day)
+
         for d in self.valid_days:
             a_vars = [self.v_assign_day[(e.id, d)]
                       for e in type_a_events if (e.id, d) in self.v_assign_day]
             b_vars = [self.v_assign_day[(e.id, d)]
                       for e in type_b_events if (e.id, d) in self.v_assign_day]
+
+            # If existing schedule has type-B on this day, forbid all type-A
+            if d in existing_b_days and a_vars:
+                for v in a_vars:
+                    model.Add(v == 0)
+                continue
+            # If existing schedule has type-A on this day, forbid all type-B
+            if d in existing_a_days and b_vars:
+                for v in b_vars:
+                    model.Add(v == 0)
+                continue
 
             if a_vars and b_vars:
                 has_a = model.NewBoolVar(f'dc_a_{d}')
@@ -1287,17 +1425,8 @@ class CPSATSchedulingEngine:
                 # Indicators for support events assigned to emp on d
                 sup_inds = []
                 for event in support_events:
-                    eid = event.id
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        ind = model.NewBoolVar(f'sup_req_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
                         sup_inds.append(ind)
 
                 if not sup_inds:
@@ -1306,17 +1435,8 @@ class CPSATSchedulingEngine:
                 # Indicators for base events assigned to emp on d
                 base_inds = []
                 for event in base_events:
-                    eid = event.id
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        ind = model.NewBoolVar(f'base_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
                         base_inds.append(ind)
 
                 if not base_inds:
@@ -1487,17 +1607,8 @@ class CPSATSchedulingEngine:
             for d in self.valid_days:
                 fd_inds = []
                 for event in full_day_events:
-                    eid = event.id
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        ind = model.NewBoolVar(f'fd_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(ind.Not())
+                    ind = self._get_indicator(model, event.id, emp_id, d)
+                    if ind is not None:
                         fd_inds.append(ind)
 
                 if not fd_inds:
@@ -1509,19 +1620,10 @@ class CPSATSchedulingEngine:
                 # If has full-day, no OTHER Core/Juicer on same day
                 fd_event_ids = {e.id for e in full_day_events}
                 for event in core_juicer_events:
-                    eid = event.id
-                    if eid in fd_event_ids:
+                    if event.id in fd_event_ids:
                         continue  # Don't block a full-day event against itself
-                    if (eid, emp_id) in self.v_assign_emp and (eid, d) in self.v_assign_day:
-                        cj_ind = model.NewBoolVar(f'cj_{eid}_{emp_id}_{d}')
-                        model.AddBoolAnd([
-                            self.v_assign_emp[(eid, emp_id)],
-                            self.v_assign_day[(eid, d)]
-                        ]).OnlyEnforceIf(cj_ind)
-                        model.AddBoolOr([
-                            self.v_assign_emp[(eid, emp_id)].Not(),
-                            self.v_assign_day[(eid, d)].Not()
-                        ]).OnlyEnforceIf(cj_ind.Not())
+                    cj_ind = self._get_indicator(model, event.id, emp_id, d)
+                    if cj_ind is not None:
                         model.Add(has_fd + cj_ind <= 1)
 
                 # At most 1 full-day event per employee per day
@@ -1641,31 +1743,16 @@ class CPSATSchedulingEngine:
                 if (eid, d) not in self.v_assign_day:
                     continue
                 primary, backup = self._get_rotation_employee(d, rot_type)
-                if primary and (eid, primary) in self.v_assign_emp:
-                    # Bonus if rotation employee is assigned AND event is on this day
-                    ind = model.NewBoolVar(f'rot_{eid}_{d}_{primary}')
-                    model.AddBoolAnd([
-                        self.v_assign_emp[(eid, primary)],
-                        self.v_assign_day[(eid, d)]
-                    ]).OnlyEnforceIf(ind)
-                    model.AddBoolOr([
-                        self.v_assign_emp[(eid, primary)].Not(),
-                        self.v_assign_day[(eid, d)].Not()
-                    ]).OnlyEnforceIf(ind.Not())
-                    terms.append(ind * self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION'))
+                if primary:
+                    ind = self._get_indicator(model, eid, primary, d)
+                    if ind is not None:
+                        terms.append(ind * self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION'))
 
                 # Smaller bonus for backup rotation employee
-                if backup and backup != primary and (eid, backup) in self.v_assign_emp:
-                    ind_bk = model.NewBoolVar(f'rot_bk_{eid}_{d}_{backup}')
-                    model.AddBoolAnd([
-                        self.v_assign_emp[(eid, backup)],
-                        self.v_assign_day[(eid, d)]
-                    ]).OnlyEnforceIf(ind_bk)
-                    model.AddBoolOr([
-                        self.v_assign_emp[(eid, backup)].Not(),
-                        self.v_assign_day[(eid, d)].Not()
-                    ]).OnlyEnforceIf(ind_bk.Not())
-                    terms.append(ind_bk * (self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION') // 2))
+                if backup and backup != primary:
+                    ind_bk = self._get_indicator(model, eid, backup, d)
+                    if ind_bk is not None:
+                        terms.append(ind_bk * (self._get_effective_weight(WEIGHT_ROTATION, 'WEIGHT_ROTATION') // 2))
 
         # S5: Club Supervisor misuse penalty (escalating)
         # Tier k costs k × WEIGHT, so 1st misuse = -W, 2nd = -2W, 3rd = -3W, etc.
@@ -1756,17 +1843,10 @@ class CPSATSchedulingEngine:
                 if is_refresh and self._has_digital_setups_on_date(d):
                     continue
                 primary, _ = self._get_rotation_employee(d, 'primary_lead')
-                if primary and (eid, primary) in self.v_assign_emp:
-                    ind = model.NewBoolVar(f'ld_{eid}_{d}_{primary}')
-                    model.AddBoolAnd([
-                        self.v_assign_emp[(eid, primary)],
-                        self.v_assign_day[(eid, d)]
-                    ]).OnlyEnforceIf(ind)
-                    model.AddBoolOr([
-                        self.v_assign_emp[(eid, primary)].Not(),
-                        self.v_assign_day[(eid, d)].Not()
-                    ]).OnlyEnforceIf(ind.Not())
-                    terms.append(ind * WEIGHT_LEAD_DAILY)
+                if primary:
+                    ind = self._get_indicator(model, eid, primary, d)
+                    if ind is not None:
+                        terms.append(ind * WEIGHT_LEAD_DAILY)
 
         # S9: Fairness — minimize max-min spread of Core assignments per employee
         core_events = [e for e in self.events if self._get_event_type(e) == 'Core']
@@ -1808,22 +1888,10 @@ class CPSATSchedulingEngine:
                 for w_idx, week_days in self.weeks.items():
                     indicators = []
                     for event in juicer_prod_events:
-                        eid = event.id
-                        if (eid, emp_id) not in self.v_assign_emp:
-                            continue
                         for d in week_days:
-                            if (eid, d) not in self.v_assign_day:
-                                continue
-                            ind = model.NewBoolVar(f'jp_{eid}_{emp_id}_{w_idx}_{d}')
-                            model.AddBoolAnd([
-                                self.v_assign_emp[(eid, emp_id)],
-                                self.v_assign_day[(eid, d)]
-                            ]).OnlyEnforceIf(ind)
-                            model.AddBoolOr([
-                                self.v_assign_emp[(eid, emp_id)].Not(),
-                                self.v_assign_day[(eid, d)].Not()
-                            ]).OnlyEnforceIf(ind.Not())
-                            indicators.append(ind)
+                            ind = self._get_indicator(model, event.id, emp_id, d)
+                            if ind is not None:
+                                indicators.append(ind)
 
                     if len(indicators) > MAX_JUICER_PRODUCTION_PER_WEEK:
                         excess = model.NewIntVar(
@@ -1915,17 +1983,8 @@ class CPSATSchedulingEngine:
                 continue
 
             eid = matched_event.id
-            if (eid, sd) in self.v_assign_day and (eid, emp_id) in self.v_assign_emp:
-                # Bonus for keeping existing assignment
-                kept = model.NewBoolVar(f'kept_{eid}_{emp_id}_{sd}')
-                model.AddBoolAnd([
-                    self.v_assign_day[(eid, sd)],
-                    self.v_assign_emp[(eid, emp_id)]
-                ]).OnlyEnforceIf(kept)
-                model.AddBoolOr([
-                    self.v_assign_day[(eid, sd)].Not(),
-                    self.v_assign_emp[(eid, emp_id)].Not()
-                ]).OnlyEnforceIf(kept.Not())
+            kept = self._get_indicator(model, eid, emp_id, sd)
+            if kept is not None:
                 terms.append(kept * self._get_effective_weight(WEIGHT_BUMP, 'WEIGHT_BUMP'))
 
         # S15: ML affinity bonus — nudge assignments toward ML-predicted matches
@@ -1975,22 +2034,10 @@ class CPSATSchedulingEngine:
                         continue
                     indicators = []
                     for event in core_events_for_balance:
-                        eid = event.id
-                        if (eid, emp_id) not in self.v_assign_emp:
-                            continue
                         for d in week_days:
-                            if (eid, d) not in self.v_assign_day:
-                                continue
-                            ind = model.NewBoolVar(f'wb_{eid}_{emp_id}_{w_idx}_{d}')
-                            model.AddBoolAnd([
-                                self.v_assign_emp[(eid, emp_id)],
-                                self.v_assign_day[(eid, d)]
-                            ]).OnlyEnforceIf(ind)
-                            model.AddBoolOr([
-                                self.v_assign_emp[(eid, emp_id)].Not(),
-                                self.v_assign_day[(eid, d)].Not()
-                            ]).OnlyEnforceIf(ind.Not())
-                            indicators.append(ind)
+                            ind = self._get_indicator(model, event.id, emp_id, d)
+                            if ind is not None:
+                                indicators.append(ind)
                     if indicators:
                         wc = model.NewIntVar(0, len(core_events_for_balance), f'wc_{emp_id}_{w_idx}')
                         model.Add(wc == sum(indicators))
@@ -2144,12 +2191,14 @@ class CPSATSchedulingEngine:
 
             svar = self.v_scheduled.get(eid)
             if svar is None or isinstance(svar, int):
-                self._create_pending_failure(run, event, "No valid days or eligible employees")
+                reason = self._build_failure_reason(event, "No valid days or eligible employees")
+                self._create_pending_failure(run, event, reason)
                 failed_count += 1
                 continue
 
             if solver.Value(svar) == 0:
-                self._create_pending_failure(run, event, "Solver could not schedule within constraints")
+                reason = self._build_failure_reason(event, "Solver could not schedule within constraints")
+                self._create_pending_failure(run, event, reason)
                 failed_count += 1
                 continue
 
@@ -2314,14 +2363,21 @@ class CPSATSchedulingEngine:
 
         return self.default_times.get(etype, time(11, 0))
 
-    def _post_solve_review(self, run):
+    def _post_solve_review(self, run, phase_refs=None):
         """Defensive post-solve review to catch any remaining Core double-bookings.
 
-        Runs after _extract_solution() and before commit. Scans all proposed
+        Runs after _extract_solution() and before commit. Scans proposed
         PendingSchedule records for this run and removes violations:
           1. Same-run duplicates: 2+ Core events for same (emp, day) in this run
           2. Cross-run conflicts: new Core conflicts with an existing posted Schedule
           3. Weekly excess: total Core count (new + existing) exceeds weekly limit
+
+        Args:
+            run: SchedulerRunHistory record.
+            phase_refs: If set, only review pending schedules whose event_ref_num
+                        is in this set.  Used by Phase 3 so that Phase 2's
+                        already-reviewed schedules (which were injected into
+                        existing counts) aren't double-counted.
 
         Removed assignments get failure_reason set, employee/datetime cleared.
         Returns count of removed assignments.
@@ -2329,12 +2385,17 @@ class CPSATSchedulingEngine:
         removed = 0
 
         # Gather all proposed (non-failed) PendingSchedules from this run
-        pending = self.PendingSchedule.query.filter_by(
+        query = self.PendingSchedule.query.filter_by(
             scheduler_run_id=run.id,
         ).filter(
             self.PendingSchedule.employee_id.isnot(None),
             self.PendingSchedule.schedule_datetime.isnot(None),
-        ).all()
+        )
+        if phase_refs is not None:
+            query = query.filter(
+                self.PendingSchedule.event_ref_num.in_(phase_refs)
+            )
+        pending = query.all()
 
         # Resolve event types for each pending schedule
         event_type_cache = {}
@@ -2453,6 +2514,10 @@ class CPSATSchedulingEngine:
                 valid_days = self._valid_days_for_event(event)
                 if not valid_days:
                     reasons.append("no valid days in scheduling window")
+                    # Check if locked days prevented scheduling
+                    locked_detail = self._get_locked_day_detail(event)
+                    if locked_detail:
+                        reasons.append(locked_detail)
                 if not eligible:
                     reasons.append(f"no eligible employees for {etype}")
                 explanations.append(
@@ -2557,6 +2622,58 @@ class CPSATSchedulingEngine:
         )
         self.db.add(ps)
         return ps
+
+    def _get_locked_day_detail(self, event):
+        """Return a description of locked days in the event's window, or None."""
+        e_start = event.start_datetime
+        if isinstance(e_start, datetime):
+            e_start = e_start.date()
+        e_due = event.due_datetime
+        if isinstance(e_due, datetime):
+            e_due = e_due.date()
+
+        today = date.today()
+        buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
+        earliest = today + timedelta(days=buffer_days)
+
+        eligible_locked = sorted(
+            d for d in self.locked_set
+            if e_start <= d < e_due and d >= earliest
+        )
+        if not eligible_locked:
+            return None
+
+        locked_str = ", ".join(d.strftime('%m/%d') for d in eligible_locked)
+        return f"locked day(s) in window: {locked_str}"
+
+    def _build_failure_reason(self, event, base_reason):
+        """Enrich a failure reason with locked-day details if applicable."""
+        e_start = event.start_datetime
+        if isinstance(e_start, datetime):
+            e_start = e_start.date()
+        e_due = event.due_datetime
+        if isinstance(e_due, datetime):
+            e_due = e_due.date()
+
+        # Find locked days within the event's scheduling window
+        locked_in_window = sorted(
+            d for d in self.locked_set
+            if e_start <= d < e_due
+        )
+        if not locked_in_window:
+            return base_reason
+
+        # Check if the event COULD have been scheduled on those locked days
+        today = date.today()
+        buffer_days = 0 if self.emergency_mode else SCHEDULING_WINDOW_DAYS
+        earliest = today + timedelta(days=buffer_days)
+        eligible_locked = [d for d in locked_in_window if d >= earliest]
+
+        if not eligible_locked:
+            return base_reason
+
+        locked_str = ", ".join(d.strftime('%m/%d') for d in eligible_locked)
+        return f"{base_reason}. Could have been scheduled on locked day(s): {locked_str}"
 
     def _create_pending_failure(self, run, event, reason):
         """Create a PendingSchedule failure record."""
@@ -3082,6 +3199,91 @@ class CPSATSchedulingEngine:
         return scheduled_count
 
     # ------------------------------------------------------------------
+    # Short-notice notifications
+    # ------------------------------------------------------------------
+
+    def _create_short_notice_notifications(self, run):
+        """Create ScheduleNotification records for any events scheduled within 7 days."""
+        ScheduleNotification = self.models.get('ScheduleNotification')
+        if not ScheduleNotification:
+            return
+
+        today = datetime.now().date()
+        pending_schedules = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id == run.id,
+            self.PendingSchedule.failure_reason.is_(None),
+            self.PendingSchedule.status != 'superseded',
+            self.PendingSchedule.employee_id.isnot(None),
+            self.PendingSchedule.schedule_datetime.isnot(None),
+        ).all()
+
+        count = 0
+        for ps in pending_schedules:
+            # Only create notifications for Core and Juicer Production events
+            if ps.event and ps.event.event_type not in ('Core', 'Juicer Production'):
+                continue
+            # Skip bumped events — only notify for new schedules
+            if ps.is_swap:
+                continue
+            schedule_date = (ps.schedule_datetime.date()
+                            if isinstance(ps.schedule_datetime, datetime)
+                            else ps.schedule_datetime)
+            days_notice = (schedule_date - today).days
+            if days_notice <= 7:
+                notification = ScheduleNotification(
+                    scheduler_run_id=run.id,
+                    event_ref_num=ps.event_ref_num,
+                    employee_id=ps.employee_id,
+                    schedule_date=schedule_date,
+                    schedule_time=ps.schedule_time or ps.schedule_datetime.time(),
+                    days_notice=days_notice,
+                )
+                self.db.add(notification)
+                count += 1
+
+        if count > 0:
+            self.db.flush()
+            logger.info(f"CP-SAT: Created {count} short-notice notification(s)")
+
+    # ------------------------------------------------------------------
+    # Stale run cleanup
+    # ------------------------------------------------------------------
+
+    def _cleanup_stale_runs(self):
+        """Expire old unapproved scheduler runs and delete their PendingSchedule records.
+
+        Runs that were completed more than 48 hours ago but never approved are
+        stale — their proposals are outdated and their events should be freed
+        for rescheduling.  Without this cleanup, events get stuck: they have
+        PendingSchedule proposals that will never be approved, but each new run
+        re-proposes them because ``is_scheduled`` is still False and
+        ``condition`` is still 'Unstaffed'.
+        """
+        cutoff = datetime.utcnow() - timedelta(hours=48)
+        stale_runs = self.db.query(self.SchedulerRunHistory).filter(
+            self.SchedulerRunHistory.approved_at.is_(None),
+            self.SchedulerRunHistory.status == 'completed',
+            self.SchedulerRunHistory.started_at < cutoff,
+        ).all()
+
+        if not stale_runs:
+            return
+
+        stale_ids = [r.id for r in stale_runs]
+        deleted = self.db.query(self.PendingSchedule).filter(
+            self.PendingSchedule.scheduler_run_id.in_(stale_ids),
+        ).delete(synchronize_session='fetch')
+
+        for r in stale_runs:
+            r.status = 'expired'
+
+        self.db.flush()
+        logger.info(
+            f"Cleaned up {len(stale_runs)} stale run(s), "
+            f"deleted {deleted} orphaned PendingSchedule record(s)"
+        )
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -3124,6 +3326,11 @@ class CPSATSchedulingEngine:
                 )
         else:
             logger.info("Skipping database refresh in test environment")
+
+        # === CLEANUP: Expire old unapproved runs ===
+        # Delete PendingSchedule records from stale runs so their events
+        # are not stuck in limbo forever.
+        self._cleanup_stale_runs()
 
         run = self.SchedulerRunHistory(
             run_type=run_type, status='running', solver_type='cpsat',
@@ -3219,6 +3426,12 @@ class CPSATSchedulingEngine:
                     self.allow_bumping = True
                     self._load_data()
 
+                    # Inject Phase 2 pending results so Phase 3 accounts for
+                    # them in constraint computation (existing counts, conflict
+                    # checks).  Without this, Phase 3 can violate H14, H23,
+                    # H24 relative to Phase 2 assignments.
+                    self._inject_pending_as_existing(run)
+
                     # Filter to only failed events + bumpable targets
                     self.events = [e for e in self.events
                                    if e.project_ref_num in failed_refs
@@ -3253,7 +3466,18 @@ class CPSATSchedulingEngine:
                         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                             scheduled_3, failed_3, swaps_3 = self._extract_solution(solver, run)
                             self._log_solution_explanations(solver)
-                            removed = self._post_solve_review(run)
+                            # Phase 3 post-review: only check Phase 3's new
+                            # schedules.  Phase 2's are already in existing
+                            # counts (via _inject_pending_as_existing) and were
+                            # reviewed by Phase 2's own post-review call.
+                            bumpable_refs = {
+                                e.project_ref_num for e in self.events
+                                if e.id in self.bumpable_event_ids
+                            }
+                            phase3_review_refs = retryable_refs | bumpable_refs
+                            removed = self._post_solve_review(
+                                run, phase_refs=phase3_review_refs
+                            )
                             if removed > 0:
                                 scheduled_3 -= removed
                                 failed_3 += removed
@@ -3281,6 +3505,9 @@ class CPSATSchedulingEngine:
             logger.info("=== PHASE 5: Orphaned Supervisor pass ===")
             orphan_scheduled = self._schedule_orphaned_supervisors(run)
             total_scheduled += orphan_scheduled
+
+            # === Short-notice notifications ===
+            self._create_short_notice_notifications(run)
 
             # === Finalize ===
             run.status = 'completed'

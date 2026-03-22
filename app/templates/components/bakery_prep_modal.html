@@ -1,0 +1,33 @@
+<!-- Friday Bakery Prep Modal - Required by friday-bakery-prep.js -->
+<div id="fridayBakeryPrepModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:16px; max-width:480px; width:90%; box-shadow:0 25px 50px rgba(0,0,0,0.3); overflow:hidden; margin:auto;">
+        <div style="background:linear-gradient(135deg,#78350f,#92400e); padding:20px 24px; color:white;">
+            <h3 style="margin:0; font-size:18px; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined">bakery_dining</span>
+                Bakery Prep List
+            </h3>
+            <p style="margin:4px 0 0; opacity:0.8; font-size:13px;">Weekly Friday Task</p>
+        </div>
+        <div style="padding:24px;">
+            <div id="bakeryPrepStepContent"></div>
+            <div id="bakeryPrepMfaInput" style="display:none; margin-top:16px;">
+                <label for="bakeryPrepMfaCode" style="display:block; font-weight:600; margin-bottom:6px; font-size:14px;">MFA Code</label>
+                <input id="bakeryPrepMfaCode" type="text" maxlength="6" placeholder="Enter 6-digit code" autocomplete="one-time-code"
+                       style="width:100%; padding:12px; font-size:20px; letter-spacing:6px; text-align:center; border:2px solid #d1d5db; border-radius:8px; box-sizing:border-box;">
+            </div>
+            <div id="bakeryPrepProgress" style="display:none; text-align:center; margin-top:16px;">
+                <div style="width:32px; height:32px; border:3px solid #e5e7eb; border-top-color:#0071ce; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 8px;"></div>
+                <p id="bakeryPrepProgressText" style="color:#6b7280; margin:0;">Working...</p>
+            </div>
+        </div>
+        <div id="bakeryPrepFooter" style="padding:16px 24px; border-top:1px solid #e5e7eb; display:flex; gap:8px; justify-content:flex-end;"></div>
+    </div>
+</div>
+<style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #fridayBakeryPrepModal .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+    #fridayBakeryPrepModal .btn-primary { background: #0071ce; color: white; }
+    #fridayBakeryPrepModal .btn-primary:hover { background: #005ea6; }
+    #fridayBakeryPrepModal .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+    #fridayBakeryPrepModal .btn-secondary:hover { background: #e5e7eb; }
+</style>

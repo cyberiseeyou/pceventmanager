@@ -1717,24 +1717,42 @@ class DailyPaperworkGenerator:
             )
             story.append(Paragraph(f"Event {event_id}: {group['event_name']}", event_header_style))
 
-            # Items table
-            table_data = [['Item #', 'UPC/Barcode', 'Description']]
+            # Items table with barcode images (matching per-day format)
+            table_data = [['UPC Number', 'Barcode', 'Description']]
             for item_nbr, barcode_num, item_desc in items:
-                table_data.append([item_nbr, barcode_num, item_desc])
+                barcode_path = self.generate_barcode_image(barcode_num)
+                if barcode_path:
+                    barcode_img = ReportLabImage(barcode_path, width=1.2*inch, height=0.5*inch)
+                    table_data.append([str(barcode_num), barcode_img, str(item_desc)])
+                else:
+                    table_data.append([str(barcode_num), 'N/A', str(item_desc)])
 
-            table = Table(table_data, colWidths=[80, 120, 260])
+            table = Table(table_data, colWidths=[1.2*inch, 1.5*inch, 3.8*inch])
             table.setStyle(TableStyle([
+                # Header row
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E4C73')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                # Data rows
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                # Alternating row colors
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+                # Alignment
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DDDDDD')),
+                # Padding
+                ('TOPPADDING', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                ('TOPPADDING', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
             ]))
             story.append(table)
 

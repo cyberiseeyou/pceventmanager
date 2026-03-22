@@ -42,6 +42,11 @@ logs/
 # Git worktrees
 .worktrees/
 
+# Tool artifacts
+.playwright-mcp/
+.superpowers/
+foundation/
+
 # Backups
 backups/
 

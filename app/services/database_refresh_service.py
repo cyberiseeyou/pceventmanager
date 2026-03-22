@@ -192,6 +192,18 @@ class DatabaseRefreshService:
                 f"Preserved {len(local_schedules)} local schedules for restoration after refresh"
             )
 
+            # Preserve walmart_event_id mappings (set via Walmart sync, not in Crossmark API)
+            walmart_id_map = {}
+            events_with_walmart_ids = Event.query.filter(
+                Event.walmart_event_id.isnot(None)
+            ).all()
+            for evt in events_with_walmart_ids:
+                walmart_id_map[evt.project_ref_num] = evt.walmart_event_id
+            if walmart_id_map:
+                current_app.logger.info(
+                    f"Preserved walmart_event_id for {len(walmart_id_map)} events"
+                )
+
             with disable_foreign_keys(db.session):
                 # Clear auto scheduler results if table exists
                 try:
@@ -343,6 +355,20 @@ class DatabaseRefreshService:
             overrides_applied = self._reapply_event_type_overrides(db, Event)
             if overrides_applied > 0:
                 current_app.logger.info(f"Reapplied {overrides_applied} event type overrides")
+
+            # Restore preserved walmart_event_id mappings
+            restored_walmart = 0
+            if walmart_id_map:
+                for ref_num, walmart_id in walmart_id_map.items():
+                    event = Event.query.filter_by(project_ref_num=ref_num).first()
+                    if event and not event.walmart_event_id:
+                        event.walmart_event_id = walmart_id
+                        restored_walmart += 1
+                if restored_walmart:
+                    db.session.commit()
+                    current_app.logger.info(
+                        f"Restored walmart_event_id for {restored_walmart} events from pre-refresh data"
+                    )
 
             # Reconcile: mark events with Schedule records as scheduled
             # The planning API may report condition='Unstaffed' even for events

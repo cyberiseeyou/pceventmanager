@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}My Dashboard - Product Connections{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/my-dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="my-dash">
+
+    {# ── 1. GREETING + TODAY/NEXT EVENT ── #}
+    <div class="my-dash__greeting">
+        <p class="my-dash__hello">{{ greeting_label }}</p>
+        <h1 class="my-dash__name">{{ first_name }}</h1>
+        <p class="my-dash__date">{{ today.strftime('%A, %B %-d, %Y') }}</p>
+    </div>
+
+    {% if today_events %}
+    <div class="my-dash__today-banner">
+        <p class="my-dash__today-label">Today's Schedule</p>
+        <p class="my-dash__today-summary">
+            {{ today_events|length }} event{{ 's' if today_events|length != 1 else '' }} scheduled
+        </p>
+        <ul class="my-dash__today-events">
+            {% for item in today_events %}
+            <li class="my-dash__today-event">
+                <span class="my-dash__today-time">{{ item.time }}</span>
+                <span class="my-dash__today-event-name">{{ item.event_name }}</span>
+                <span class="my-dash__today-event-type">{{ item.event_type }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif next_event %}
+    <div class="my-dash__today-banner my-dash__today-banner--next">
+        <p class="my-dash__today-label">Next Scheduled Event</p>
+        <p class="my-dash__today-summary">{{ next_event.event_name }}</p>
+        <div class="my-dash__next-details">
+            <span class="my-dash__next-date">{{ next_event.date }}</span>
+            <span class="my-dash__next-time">{{ next_event.time }}</span>
+            <span class="my-dash__next-type">{{ next_event.event_type }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="my-dash__today-banner my-dash__today-banner--off">
+        <p class="my-dash__today-label">Today's Schedule</p>
+        <p class="my-dash__today-summary">No events today</p>
+        <p class="my-dash__today-detail">Enjoy your day off, or check Monthly Schedule for upcoming shifts.</p>
+    </div>
+    {% endif %}
+
+    {# ── 2. STATS CARD — THIS WEEK ── #}
+    <div class="my-dash__stats-card">
+        <h3 class="my-dash__stats-title">
+            <span class="material-symbols-outlined">bar_chart</span>
+            This Week
+        </h3>
+        <div class="my-dash__stats-row">
+            <div class="my-dash__stat">
+                <span class="my-dash__stat-value" id="statHours">{{ scheduled_hours }}</span>
+                <span class="my-dash__stat-label">Scheduled<br>Hours</span>
+            </div>
+            <div class="my-dash__stat">
+                <span class="my-dash__stat-value" id="statDays">{{ upcoming_days_working }}</span>
+                <span class="my-dash__stat-label">Days<br>Scheduled</span>
+            </div>
+            <div class="my-dash__stat">
+                <span class="my-dash__stat-value" id="statEvents">{{ week_event_count }}</span>
+                <span class="my-dash__stat-label">Events</span>
+            </div>
+        </div>
+    </div>
+
+    {# ── 3. WEEKLY CALENDAR GRID ── #}
+    <section class="my-dash__weekly">
+        <div class="my-dash__section-header">
+            <button class="my-dash__week-nav" id="weekPrev" aria-label="Previous week">
+                <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <h2 class="my-dash__section-title" id="weekLabel">This Week</h2>
+            <button class="my-dash__week-nav" id="weekNext" aria-label="Next week">
+                <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+        </div>
+        <div class="my-dash__week-grid" id="weekGrid">
+            {# Populated by JavaScript #}
+            <div class="my-dash__empty">
+                <span class="material-symbols-outlined">hourglass_empty</span>
+                Loading schedule...
+            </div>
+        </div>
+    </section>
+
+
+    {# ── UPCOMING APPROVED TIME OFF (lead only, next 30 days) ── #}
+    {% if is_lead %}
+    <section class="my-dash__team-timeoff">
+        <h3 class="my-dash__section-title" style="margin-bottom: var(--space-3);">
+            <span class="material-symbols-outlined">event_busy</span>
+            Upcoming Approved Time Off
+        </h3>
+        {% if team_time_off %}
+            {% for item in team_time_off %}
+            <div class="my-dash__team-timeoff-item">
+                <span class="my-dash__team-timeoff-dot"></span>
+                <div class="my-dash__team-timeoff-details">
+                    <span class="my-dash__team-timeoff-name">{{ item.employee_name | title }}</span>
+                    <span class="my-dash__team-timeoff-dates">
+                        {{ item.start_date.strftime('%b %-d') }}{% if item.start_date != item.end_date %} &ndash; {{ item.end_date.strftime('%b %-d') }}{% endif %}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="my-dash__empty">
+                <span class="material-symbols-outlined">event_available</span>
+                No approved time off in the next 30 days
+            </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Schedule Change Notifications (browser Notification API) -->
+<script src="{{ url_for('static', filename='js/components/schedule-change-notifier.js') }}"></script>
+
+<script>
+(function() {
+    // ===== WEEKLY CALENDAR GRID =====
+    const weekGrid = document.getElementById('weekGrid');
+    const weekLabel = document.getElementById('weekLabel');
+    const weekPrev = document.getElementById('weekPrev');
+    const weekNext = document.getElementById('weekNext');
+
+    // Current week start (Sunday)
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    let currentWeekStart = new Date(todayDate);
+    const dayOfWeek = currentWeekStart.getDay(); // 0=Sun
+    currentWeekStart.setDate(currentWeekStart.getDate() - dayOfWeek);
+
+    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    function formatDateISO(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function eventAccent(eventType) {
+        const t = (eventType || '').toLowerCase();
+        if (t.includes('core')) return 'core';
+        if (t.includes('juicer')) return 'juicer';
+        if (t.includes('digital')) return 'digital';
+        if (t.includes('supervisor')) return 'supervisor';
+        if (t.includes('freeosk')) return 'freeosk';
+        return 'other';
+    }
+
+    function updateWeekLabel() {
+        const endDate = new Date(currentWeekStart);
+        endDate.setDate(endDate.getDate() + 6);
+
+        const startMonth = currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        weekLabel.textContent = startMonth + ' \u2013 ' + endMonth;
+    }
+
+    async function loadWeek() {
+        const weekStartStr = formatDateISO(currentWeekStart);
+        updateWeekLabel();
+
+        weekGrid.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">hourglass_empty</span>Loading schedule...</div>';
+
+        try {
+            const resp = await fetch('/api/my-schedule/weekly?week_start=' + weekStartStr);
+            if (!resp.ok) throw new Error('Failed to load schedule');
+            const data = await resp.json();
+            renderWeekGrid(data);
+            updateStats(data.stats);
+        } catch (err) {
+            weekGrid.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Error loading schedule</div>';
+        }
+    }
+
+    function updateStats(stats) {
+        if (!stats) return;
+        var h = document.getElementById('statHours');
+        var d = document.getElementById('statDays');
+        var e = document.getElementById('statEvents');
+        if (h) h.textContent = stats.total_hours || 0;
+        if (d) d.textContent = stats.days_scheduled || 0;
+        if (e) e.textContent = stats.event_count || 0;
+    }
+
+    function renderWeekGrid(data) {
+        const todayStr = formatDateISO(todayDate);
+        let html = '<div class="my-dash__week-header">';
+
+        // Header row
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(currentWeekStart);
+            d.setDate(d.getDate() + i);
+            const dateStr = formatDateISO(d);
+            const isToday = dateStr === todayStr;
+            html += '<div class="my-dash__week-day-header' + (isToday ? ' my-dash__week-day-header--today' : '') + '">';
+            html += '<span class="my-dash__week-day-name">' + DAY_NAMES[i] + '</span>';
+            html += '<span class="my-dash__week-day-num">' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        // Day cells
+        html += '<div class="my-dash__week-cells">';
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(currentWeekStart);
+            d.setDate(d.getDate() + i);
+            const dateStr = formatDateISO(d);
+            const isToday = dateStr === todayStr;
+            const events = data.days[dateStr] || [];
+
+            var dayLabel = DAY_NAMES[i] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+            html += '<div class="my-dash__week-cell' + (isToday ? ' my-dash__week-cell--today' : '') + '" data-day-label="' + dayLabel + '">';
+
+            if (events.length === 0) {
+                html += '<div class="my-dash__week-empty">No events</div>';
+            } else {
+                for (const ev of events) {
+                    const accent = eventAccent(ev.event_type);
+                    const safeName = (ev.event_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    html += '<div class="my-dash__week-event my-dash__week-event--' + accent + '">';
+                    html += '<span class="my-dash__week-event-time">' + ev.time + '</span>';
+                    html += '<span class="my-dash__week-event-name">' + safeName + '</span>';
+                    html += '</div>';
+                }
+            }
+
+            html += '</div>';
+        }
+        html += '</div>';
+
+        weekGrid.innerHTML = html;
+    }
+
+    // Navigation
+    weekPrev.addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+        loadWeek();
+    });
+
+    weekNext.addEventListener('click', function() {
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        loadWeek();
+    });
+
+    // Initial load
+    loadWeek();
+})();
+</script>
+{% endblock %}
