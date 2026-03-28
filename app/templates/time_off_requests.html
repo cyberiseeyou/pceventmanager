@@ -1376,6 +1376,12 @@
             }
 
             showFlashMessage(data.message, 'success');
+
+            // Check if there are conflicting schedules
+            if (data.has_conflicts && data.conflicts && data.conflicts.length > 0) {
+                showConflictDialog(data.time_off_id, data.conflicts);
+            }
+
             await loadPendingRequests();
             await loadAllTimeOffRequests();
             filterRequests();
@@ -1383,6 +1389,66 @@
             console.error('Error approving request:', error);
             showFlashMessage('Error approving request. Please try again.', 'error');
         }
+    }
+
+    function showConflictDialog(timeOffId, conflicts) {
+        var conflictList = conflicts.map(function(c) {
+            return '<li>' + escapeHtml(c.event_name) + ' — ' +
+                   escapeHtml(c.date) + ' at ' + escapeHtml(c.time) + '</li>';
+        }).join('');
+
+        var modal = document.createElement('div');
+        modal.className = 'modal-backdrop modal-open';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:calc(100% - 32px);max-height:80vh;overflow-y:auto;">
+                <h3 style="margin:0 0 8px;font-size:18px;color:#1f2937;">Schedule Conflicts Found</h3>
+                <p style="margin:0 0 12px;font-size:14px;color:#6b7280;">
+                    This employee has ${conflicts.length} scheduled event(s) during their approved time off:
+                </p>
+                <ul style="margin:0 0 16px;padding-left:20px;font-size:13px;color:#374151;">${conflictList}</ul>
+                <p style="margin:0 0 16px;font-size:14px;color:#6b7280;">What would you like to do?</p>
+                <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                    <button id="conflict-keep" style="padding:8px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;">
+                        Keep events, I'll handle manually
+                    </button>
+                    <button id="conflict-remove" style="padding:8px 16px;border:none;border-radius:8px;background:#dc2626;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
+                        Remove conflicting events
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('conflict-keep').addEventListener('click', function() {
+            modal.remove();
+        });
+
+        document.getElementById('conflict-remove').addEventListener('click', async function() {
+            try {
+                var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content;
+                var resp = await fetch('/api/time-off/' + timeOffId + '/resolve-conflicts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+                    },
+                    body: JSON.stringify({ action: 'unschedule_all' })
+                });
+                var result = await resp.json();
+                if (result.success) {
+                    showFlashMessage(result.message, 'success');
+                } else {
+                    showFlashMessage('Error: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showFlashMessage('Error removing conflicts', 'error');
+            }
+            modal.remove();
+            await loadPendingRequests();
+            await loadAllTimeOffRequests();
+            filterRequests();
+        });
     }
 
     function openDenyModal(requestId, employeeName, dateRange) {

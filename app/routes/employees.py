@@ -751,7 +751,8 @@ def submit_time_off_request():
 @require_authentication()
 @require_role('supervisor')
 def review_time_off_request(request_id):
-    """Supervisor approves or denies a time off request."""
+    """Supervisor approves or denies a time off request.
+    On approval, returns any conflicting schedules so the supervisor can decide."""
     db = current_app.extensions['sqlalchemy']
     models = get_models()
     EmployeeTimeOff = models['EmployeeTimeOff']
@@ -785,10 +786,133 @@ def review_time_off_request(request_id):
     emp = Employee.query.get(time_off.employee_id)
     emp_name = emp.name if emp else time_off.employee_id
 
-    return jsonify({
+    response = {
         'success': True,
         'message': f'Time off request for {emp_name} has been {time_off.status}.',
         'status': time_off.status,
+    }
+
+    # On approval, check for conflicting schedules
+    if action == 'approve':
+        Schedule = models['Schedule']
+        Event = models['Event']
+        conflicting_schedules = Schedule.query.filter(
+            Schedule.employee_id == time_off.employee_id,
+            func.date(Schedule.schedule_datetime) >= time_off.start_date,
+            func.date(Schedule.schedule_datetime) <= time_off.end_date,
+        ).all()
+
+        if conflicting_schedules:
+            conflicts = []
+            for sched in conflicting_schedules:
+                event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+                conflicts.append({
+                    'schedule_id': sched.id,
+                    'event_name': event.project_name if event else 'Unknown Event',
+                    'event_type': event.event_type if event else 'Unknown',
+                    'date': sched.schedule_datetime.strftime('%Y-%m-%d'),
+                    'time': sched.schedule_datetime.strftime('%I:%M %p'),
+                })
+            response['has_conflicts'] = True
+            response['conflicts'] = conflicts
+            response['time_off_id'] = request_id
+
+    return jsonify(response)
+
+
+@employees_bp.route('/api/time-off/<int:request_id>/resolve-conflicts', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def resolve_time_off_conflicts(request_id):
+    """Unschedule events that conflict with an approved time-off request.
+    Sends notifications to affected employees."""
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+    Schedule = models['Schedule']
+    Event = models['Event']
+
+    time_off = EmployeeTimeOff.query.get(request_id)
+    if not time_off:
+        return jsonify({'error': 'Time off request not found'}), 404
+
+    if time_off.status != 'approved':
+        return jsonify({'error': 'Time off request is not approved'}), 400
+
+    data = request.get_json() or {}
+    action = data.get('action', 'unschedule_all')
+
+    # Find conflicting schedules
+    if action == 'unschedule_all':
+        conflicting = Schedule.query.filter(
+            Schedule.employee_id == time_off.employee_id,
+            func.date(Schedule.schedule_datetime) >= time_off.start_date,
+            func.date(Schedule.schedule_datetime) <= time_off.end_date,
+        ).all()
+    elif action == 'unschedule':
+        schedule_ids = data.get('schedule_ids', [])
+        if not schedule_ids:
+            return jsonify({'error': 'No schedule_ids provided'}), 400
+        conflicting = Schedule.query.filter(
+            Schedule.id.in_(schedule_ids),
+            Schedule.employee_id == time_off.employee_id,
+        ).all()
+    else:
+        return jsonify({'error': 'action must be "unschedule_all" or "unschedule"'}), 400
+
+    if not conflicting:
+        return jsonify({'success': True, 'message': 'No conflicting schedules found', 'unscheduled_count': 0})
+
+    from app.integrations.external_api.session_api_service import session_api as external_api
+    from app.services.schedule_change_service import get_schedule_change_service
+
+    unscheduled = []
+    svc = get_schedule_change_service()
+
+    for sched in conflicting:
+        event = Event.query.filter_by(project_ref_num=sched.event_ref_num).first()
+
+        # Call Crossmark API to unschedule
+        if sched.external_id:
+            try:
+                if external_api.ensure_authenticated():
+                    api_result = external_api.unschedule_mplan_event(str(sched.external_id))
+                    if not api_result.get('success'):
+                        current_app.logger.warning(
+                            f"Failed to unschedule in Crossmark: {api_result.get('message')}"
+                        )
+            except Exception as api_error:
+                current_app.logger.error(f"Crossmark API error: {str(api_error)}")
+
+        # Notify the employee
+        if event and event.event_type != 'Supervisor':
+            try:
+                svc.notify_event_removed(
+                    employee_id=sched.employee_id,
+                    event_type=event.event_type,
+                    event_date=sched.schedule_datetime,
+                    old_time=sched.schedule_datetime,
+                    triggered_by='Supervisor',
+                    reason='approved time off',
+                )
+            except Exception as notif_err:
+                current_app.logger.warning(f"Schedule change notification failed: {notif_err}")
+
+        # Update event status
+        if event:
+            event.is_scheduled = False
+            event.condition = 'Unstaffed'
+            unscheduled.append(event.project_name if event else 'Unknown')
+
+        db.session.delete(sched)
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Removed {len(unscheduled)} conflicting event(s)',
+        'unscheduled_count': len(unscheduled),
+        'unscheduled_events': unscheduled,
     })
 
 
