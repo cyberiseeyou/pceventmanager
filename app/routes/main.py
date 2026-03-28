@@ -19,6 +19,12 @@ def privacy_policy():
     return render_template('privacy_policy.html')
 
 
+@main_bp.route('/terms-and-conditions')
+def terms_and_conditions():
+    """Public SMS terms and conditions page (required by Twilio)."""
+    return render_template('terms_and_conditions.html')
+
+
 @main_bp.route('/service-worker.js')
 def service_worker():
     """Serve service worker from root for maximum scope."""
