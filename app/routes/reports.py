@@ -131,10 +131,10 @@ def time_off():
 def weekly_scheduled_hours():
     """Report 8: Weekly Scheduled Hours (excludes Club Supervisors)."""
     today = date.today()
-    # Default to last 4 weeks
+    # Default to current week (Sunday through Saturday)
     days_since_sunday = (today.weekday() + 1) % 7
-    default_end = today - timedelta(days=days_since_sunday) + timedelta(days=6)
-    default_start = default_end - timedelta(days=27)
+    default_start = today - timedelta(days=days_since_sunday)
+    default_end = default_start + timedelta(days=6)
     start, end = _parse_dates(default_start=default_start, default_end=default_end)
     service = _get_service()
     data = service.get_weekly_scheduled_hours(start, end)
@@ -289,8 +289,8 @@ def export_time_off():
 def export_weekly_scheduled_hours():
     today = date.today()
     days_since_sunday = (today.weekday() + 1) % 7
-    default_end = today - timedelta(days=days_since_sunday) + timedelta(days=6)
-    default_start = default_end - timedelta(days=27)
+    default_start = today - timedelta(days=days_since_sunday)
+    default_end = default_start + timedelta(days=6)
     start, end = _parse_dates(default_start=default_start, default_end=default_end)
     service = _get_service()
     data = service.get_weekly_scheduled_hours(start, end)
