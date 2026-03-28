@@ -13,6 +13,12 @@ from datetime import datetime, date, timedelta
 main_bp = Blueprint('main', __name__)
 
 
+@main_bp.route('/privacy-policy')
+def privacy_policy():
+    """Public privacy policy page (required by Twilio and app stores)."""
+    return render_template('privacy_policy.html')
+
+
 @main_bp.route('/service-worker.js')
 def service_worker():
     """Serve service worker from root for maximum scope."""

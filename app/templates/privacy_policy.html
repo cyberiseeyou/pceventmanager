@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Product Connections Event Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937; line-height: 1.7; background: #f9fafb; }
+        .container { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+        h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #111827; }
+        .updated { font-size: 14px; color: #6b7280; margin-bottom: 32px; }
+        h2 { font-size: 18px; font-weight: 600; margin: 28px 0 12px; color: #111827; }
+        p, li { font-size: 15px; color: #374151; margin-bottom: 12px; }
+        ul { padding-left: 24px; margin-bottom: 16px; }
+        li { margin-bottom: 6px; }
+        .highlight { background: #f0fdf4; border-left: 3px solid #16a34a; padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+        .highlight p { margin: 0; font-weight: 500; color: #065f46; }
+        a { color: #2E4C73; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated: March 28, 2026</p>
+
+<p>Product Connections Event Manager ("the Application") is an internal workforce management tool operated by Product Connections for scheduling, attendance tracking, and team communication. This privacy policy describes how we collect, use, and protect information when you use the Application.</p>
+
+<h2>1. Information We Collect</h2>
+<p>We collect only the information necessary to operate the scheduling and workforce management system:</p>
+<ul>
+    <li><strong>Employee Information:</strong> Name, employee ID, job title, email address, and phone number as provided by your employer's HR systems.</li>
+    <li><strong>Scheduling Data:</strong> Work schedules, event assignments, shift times, availability preferences, and time-off requests.</li>
+    <li><strong>Attendance Records:</strong> Attendance status (on-time, late, called-in, excused absence), calloff submissions including reason and any notes you provide.</li>
+    <li><strong>Device Information:</strong> When you opt in to push notifications, we store a Web Push subscription endpoint and encryption keys for your device. We also store your browser's user-agent string to help identify the device.</li>
+    <li><strong>Phone Number (SMS):</strong> If SMS notifications are enabled, we use designated supervisor phone numbers to deliver time-sensitive calloff alerts via Twilio's messaging service.</li>
+    <li><strong>Uploaded Files:</strong> Documents uploaded by supervisors in connection with attendance records (e.g., doctor's notes) are stored securely on the Application's server.</li>
+</ul>
+
+<h2>2. How We Use Your Information</h2>
+<p>Your information is used solely for the following internal business purposes:</p>
+<ul>
+    <li>Creating and managing employee work schedules</li>
+    <li>Tracking attendance and processing calloff requests</li>
+    <li>Sending work-related notifications (schedule changes, calloff alerts) via push notifications and SMS</li>
+    <li>Enabling supervisors to manage team schedules, approve time-off, and review attendance</li>
+    <li>Generating operational reports for workforce management</li>
+</ul>
+
+<div class="highlight">
+    <p>We do not use your information for marketing, advertising, profiling, or any purpose unrelated to workforce management.</p>
+</div>
+
+<h2>3. Information Sharing</h2>
+<p>We do not sell, rent, trade, or share your personal information with third parties, except in the following limited circumstances:</p>
+<ul>
+    <li><strong>Service Providers:</strong> We use Twilio to deliver SMS notifications. Twilio receives only the phone number and message content necessary to deliver the SMS. Twilio's use of this data is governed by <a href="https://www.twilio.com/legal/privacy" target="_blank" rel="noopener">Twilio's Privacy Policy</a>.</li>
+    <li><strong>Push Notification Delivery:</strong> Web Push notifications are delivered through your browser's push service (e.g., Google's FCM, Mozilla's push service). Only encrypted message payloads are transmitted.</li>
+    <li><strong>Legal Requirements:</strong> We may disclose information if required by law, regulation, or legal process.</li>
+</ul>
+
+<div class="highlight">
+    <p>Your information is never shared with third parties for marketing purposes.</p>
+</div>
+
+<h2>4. Data Storage and Security</h2>
+<ul>
+    <li>All data is stored on secured servers with access restricted to authorized personnel.</li>
+    <li>Passwords and PINs are hashed using industry-standard algorithms and are never stored in plain text.</li>
+    <li>Sessions are managed through encrypted tokens stored in Redis with automatic expiration.</li>
+    <li>Uploaded files are stored in access-controlled directories on the Application server.</li>
+    <li>All communication with the Application is encrypted via HTTPS.</li>
+</ul>
+
+<h2>5. Data Retention</h2>
+<p>We retain your information only for as long as necessary to fulfill the purposes described in this policy and to comply with legal and business requirements. Scheduling and attendance data is retained for operational reporting purposes. When an employee is terminated, their active scheduling data is archived.</p>
+
+<h2>6. Your Rights</h2>
+<p>As an employee using this Application, you may:</p>
+<ul>
+    <li>View your own schedule, attendance records, and calloff history within the Application.</li>
+    <li>Opt out of push notifications at any time by revoking notification permission in your browser settings or logging out of the Application.</li>
+    <li>Request information about what data is stored about you by contacting your supervisor or system administrator.</li>
+</ul>
+
+<h2>7. Push Notifications and SMS</h2>
+<p>Push notifications and SMS messages are used exclusively for work-related alerts:</p>
+<ul>
+    <li>Schedule changes affecting your upcoming events</li>
+    <li>Calloff alerts to supervisors when an employee reports an absence</li>
+</ul>
+<p>You can disable push notifications at any time through your device's browser settings. SMS notifications are sent only to designated supervisor phone numbers configured by the system administrator.</p>
+
+<h2>8. Changes to This Policy</h2>
+<p>We may update this privacy policy from time to time. Any changes will be reflected on this page with an updated "Last updated" date. Continued use of the Application after changes constitutes acceptance of the revised policy.</p>
+
+<h2>9. Contact</h2>
+<p>If you have questions about this privacy policy or how your data is handled, contact your Club Supervisor or system administrator.</p>
+
+</div>
+</body>
+</html>
