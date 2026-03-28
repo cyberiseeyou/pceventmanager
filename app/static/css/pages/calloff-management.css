@@ -392,6 +392,10 @@
 }
 
 /* Modals */
+.calloff-modal-overlay[hidden] {
+    display: none !important;
+}
+
 .calloff-modal-overlay {
     position: fixed;
     top: 0;
