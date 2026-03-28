@@ -20,8 +20,14 @@ def _get_service():
 
 
 def _parse_dates(default_start=None, default_end=None):
-    """Parse start_date and end_date from query params, with defaults."""
+    """Parse start_date and end_date from query params, with defaults.
+
+    Enforces a floor of 30 days ago — the external API only fetches events
+    within a 30-day lookback window, so older data is unreliable.
+    """
     today = date.today()
+    earliest_allowed = today - timedelta(days=30)
+
     if default_start is None:
         days_since_sunday = (today.weekday() + 1) % 7
         default_start = today - timedelta(days=days_since_sunday)
@@ -39,6 +45,10 @@ def _parse_dates(default_start=None, default_end=None):
         end = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else default_end
     except ValueError:
         end = default_end
+
+    # Clamp start date to 30-day lookback floor
+    if start < earliest_allowed:
+        start = earliest_allowed
 
     return start, end
 

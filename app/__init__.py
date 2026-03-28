@@ -153,6 +153,13 @@ def create_app(config_name=None):
     from app.utils.event_helpers import calculate_schedule_duration
     app.jinja_env.globals['calculate_schedule_duration'] = calculate_schedule_duration
 
+    # Earliest date for report date pickers (matches 30-day API lookback)
+    from datetime import date as _date, timedelta as _td
+
+    @app.context_processor
+    def inject_earliest_report_date():
+        return {'earliest_report_date': (_date.today() - _td(days=30)).isoformat()}
+
     # Register blueprints
     register_blueprints(app, db, models)
 
