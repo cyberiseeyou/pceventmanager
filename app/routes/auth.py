@@ -82,6 +82,17 @@ def get_inactivity_timeout():
     return current_app.config.get('SESSION_INACTIVITY_TIMEOUT', 600)
 
 
+# Roles that stay logged in indefinitely (no inactivity timeout, no 24h expiry)
+PERSISTENT_SESSION_ROLES = ('lead', 'specialist')
+PERSISTENT_SESSION_TTL = 2592000  # 30 days in seconds
+
+
+def _is_persistent_session(session_data):
+    """Check if session belongs to a role that should never auto-expire."""
+    user_info = session_data.get('user_info', {})
+    return user_info.get('role') in PERSISTENT_SESSION_ROLES
+
+
 def update_session_activity(session_id):
     """
     Update last_activity timestamp for a session.
@@ -107,6 +118,10 @@ def is_authenticated():
     session_data = get_session(session_id)
     if not session_data:
         return False
+
+    # Leads and specialists stay logged in indefinitely — skip timeout checks
+    if _is_persistent_session(session_data):
+        return True
 
     # Check expiration (handled by Redis TTL mostly, but logic kept for safety)
     try:
@@ -348,8 +363,10 @@ def login():
                 # Add event times configuration status to session
                 session_data['event_times_configured'] = event_times_configured
                 
-                # Save to Redis
-                save_session(session_id, session_data) # Uses default 24h TTL
+                # Save to Redis — persistent TTL for leads/specialists
+                persistent = _is_persistent_session(session_data)
+                session_ttl = PERSISTENT_SESSION_TTL if persistent else 86400
+                save_session(session_id, session_data, ttl_seconds=session_ttl)
 
                 current_app.logger.info(f"Successful authentication for user: {username}")
 
@@ -364,11 +381,12 @@ def login():
                 else:
                     response = redirect(url_for('auth.loading_page'))
 
-                # Set session cookie
+                # Set session cookie — 30 days for leads/specialists, 24h for others
+                cookie_max_age = PERSISTENT_SESSION_TTL if persistent else (86400 if remember_me else None)
                 response.set_cookie(
                     'session_id',
                     session_id,
-                    max_age=86400 if remember_me else None,  # 24 hours if remember me
+                    max_age=cookie_max_age,
                     httponly=True,
                     secure=request.is_secure,
                     samesite='Lax'
@@ -480,7 +498,10 @@ def employee_login():
         'event_times_configured': True  # Employees don't need to configure this
     }
 
-    save_session(session_id, session_data)
+    # Leads and specialists get persistent sessions (30 days); supervisors get 24h
+    persistent = employee.role in PERSISTENT_SESSION_ROLES
+    session_ttl = PERSISTENT_SESSION_TTL if persistent else 86400
+    save_session(session_id, session_data, ttl_seconds=session_ttl)
 
     # Specialists and leads land on their personal dashboard; supervisors get the daily view
     if employee.role in ('specialist', 'lead'):
@@ -491,7 +512,7 @@ def employee_login():
 
     response.set_cookie(
         'session_id', session_id,
-        max_age=86400, httponly=True,
+        max_age=session_ttl, httponly=True,
         secure=request.is_secure, samesite='Lax'
     )
     return response
@@ -594,10 +615,30 @@ def session_info():
 def logout():
     """Handle user logout"""
     from app.integrations.external_api.session_api_service import session_api as external_api
+    from app.models import get_models, get_db
 
     session_id = request.cookies.get('session_id')
 
     if session_id:
+        # Read session before deleting to get employee_id for push cleanup
+        session_data = get_session(session_id)
+        if session_data:
+            employee_id = session_data.get('employee_id')
+            if employee_id:
+                # Deactivate push subscriptions so this device stops receiving notifications
+                try:
+                    models = get_models()
+                    db = get_db()
+                    PushSubscription = models.get('PushSubscription')
+                    if PushSubscription:
+                        PushSubscription.query.filter_by(
+                            employee_id=employee_id, is_active=True
+                        ).update({'is_active': False})
+                        db.session.commit()
+                        current_app.logger.info(f"Deactivated push subscriptions for employee {employee_id} on logout")
+                except Exception as e:
+                    current_app.logger.error(f"Error deactivating push subscriptions on logout: {e}")
+
         delete_session(session_id)
         current_app.logger.info("User logged out successfully")
 
@@ -640,11 +681,19 @@ def auth_status():
     
     if is_authenticated() and session_data:
         user_info = get_current_user()
-        
+
+        # Leads and specialists have no inactivity timeout
+        if _is_persistent_session(session_data):
+            return jsonify({
+                'authenticated': True,
+                'user': user_info,
+                'no_inactivity_timeout': True
+            })
+
         # Calculate seconds until timeout
         inactivity_timeout = get_inactivity_timeout()
         seconds_remaining = inactivity_timeout
-        
+
         last_activity_str = session_data.get('last_activity')
         if last_activity_str:
             try:
@@ -653,7 +702,7 @@ def auth_status():
                 seconds_remaining = max(0, inactivity_timeout - elapsed)
             except Exception:
                 pass
-        
+
         return jsonify({
             'authenticated': True,
             'user': user_info,
@@ -678,6 +727,16 @@ def session_heartbeat():
         return jsonify({'success': False, 'error': 'No session'}), 401
 
     if update_session_activity(session_id):
+        # Refresh Redis TTL for persistent sessions so they don't expire after 30 days of active use
+        session_data = get_session(session_id)
+        if session_data and _is_persistent_session(session_data):
+            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+            return jsonify({
+                'success': True,
+                'message': 'Session activity updated',
+                'no_inactivity_timeout': True
+            })
+
         inactivity_timeout = get_inactivity_timeout()
         return jsonify({
             'success': True,
