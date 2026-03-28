@@ -13,6 +13,8 @@ import logging
 import re
 import time
 from io import StringIO
+from app.services.schedule_change_service import get_schedule_change_service
+from app.utils.event_helpers import calculate_schedule_duration
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 logger = logging.getLogger(__name__)
@@ -371,7 +373,7 @@ def get_daily_events(date):
 
     # Helper function to build event dict (defined once, not per iteration)
     def build_event_dict(sched, evt, emp):
-        duration = evt.estimated_time or evt.get_default_duration(evt.event_type)
+        duration = calculate_schedule_duration(evt)
         end_dt = sched.schedule_datetime + timedelta(minutes=duration)
 
         # Get EDR status if available (from Walmart EDR system)
@@ -619,6 +621,64 @@ def get_event_by_ref(ref_num):
     }), 200
 
 
+@api_bp.route('/event/<int:event_ref_num>/submissions', methods=['GET'])
+@require_authentication()
+def get_event_submissions(event_ref_num):
+    """Get submission responses and activity for an event from MVRetail.
+
+    Returns question/answer pairs, photos, and activity timeline.
+    Requires SYNC_ENABLED and valid MVRetail credentials.
+    """
+    config = current_app.config
+    if not config.get('SYNC_ENABLED', False):
+        return jsonify({'error': 'External sync is not enabled'}), 503
+
+    models = get_models()
+    Event = models['Event']
+
+    event = Event.query.filter_by(project_ref_num=event_ref_num).first()
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    mplan_id = str(event.external_id) if event.external_id else None
+    store_id = str(event.location_mvid) if event.location_mvid else None
+
+    if not mplan_id or not store_id:
+        return jsonify({'error': 'Event missing external ID or location ID'}), 400
+
+    try:
+        from app.integrations.external_api.session_api_service import session_api
+        from app.services.submission_parser import parse_submissions, parse_activity
+
+        if not session_api.ensure_authenticated():
+            return jsonify({'error': 'Failed to authenticate with external API'}), 502
+
+        # Fetch submissions and activity in sequence
+        sub_response = session_api.get_event_submissions(mplan_id, store_id)
+        act_response = session_api.get_event_activity(mplan_id, store_id)
+
+        submissions = []
+        if sub_response and sub_response.get('success'):
+            submissions = parse_submissions(sub_response.get('responses', []))
+
+        activity = []
+        if act_response:
+            raw = act_response if isinstance(act_response, list) else []
+            activity = parse_activity(raw)
+
+        return jsonify({
+            'success': True,
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+            'condition': event.condition,
+            'submissions': submissions,
+            'activity': activity,
+        })
+    except Exception as e:
+        logger.error(f"Error fetching submissions for event {event_ref_num}: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to fetch submissions: {str(e)}'}), 500
+
+
 @api_bp.route('/event/<int:schedule_id>/unschedule', methods=['POST'])
 def unschedule_event_quick(schedule_id):
     """
@@ -814,6 +874,20 @@ def unschedule_event_quick(schedule_id):
                         )
                     else:
                         logger.info("No paired Supervisor event found for this CORE event.")
+
+                # Schedule change notification
+                if event and event.event_type != 'Supervisor':
+                    try:
+                        svc = get_schedule_change_service()
+                        svc.notify_event_removed(
+                            employee_id=schedule.employee_id,
+                            event_type=event.event_type,
+                            event_date=schedule.schedule_datetime,
+                            old_time=schedule.schedule_datetime,
+                            triggered_by='Supervisor'
+                        )
+                    except Exception as e:
+                        logger.warning(f"Schedule change notification failed: {e}")
 
                 # Delete the CORE schedule
                 db.session.delete(schedule)
@@ -1593,7 +1667,7 @@ def reschedule():
         from app.integrations.external_api.session_api_service import session_api as external_api
 
         # Calculate end datetime
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = new_datetime + timedelta(minutes=estimated_minutes)
 
         # Prepare API data
@@ -1649,6 +1723,10 @@ def reschedule():
 
         # API submission successful - now update local record with transaction
         try:
+            # Capture old values for notification
+            old_employee_id = schedule.employee_id
+            old_datetime = schedule.schedule_datetime
+
             # BEGIN NESTED TRANSACTION for CORE-Supervisor pairing
             with db.session.begin_nested():
                 # Update CORE event schedule
@@ -1712,7 +1790,7 @@ def reschedule():
                                     # Validate Supervisor API fields
                                     if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
                                         # Calculate Supervisor end datetime
-                                        supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
+                                        supervisor_estimated_minutes = calculate_schedule_duration(supervisor_event)
                                         supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
 
                                         # Call Crossmark API for Supervisor
@@ -1837,7 +1915,7 @@ def reschedule():
                             supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
 
                             if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
-                                supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
+                                supervisor_estimated_minutes = calculate_schedule_duration(supervisor_event)
                                 supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
 
                                 supervisor_api_result = external_api.schedule_mplan_event(
@@ -1873,6 +1951,41 @@ def reschedule():
                                 current_app.logger.warning("Supervisor API fields incomplete. Skipping.")
                     else:
                         current_app.logger.info("No paired Supervisor event found for this CORE event.")
+
+            # Schedule change notification
+            if event.event_type != 'Supervisor':
+                try:
+                    svc = get_schedule_change_service()
+                    if str(new_employee_id) != str(old_employee_id):
+                        old_emp = Employee.query.get(old_employee_id)
+                        old_emp_name = old_emp.name if old_emp else 'Unknown'
+                        new_emp_name = new_employee.name if new_employee else 'Unknown'
+                        svc.notify_employee_swapped_out(
+                            old_employee_id=old_employee_id,
+                            event_type=event.event_type,
+                            event_date=old_datetime,
+                            old_time=old_datetime,
+                            new_employee_name=new_emp_name,
+                            triggered_by='Supervisor'
+                        )
+                        svc.notify_employee_swapped_in(
+                            new_employee_id=new_employee_id,
+                            event_type=event.event_type,
+                            schedule_datetime=new_datetime,
+                            old_employee_name=old_emp_name,
+                            triggered_by='Supervisor'
+                        )
+                    else:
+                        svc.notify_time_changed(
+                            employee_id=new_employee_id,
+                            event_type=event.event_type,
+                            event_date=new_datetime,
+                            old_datetime=old_datetime,
+                            new_datetime=new_datetime,
+                            triggered_by='Supervisor'
+                        )
+                except Exception as e:
+                    logger.warning(f"Schedule change notification failed: {e}")
 
             # COMMIT TRANSACTION
             db.session.commit()
@@ -2055,7 +2168,7 @@ def reschedule_event_with_validation(schedule_id):
         from datetime import timedelta
 
         # Calculate end datetime
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = new_datetime + timedelta(minutes=estimated_minutes)
 
         # Prepare API data
@@ -2275,7 +2388,7 @@ def reschedule_event_with_validation(schedule_id):
                             supervisor_location_id = str(supervisor_event.location_mvid) if supervisor_event.location_mvid else None
                             
                             if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
-                                supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
+                                supervisor_estimated_minutes = calculate_schedule_duration(supervisor_event)
                                 supervisor_end_datetime = supervisor_new_datetime + timedelta(minutes=supervisor_estimated_minutes)
                                 
                                 logger.info(f"Calling Crossmark API for Supervisor: rep_id={supervisor_rep_id}, mplan_id={supervisor_mplan_id}")
@@ -2316,6 +2429,40 @@ def reschedule_event_with_validation(schedule_id):
                                     logger.warning(f"Failed to schedule Supervisor: {supervisor_api_result.get('message')}")
                             else:
                                 logger.warning(f"Supervisor API fields incomplete. rep_id={supervisor_rep_id}, mplan_id={supervisor_mplan_id}, location_id={supervisor_location_id}")
+
+            # Schedule change notification
+            if event.event_type != 'Supervisor':
+                try:
+                    svc = get_schedule_change_service()
+                    if new_employee_id and str(new_employee_id) != str(old_employee_id):
+                        old_emp = Employee.query.get(old_employee_id)
+                        old_emp_name = old_emp.name if old_emp else 'Unknown'
+                        svc.notify_employee_swapped_out(
+                            old_employee_id=old_employee_id,
+                            event_type=event.event_type,
+                            event_date=old_datetime,
+                            old_time=old_datetime,
+                            new_employee_name=employee.name,
+                            triggered_by='Supervisor'
+                        )
+                        svc.notify_employee_swapped_in(
+                            new_employee_id=employee.id,
+                            event_type=event.event_type,
+                            schedule_datetime=new_datetime,
+                            old_employee_name=old_emp_name,
+                            triggered_by='Supervisor'
+                        )
+                    else:
+                        svc.notify_time_changed(
+                            employee_id=employee.id,
+                            event_type=event.event_type,
+                            event_date=new_datetime,
+                            old_datetime=old_datetime,
+                            new_datetime=new_datetime,
+                            triggered_by='Supervisor'
+                        )
+                except Exception as e:
+                    logger.warning(f"Schedule change notification failed: {e}")
 
             # COMMIT TRANSACTION
             db.session.commit()
@@ -2521,7 +2668,7 @@ def change_employee_assignment(schedule_id):
         from datetime import timedelta
 
         # Calculate end datetime
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = schedule_datetime + timedelta(minutes=estimated_minutes)
 
         # Prepare API data
@@ -2613,6 +2760,29 @@ def change_employee_assignment(schedule_id):
         # Update event sync status
         event.sync_status = 'synced'
         event.last_synced = datetime.utcnow()
+
+        # Schedule change notification
+        if event.event_type != 'Supervisor':
+            try:
+                svc = get_schedule_change_service()
+                old_emp_name = old_employee.name if old_employee else 'Unknown'
+                svc.notify_employee_swapped_out(
+                    old_employee_id=old_employee_id,
+                    event_type=event.event_type,
+                    event_date=schedule_datetime,
+                    old_time=schedule_datetime,
+                    new_employee_name=new_employee.name,
+                    triggered_by='Supervisor'
+                )
+                svc.notify_employee_swapped_in(
+                    new_employee_id=new_employee_id,
+                    event_type=event.event_type,
+                    schedule_datetime=schedule_datetime,
+                    old_employee_name=old_emp_name,
+                    triggered_by='Supervisor'
+                )
+            except Exception as e:
+                logger.warning(f"Schedule change notification failed: {e}")
 
         db.session.commit()
 
@@ -2817,6 +2987,20 @@ def unschedule_event(schedule_id):
                     else:
                         current_app.logger.info("No paired Supervisor event found for this CORE event.")
 
+                # Schedule change notification
+                if event.event_type != 'Supervisor':
+                    try:
+                        svc = get_schedule_change_service()
+                        svc.notify_event_removed(
+                            employee_id=schedule.employee_id,
+                            event_type=event.event_type,
+                            event_date=schedule.schedule_datetime,
+                            old_time=schedule.schedule_datetime,
+                            triggered_by='Supervisor'
+                        )
+                    except Exception as e:
+                        current_app.logger.warning(f"Schedule change notification failed: {e}")
+
                 # Delete CORE event schedule record
                 db.session.delete(schedule)
 
@@ -2933,6 +3117,20 @@ def unschedule_event_by_id(event_id):
                         'error': 'Failed to submit to Crossmark API',
                         'details': str(api_error)
                     }), 500
+
+            # Schedule change notification
+            if event.event_type != 'Supervisor':
+                try:
+                    svc = get_schedule_change_service()
+                    svc.notify_event_removed(
+                        employee_id=schedule.employee_id,
+                        event_type=event.event_type,
+                        event_date=schedule.schedule_datetime,
+                        old_time=schedule.schedule_datetime,
+                        triggered_by='Supervisor'
+                    )
+                except Exception as e:
+                    current_app.logger.warning(f"Schedule change notification failed: {e}")
 
             # Delete the schedule
             db.session.delete(schedule)
@@ -3165,8 +3363,8 @@ def trade_events():
         from datetime import timedelta
 
         # Calculate end datetimes for both events
-        estimated_minutes1 = event1.estimated_time or event1.get_default_duration(event1.event_type)
-        estimated_minutes2 = event2.estimated_time or event2.get_default_duration(event2.event_type)
+        estimated_minutes1 = calculate_schedule_duration(event1)
+        estimated_minutes2 = calculate_schedule_duration(event2)
         end_datetime1 = schedule1.schedule_datetime + timedelta(minutes=estimated_minutes1)
         end_datetime2 = schedule2.schedule_datetime + timedelta(minutes=estimated_minutes2)
 
@@ -3269,6 +3467,36 @@ def trade_events():
         event1.last_synced = datetime.utcnow()
         event2.sync_status = 'synced'
         event2.last_synced = datetime.utcnow()
+
+        # Schedule change notifications for both employees
+        try:
+            svc = get_schedule_change_service()
+            # Employee 1: lost event1, got event2
+            svc.notify_event_traded(
+                employee_id=original_emp1_id,
+                old_event_type=event1.event_type,
+                old_event_date=schedule1.schedule_datetime,
+                old_time=schedule1.schedule_datetime,
+                new_event_type=event2.event_type,
+                new_event_date=schedule2.schedule_datetime,
+                new_time=schedule2.schedule_datetime,
+                trade_partner_name=original_emp2_name,
+                triggered_by='Supervisor',
+            )
+            # Employee 2: lost event2, got event1
+            svc.notify_event_traded(
+                employee_id=original_emp2_id,
+                old_event_type=event2.event_type,
+                old_event_date=schedule2.schedule_datetime,
+                old_time=schedule2.schedule_datetime,
+                new_event_type=event1.event_type,
+                new_event_date=schedule1.schedule_datetime,
+                new_time=schedule1.schedule_datetime,
+                trade_partner_name=original_emp1_name,
+                triggered_by='Supervisor',
+            )
+        except Exception as e:
+            logger.warning(f"Schedule change notification failed: {e}")
 
         db.session.commit()
 
@@ -3507,7 +3735,7 @@ def bulk_reassign_supervisor_events():
                 continue
 
             # Calculate end datetime
-            estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            estimated_minutes = calculate_schedule_duration(event)
             end_datetime = schedule.schedule_datetime + timedelta(minutes=estimated_minutes)
 
             # Call external API to schedule the event with the new employee
@@ -3538,6 +3766,7 @@ def bulk_reassign_supervisor_events():
                     continue
 
                 # Update local database with new employee assignment
+                old_employee_id = schedule.employee_id
                 old_employee_name = schedule.employee.name if schedule.employee else 'Unknown'
                 schedule.employee_id = new_employee_id
                 schedule.employee_name = new_employee.name
@@ -3545,6 +3774,30 @@ def bulk_reassign_supervisor_events():
                 # Update sync status
                 event.sync_status = 'synced'
                 event.last_synced = datetime.utcnow()
+
+                # Schedule change notifications for old and new employee
+                try:
+                    svc = get_schedule_change_service()
+                    if old_employee_id:
+                        svc.notify_employee_swapped_out(
+                            old_employee_id=old_employee_id,
+                            event_type=event.event_type,
+                            event_date=schedule.schedule_datetime,
+                            old_time=schedule.schedule_datetime,
+                            new_employee_name=new_employee.name,
+                            triggered_by='Supervisor',
+                            reason='supervisor events reassigned',
+                        )
+                    svc.notify_employee_swapped_in(
+                        new_employee_id=new_employee_id,
+                        event_type=event.event_type,
+                        schedule_datetime=schedule.schedule_datetime,
+                        old_employee_name=old_employee_name,
+                        triggered_by='Supervisor',
+                        reason='supervisor events reassigned',
+                    )
+                except Exception as notif_err:
+                    logger.warning(f"Schedule change notification failed: {notif_err}")
 
                 reassigned_events.append({
                     'schedule_id': schedule.id,
@@ -3661,7 +3914,7 @@ def change_employee():
         from app.integrations.external_api.session_api_service import session_api as external_api
 
         # Calculate end datetime
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = schedule.schedule_datetime + timedelta(minutes=estimated_minutes)
 
         # Prepare API data
@@ -3716,12 +3969,37 @@ def change_employee():
             return jsonify({'error': f'Failed to submit to Crossmark API: {str(api_error)}'}), 500
 
         # API submission successful - now update local record
+        old_employee_id = schedule.employee_id
+        old_employee = Employee.query.get(old_employee_id)
+        old_emp_name = old_employee.name if old_employee else 'Unknown'
         schedule.employee_id = new_employee_id
         schedule.employee_name = new_employee.name
 
         # Update event sync status
         event.sync_status = 'synced'
         event.last_synced = datetime.utcnow()
+
+        # Schedule change notification
+        if event.event_type != 'Supervisor':
+            try:
+                svc = get_schedule_change_service()
+                svc.notify_employee_swapped_out(
+                    old_employee_id=old_employee_id,
+                    event_type=event.event_type,
+                    event_date=schedule.schedule_datetime,
+                    old_time=schedule.schedule_datetime,
+                    new_employee_name=new_employee.name,
+                    triggered_by='Supervisor'
+                )
+                svc.notify_employee_swapped_in(
+                    new_employee_id=new_employee_id,
+                    event_type=event.event_type,
+                    schedule_datetime=schedule.schedule_datetime,
+                    old_employee_name=old_emp_name,
+                    triggered_by='Supervisor'
+                )
+            except Exception as e:
+                logger.warning(f"Schedule change notification failed: {e}")
 
         db.session.commit()
 
@@ -4532,11 +4810,11 @@ def schedule_event():
         if not event:
             return jsonify({'success': False, 'error': 'Event not found'}), 404
 
-        # Calculate duration: use param if provided, else event's estimated_time, else type default
+        # Calculate duration: use param if provided, else estimated_time + lunch, else type default
         if duration_minutes_param:
             duration_minutes = duration_minutes_param
         else:
-            duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            duration_minutes = calculate_schedule_duration(event)
 
         # Get the employee
         employee = db.session.get(Employee, employee_id)
@@ -4744,7 +5022,7 @@ def schedule_event():
                         # Validate Supervisor API fields
                         if all([supervisor_rep_id, supervisor_mplan_id, supervisor_location_id]):
                             # Calculate Supervisor end datetime
-                            supervisor_estimated_minutes = supervisor_event.estimated_time or supervisor_event.get_default_duration(supervisor_event.event_type)
+                            supervisor_estimated_minutes = calculate_schedule_duration(supervisor_event)
                             supervisor_end_datetime = supervisor_schedule_datetime + timedelta(minutes=supervisor_estimated_minutes)
 
                             # Call Crossmark API for Supervisor
@@ -4798,6 +5076,19 @@ def schedule_event():
                         )
                     else:
                         current_app.logger.info("No paired Supervisor event found for this CORE event.")
+
+            # Schedule change notification
+            if event.event_type != 'Supervisor':
+                try:
+                    svc = get_schedule_change_service()
+                    svc.notify_event_added(
+                        employee_id=employee_id,
+                        event_type=event.event_type,
+                        schedule_datetime=schedule_datetime,
+                        triggered_by='Supervisor'
+                    )
+                except Exception as e:
+                    logger.warning(f"Schedule change notification failed: {e}")
 
             # COMMIT TRANSACTION
             db.session.commit()
@@ -4958,7 +5249,7 @@ def get_employee_schedule_details():
         formatted_schedules = []
         for schedule, event in schedules:
             # Calculate duration
-            duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            duration_minutes = calculate_schedule_duration(event)
             hours = duration_minutes // 60
             minutes = duration_minutes % 60
             if minutes > 0:
@@ -5173,6 +5464,30 @@ def change_event_employee(schedule_id):
         # Update schedule with new employee
         schedule.employee_id = new_employee_id
         schedule.employee_name = new_employee.name
+
+        # Schedule change notification (notify both old and new employee)
+        event = schedule.event
+        if event and event.event_type != 'Supervisor':
+            try:
+                svc = get_schedule_change_service()
+                if old_employee_id:
+                    svc.notify_employee_swapped_out(
+                        old_employee_id=old_employee_id,
+                        event_type=event.event_type,
+                        event_date=schedule.schedule_datetime,
+                        old_time=schedule.schedule_datetime,
+                        new_employee_name=new_employee.name,
+                        triggered_by='Supervisor',
+                    )
+                svc.notify_employee_swapped_in(
+                    new_employee_id=new_employee_id,
+                    event_type=event.event_type,
+                    schedule_datetime=schedule.schedule_datetime,
+                    old_employee_name=old_employee_name,
+                    triggered_by='Supervisor',
+                )
+            except Exception as e:
+                logger.warning(f"Schedule change notification failed: {e}")
 
         db.session.commit()
 
@@ -5942,6 +6257,20 @@ def bulk_unschedule():
 
             # Delete schedules
             for schedule in schedules:
+                # Schedule change notification
+                if event.event_type != 'Supervisor':
+                    try:
+                        svc = get_schedule_change_service()
+                        svc.notify_event_removed(
+                            employee_id=schedule.employee_id,
+                            event_type=event.event_type,
+                            event_date=schedule.schedule_datetime,
+                            old_time=schedule.schedule_datetime,
+                            triggered_by='Supervisor'
+                        )
+                    except Exception as e:
+                        logger.warning(f"Schedule change notification failed: {e}")
+
                 db.session.delete(schedule)
 
             # Update event condition
@@ -6080,7 +6409,7 @@ def fix_coverage_times(date_str):
                 errors.append(f"Missing API IDs for {emp_name} - shift {i + 1}")
                 continue
 
-            estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            estimated_minutes = calculate_schedule_duration(event)
             end_datetime = new_datetime + timedelta(minutes=estimated_minutes)
 
             try:
@@ -6282,7 +6611,7 @@ def my_schedule_weekly():
 
     for schedule, event in rows:
         d = schedule.schedule_datetime.date()
-        duration = event.estimated_time or Event.get_default_duration(event.event_type)
+        duration = calculate_schedule_duration(event)
         total_minutes += duration
         scheduled_dates.add(d)
         days[d.isoformat()].append({
@@ -6303,6 +6632,77 @@ def my_schedule_weekly():
             'days_scheduled': len(scheduled_dates),
             'event_count': len(rows),
         },
+    })
+
+
+@api_bp.route('/my-schedule/daily', methods=['GET'])
+@require_authentication()
+def my_schedule_daily():
+    """Return the logged-in employee's events for a single day.
+
+    For leads, also returns all other team members' events separately.
+
+    Query params:
+        date (str): YYYY-MM-DD (defaults to today)
+    """
+    from app.routes.auth import get_current_user
+
+    models = get_models()
+    Schedule = models['Schedule']
+    Event = models['Event']
+    Employee = models['Employee']
+    db = current_app.extensions['sqlalchemy']
+
+    user = get_current_user()
+    employee_id = user.get('employee_id') if user else None
+    user_role = user.get('role', '') if user else ''
+
+    date_str = request.args.get('date')
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+    else:
+        selected_date = date.today()
+
+    day_start = datetime.combine(selected_date, datetime.min.time())
+    day_end = datetime.combine(selected_date, datetime.max.time())
+
+    rows = db.session.query(Schedule, Event, Employee).join(
+        Event, Schedule.event_ref_num == Event.project_ref_num
+    ).outerjoin(
+        Employee, Schedule.employee_id == Employee.id
+    ).filter(
+        Schedule.schedule_datetime >= day_start,
+        Schedule.schedule_datetime <= day_end
+    ).order_by(Schedule.schedule_datetime).all()
+
+    my_events = []
+    team_events = []
+
+    for schedule, event, employee in rows:
+        emp_name = employee.name if employee else (schedule.employee_name or 'Unassigned')
+        entry = {
+            'schedule_id': schedule.id,
+            'time': schedule.schedule_datetime.strftime('%I:%M %p').lstrip('0'),
+            'event_name': event.project_name,
+            'event_type': event.event_type,
+            'employee_name': emp_name,
+        }
+
+        if employee_id and schedule.employee_id == employee_id:
+            my_events.append(entry)
+        elif user_role in ('lead', 'supervisor'):
+            team_events.append(entry)
+
+    date_label = selected_date.strftime('%A, %B %-d')
+
+    return jsonify({
+        'date': selected_date.isoformat(),
+        'date_label': date_label,
+        'my_events': my_events,
+        'team_events': team_events,
     })
 
 
@@ -6359,7 +6759,7 @@ def my_schedule_monthly():
         d = schedule.schedule_datetime.date().isoformat()
         if d not in days:
             days[d] = []
-        duration = event.estimated_time or Event.get_default_duration(event.event_type)
+        duration = calculate_schedule_duration(event)
         days[d].append({
             'schedule_id': schedule.id,
             'time': schedule.schedule_datetime.strftime('%I:%M %p'),

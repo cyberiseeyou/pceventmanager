@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - Product Connections{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/my-notifications.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="my-notif">
+    <div class="my-notif__header">
+        <h1 class="my-notif__title">Notifications</h1>
+        <button class="my-notif__mark-all" id="markAllRead" hidden>
+            <span class="material-symbols-outlined" style="font-size: 18px;">done_all</span>
+            Mark all read
+        </button>
+    </div>
+    <div id="notifList" class="my-notif__list">
+        <div class="my-notif__empty" id="notifEmpty">
+            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--color-neutral-300);">notifications_none</span>
+            <p>No notifications yet</p>
+            <p class="my-notif__empty-sub">You'll be notified when your schedule changes within 7 days.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pages/my-notifications.js') }}"></script>
+{% endblock %}

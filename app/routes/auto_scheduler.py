@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import func
 
 from app.services.scheduling_engine import SchedulingEngine
+from app.services.schedule_change_service import get_schedule_change_service
 from app.routes.auth import require_authentication, require_role
 from app.utils.timezone import to_local_time
 
@@ -617,25 +618,41 @@ def approve_schedule():
                     )
                     db.session.delete(sup_pending)
                 
-                # 2. Delete any posted Schedule records for the bumped event
+                # 2. Look up the bumped event for notification and supervisor checks
+                bumped_event = db.session.query(models['Event']).filter_by(
+                    project_ref_num=bumped_ref
+                ).first()
+
+                # 3. Delete any posted Schedule records for the bumped event
                 # (These might exist from previous approved runs)
                 posted_schedules = db.session.query(models['Schedule']).filter(
                     models['Schedule'].event_ref_num == bumped_ref
                 ).all()
-                
+
                 scheduled_dates = set()  # Track dates for supervisor deletion
                 for posted_schedule in posted_schedules:
                     current_app.logger.info(
                         f"  Deleting posted schedule for event {bumped_ref} "
                         f"(was scheduled to {posted_schedule.employee_id} at {posted_schedule.schedule_datetime})"
                     )
+                    # Notify bumped employee (skip Supervisor phantom events)
+                    if bumped_event and bumped_event.event_type != 'Supervisor' and posted_schedule.employee_id:
+                        try:
+                            svc = get_schedule_change_service()
+                            svc.notify_event_removed(
+                                employee_id=posted_schedule.employee_id,
+                                event_type=bumped_event.event_type,
+                                event_date=posted_schedule.schedule_datetime.date(),
+                                old_time=posted_schedule.schedule_datetime,
+                                triggered_by='Auto-Scheduler',
+                                reason='bumped by auto-scheduler',
+                            )
+                        except Exception as notif_err:
+                            current_app.logger.warning(f"Schedule change notification failed: {notif_err}")
                     scheduled_dates.add(posted_schedule.schedule_datetime.date())
                     db.session.delete(posted_schedule)
-                
-                # 3. Delete matching Supervisor events (both pending and posted)
-                bumped_event = db.session.query(models['Event']).filter_by(
-                    project_ref_num=bumped_ref
-                ).first()
+
+                # 4. Delete matching Supervisor events (both pending and posted)
                 
                 if bumped_event and bumped_event.event_type == 'Core':
                     # Extract event number to find matching Supervisor events
@@ -750,10 +767,10 @@ def approve_schedule():
                 api_failed += 1
                 continue
 
-            # Calculate end datetime (start + estimated_time)
+            # Calculate end datetime (start + estimated_time + lunch break)
             start_datetime = pending.schedule_datetime
-            # Use event's estimated_time, or fall back to the event type's default duration
-            estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            from app.utils.event_helpers import calculate_schedule_duration
+            estimated_minutes = calculate_schedule_duration(event)
             end_datetime = start_datetime + timedelta(minutes=estimated_minutes)
 
             # CRITICAL VALIDATION: Ensure schedule is within event period
@@ -926,6 +943,20 @@ def approve_schedule():
             pending.api_submitted_at = datetime.utcnow()
             api_submitted += 1
 
+            # Schedule change notification (skip Supervisor phantom events)
+            if event.event_type != 'Supervisor':
+                try:
+                    svc = get_schedule_change_service()
+                    svc.notify_event_added(
+                        employee_id=pending.employee_id,
+                        event_type=event.event_type,
+                        schedule_datetime=pending.schedule_datetime,
+                        triggered_by='Auto-Scheduler',
+                        reason='auto-scheduled',
+                    )
+                except Exception as notif_err:
+                    current_app.logger.warning(f"Schedule change notification failed: {notif_err}")
+
             current_app.logger.info(
                 f"Successfully scheduled event {event.project_ref_num} ({event.project_name}) "
                 f"to {employee.name} at {start_datetime}"
@@ -1036,10 +1067,10 @@ def approve_single_schedule(pending_id):
                 'employee_id': pending.employee_id
             }), 404
 
-        # Calculate end datetime (start + estimated_time)
+        # Calculate end datetime (start + estimated_time + lunch break)
         start_datetime = pending.schedule_datetime
-        # Use event's estimated_time, or fall back to the event type's default duration
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        from app.utils.event_helpers import calculate_schedule_duration
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = start_datetime + timedelta(minutes=estimated_minutes)
 
         # CRITICAL VALIDATION: Ensure schedule is within event period
@@ -1220,6 +1251,20 @@ def approve_single_schedule(pending_id):
         # Update pending schedule status
         pending.status = 'api_submitted' if sync_enabled else 'approved'
         pending.api_submitted_at = datetime.utcnow()
+
+        # Schedule change notification (skip Supervisor phantom events)
+        if event.event_type != 'Supervisor':
+            try:
+                svc = get_schedule_change_service()
+                svc.notify_event_added(
+                    employee_id=pending.employee_id,
+                    event_type=event.event_type,
+                    schedule_datetime=pending.schedule_datetime,
+                    triggered_by='Auto-Scheduler',
+                    reason='auto-scheduled',
+                )
+            except Exception as notif_err:
+                current_app.logger.warning(f"Schedule change notification failed: {notif_err}")
 
         db.session.commit()
 

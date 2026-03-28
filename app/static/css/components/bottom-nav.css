@@ -9,6 +9,25 @@
     display: none;
 }
 
+/* Notification badge on bottom nav bell icon */
+.bottom-nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 50%;
+    transform: translateX(calc(50% + 10px));
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    background: var(--color-danger, #ef4444);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    z-index: 1;
+}
+
 /* Visible on mobile */
 @media (max-width: 768px) {
     .bottom-nav {

@@ -18,6 +18,8 @@ from .shift_block_setting import create_shift_block_setting_model
 from .notes import create_notes_models
 from .inventory import create_inventory_models
 from .lost_demo import create_lost_demo_model
+from .schedule_change_notification import create_schedule_change_notification_model
+from .push_subscription import create_push_subscription_model
 
 
 def init_models(db):
@@ -48,6 +50,8 @@ def init_models(db):
     Note, RecurringReminder = create_notes_models(db)
     inventory_models = create_inventory_models(db)
     LostDemo = create_lost_demo_model(db)
+    ScheduleChangeNotification = create_schedule_change_notification_model(db)
+    PushSubscription = create_push_subscription_model(db)
 
     return {
         'Employee': Employee,
@@ -83,6 +87,8 @@ def init_models(db):
         'InventoryReminder': inventory_models['InventoryReminder'],
         'LostDemo': LostDemo,
         'ScheduleNotification': ScheduleNotification,
+        'ScheduleChangeNotification': ScheduleChangeNotification,
+        'PushSubscription': PushSubscription,
     }
 
 

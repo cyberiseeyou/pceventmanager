@@ -7,7 +7,7 @@
  * - Offline fallback page when network unavailable
  */
 
-const CACHE_VERSION = 'pc-events-v1';
+const CACHE_VERSION = 'pc-events-v2';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
 
@@ -151,3 +151,58 @@ async function networkFirstWithFallback(request) {
     });
   }
 }
+
+/**
+ * Push notification handler.
+ * Receives push events from the server and displays device-level notifications.
+ */
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = { title: 'Schedule Change', body: event.data.text() };
+  }
+
+  const title = data.title || 'Schedule Change';
+  const options = {
+    body: data.body || 'Your schedule has been updated.',
+    icon: '/static/img/pwa-icon-192.png',
+    badge: '/static/img/pwa-icon-192.png',
+    tag: data.tag || 'schedule-change',
+    renotify: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: data.url || '/my-notifications',
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/**
+ * Notification click handler.
+ * Opens the app at the notifications page when user taps a push notification.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || '/my-notifications';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If app is already open, focus it and navigate
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus();
+          client.navigate(targetUrl);
+          return;
+        }
+      }
+      // Otherwise open a new window
+      return clients.openWindow(targetUrl);
+    })
+  );
+});

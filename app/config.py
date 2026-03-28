@@ -63,6 +63,11 @@ class Config:
     CPSAT_ENABLED = config('CPSAT_ENABLED', default=True, cast=bool)
     CPSAT_TIME_LIMIT = config('CPSAT_TIME_LIMIT', default=15, cast=int)  # Solver time limit in seconds
 
+    # Web Push VAPID keys (for schedule change notifications)
+    VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
+    VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
+    VAPID_CLAIMS_EMAIL = config('VAPID_CLAIMS_EMAIL', default='mailto:admin@pcevents.com')
+
     @classmethod
     def validate(cls, validate_walmart: bool = True) -> None:
         """

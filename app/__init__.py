@@ -150,6 +150,9 @@ def create_app(config_name=None):
     # Register Jinja filters
     app.jinja_env.filters['localtime'] = to_local_time
 
+    from app.utils.event_helpers import calculate_schedule_duration
+    app.jinja_env.globals['calculate_schedule_duration'] = calculate_schedule_duration
+
     # Register blueprints
     register_blueprints(app, db, models)
 
@@ -233,6 +236,14 @@ def register_blueprints(app, db, models):
     notifications_api_bp = init_notification_routes(db, models)
     app.register_blueprint(notifications_api_bp)
 
+    from app.routes.api_schedule_changes import init_schedule_change_routes
+    schedule_changes_bp = init_schedule_change_routes(db, models)
+    app.register_blueprint(schedule_changes_bp)
+
+    from app.routes.api_push import init_push_routes
+    push_bp = init_push_routes(db, models)
+    app.register_blueprint(push_bp)
+
     from app.routes.api_paperwork_templates import api_paperwork_templates_bp
     app.register_blueprint(api_paperwork_templates_bp)
 
@@ -256,6 +267,9 @@ def register_blueprints(app, db, models):
 
     from app.routes.lost_demos import lost_demos_bp
     app.register_blueprint(lost_demos_bp)
+
+    from app.routes.api_demo_goals import api_demo_goals_bp
+    app.register_blueprint(api_demo_goals_bp)
 
     # Configure CSRF exemptions for specific routes (after blueprint registration)
     if 'auth.login' in app.view_functions:
