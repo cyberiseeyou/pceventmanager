@@ -401,6 +401,7 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 | api_push_bp | /api/push | Web push subscriptions |
 | api_schedule_changes_bp | /api/schedule-changes | Schedule change notifications |
 | api_demo_goals_bp | /api | Demo goals endpoints |
+| api_calloffs_bp | /api/calloffs | Employee calloff management |
 
 ---
 

@@ -340,6 +340,11 @@
                 <span class="material-symbols-outlined">target</span>
                 <span>Demo Goals</span>
             </a>
+            <a href="{{ url_for('main.calloff_management') }}"
+                class="sidebar-item {% if request.endpoint == 'main.calloff_management' %}active{% endif %}">
+                <span class="material-symbols-outlined">phone_missed</span>
+                <span>Calloffs</span>
+            </a>
             <a href="{{ url_for('dashboard.weekly_validation') }}"
                 class="sidebar-item {% if request.endpoint == 'dashboard.weekly_validation' %}active{% endif %}">
                 <span class="material-symbols-outlined">verified</span>

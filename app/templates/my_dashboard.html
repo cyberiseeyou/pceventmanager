@@ -14,6 +14,10 @@
         <p class="my-dash__hello">{{ greeting_label }}</p>
         <h1 class="my-dash__name">{{ first_name }}</h1>
         <p class="my-dash__date">{{ today.strftime('%A, %B %-d, %Y') }}</p>
+        <a href="{{ url_for('main.calloff_form') }}" class="my-dash__calloff-btn">
+            <span class="material-symbols-outlined">phone_missed</span>
+            Report Calloff
+        </a>
     </div>
 
     {# ── 2. DATE NAVIGATION ── #}

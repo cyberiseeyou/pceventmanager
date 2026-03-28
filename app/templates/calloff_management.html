@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Calloff Management - Product Connections{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/calloff-management.css') }}?v={{ config.get('VERSION', '') }}">
+{% endblock %}
+
+{% block content %}
+<div class="calloff-mgmt">
+    <div class="calloff-mgmt__header">
+        <div>
+            <h1 class="calloff-mgmt__title">Calloff Management</h1>
+            <p class="calloff-mgmt__subtitle">Review and manage employee calloffs</p>
+        </div>
+        <div class="calloff-mgmt__filters">
+            <select id="filterEmployee" class="calloff-mgmt__filter">
+                <option value="">All Employees</option>
+            </select>
+            <select id="filterDays" class="calloff-mgmt__filter">
+                <option value="30">Last 30 Days</option>
+                <option value="7">Last 7 Days</option>
+                <option value="60">Last 60 Days</option>
+                <option value="90">Last 90 Days</option>
+            </select>
+        </div>
+    </div>
+
+    {# Tabs #}
+    <div class="calloff-mgmt__tabs" role="tablist">
+        <button role="tab" class="calloff-mgmt__tab active" data-tab="pending" aria-selected="true">
+            Pending Review <span class="calloff-mgmt__badge" id="pendingBadge" hidden>0</span>
+        </button>
+        <button role="tab" class="calloff-mgmt__tab" data-tab="all" aria-selected="false">
+            All Calloffs
+        </button>
+        <button role="tab" class="calloff-mgmt__tab" data-tab="patterns" aria-selected="false">
+            Patterns & Alerts
+        </button>
+    </div>
+
+    {# Pending panel #}
+    <div class="calloff-mgmt__panel" id="panel-pending">
+        <div id="pendingList" class="calloff-mgmt__list">
+            <div class="calloff-mgmt__loading">Loading...</div>
+        </div>
+    </div>
+
+    {# All calloffs panel #}
+    <div class="calloff-mgmt__panel" id="panel-all" hidden>
+        <div class="calloff-mgmt__toolbar">
+            <select id="filterStatus" class="calloff-mgmt__filter">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="excused">Excused</option>
+                <option value="unexcused">Unexcused</option>
+            </select>
+            <select id="filterReason" class="calloff-mgmt__filter">
+                <option value="">All Reasons</option>
+                <option value="sick">Sick / Illness</option>
+                <option value="family_emergency">Family Emergency</option>
+                <option value="personal">Personal</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div id="allList" class="calloff-mgmt__list">
+            <div class="calloff-mgmt__loading">Loading...</div>
+        </div>
+    </div>
+
+    {# Patterns panel #}
+    <div class="calloff-mgmt__panel" id="panel-patterns" hidden>
+        <div id="patternsContent" class="calloff-mgmt__list">
+            <div class="calloff-mgmt__loading">Loading...</div>
+        </div>
+    </div>
+</div>
+
+{# Upload modal #}
+<div class="calloff-modal-overlay" id="uploadModal" hidden>
+    <div class="calloff-modal">
+        <div class="calloff-modal__header">
+            <h3>Upload File</h3>
+            <button class="calloff-modal__close" data-action="close-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="calloff-modal__body">
+            <input type="file" id="uploadFile" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp">
+            <p class="calloff-modal__hint">PDF, JPEG, PNG, HEIC, or WEBP. Max 10 MB.</p>
+        </div>
+        <div class="calloff-modal__footer">
+            <button class="calloff-modal__btn calloff-modal__btn--secondary" data-action="close-modal">Cancel</button>
+            <button class="calloff-modal__btn calloff-modal__btn--primary" id="uploadSubmit">Upload</button>
+        </div>
+    </div>
+</div>
+
+{# Comment modal #}
+<div class="calloff-modal-overlay" id="commentModal" hidden>
+    <div class="calloff-modal">
+        <div class="calloff-modal__header">
+            <h3>Supervisor Comment</h3>
+            <button class="calloff-modal__close" data-action="close-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="calloff-modal__body">
+            <textarea id="commentText" class="calloff-modal__textarea" rows="4"
+                      placeholder="Add a comment..."></textarea>
+        </div>
+        <div class="calloff-modal__footer">
+            <button class="calloff-modal__btn calloff-modal__btn--secondary" data-action="close-modal">Cancel</button>
+            <button class="calloff-modal__btn calloff-modal__btn--primary" id="commentSubmit">Save Comment</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pages/calloff-management.js') }}?v={{ config.get('VERSION', '') }}"></script>
+{% endblock %}

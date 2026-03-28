@@ -271,6 +271,9 @@ def register_blueprints(app, db, models):
     from app.routes.api_demo_goals import api_demo_goals_bp
     app.register_blueprint(api_demo_goals_bp)
 
+    from app.routes.api_calloffs import api_calloffs_bp
+    app.register_blueprint(api_calloffs_bp)
+
     # Configure CSRF exemptions for specific routes (after blueprint registration)
     if 'auth.login' in app.view_functions:
         csrf.exempt(app.view_functions['auth.login'])

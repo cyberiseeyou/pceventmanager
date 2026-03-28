@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Report Calloff - Product Connections{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/calloff-form.css') }}?v={{ config.get('VERSION', '') }}">
+{% endblock %}
+
+{% block content %}
+<div class="calloff-form">
+    <div class="calloff-form__header">
+        <a href="{{ url_for('main.my_dashboard') }}" class="calloff-form__back" aria-label="Back to dashboard">
+            <span class="material-symbols-outlined">arrow_back</span>
+        </a>
+        <h1 class="calloff-form__title">Report Calloff</h1>
+    </div>
+
+    <form id="calloffForm" class="calloff-form__body">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {# Date toggle #}
+        <div class="calloff-form__field">
+            <label class="calloff-form__label">Date of Calloff</label>
+            <div class="calloff-form__date-toggle">
+                <button type="button" class="calloff-form__date-btn active" data-date="today" id="dateToday">
+                    Today
+                </button>
+                <button type="button" class="calloff-form__date-btn" data-date="tomorrow" id="dateTomorrow">
+                    Tomorrow
+                </button>
+            </div>
+            <input type="hidden" id="calloffDate" name="calloff_date" value="">
+        </div>
+
+        {# Reason dropdown #}
+        <div class="calloff-form__field">
+            <label class="calloff-form__label" for="calloffReason">Reason <span class="required">*</span></label>
+            <select id="calloffReason" name="reason" class="calloff-form__select" required>
+                <option value="" disabled selected>Select a reason</option>
+                <option value="sick">Sick / Illness</option>
+                <option value="family_emergency">Family Emergency</option>
+                <option value="personal">Personal</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        {# Doctor's note warning #}
+        <div class="calloff-form__warning" id="doctorNoteWarning" hidden>
+            <span class="material-symbols-outlined">warning</span>
+            <div>
+                <strong>Doctor's note required.</strong>
+                A doctor's note will be required to turn in to your Club Supervisor upon return to work in order for this absence to be excused.
+            </div>
+        </div>
+
+        {# Additional details #}
+        <div class="calloff-form__field">
+            <label class="calloff-form__label" for="calloffNotes">
+                Additional Details <span class="optional">(optional)</span>
+            </label>
+            <textarea id="calloffNotes" name="notes" class="calloff-form__textarea"
+                      placeholder="Any additional context about your calloff..."
+                      rows="3"></textarea>
+        </div>
+
+        {# Affected events preview #}
+        <div class="calloff-form__field">
+            <label class="calloff-form__label">Scheduled Events</label>
+            <div id="affectedEvents" class="calloff-form__events">
+                <div class="calloff-form__events-loading">
+                    <span class="material-symbols-outlined">hourglass_empty</span>
+                    Checking schedule...
+                </div>
+            </div>
+        </div>
+
+        {# Submit button #}
+        <button type="submit" class="calloff-form__submit" id="submitBtn">
+            Submit Calloff
+        </button>
+
+        {# Status messages #}
+        <div id="formMessage" class="calloff-form__message" hidden></div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pages/calloff-form.js') }}?v={{ config.get('VERSION', '') }}"></script>
+{% endblock %}

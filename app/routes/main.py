@@ -59,6 +59,21 @@ def dashboard():
     return redirect(url_for('dashboard.command_center'))
 
 
+@main_bp.route('/calloff')
+@require_authentication()
+def calloff_form():
+    """PWA calloff form for leads and specialists."""
+    return render_template('calloff_form.html')
+
+
+@main_bp.route('/calloffs')
+@require_authentication()
+@require_role('supervisor')
+def calloff_management():
+    """Supervisor dashboard for managing employee calloffs."""
+    return render_template('calloff_management.html')
+
+
 @main_bp.route('/demo-goals')
 @require_authentication()
 def demo_goals_page():

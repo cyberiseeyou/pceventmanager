@@ -1,0 +1,259 @@
+/* Calloff Form — Employee mobile-first calloff submission */
+
+.calloff-form {
+    max-width: 500px;
+    margin: 0 auto;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+.calloff-form__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--pc-dark-blue, #2E4C73);
+    color: #fff;
+}
+
+.calloff-form__back {
+    color: #fff;
+    text-decoration: none;
+    display: flex;
+}
+
+.calloff-form__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.calloff-form__body {
+    padding: 20px;
+}
+
+.calloff-form__field {
+    margin-bottom: 20px;
+}
+
+.calloff-form__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+.calloff-form__label .required {
+    color: #dc2626;
+}
+
+.calloff-form__label .optional {
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+/* Date toggle buttons */
+.calloff-form__date-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.calloff-form__date-btn {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    min-height: 48px;
+}
+
+.calloff-form__date-btn.active {
+    border-color: var(--pc-dark-blue, #2E4C73);
+    border-width: 2px;
+    background: #f0f4f8;
+    color: #1f2937;
+    font-weight: 600;
+}
+
+/* Select dropdown */
+.calloff-form__select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 16px;  /* Prevents iOS zoom */
+    color: #1f2937;
+    background: #fff;
+    font-family: inherit;
+    min-height: 48px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239ca3af' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+}
+
+/* Textarea */
+.calloff-form__textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1f2937;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    box-sizing: border-box;
+}
+
+/* Doctor's note warning */
+.calloff-form__warning {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.4;
+}
+
+.calloff-form__warning .material-symbols-outlined {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* Affected events */
+.calloff-form__events {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.calloff-form__events-loading,
+.calloff-form__events-empty {
+    padding: 16px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.calloff-form__event-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.calloff-form__event-item:last-child {
+    border-bottom: none;
+}
+
+.calloff-form__event-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.calloff-form__event-time {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.calloff-form__event-badge {
+    font-size: 11px;
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.calloff-form__events-note {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 6px 0 0;
+    padding: 0;
+}
+
+/* Submit button */
+.calloff-form__submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--pc-dark-blue, #2E4C73);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: 48px;
+    transition: opacity 0.15s;
+}
+
+.calloff-form__submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Message feedback */
+.calloff-form__message {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.calloff-form__message--success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+.calloff-form__message--error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+/* Dashboard calloff button */
+.my-dash__calloff-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 10px 20px;
+    background: #dc2626;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+.my-dash__calloff-btn:hover {
+    background: #b91c1c;
+}
+
+.my-dash__calloff-btn .material-symbols-outlined {
+    font-size: 18px;
+}

@@ -68,6 +68,16 @@ class Config:
     VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
     VAPID_CLAIMS_EMAIL = config('VAPID_CLAIMS_EMAIL', default='mailto:admin@pcevents.com')
 
+    # SMS notifications via Twilio (for calloff alerts to supervisors)
+    SMS_NOTIFICATIONS_ENABLED = config('SMS_NOTIFICATIONS_ENABLED', default=False, cast=bool)
+    TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+    TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+    TWILIO_FROM_NUMBER = config('TWILIO_FROM_NUMBER', default='')
+    SUPERVISOR_SMS_NUMBER = config('SUPERVISOR_SMS_NUMBER', default='')
+
+    # Calloff file uploads
+    CALLOFF_UPLOAD_FOLDER = config('CALLOFF_UPLOAD_FOLDER', default='uploads/calloffs')
+
     @classmethod
     def validate(cls, validate_walmart: bool = True) -> None:
         """

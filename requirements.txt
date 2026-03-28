@@ -35,6 +35,9 @@ python-dotenv==1.0.1
 pywebpush>=2.0.0
 py-vapid>=1.9.0
 
+# SMS Notifications (Twilio)
+twilio>=9.0.0
+
 # Production WSGI Server
 gunicorn==21.2.0
 gevent==24.2.1
