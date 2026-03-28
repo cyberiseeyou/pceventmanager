@@ -27,6 +27,7 @@
         <input type="date" id="end_date" name="end_date" value="{{ end_date }}" max="{{ latest_report_date }}">
         <button type="submit" class="btn-generate">Generate</button>
     </form>
+    <script src="{{ url_for('static', filename='js/pages/report-date-sync.js') }}"></script>
 
     {% if data %}
     <div class="chart-container">

@@ -52,6 +52,8 @@ def _parse_dates(default_start=None, default_end=None):
         start = earliest_allowed
     if end > latest_allowed:
         end = latest_allowed
+    if end < start:
+        end = start
 
     return start, end
 
