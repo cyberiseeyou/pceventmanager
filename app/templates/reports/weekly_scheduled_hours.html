@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Weekly Scheduled Hours{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="report-header">
+        <div>
+            <h1>Weekly Scheduled Hours</h1>
+            <div class="subtitle">{{ start_date.strftime('%m/%d/%Y') }} — {{ end_date.strftime('%m/%d/%Y') }} (excludes Club Supervisors)</div>
+        </div>
+        <div class="report-actions">
+            <a href="{{ url_for('reports.export_weekly_scheduled_hours', start_date=start_date, end_date=end_date) }}" class="btn">Export CSV</a>
+            <button class="btn" data-action="print">Print</button>
+            <a href="{{ url_for('reports.index') }}" class="btn">Back</a>
+        </div>
+    </div>
+
+    <form class="date-range-form" method="get">
+        <label for="start_date">From</label>
+        <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To</label>
+        <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn-generate">Generate</button>
+    </form>
+
+    {% if data.employees %}
+    {# Summary stats #}
+    <div class="stat-cards">
+        <div class="stat-card">
+            <div class="stat-value">{{ data.employee_count }}</div>
+            <div class="stat-label">Employees</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ data.num_weeks }}</div>
+            <div class="stat-label">Weeks</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ data.team_avg_weekly }}h</div>
+            <div class="stat-label">Team Avg / Week</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ data.per_employee_avg_weekly }}h</div>
+            <div class="stat-label">Per Employee Avg / Week</div>
+        </div>
+    </div>
+
+    {# Chart #}
+    <div class="chart-container">
+        <h3>Average Weekly Hours by Employee</h3>
+        <canvas id="weeklyHoursChart"></canvas>
+    </div>
+
+    {# Week-by-week breakdown chart #}
+    {% if data.num_weeks > 1 %}
+    <div class="chart-container">
+        <h3>Hours by Week</h3>
+        <canvas id="weekBreakdownChart"></canvas>
+    </div>
+    {% endif %}
+
+    {# Data table #}
+    <div class="chart-container">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Title</th>
+                    {% for w in data.weeks %}
+                    <th>{{ w }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                    <th>Avg / Week</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in data.employees %}
+                <tr>
+                    <td>{{ e.name }}</td>
+                    <td>{{ e.job_title }}</td>
+                    {% for h in e.weekly_hours %}
+                    <td>{{ h }}</td>
+                    {% endfor %}
+                    <td><strong>{{ e.total_hours }}</strong></td>
+                    <td><strong>{{ e.avg_weekly_hours }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="chart-container">
+        <p style="text-align: center; color: #6b7280;">No scheduled hours data found for this date range.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    document.querySelectorAll('[data-action="print"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { window.print(); });
+    });
+
+    var reportData = {{ data | tojson }};
+    if (!reportData.employees || reportData.employees.length === 0) return;
+
+    // Chart 1: Average weekly hours per employee (horizontal bar)
+    var avgCanvas = document.getElementById('weeklyHoursChart');
+    if (avgCanvas) {
+        var employees = reportData.employees;
+        var avgHours = employees.map(function(e) { return e.avg_weekly_hours; });
+        var maxHours = Math.max.apply(null, avgHours);
+
+        new Chart(avgCanvas, {
+            type: 'bar',
+            data: {
+                labels: employees.map(function(e) { return e.name; }),
+                datasets: [{
+                    label: 'Avg Hours / Week',
+                    data: avgHours,
+                    backgroundColor: avgHours.map(function(h) {
+                        if (h >= 40) return '#e15759';
+                        if (h >= 30) return '#f28e2b';
+                        return '#4e79a7';
+                    })
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, title: { display: true, text: 'Hours' } }
+                }
+            }
+        });
+    }
+
+    // Chart 2: Stacked bar by week (if multiple weeks)
+    var weekCanvas = document.getElementById('weekBreakdownChart');
+    if (weekCanvas && reportData.weeks.length > 1) {
+        var colors = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1','#ff9da7','#9c755f','#bab0ab',
+                      '#1b9e77','#d95f02','#7570b3','#e7298a','#66a61e','#e6ab02','#a6761d','#666666'];
+
+        var datasets = reportData.employees.map(function(emp, idx) {
+            return {
+                label: emp.name,
+                data: emp.weekly_hours,
+                backgroundColor: colors[idx % colors.length],
+            };
+        });
+
+        new Chart(weekCanvas, {
+            type: 'bar',
+            data: {
+                labels: reportData.weeks,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                },
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Hours' } }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

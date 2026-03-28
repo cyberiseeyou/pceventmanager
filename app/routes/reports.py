@@ -127,6 +127,21 @@ def time_off():
                          data=data, start_date=start, end_date=end)
 
 
+@reports_bp.route('/weekly-scheduled-hours')
+def weekly_scheduled_hours():
+    """Report 8: Weekly Scheduled Hours (excludes Club Supervisors)."""
+    today = date.today()
+    # Default to last 4 weeks
+    days_since_sunday = (today.weekday() + 1) % 7
+    default_end = today - timedelta(days=days_since_sunday) + timedelta(days=6)
+    default_start = default_end - timedelta(days=27)
+    start, end = _parse_dates(default_start=default_start, default_end=default_end)
+    service = _get_service()
+    data = service.get_weekly_scheduled_hours(start, end)
+    return render_template('reports/weekly_scheduled_hours.html',
+                         data=data, start_date=start, end_date=end)
+
+
 # --- CSV Export Routes ---
 
 @reports_bp.route('/event-statistics/export')
@@ -267,4 +282,31 @@ def export_time_off():
     resp = make_response(output.getvalue())
     resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
     resp.headers['Content-Disposition'] = f'attachment; filename=time_off_{start}_{end}.csv'
+    return resp
+
+
+@reports_bp.route('/weekly-scheduled-hours/export')
+def export_weekly_scheduled_hours():
+    today = date.today()
+    days_since_sunday = (today.weekday() + 1) % 7
+    default_end = today - timedelta(days=days_since_sunday) + timedelta(days=6)
+    default_start = default_end - timedelta(days=27)
+    start, end = _parse_dates(default_start=default_start, default_end=default_end)
+    service = _get_service()
+    data = service.get_weekly_scheduled_hours(start, end)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Weekly Scheduled Hours (excl. Club Supervisors)', f'{start} to {end}'])
+    writer.writerow(['Team Avg Weekly: {0}h'.format(data['team_avg_weekly']),
+                     'Per Employee Avg: {0}h'.format(data['per_employee_avg_weekly'])])
+    writer.writerow([])
+    header = ['Employee', 'Job Title'] + data['weeks'] + ['Total Hours', 'Avg Weekly Hours']
+    writer.writerow(header)
+    for e in data['employees']:
+        row = [e['name'], e['job_title']] + [str(h) for h in e['weekly_hours']] + [e['total_hours'], e['avg_weekly_hours']]
+        writer.writerow(row)
+    output.seek(0)
+    resp = make_response(output.getvalue())
+    resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    resp.headers['Content-Disposition'] = f'attachment; filename=weekly_scheduled_hours_{start}_{end}.csv'
     return resp

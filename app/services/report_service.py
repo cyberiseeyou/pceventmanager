@@ -339,3 +339,96 @@ class ReportService:
             })
 
         return {'records': result, 'total_days': total_days}
+
+    def get_weekly_scheduled_hours(self, start_date, end_date):
+        """Report 8: Weekly Scheduled Hours per employee (excluding Club Supervisors).
+
+        Returns per-employee hours broken down by week, plus overall averages.
+        Uses calculate_schedule_duration for accurate hours including lunch breaks.
+        """
+        from app.utils.event_helpers import calculate_schedule_duration
+
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
+
+        rows = self.session.query(
+            self.Employee, self.Schedule, self.Event
+        ).join(
+            self.Schedule, self.Schedule.employee_id == self.Employee.id
+        ).join(
+            self.Event, self.Event.project_ref_num == self.Schedule.event_ref_num
+        ).filter(
+            self.Schedule.schedule_datetime >= start_dt,
+            self.Schedule.schedule_datetime <= end_dt,
+            self.Employee.is_active == True,
+            self.Employee.job_title != 'Club Supervisor',
+        ).order_by(
+            self.Schedule.schedule_datetime
+        ).all()
+
+        # Build weeks (Sun-Sat boundaries)
+        weeks = []
+        current = start_date - timedelta(days=(start_date.weekday() + 1) % 7)
+        while current <= end_date:
+            week_end = current + timedelta(days=6)
+            weeks.append({
+                'start': current,
+                'end': min(week_end, end_date),
+                'label': f"{current.strftime('%m/%d')} – {week_end.strftime('%m/%d')}",
+            })
+            current = week_end + timedelta(days=1)
+
+        # Aggregate hours by employee and week
+        emp_data = {}
+        for emp, sched, event in rows:
+            if emp.id not in emp_data:
+                emp_data[emp.id] = {
+                    'name': emp.name,
+                    'job_title': emp.job_title,
+                    'weeks': {i: 0.0 for i in range(len(weeks))},
+                    'total_minutes': 0.0,
+                    'event_count': 0,
+                }
+
+            duration = calculate_schedule_duration(event)
+            sched_date = sched.schedule_datetime.date()
+
+            for i, w in enumerate(weeks):
+                if w['start'] <= sched_date <= w['end']:
+                    emp_data[emp.id]['weeks'][i] += duration
+                    break
+
+            emp_data[emp.id]['total_minutes'] += duration
+            emp_data[emp.id]['event_count'] += 1
+
+        # Build result
+        num_weeks = len(weeks) if weeks else 1
+        employees = []
+        for eid, d in sorted(emp_data.items(), key=lambda x: x[1]['name']):
+            weekly_hours = [round(d['weeks'].get(i, 0) / 60, 1) for i in range(len(weeks))]
+            total_hours = round(d['total_minutes'] / 60, 1)
+            avg_weekly = round(total_hours / num_weeks, 1)
+
+            employees.append({
+                'name': d['name'],
+                'job_title': d['job_title'],
+                'weekly_hours': weekly_hours,
+                'total_hours': total_hours,
+                'avg_weekly_hours': avg_weekly,
+                'event_count': d['event_count'],
+            })
+
+        # Team averages
+        team_total = sum(e['total_hours'] for e in employees)
+        team_avg_weekly = round(team_total / num_weeks, 1) if employees else 0
+        per_employee_avg = round(team_avg_weekly / len(employees), 1) if employees else 0
+
+        return {
+            'weeks': [w['label'] for w in weeks],
+            'employees': employees,
+            'num_weeks': num_weeks,
+            'team_total_hours': team_total,
+            'team_avg_weekly': team_avg_weekly,
+            'per_employee_avg_weekly': per_employee_avg,
+            'employee_count': len(employees),
+        }
