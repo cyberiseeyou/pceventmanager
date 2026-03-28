@@ -114,6 +114,10 @@
 }
 
 /* Doctor's note warning */
+.calloff-form__warning[hidden] {
+    display: none !important;
+}
+
 .calloff-form__warning {
     display: flex;
     gap: 10px;
