@@ -157,8 +157,11 @@ def create_app(config_name=None):
     from datetime import date as _date, timedelta as _td
 
     @app.context_processor
-    def inject_earliest_report_date():
-        return {'earliest_report_date': (_date.today() - _td(days=30)).isoformat()}
+    def inject_report_date_limits():
+        return {
+            'earliest_report_date': (_date.today() - _td(days=30)).isoformat(),
+            'latest_report_date': (_date.today() + _td(days=120)).isoformat(),
+        }
 
     # Register blueprints
     register_blueprints(app, db, models)

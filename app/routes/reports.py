@@ -27,6 +27,7 @@ def _parse_dates(default_start=None, default_end=None):
     """
     today = date.today()
     earliest_allowed = today - timedelta(days=30)
+    latest_allowed = today + timedelta(days=120)
 
     if default_start is None:
         days_since_sunday = (today.weekday() + 1) % 7
@@ -46,9 +47,11 @@ def _parse_dates(default_start=None, default_end=None):
     except ValueError:
         end = default_end
 
-    # Clamp start date to 30-day lookback floor
+    # Clamp to API data window (30 days back, 120 days forward)
     if start < earliest_allowed:
         start = earliest_allowed
+    if end > latest_allowed:
+        end = latest_allowed
 
     return start, end
 
