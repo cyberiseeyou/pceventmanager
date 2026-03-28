@@ -59,25 +59,28 @@ def dashboard():
     return redirect(url_for('dashboard.command_center'))
 
 
+@main_bp.route('/demo-goals')
+@require_authentication()
+def demo_goals_page():
+    """View and print Sam's Club demo goals filtered by club number."""
+    from app.models import get_models
+    models = get_models()
+    SystemSetting = models.get('SystemSetting')
+    default_club = ''
+    if SystemSetting:
+        default_club = SystemSetting.get_setting('club_number', '') or ''
+    return render_template('demo_goals.html', default_club_number=default_club or '8135')
+
+
 @main_bp.route('/my-dashboard')
 @require_authentication()
 def my_dashboard():
-    """Personal dashboard for non-lead employees showing their own schedule,
-    time off requests, and weekly stats."""
-    from flask import current_app
-    from app.models import get_models
+    """Personal dashboard showing daily events. Leads also see team events."""
     from app.routes.auth import get_current_user
 
-    db = current_app.extensions['sqlalchemy']
-    models = get_models()
-    Schedule = models['Schedule']
-    Event = models['Event']
-    Employee = models['Employee']
-    EmployeeTimeOff = models['EmployeeTimeOff']
-
     user = get_current_user()
-    employee_id = user.get('employee_id') if user else None
     first_name = user.get('first_name', 'there') if user else 'there'
+    user_role = user.get('role', '') if user else ''
 
     today = date.today()
     now = datetime.now()
@@ -91,117 +94,11 @@ def my_dashboard():
     else:
         greeting_label = 'Good evening'
 
-    today_events = []
-    next_event = None
-    week_event_count = 0
-    upcoming_days_working = 0
-    scheduled_hours = 0.0
-    all_time_off_requests = []
-
-    if employee_id:
-        # ── Today's events ──
-        today_start = datetime.combine(today, datetime.min.time())
-        today_end = datetime.combine(today, datetime.max.time())
-
-        today_schedules = db.session.query(Schedule, Event).join(
-            Event, Schedule.event_ref_num == Event.project_ref_num
-        ).filter(
-            Schedule.employee_id == employee_id,
-            Schedule.schedule_datetime >= today_start,
-            Schedule.schedule_datetime <= today_end
-        ).order_by(Schedule.schedule_datetime).all()
-
-        for schedule, event in today_schedules:
-            today_events.append({
-                'time': schedule.schedule_datetime.strftime('%I:%M %p'),
-                'event_name': event.project_name,
-                'event_type': event.event_type,
-            })
-
-        # ── Next upcoming event (if no events today) ──
-        if not today_events:
-            next_row = db.session.query(Schedule, Event).join(
-                Event, Schedule.event_ref_num == Event.project_ref_num
-            ).filter(
-                Schedule.employee_id == employee_id,
-                Schedule.schedule_datetime > today_end
-            ).order_by(Schedule.schedule_datetime).first()
-
-            if next_row:
-                schedule, event = next_row
-                next_event = {
-                    'date': schedule.schedule_datetime.strftime('%A, %B %-d'),
-                    'time': schedule.schedule_datetime.strftime('%I:%M %p'),
-                    'event_name': event.project_name,
-                    'event_type': event.event_type,
-                }
-
-        # ── Week stats (Sun-Sat containing today) ──
-        week_start_date = today - timedelta(days=(today.weekday() + 1) % 7)
-        week_end_date = week_start_date + timedelta(days=6)
-        week_start = datetime.combine(week_start_date, datetime.min.time())
-        week_end = datetime.combine(week_end_date, datetime.max.time())
-
-        week_schedules = db.session.query(Schedule, Event).join(
-            Event, Schedule.event_ref_num == Event.project_ref_num
-        ).filter(
-            Schedule.employee_id == employee_id,
-            Schedule.schedule_datetime >= week_start,
-            Schedule.schedule_datetime <= week_end
-        ).all()
-
-        week_event_count = len(week_schedules)
-        working_dates = set()
-        total_minutes = 0
-        for schedule, event in week_schedules:
-            working_dates.add(schedule.schedule_datetime.date())
-            total_minutes += event.estimated_time or Event.get_default_duration(event.event_type)
-        upcoming_days_working = len(working_dates)
-        scheduled_hours = round(total_minutes / 60, 1)
-
-        # ── All time off requests (for status tracking) ──
-        all_time_off_requests = EmployeeTimeOff.query.filter(
-            EmployeeTimeOff.employee_id == employee_id,
-            EmployeeTimeOff.end_date >= today
-        ).order_by(EmployeeTimeOff.start_date).all()
-
-    # ── Lead-only: team time off ──
-    user_role = user.get('role', '') if user else ''
-    is_lead = user_role == 'lead'
-    team_time_off = []
-    team_time_off_query = []
-
-    if is_lead and employee_id:
-        thirty_days = today + timedelta(days=30)
-        team_time_off_query = EmployeeTimeOff.query.join(
-            Employee, EmployeeTimeOff.employee_id == Employee.id
-        ).filter(
-            EmployeeTimeOff.status == 'approved',
-            EmployeeTimeOff.start_date >= today,
-            EmployeeTimeOff.start_date <= thirty_days,
-        ).order_by(EmployeeTimeOff.start_date.asc()).all()
-
-        for req in team_time_off_query:
-            emp = Employee.query.get(req.employee_id)
-            emp_name = emp.name if emp else 'Unknown'
-            team_time_off.append({
-                'employee_name': emp_name,
-                'start_date': req.start_date,
-                'end_date': req.end_date,
-            })
-
     return render_template('my_dashboard.html',
         first_name=first_name,
         greeting_label=greeting_label,
         today=today,
-        today_events=today_events,
-        next_event=next_event,
-        week_event_count=week_event_count,
-        upcoming_days_working=upcoming_days_working,
-        scheduled_hours=scheduled_hours,
-        all_time_off_requests=all_time_off_requests,
-        is_lead=is_lead,
-        team_time_off=team_time_off,
+        is_lead=user_role == 'lead',
     )
 
 
@@ -254,18 +151,29 @@ def my_events():
     return render_template('my_events.html')
 
 
+@main_bp.route('/my-notifications')
+@require_authentication()
+def my_notifications():
+    """Notifications page for schedule changes (specialist and lead only)."""
+    return render_template('my_notifications.html')
+
+
 @main_bp.route('/my-time-off')
 @require_authentication()
 def my_time_off():
-    """Read-only view of the employee's own time-off requests with submit form."""
+    """Read-only view of the employee's own time-off requests with submit form.
+    Leads also see upcoming approved time off for all team members."""
     from app.models import get_models
     from app.routes.auth import get_current_user
 
     models = get_models()
     EmployeeTimeOff = models['EmployeeTimeOff']
+    Employee = models['Employee']
 
     user = get_current_user()
     employee_id = user.get('employee_id') if user else None
+    user_role = user.get('role', '') if user else ''
+    is_lead = user_role == 'lead'
 
     requests = []
     if employee_id:
@@ -273,9 +181,31 @@ def my_time_off():
             EmployeeTimeOff.employee_id == employee_id,
         ).order_by(EmployeeTimeOff.start_date.desc()).all()
 
+    # Lead-only: approved time off for all other team members
+    team_time_off = []
+    if is_lead:
+        today_date = date.today()
+        team_rows = EmployeeTimeOff.query.join(
+            Employee, EmployeeTimeOff.employee_id == Employee.id
+        ).filter(
+            EmployeeTimeOff.status == 'approved',
+            EmployeeTimeOff.end_date >= today_date,
+            EmployeeTimeOff.employee_id != employee_id,
+        ).order_by(EmployeeTimeOff.start_date.asc()).all()
+
+        for req in team_rows:
+            emp = Employee.query.get(req.employee_id)
+            team_time_off.append({
+                'employee_name': emp.name if emp else 'Unknown',
+                'start_date': req.start_date,
+                'end_date': req.end_date,
+            })
+
     return render_template('my_time_off.html',
                            requests=requests,
-                           today=date.today())
+                           today=date.today(),
+                           is_lead=is_lead,
+                           team_time_off=team_time_off)
 
 
 @main_bp.route('/api/my-schedule-updates')

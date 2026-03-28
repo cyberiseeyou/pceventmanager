@@ -1,5 +1,5 @@
 /**
- * Monthly Schedule - Personal monthly calendar view for specialists
+ * Monthly Schedule - Simple calendar showing earliest start time or OFF
  */
 
 /* =============================================
@@ -7,7 +7,7 @@
    ============================================= */
 
 .monthly {
-  max-width: 960px;
+  max-width: 720px;
   margin: 0 auto;
   padding: var(--space-4) var(--space-4) var(--space-16);
 }
@@ -29,7 +29,7 @@
   font-weight: 700;
   color: var(--color-neutral-900);
   margin: 0;
-  min-width: 200px;
+  min-width: 180px;
   text-align: center;
 }
 
@@ -114,33 +114,30 @@
 
 .monthly__cell {
   background: #fff;
-  min-height: 90px;
+  min-height: 72px;
   padding: var(--space-2);
-  cursor: pointer;
-  position: relative;
-  transition: background var(--transition-fast);
-}
-
-.monthly__cell:hover {
-  background: var(--color-neutral-50);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
 .monthly__cell--empty {
   background: var(--color-neutral-50);
-  cursor: default;
 }
 
 .monthly__cell--today {
-  background: rgba(27, 155, 216, 0.05);
+  background: rgba(27, 155, 216, 0.06);
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
+/* Day number */
 .monthly__cell-num {
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-neutral-600);
-  display: block;
-  margin-bottom: var(--space-1);
+  line-height: 1;
 }
 
 .monthly__cell--today .monthly__cell-num {
@@ -148,221 +145,23 @@
   font-weight: 700;
 }
 
-.monthly__cell-badge {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  min-width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  background: var(--color-primary);
-  color: #fff;
+/* Earliest start time */
+.monthly__cell-time {
   font-size: 0.75rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-}
-
-.monthly__cell-dots {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
-  margin-top: var(--space-1);
-}
-
-.monthly__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.monthly__dot--core { background: var(--color-core); }
-.monthly__dot--juicer { background: var(--color-juicer); }
-.monthly__dot--digital { background: var(--color-digital); }
-.monthly__dot--supervisor { background: var(--color-supervisor); }
-.monthly__dot--freeosk { background: var(--color-freeosk); }
-.monthly__dot--other { background: var(--color-neutral-400); }
-
-/* =============================================
-   DAY DETAIL EXPANSION
-   ============================================= */
-
-.monthly__detail {
-  margin-top: var(--space-4);
-  background: var(--color-neutral-50);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.monthly__detail-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-neutral-100);
-  border-bottom: 1px solid var(--color-neutral-200);
-}
-
-.monthly__detail-title {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  color: var(--color-neutral-800);
-  margin: 0;
-}
-
-.monthly__detail-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-neutral-500);
-  padding: var(--space-2);
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.monthly__detail-close:hover {
-  background: var(--color-neutral-200);
-}
-
-.monthly__detail-body {
-  padding: var(--space-3) var(--space-4);
-}
-
-.monthly__detail-event {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-left: 3px solid var(--color-neutral-400);
-  padding-left: var(--space-3);
-}
-
-.monthly__detail-event + .monthly__detail-event {
-  border-top: 1px solid var(--color-neutral-200);
-}
-
-.monthly__detail-event--core { border-left-color: var(--color-core); }
-.monthly__detail-event--juicer { border-left-color: var(--color-juicer); }
-.monthly__detail-event--digital { border-left-color: var(--color-digital); }
-.monthly__detail-event--supervisor { border-left-color: var(--color-supervisor); }
-.monthly__detail-event--freeosk { border-left-color: var(--color-freeosk); }
-.monthly__detail-event--other { border-left-color: var(--color-neutral-400); }
-
-.monthly__detail-event-time {
-  font-size: var(--font-size-sm);
   font-weight: 700;
   color: var(--color-primary);
-  min-width: 72px;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
-.monthly__detail-event-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.monthly__detail-event-name {
-  font-size: var(--font-size-sm);
+/* OFF label */
+.monthly__cell-off {
+  font-size: 0.65rem;
   font-weight: 600;
-  color: var(--color-neutral-800);
-}
-
-.monthly__detail-event-meta {
-  font-size: 0.8rem;
-  color: var(--color-neutral-500);
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-
-/* =============================================
-   MOBILE LIST VIEW (480px fallback)
-   ============================================= */
-
-.monthly__list {
-  padding-top: var(--space-2);
-}
-
-.monthly__list-day {
-  margin-bottom: var(--space-4);
-}
-
-.monthly__list-day--today {
-  border-left: 3px solid var(--color-primary);
-  padding-left: var(--space-3);
-}
-
-.monthly__list-day-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.monthly__list-day-name {
-  font-size: 0.75rem;
-  font-weight: 700;
   text-transform: uppercase;
-  color: var(--color-neutral-500);
-}
-
-.monthly__list-day-date {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-neutral-700);
-}
-
-.monthly__list-event {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-neutral-50);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-neutral-400);
-}
-
-.monthly__list-event + .monthly__list-event {
-  margin-top: var(--space-1);
-}
-
-.monthly__list-event--core { border-left-color: var(--color-core); }
-.monthly__list-event--juicer { border-left-color: var(--color-juicer); }
-.monthly__list-event--digital { border-left-color: var(--color-digital); }
-.monthly__list-event--supervisor { border-left-color: var(--color-supervisor); }
-.monthly__list-event--freeosk { border-left-color: var(--color-freeosk); }
-.monthly__list-event--other { border-left-color: var(--color-neutral-400); }
-
-.monthly__list-event-time {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  color: var(--color-primary);
-  min-width: 72px;
-  font-variant-numeric: tabular-nums;
-}
-
-.monthly__list-event-name {
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--color-neutral-700);
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
-}
-
-.monthly__list-event-store {
-  font-size: 0.75rem;
-  color: var(--color-neutral-500);
-  white-space: nowrap;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-300);
+  line-height: 1;
 }
 
 /* =============================================
@@ -390,30 +189,33 @@
 
 @media (max-width: 768px) {
   .monthly {
-    padding: var(--space-3) var(--space-3) 100px;
+    padding: var(--space-3) var(--space-2) 100px;
   }
 
   .monthly__cell {
-    min-height: 70px;
+    min-height: 60px;
     padding: var(--space-1);
   }
 
-  .monthly__cell-badge {
-    top: var(--space-1);
-    right: var(--space-1);
+  .monthly__cell-time {
+    font-size: 0.65rem;
   }
 }
 
-@media (max-width: 480px) {
-  .monthly__grid-wrapper {
-    display: none;
+@media (max-width: 400px) {
+  .monthly__cell {
+    min-height: 50px;
   }
 
-  .monthly__list {
-    display: block !important;
+  .monthly__cell-num {
+    font-size: 0.75rem;
   }
 
-  .monthly__detail {
-    margin-top: var(--space-2);
+  .monthly__cell-time {
+    font-size: 0.6rem;
+  }
+
+  .monthly__cell-off {
+    font-size: 0.55rem;
   }
 }

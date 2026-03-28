@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}My Time Off - Product Connections{% endblock %}
+{% block title %}Time Off - Product Connections{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -187,6 +187,61 @@
         font-size: var(--font-size-sm);
     }
 
+    /* ── Divider ── */
+    .my-to__divider {
+        border: none;
+        border-top: 2px solid var(--color-neutral-200);
+        margin: var(--space-6) 0;
+    }
+
+    /* ── Team Time Off (lead only) ── */
+    .my-to__team-heading {
+        font-size: var(--font-size-base);
+        font-weight: 700;
+        color: var(--color-neutral-800);
+        margin: 0 0 var(--space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .my-to__team-heading .material-symbols-outlined {
+        font-size: 20px;
+        color: var(--color-primary);
+    }
+
+    .my-to__team-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--color-neutral-100);
+    }
+
+    .my-to__team-item:last-child {
+        border-bottom: none;
+    }
+
+    .my-to__team-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #10B981;
+        flex-shrink: 0;
+    }
+
+    .my-to__team-name {
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--color-neutral-800);
+    }
+
+    .my-to__team-dates {
+        font-size: 0.8rem;
+        color: var(--color-neutral-500);
+        margin-top: 2px;
+    }
+
     @media (max-width: 480px) {
         .my-to__form-row {
             flex-direction: column;
@@ -204,7 +259,7 @@
 {% block content %}
 <div class="my-to">
 
-    <h1 class="my-to__title">My Time Off</h1>
+    <h1 class="my-to__title">Time Off</h1>
 
     {# ── Submit Form ── #}
     <div class="my-to__form-card">
@@ -252,6 +307,31 @@
         {% endfor %}
     {% else %}
         <div class="my-to__empty">No time off requests</div>
+    {% endif %}
+
+    {% if is_lead %}
+    <hr class="my-to__divider">
+
+    <h2 class="my-to__team-heading">
+        <span class="material-symbols-outlined">group</span>
+        Team Approved Time Off
+    </h2>
+
+    {% if team_time_off %}
+        {% for item in team_time_off %}
+        <div class="my-to__team-item">
+            <span class="my-to__team-dot"></span>
+            <div>
+                <div class="my-to__team-name">{{ item.employee_name | title }}</div>
+                <div class="my-to__team-dates">
+                    {{ item.start_date.strftime('%b %-d') }}{% if item.start_date != item.end_date %} &ndash; {{ item.end_date.strftime('%b %-d, %Y') }}{% else %}, {{ item.start_date.strftime('%Y') }}{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="my-to__empty">No approved time off for the team</div>
+    {% endif %}
     {% endif %}
 
 </div>

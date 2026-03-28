@@ -3,264 +3,511 @@
 {% block title %}My Dashboard - Product Connections{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/my-dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/my-dashboard.css') }}?v={{ config.get('VERSION', '') }}">
 {% endblock %}
 
 {% block content %}
 <div class="my-dash">
 
-    {# ── 1. GREETING + TODAY/NEXT EVENT ── #}
+    {# ── 1. GREETING ── #}
     <div class="my-dash__greeting">
         <p class="my-dash__hello">{{ greeting_label }}</p>
         <h1 class="my-dash__name">{{ first_name }}</h1>
         <p class="my-dash__date">{{ today.strftime('%A, %B %-d, %Y') }}</p>
     </div>
 
-    {% if today_events %}
-    <div class="my-dash__today-banner">
-        <p class="my-dash__today-label">Today's Schedule</p>
-        <p class="my-dash__today-summary">
-            {{ today_events|length }} event{{ 's' if today_events|length != 1 else '' }} scheduled
-        </p>
-        <ul class="my-dash__today-events">
-            {% for item in today_events %}
-            <li class="my-dash__today-event">
-                <span class="my-dash__today-time">{{ item.time }}</span>
-                <span class="my-dash__today-event-name">{{ item.event_name }}</span>
-                <span class="my-dash__today-event-type">{{ item.event_type }}</span>
-            </li>
-            {% endfor %}
-        </ul>
+    {# ── 2. DATE NAVIGATION ── #}
+    <div class="my-dash__day-nav">
+        <button class="my-dash__day-nav-btn" id="dayPrev" aria-label="Previous day">
+            <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <h2 class="my-dash__day-label" id="dayLabel">Today</h2>
+        <button class="my-dash__day-nav-btn" id="dayNext" aria-label="Next day">
+            <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+        <button class="my-dash__day-today-btn" id="dayToday" hidden>Today</button>
     </div>
-    {% elif next_event %}
-    <div class="my-dash__today-banner my-dash__today-banner--next">
-        <p class="my-dash__today-label">Next Scheduled Event</p>
-        <p class="my-dash__today-summary">{{ next_event.event_name }}</p>
-        <div class="my-dash__next-details">
-            <span class="my-dash__next-date">{{ next_event.date }}</span>
-            <span class="my-dash__next-time">{{ next_event.time }}</span>
-            <span class="my-dash__next-type">{{ next_event.event_type }}</span>
-        </div>
-    </div>
-    {% else %}
-    <div class="my-dash__today-banner my-dash__today-banner--off">
-        <p class="my-dash__today-label">Today's Schedule</p>
-        <p class="my-dash__today-summary">No events today</p>
-        <p class="my-dash__today-detail">Enjoy your day off, or check Monthly Schedule for upcoming shifts.</p>
+
+    {% if is_lead %}
+    {# ── 3. TABS (lead only) ── #}
+    <div class="my-dash__tabs" role="tablist" aria-label="Daily view sections">
+        <button role="tab" class="my-dash__tab active" data-tab="schedule" aria-selected="true" aria-controls="tab-panel-schedule" id="tab-schedule">
+            <span class="material-symbols-outlined">event</span> Schedule
+        </button>
+        <button role="tab" class="my-dash__tab" data-tab="attendance" aria-selected="false" aria-controls="tab-panel-attendance" id="tab-attendance">
+            <span class="material-symbols-outlined">how_to_reg</span> Attendance
+        </button>
+        <button role="tab" class="my-dash__tab" data-tab="notes" aria-selected="false" aria-controls="tab-panel-notes" id="tab-notes">
+            <span class="material-symbols-outlined">sticky_note_2</span> Notes
+        </button>
     </div>
     {% endif %}
 
-    {# ── 2. STATS CARD — THIS WEEK ── #}
-    <div class="my-dash__stats-card">
-        <h3 class="my-dash__stats-title">
-            <span class="material-symbols-outlined">bar_chart</span>
-            This Week
-        </h3>
-        <div class="my-dash__stats-row">
-            <div class="my-dash__stat">
-                <span class="my-dash__stat-value" id="statHours">{{ scheduled_hours }}</span>
-                <span class="my-dash__stat-label">Scheduled<br>Hours</span>
-            </div>
-            <div class="my-dash__stat">
-                <span class="my-dash__stat-value" id="statDays">{{ upcoming_days_working }}</span>
-                <span class="my-dash__stat-label">Days<br>Scheduled</span>
-            </div>
-            <div class="my-dash__stat">
-                <span class="my-dash__stat-value" id="statEvents">{{ week_event_count }}</span>
-                <span class="my-dash__stat-label">Events</span>
-            </div>
-        </div>
-    </div>
-
-    {# ── 3. WEEKLY CALENDAR GRID ── #}
-    <section class="my-dash__weekly">
-        <div class="my-dash__section-header">
-            <button class="my-dash__week-nav" id="weekPrev" aria-label="Previous week">
-                <span class="material-symbols-outlined">chevron_left</span>
-            </button>
-            <h2 class="my-dash__section-title" id="weekLabel">This Week</h2>
-            <button class="my-dash__week-nav" id="weekNext" aria-label="Next week">
-                <span class="material-symbols-outlined">chevron_right</span>
-            </button>
-        </div>
-        <div class="my-dash__week-grid" id="weekGrid">
-            {# Populated by JavaScript #}
+    {# ── SCHEDULE PANEL ── #}
+    <div role="tabpanel" id="tab-panel-schedule" class="my-dash__panel" aria-labelledby="tab-schedule">
+        <div id="dayContent">
             <div class="my-dash__empty">
                 <span class="material-symbols-outlined">hourglass_empty</span>
                 Loading schedule...
             </div>
         </div>
-    </section>
+    </div>
 
-
-    {# ── UPCOMING APPROVED TIME OFF (lead only, next 30 days) ── #}
     {% if is_lead %}
-    <section class="my-dash__team-timeoff">
-        <h3 class="my-dash__section-title" style="margin-bottom: var(--space-3);">
-            <span class="material-symbols-outlined">event_busy</span>
-            Upcoming Approved Time Off
-        </h3>
-        {% if team_time_off %}
-            {% for item in team_time_off %}
-            <div class="my-dash__team-timeoff-item">
-                <span class="my-dash__team-timeoff-dot"></span>
-                <div class="my-dash__team-timeoff-details">
-                    <span class="my-dash__team-timeoff-name">{{ item.employee_name | title }}</span>
-                    <span class="my-dash__team-timeoff-dates">
-                        {{ item.start_date.strftime('%b %-d') }}{% if item.start_date != item.end_date %} &ndash; {{ item.end_date.strftime('%b %-d') }}{% endif %}
-                    </span>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="my-dash__empty">
-                <span class="material-symbols-outlined">event_available</span>
-                No approved time off in the next 30 days
-            </div>
-        {% endif %}
-    </section>
+    {# ── ATTENDANCE PANEL ── #}
+    <div role="tabpanel" id="tab-panel-attendance" class="my-dash__panel" aria-labelledby="tab-attendance" hidden>
+        <div id="attendance-content"></div>
+    </div>
+
+    {# ── NOTES PANEL ── #}
+    <div role="tabpanel" id="tab-panel-notes" class="my-dash__panel" aria-labelledby="tab-notes" hidden>
+        <div class="my-dash__notes-add">
+            <textarea id="note-input" class="my-dash__note-input" placeholder="Add a note for this day..." rows="2" maxlength="500"></textarea>
+            <button id="note-submit" class="btn btn-primary btn-sm">Add Note</button>
+        </div>
+        <div id="notes-content"></div>
+    </div>
     {% endif %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
-<!-- Schedule Change Notifications (browser Notification API) -->
-<script src="{{ url_for('static', filename='js/components/schedule-change-notifier.js') }}"></script>
+<!-- Push notification permission prompt (schedule changes) -->
+<script src="{{ url_for('static', filename='js/components/push-prompt.js') }}"></script>
+
 
 <script>
 (function() {
-    // ===== WEEKLY CALENDAR GRID =====
-    const weekGrid = document.getElementById('weekGrid');
-    const weekLabel = document.getElementById('weekLabel');
-    const weekPrev = document.getElementById('weekPrev');
-    const weekNext = document.getElementById('weekNext');
+    var IS_LEAD = {{ 'true' if is_lead else 'false' }};
+    var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+    if (!CSRF) {
+        // Fallback: read from cookie
+        var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+        if (match) CSRF = decodeURIComponent(match[1]);
+    }
 
-    // Current week start (Sunday)
-    const todayDate = new Date();
+    var dayContent = document.getElementById('dayContent');
+    var dayLabel = document.getElementById('dayLabel');
+    var dayPrev = document.getElementById('dayPrev');
+    var dayNext = document.getElementById('dayNext');
+    var dayToday = document.getElementById('dayToday');
+
+    var todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
-    let currentWeekStart = new Date(todayDate);
-    const dayOfWeek = currentWeekStart.getDay(); // 0=Sun
-    currentWeekStart.setDate(currentWeekStart.getDate() - dayOfWeek);
+    var currentDate = new Date(todayDate);
 
-    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // Track which tabs have loaded for the current date
+    var attendanceLoaded = false;
+    var notesLoaded = false;
 
     function formatDateISO(d) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
         return y + '-' + m + '-' + day;
     }
 
-    function eventAccent(eventType) {
-        const t = (eventType || '').toLowerCase();
-        if (t.includes('core')) return 'core';
-        if (t.includes('juicer')) return 'juicer';
-        if (t.includes('digital')) return 'digital';
-        if (t.includes('supervisor')) return 'supervisor';
-        if (t.includes('freeosk')) return 'freeosk';
+    function esc(text) {
+        if (!text) return '';
+        var d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    function titleCase(s) {
+        if (!s) return '';
+        return s.toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function typeAccent(eventType) {
+        var t = (eventType || '').toLowerCase();
+        if (t.indexOf('core') !== -1) return 'core';
+        if (t.indexOf('juicer') !== -1) return 'juicer';
+        if (t.indexOf('digital') !== -1) return 'digital';
+        if (t.indexOf('supervisor') !== -1) return 'supervisor';
+        if (t.indexOf('freeosk') !== -1) return 'freeosk';
         return 'other';
     }
 
-    function updateWeekLabel() {
-        const endDate = new Date(currentWeekStart);
-        endDate.setDate(endDate.getDate() + 6);
-
-        const startMonth = currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        weekLabel.textContent = startMonth + ' \u2013 ' + endMonth;
+    function isSameDay(a, b) {
+        return a.getFullYear() === b.getFullYear() &&
+               a.getMonth() === b.getMonth() &&
+               a.getDate() === b.getDate();
     }
 
-    async function loadWeek() {
-        const weekStartStr = formatDateISO(currentWeekStart);
-        updateWeekLabel();
-
-        weekGrid.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">hourglass_empty</span>Loading schedule...</div>';
-
-        try {
-            const resp = await fetch('/api/my-schedule/weekly?week_start=' + weekStartStr);
-            if (!resp.ok) throw new Error('Failed to load schedule');
-            const data = await resp.json();
-            renderWeekGrid(data);
-            updateStats(data.stats);
-        } catch (err) {
-            weekGrid.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Error loading schedule</div>';
+    function updateDayLabel() {
+        if (isSameDay(currentDate, todayDate)) {
+            dayLabel.textContent = 'Today';
+            dayToday.hidden = true;
+        } else {
+            dayLabel.textContent = currentDate.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric'
+            });
+            dayToday.hidden = false;
         }
     }
 
-    function updateStats(stats) {
-        if (!stats) return;
-        var h = document.getElementById('statHours');
-        var d = document.getElementById('statDays');
-        var e = document.getElementById('statEvents');
-        if (h) h.textContent = stats.total_hours || 0;
-        if (d) d.textContent = stats.days_scheduled || 0;
-        if (e) e.textContent = stats.event_count || 0;
+    // ── SCHEDULE ──
+
+    function buildEventCard(ev, showEmployee) {
+        var accent = typeAccent(ev.event_type);
+        var html = '<div class="my-dash__day-event my-dash__day-event--' + accent + '">';
+        html += '<div class="my-dash__day-event-row">';
+        html += '<span class="my-dash__day-event-time">' + esc(ev.time) + '</span>';
+        html += '<span class="my-dash__day-event-type my-dash__day-event-type--' + accent + '">' + esc(ev.event_type || 'Other') + '</span>';
+        html += '</div>';
+        if (showEmployee) {
+            html += '<div class="my-dash__day-event-employee">' + esc(titleCase(ev.employee_name)) + '</div>';
+        }
+        html += '<div class="my-dash__day-event-name">' + esc(ev.event_name) + '</div>';
+        html += '</div>';
+        return html;
     }
 
-    function renderWeekGrid(data) {
-        const todayStr = formatDateISO(todayDate);
-        let html = '<div class="my-dash__week-header">';
+    function renderDayEvents(data) {
+        var myEvents = data.my_events || [];
+        var teamEvents = data.team_events || [];
 
-        // Header row
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(currentWeekStart);
-            d.setDate(d.getDate() + i);
-            const dateStr = formatDateISO(d);
-            const isToday = dateStr === todayStr;
-            html += '<div class="my-dash__week-day-header' + (isToday ? ' my-dash__week-day-header--today' : '') + '">';
-            html += '<span class="my-dash__week-day-name">' + DAY_NAMES[i] + '</span>';
-            html += '<span class="my-dash__week-day-num">' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + '</span>';
+        if (myEvents.length === 0 && teamEvents.length === 0) {
+            dayContent.innerHTML = '<div class="my-dash__empty">' +
+                '<span class="material-symbols-outlined">event_busy</span>' +
+                'No events scheduled for this day' +
+                '</div>';
+            return;
+        }
+
+        var html = '';
+
+        // My Events section
+        if (myEvents.length > 0) {
+            html += '<div class="my-dash__day-group">';
+            html += '<h3 class="my-dash__day-group-title">' +
+                '<span class="material-symbols-outlined">person</span> My Events ' +
+                '<span class="my-dash__day-group-count">' + myEvents.length + '</span></h3>';
+            for (var i = 0; i < myEvents.length; i++) {
+                html += buildEventCard(myEvents[i], false);
+            }
+            html += '</div>';
+        } else {
+            html += '<div class="my-dash__day-group">';
+            html += '<h3 class="my-dash__day-group-title">' +
+                '<span class="material-symbols-outlined">person</span> My Events</h3>';
+            html += '<div class="my-dash__empty my-dash__empty--sm">No events for you this day</div>';
             html += '</div>';
         }
-        html += '</div>';
 
-        // Day cells
-        html += '<div class="my-dash__week-cells">';
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(currentWeekStart);
-            d.setDate(d.getDate() + i);
-            const dateStr = formatDateISO(d);
-            const isToday = dateStr === todayStr;
-            const events = data.days[dateStr] || [];
+        // Team Events section (leads only)
+        if (IS_LEAD && teamEvents.length > 0) {
+            html += '<div class="my-dash__day-group">';
+            html += '<h3 class="my-dash__day-group-title">' +
+                '<span class="material-symbols-outlined">group</span> Team Schedule ' +
+                '<span class="my-dash__day-group-count">' + teamEvents.length + '</span></h3>';
+            for (var j = 0; j < teamEvents.length; j++) {
+                html += buildEventCard(teamEvents[j], true);
+            }
+            html += '</div>';
+        }
 
-            var dayLabel = DAY_NAMES[i] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
-            html += '<div class="my-dash__week-cell' + (isToday ? ' my-dash__week-cell--today' : '') + '" data-day-label="' + dayLabel + '">';
+        dayContent.innerHTML = html;
+    }
 
-            if (events.length === 0) {
-                html += '<div class="my-dash__week-empty">No events</div>';
+    function loadDay() {
+        updateDayLabel();
+        dayContent.innerHTML = '<div class="my-dash__empty">' +
+            '<span class="material-symbols-outlined">hourglass_empty</span>Loading schedule...</div>';
+
+        // Reset tab load state when date changes
+        attendanceLoaded = false;
+        notesLoaded = false;
+
+        var dateStr = formatDateISO(currentDate);
+        fetch('/api/my-schedule/daily?date=' + dateStr)
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('Failed to load schedule');
+                return resp.json();
+            })
+            .then(function(data) {
+                renderDayEvents(data);
+            })
+            .catch(function() {
+                dayContent.innerHTML = '<div class="my-dash__empty">' +
+                    '<span class="material-symbols-outlined">error</span>Error loading schedule</div>';
+            });
+
+        // If attendance tab is currently active, reload it
+        var attPanel = document.getElementById('tab-panel-attendance');
+        if (attPanel && !attPanel.hidden) {
+            loadAttendance();
+        }
+        // If notes tab is currently active, reload it
+        var notesPanel = document.getElementById('tab-panel-notes');
+        if (notesPanel && !notesPanel.hidden) {
+            loadNotes();
+        }
+    }
+
+    // ── TAB SWITCHING (lead only) ──
+
+    if (IS_LEAD) {
+        var tabs = document.querySelectorAll('.my-dash__tab');
+        var panels = document.querySelectorAll('.my-dash__panel');
+
+        for (var i = 0; i < tabs.length; i++) {
+            tabs[i].addEventListener('click', (function(tab) {
+                return function() {
+                    var target = tab.getAttribute('data-tab');
+                    for (var j = 0; j < tabs.length; j++) {
+                        var isActive = tabs[j].getAttribute('data-tab') === target;
+                        tabs[j].classList.toggle('active', isActive);
+                        tabs[j].setAttribute('aria-selected', isActive ? 'true' : 'false');
+                    }
+                    for (var k = 0; k < panels.length; k++) {
+                        panels[k].hidden = panels[k].id !== 'tab-panel-' + target;
+                    }
+                    if (target === 'attendance' && !attendanceLoaded) loadAttendance();
+                    if (target === 'notes' && !notesLoaded) loadNotes();
+                };
+            })(tabs[i]));
+        }
+    }
+
+    // ── ATTENDANCE (lead only) ──
+
+    function loadAttendance() {
+        var container = document.getElementById('attendance-content');
+        if (!container) return;
+        container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">hourglass_empty</span>Loading attendance...</div>';
+
+        var dateStr = formatDateISO(currentDate);
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/attendance/scheduled-employees/' + dateStr, true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    attendanceLoaded = true;
+                    var employees = data.scheduled_employees || [];
+                    if (employees.length === 0) {
+                        container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">event_busy</span>No employees scheduled for this date</div>';
+                        return;
+                    }
+                    var html = '';
+                    for (var i = 0; i < employees.length; i++) {
+                        html += buildAttendanceRow(employees[i]);
+                    }
+                    container.innerHTML = html;
+                    attachAttendanceListeners(container);
+                } catch (e) {
+                    container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Invalid response</div>';
+                }
             } else {
-                for (const ev of events) {
-                    const accent = eventAccent(ev.event_type);
-                    const safeName = (ev.event_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    html += '<div class="my-dash__week-event my-dash__week-event--' + accent + '">';
-                    html += '<span class="my-dash__week-event-time">' + ev.time + '</span>';
-                    html += '<span class="my-dash__week-event-name">' + safeName + '</span>';
-                    html += '</div>';
+                container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Error loading attendance</div>';
+            }
+        };
+        xhr.onerror = function() { container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Network error</div>'; };
+        xhr.ontimeout = function() { container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Request timed out</div>'; };
+        xhr.send();
+    }
+
+    function buildAttendanceRow(emp) {
+        var name = esc(titleCase(emp.employee_name));
+        var timeHtml = emp.earliest_start_time
+            ? '<span class="att-start-time">' + esc(emp.earliest_start_time) + '</span>' : '';
+
+        if (emp.attendance_status !== null) {
+            var badge = '<span class="att-badge att-badge--' + emp.attendance_status + '">' +
+                (emp.status_label || emp.attendance_status) + '</span>';
+            var notes = emp.attendance_notes
+                ? '<div class="att-notes">' + esc(emp.attendance_notes) + '</div>' : '';
+            var recorded = emp.recorded_by
+                ? '<span class="att-audit">Recorded by ' + esc(emp.recorded_by) + '</span>' : '';
+            var modified = emp.is_modified && emp.modified_by
+                ? '<span class="att-audit att-audit--modified">Modified by ' + esc(emp.modified_by) + '</span>' : '';
+
+            return '<div class="att-row att-row--locked">' +
+                '<div class="att-row__info">' +
+                    '<div class="att-row__name"><span class="material-symbols-outlined att-lock-icon">lock</span> ' + name + ' ' + timeHtml + '</div>' +
+                    '<div class="att-row__details">' + badge + notes + '</div>' +
+                    '<div class="att-row__audit">' + recorded + modified + '</div>' +
+                '</div></div>';
+        }
+
+        return '<div class="att-row att-row--open" data-employee-id="' + emp.employee_id + '">' +
+            '<div class="att-row__info"><div class="att-row__name">' + name + ' ' + timeHtml + '</div></div>' +
+            '<div class="att-row__actions"><div class="att-dropdown">' +
+                '<button class="btn btn-primary btn-sm att-dropdown-toggle">Record Attendance &#9660;</button>' +
+                '<div class="att-dropdown-menu" hidden>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="on_time">On-Time</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="late">Late</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="called_in">Called-In</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="no_call_no_show">No-Call-No-Show</button>' +
+                    '<button class="att-option" data-employee-id="' + emp.employee_id + '" data-status="excused_absence">Excused Absence</button>' +
+                '</div></div></div></div>';
+    }
+
+    function attachAttendanceListeners(container) {
+        container.addEventListener('click', function(e) {
+            var toggle = e.target.closest('.att-dropdown-toggle');
+            if (toggle) {
+                e.stopPropagation();
+                var menu = toggle.nextElementSibling;
+                var wasHidden = menu.hidden;
+                var allMenus = container.querySelectorAll('.att-dropdown-menu');
+                for (var i = 0; i < allMenus.length; i++) allMenus[i].hidden = true;
+                menu.hidden = !wasHidden;
+                return;
+            }
+            var option = e.target.closest('.att-option');
+            if (option) {
+                submitAttendance(option.getAttribute('data-employee-id'), option.getAttribute('data-status'));
+                return;
+            }
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.att-dropdown')) {
+                var allMenus = container.querySelectorAll('.att-dropdown-menu');
+                for (var i = 0; i < allMenus.length; i++) allMenus[i].hidden = true;
+            }
+        });
+    }
+
+    function submitAttendance(employeeId, status) {
+        var dateStr = formatDateISO(currentDate);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/attendance', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-CSRF-Token', CSRF);
+        xhr.setRequestHeader('X-CSRFToken', CSRF);
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            if (xhr.status < 300) {
+                loadAttendance();
+            } else {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    alert(data.error || 'Failed to record attendance');
+                } catch (e) {
+                    // CSRF failures return HTML, not JSON
+                    alert('Attendance error (' + xhr.status + '): ' + (xhr.responseText || '').substring(0, 200));
                 }
             }
+        };
+        xhr.onerror = function() { alert('Network error'); };
+        xhr.send(JSON.stringify({ employee_id: employeeId, attendance_date: dateStr, status: status }));
+    }
 
-            html += '</div>';
-        }
-        html += '</div>';
+    // ── NOTES (lead only) ──
 
-        weekGrid.innerHTML = html;
+    function loadNotes() {
+        var container = document.getElementById('notes-content');
+        if (!container) return;
+        container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">hourglass_empty</span>Loading notes...</div>';
+
+        var dateStr = formatDateISO(currentDate);
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/day-notes/' + dateStr, true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    notesLoaded = true;
+                    var notes = data.notes || [];
+                    if (notes.length === 0) {
+                        container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">sticky_note_2</span>No notes for this date</div>';
+                        return;
+                    }
+                    var html = '';
+                    for (var i = 0; i < notes.length; i++) {
+                        var n = notes[i];
+                        var del = n.can_delete
+                            ? ' <button class="note-delete-btn" data-note-id="' + n.id + '"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>'
+                            : '';
+                        html += '<div class="note-item">' +
+                            '<div class="note-item__content">' + esc(n.content) + '</div>' +
+                            '<div class="note-item__meta">' + esc(n.created_by) + ' &middot; ' + esc(n.created_at) + del + '</div>' +
+                            '</div>';
+                    }
+                    container.innerHTML = html;
+                    attachNoteDeleteListeners(container);
+                } catch (e) {
+                    container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Invalid response</div>';
+                }
+            } else {
+                container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Error loading notes</div>';
+            }
+        };
+        xhr.onerror = function() { container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Network error</div>'; };
+        xhr.ontimeout = function() { container.innerHTML = '<div class="my-dash__empty"><span class="material-symbols-outlined">error</span>Request timed out</div>'; };
+        xhr.send();
+    }
+
+    function attachNoteDeleteListeners(container) {
+        container.addEventListener('click', function(e) {
+            var btn = e.target.closest('.note-delete-btn');
+            if (btn) {
+                if (!confirm('Delete this note?')) return;
+                var xhr = new XMLHttpRequest();
+                xhr.open('DELETE', '/api/day-notes/' + btn.getAttribute('data-note-id'), true);
+                xhr.setRequestHeader('X-CSRF-Token', CSRF);
+        xhr.setRequestHeader('X-CSRFToken', CSRF);
+                xhr.onload = function() { if (xhr.status < 300) loadNotes(); else alert('Failed to delete'); };
+                xhr.send();
+            }
+        });
+    }
+
+    // Submit new note
+    var noteBtn = document.getElementById('note-submit');
+    if (noteBtn) {
+        noteBtn.addEventListener('click', function() {
+            var input = document.getElementById('note-input');
+            var content = (input.value || '').trim();
+            if (!content) return;
+            noteBtn.disabled = true;
+
+            var dateStr = formatDateISO(currentDate);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/day-notes/' + dateStr, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('X-CSRF-Token', CSRF);
+        xhr.setRequestHeader('X-CSRFToken', CSRF);
+            xhr.timeout = 15000;
+            xhr.onload = function() {
+                noteBtn.disabled = false;
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (xhr.status < 300) { input.value = ''; loadNotes(); }
+                    else { alert(data.error || 'Failed to add note'); }
+                } catch (e) { alert('Invalid response'); }
+            };
+            xhr.onerror = function() { noteBtn.disabled = false; alert('Network error'); };
+            xhr.send(JSON.stringify({ content: content }));
+        });
     }
 
     // Navigation
-    weekPrev.addEventListener('click', function() {
-        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-        loadWeek();
+    dayPrev.addEventListener('click', function() {
+        currentDate.setDate(currentDate.getDate() - 1);
+        loadDay();
     });
 
-    weekNext.addEventListener('click', function() {
-        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-        loadWeek();
+    dayNext.addEventListener('click', function() {
+        currentDate.setDate(currentDate.getDate() + 1);
+        loadDay();
+    });
+
+    dayToday.addEventListener('click', function() {
+        currentDate = new Date(todayDate);
+        loadDay();
     });
 
     // Initial load
-    loadWeek();
+    loadDay();
 })();
 </script>
 {% endblock %}

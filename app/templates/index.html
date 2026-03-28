@@ -238,6 +238,7 @@
                     </button>
                 </div>
             </div>
+
         </section>
 
         <!-- Unscheduled Events & Scheduling Progress -->
@@ -282,7 +283,7 @@
                                 data-event-name="{{ event.project_name }}"
                                 data-event-type="{{ event.event_type }}"
                                 data-location="{{ event.store_name or '' }}"
-                                data-duration="{{ event.estimated_time or event.get_default_duration(event.event_type) }}"
+                                data-duration="{{ calculate_schedule_duration(event) }}"
                                 data-date-needed="{{ event.start_datetime.strftime('%Y-%m-%d') }}">
                             <span class="btn-text">Schedule Now</span>
                             <span class="btn-spinner">⏳</span>
@@ -377,6 +378,10 @@
                 <button data-action="reschedule-event" class="btn btn-primary">Reschedule</button>
                 <button data-action="unschedule-event" class="btn btn-secondary">Unschedule</button>
                 <button data-action="change-employee" class="btn btn-primary">Change Employee</button>
+                <button data-action="view-submissions" class="btn btn-primary" style="background:var(--color-primary);">
+                    <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">assignment_turned_in</span>
+                    Submissions
+                </button>
                 <button data-action="print-edr" class="btn btn--navy">Print EDR</button>
                 <button data-action="print-instructions" class="btn btn--blue">Print Instructions</button>
                 <button data-action="print-both" class="btn btn-primary">Print Both</button>
@@ -478,6 +483,26 @@
     ]
 }
 </script>
+
+<!-- Submissions Panel (shared with daily view) -->
+<div class="submissions-panel" id="submissionsPanel" style="display: none;">
+    <div class="submissions-panel__header">
+        <h3 class="submissions-panel__title" id="submissionsPanelTitle">Event Submissions</h3>
+        <button class="submissions-panel__close" id="closeSubmissionsPanel" aria-label="Close submissions">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <div class="submissions-panel__body" id="submissionsPanelBody">
+        <div class="submissions-panel__loading">Loading submissions...</div>
+    </div>
+</div>
+<div class="photo-lightbox" id="photoLightbox" style="display: none;" role="dialog" aria-modal="true">
+    <button class="photo-lightbox__close" id="closeLightbox" aria-label="Close photo">
+        <span class="material-symbols-outlined">close</span>
+    </button>
+    <img class="photo-lightbox__img" id="lightboxImg" src="" alt="Submission photo">
+</div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/submissions-panel.css') }}">
 
 <!-- FLAW-003: Index page JavaScript (extracted from inline script) -->
 <script src="{{ url_for('static', filename='js/pages/index-page.js') }}"></script>

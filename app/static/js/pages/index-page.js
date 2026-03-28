@@ -1475,9 +1475,97 @@ document.addEventListener('click', function(e) {
         case 'reschedule-event': rescheduleEvent(); break;
         case 'unschedule-event': unscheduleEvent(); break;
         case 'change-employee': changeEmployee(); break;
+        case 'view-submissions': viewSubmissions(currentEventRefNum); break;
         case 'print-edr': printEDR(); break;
         case 'print-instructions': printInstructions(); break;
         case 'print-both': printBoth(); break;
         case 'close-modal': closeModal(target.dataset.modal); break;
+    }
+});
+
+// ── View Submissions ──
+async function viewSubmissions(eventRefNum) {
+    if (!eventRefNum) return;
+
+    var panel = document.getElementById('submissionsPanel');
+    var body = document.getElementById('submissionsPanelBody');
+    var title = document.getElementById('submissionsPanelTitle');
+    if (!panel || !body) return;
+
+    panel.style.display = 'flex';
+    body.innerHTML = '<div class="submissions-panel__loading"><span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">refresh</span> Loading submissions...</div>';
+
+    try {
+        var response = await fetch('/api/event/' + eventRefNum + '/submissions');
+        var data = await response.json();
+
+        if (!response.ok) {
+            body.innerHTML = '<div class="submissions-panel__error">' + escapeHtml(data.error || 'Failed to load') + '</div>';
+            return;
+        }
+
+        if (title) title.textContent = data.event_name || 'Event Submissions';
+
+        if (!data.submissions || data.submissions.length === 0) {
+            body.innerHTML = '<div class="submissions-panel__empty"><span class="material-symbols-outlined" style="font-size:48px;color:#d1d5db;">inbox</span><p>No submissions yet</p></div>';
+            return;
+        }
+
+        var html = '<div class="submissions-list">';
+        for (var i = 0; i < data.submissions.length; i++) {
+            var item = data.submissions[i];
+            html += '<div class="submission-item">';
+            html += '<div class="submission-item__question">' + escapeHtml(item.question) + '</div>';
+            if (item.answer) {
+                html += '<div class="submission-item__answer">' + escapeHtml(item.answer) + '</div>';
+            }
+            if (item.photos && item.photos.length > 0) {
+                html += '<div class="submission-item__photos">';
+                for (var j = 0; j < item.photos.length; j++) {
+                    html += '<img class="submission-item__photo" src="' + escapeHtml(item.photos[j]) + '" alt="Submission photo" data-action="open-lightbox" loading="lazy">';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+
+        if (data.activity && data.activity.length > 0) {
+            html += '<div class="submissions-activity"><h4>Activity Timeline</h4>';
+            for (var k = 0; k < data.activity.length; k++) {
+                var act = data.activity[k];
+                html += '<div class="submissions-activity__item">';
+                html += '<span class="submissions-activity__date">' + escapeHtml(act.date) + '</span>';
+                html += '<span class="submissions-activity__text">' + escapeHtml(act.activity) + '</span>';
+                html += '<span class="submissions-activity__owner">' + escapeHtml(act.owner) + '</span>';
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+        body.innerHTML = html;
+    } catch (err) {
+        body.innerHTML = '<div class="submissions-panel__error">Failed to load submissions.</div>';
+    }
+}
+
+// Close and lightbox handlers
+document.getElementById('closeSubmissionsPanel')?.addEventListener('click', function() {
+    document.getElementById('submissionsPanel').style.display = 'none';
+});
+document.getElementById('closeLightbox')?.addEventListener('click', function() {
+    document.getElementById('photoLightbox').style.display = 'none';
+});
+document.getElementById('photoLightbox')?.addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+document.addEventListener('click', function(e) {
+    if (e.target.matches('.submission-item__photo')) {
+        var lightbox = document.getElementById('photoLightbox');
+        var img = document.getElementById('lightboxImg');
+        if (lightbox && img) {
+            img.src = e.target.src;
+            lightbox.style.display = 'flex';
+        }
     }
 });
