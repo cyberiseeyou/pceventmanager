@@ -570,6 +570,10 @@ class DailyView {
             ? `<span class="attendance-notes" title="${this.escapeHtml(employee.attendance_notes)}"><span class="material-symbols-outlined">notes</span> ${this.truncate(employee.attendance_notes, 40)}</span>`
             : '';
 
+        const recordedBy = hasAttendance && employee.recorded_by
+            ? `<span class="attendance-recorded-by">Recorded by ${this.escapeHtml(employee.recorded_by)}${employee.is_modified && employee.modified_by ? ' · Modified by ' + this.escapeHtml(employee.modified_by) : ''}</span>`
+            : '';
+
         const startTime = employee.earliest_start_time
             ? `<span class="employee-start-time"> - ${employee.earliest_start_time}</span>`
             : '';
@@ -583,13 +587,15 @@ class DailyView {
                 <div class="attendance-row__status">
                     ${statusBadge}
                     ${notesPreview}
+                    ${recordedBy}
                 </div>
                 <div class="attendance-row__actions">
                     ${hasAttendance
-                ? `<button class="btn btn-secondary btn-sm btn-edit-attendance-row"
-                                   data-employee-id="${employee.employee_id}"
-                                   aria-label="Edit attendance for ${employee.employee_name}">
-                               Edit
+                ? `<button class="btn btn-danger btn-sm btn-delete-attendance"
+                                   data-attendance-id="${employee.attendance_id}"
+                                   data-employee-name="${this.escapeHtml(employee.employee_name)}"
+                                   aria-label="Delete attendance for ${employee.employee_name}">
+                               Delete
                            </button>`
                 : `<div class="attendance-dropdown" data-employee-id="${employee.employee_id}">
                                <button class="btn btn-primary btn-sm dropdown-toggle"
@@ -658,11 +664,12 @@ class DailyView {
         if (!container) return;
 
         container.addEventListener('click', (e) => {
-            // Edit attendance button
-            const editBtn = e.target.closest('.btn-edit-attendance-row');
-            if (editBtn) {
-                const employeeId = editBtn.getAttribute('data-employee-id');
-                this.handleAttendanceEditForEmployee(employeeId);
+            // Delete attendance button
+            const deleteBtn = e.target.closest('.btn-delete-attendance');
+            if (deleteBtn) {
+                const attendanceId = deleteBtn.getAttribute('data-attendance-id');
+                const employeeName = deleteBtn.getAttribute('data-employee-name');
+                this.handleAttendanceDelete(attendanceId, employeeName);
                 return;
             }
 
@@ -730,6 +737,32 @@ class DailyView {
             }
         } catch (error) {
             this.showNotification(error.message || 'Failed to record attendance', 'error');
+        }
+    }
+
+    /**
+     * Handle attendance delete
+     */
+    async handleAttendanceDelete(attendanceId, employeeName) {
+        if (!confirm(`Delete attendance record for ${employeeName}?`)) return;
+
+        try {
+            const response = await fetch(`/api/attendance/${attendanceId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-Token': this.getCsrfToken()
+                }
+            });
+
+            const data = await response.json();
+            if (response.ok && data.success) {
+                this.showNotification('Attendance record deleted', 'success');
+                await this.loadAttendance();
+            } else {
+                throw new Error(data.error || 'Failed to delete attendance');
+            }
+        } catch (error) {
+            this.showNotification(error.message || 'Failed to delete attendance', 'error');
         }
     }
 
@@ -1453,6 +1486,13 @@ class DailyView {
                                 Trade Event
                             </button>
                             ` : ''}
+                            ${event.condition === 'Submitted' ? `
+                            <button class="dropdown-item btn-view-submissions"
+                                    role="menuitem"
+                                    data-event-ref="${event.event_id}">
+                                <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">assignment_turned_in</span> View Submissions
+                            </button>
+                            ` : ''}
                             <button class="dropdown-item btn-unschedule"
                                     role="menuitem"
                                     data-schedule-id="${event.schedule_id}">
@@ -1626,6 +1666,14 @@ class DailyView {
             btn.addEventListener('click', (e) => {
                 const scheduleId = e.currentTarget.getAttribute('data-schedule-id');
                 this.handleUnschedule(scheduleId);
+            });
+        });
+
+        // View Submissions buttons
+        document.querySelectorAll('.btn-view-submissions').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const eventRef = e.currentTarget.getAttribute('data-event-ref');
+                viewSubmissions(eventRef);
             });
         });
 
@@ -4259,6 +4307,106 @@ class DailyView {
         if (modal) modal.style.display = 'none';
     }
 }
+
+// ── View Submissions (global functions) ──
+
+/**
+ * Open the submissions side panel and fetch submission data for an event.
+ *
+ * @param {string|number} eventRefNum - Event project_ref_num
+ */
+async function viewSubmissions(eventRefNum) {
+    const panel = document.getElementById('submissionsPanel');
+    const body = document.getElementById('submissionsPanelBody');
+    const title = document.getElementById('submissionsPanelTitle');
+
+    if (!panel || !body) return;
+
+    panel.style.display = 'flex';
+    body.innerHTML = '<div class="submissions-panel__loading"><span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">refresh</span> Loading submissions...</div>';
+
+    try {
+        const response = await fetch(`/api/event/${eventRefNum}/submissions`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            body.innerHTML = `<div class="submissions-panel__error">${escapeHtml(data.error || 'Failed to load submissions')}</div>`;
+            return;
+        }
+
+        if (title) title.textContent = data.event_name || 'Event Submissions';
+
+        if (!data.submissions || data.submissions.length === 0) {
+            body.innerHTML = '<div class="submissions-panel__empty"><span class="material-symbols-outlined" style="font-size:48px;color:var(--color-neutral-300);">inbox</span><p>No submissions yet</p></div>';
+            return;
+        }
+
+        let html = '<div class="submissions-list">';
+
+        for (const item of data.submissions) {
+            html += '<div class="submission-item">';
+            html += `<div class="submission-item__question">${escapeHtml(item.question)}</div>`;
+            if (item.answer) {
+                html += `<div class="submission-item__answer">${escapeHtml(item.answer)}</div>`;
+            }
+            if (item.photos && item.photos.length > 0) {
+                html += '<div class="submission-item__photos">';
+                for (const url of item.photos) {
+                    html += `<img class="submission-item__photo" src="${escapeHtml(url)}" alt="Submission photo" data-action="open-lightbox" loading="lazy">`;
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+
+        // Activity timeline
+        if (data.activity && data.activity.length > 0) {
+            html += '<div class="submissions-activity"><h4>Activity Timeline</h4>';
+            for (const act of data.activity) {
+                html += '<div class="submissions-activity__item">';
+                html += `<span class="submissions-activity__date">${escapeHtml(act.date)}</span>`;
+                html += `<span class="submissions-activity__text">${escapeHtml(act.activity)}</span>`;
+                html += `<span class="submissions-activity__owner">${escapeHtml(act.owner)}</span>`;
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+        body.innerHTML = html;
+
+        // Attach photo click listeners (avoid inline onclick)
+        body.querySelectorAll('[data-action="open-lightbox"]').forEach(img => {
+            img.addEventListener('click', () => openPhotoLightbox(img.src));
+        });
+    } catch (err) {
+        body.innerHTML = '<div class="submissions-panel__error">Failed to load submissions. Check your connection.</div>';
+    }
+}
+
+/**
+ * Open the photo lightbox overlay with the given image URL.
+ *
+ * @param {string} src - Image source URL
+ */
+function openPhotoLightbox(src) {
+    const lightbox = document.getElementById('photoLightbox');
+    const img = document.getElementById('lightboxImg');
+    if (!lightbox || !img) return;
+    img.src = src;
+    lightbox.style.display = 'flex';
+}
+
+// Close handlers for submissions panel and lightbox
+document.getElementById('closeSubmissionsPanel')?.addEventListener('click', function () {
+    document.getElementById('submissionsPanel').style.display = 'none';
+});
+document.getElementById('closeLightbox')?.addEventListener('click', function () {
+    document.getElementById('photoLightbox').style.display = 'none';
+});
+document.getElementById('photoLightbox')?.addEventListener('click', function (e) {
+    if (e.target === this) this.style.display = 'none';
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {

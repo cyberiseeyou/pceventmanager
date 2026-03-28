@@ -1708,6 +1708,70 @@ class SessionAPIService:
         """Alias for delete_schedule - more descriptive name"""
         return self.delete_schedule(schedule_id)
 
+    def get_event_submissions(self, mplan_id: str, store_id: str, wle_id: str = None) -> Optional[Dict]:
+        """
+        Fetch question responses/submissions for an event at a location.
+
+        Args:
+            mplan_id: The mPlan ID (Event.external_id)
+            store_id: The store/location ID (Event.location_mvid)
+            wle_id: Optional workflow element ID
+
+        Returns:
+            dict with 'success' and 'responses' list containing HTML responseText fields
+        """
+        try:
+            params = {
+                '_dc': str(int(time.time() * 1000)),
+                'mPlanID': mplan_id,
+                'storeID': store_id,
+                'page': 1,
+                'start': 0,
+                'limit': 50,
+            }
+            if wle_id:
+                params['wleID'] = wle_id
+
+            response = self.make_request('GET', '/planningextcontroller/getLocationResponses', params=params)
+            if 200 <= response.status_code < 300:
+                return self._safe_json(response)
+            self.logger.warning(f"get_event_submissions failed: {response.status_code}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting event submissions: {str(e)}")
+            return None
+
+    def get_event_activity(self, mplan_id: str, store_id: str) -> Optional[Dict]:
+        """
+        Fetch activity timeline for an event at a location.
+
+        Args:
+            mplan_id: The mPlan ID (Event.external_id)
+            store_id: The store/location ID (Event.location_mvid)
+
+        Returns:
+            list of activity entries with date, activity, owner fields
+        """
+        try:
+            params = {
+                '_dc': str(int(time.time() * 1000)),
+                'mPlanID': mplan_id,
+                'storeID': store_id,
+                'page': 1,
+                'start': 0,
+                'limit': 50,
+                'sort': json.dumps([{"property": "activity", "direction": "ASC"}]),
+            }
+
+            response = self.make_request('GET', '/planningextcontroller/getMplanActivity', params=params)
+            if 200 <= response.status_code < 300:
+                return self._safe_json(response)
+            self.logger.warning(f"get_event_activity failed: {response.status_code}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting event activity: {str(e)}")
+            return None
+
     def logout(self) -> bool:
         """Logout and clear session"""
         try:

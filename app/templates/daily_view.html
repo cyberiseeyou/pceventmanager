@@ -763,6 +763,27 @@
     </footer>
   </div>
 </div>
+
+<!-- Submissions Panel -->
+<div class="submissions-panel" id="submissionsPanel" style="display: none;">
+    <div class="submissions-panel__header">
+        <h3 class="submissions-panel__title" id="submissionsPanelTitle">Event Submissions</h3>
+        <button class="submissions-panel__close" id="closeSubmissionsPanel" aria-label="Close submissions">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <div class="submissions-panel__body" id="submissionsPanelBody">
+        <div class="submissions-panel__loading">Loading submissions...</div>
+    </div>
+</div>
+
+<!-- Photo Lightbox -->
+<div class="photo-lightbox" id="photoLightbox" style="display: none;" role="dialog" aria-modal="true">
+    <button class="photo-lightbox__close" id="closeLightbox" aria-label="Close photo">
+        <span class="material-symbols-outlined">close</span>
+    </button>
+    <img class="photo-lightbox__img" id="lightboxImg" src="" alt="Submission photo">
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+
+{% block title %}Demo Goals - Product Connections{% endblock %}
+
+{% block extra_head %}
+<style>
+    .demo-goals {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: var(--space-4) var(--space-4) 100px;
+    }
+
+    .demo-goals__header {
+        padding: var(--space-6) 0 var(--space-4);
+    }
+
+    .demo-goals__title {
+        font-size: clamp(1.25rem, 4vw, 1.5rem);
+        font-weight: 700;
+        color: var(--color-neutral-900);
+        margin: 0 0 var(--space-2);
+    }
+
+    .demo-goals__subtitle {
+        color: var(--color-neutral-500);
+        font-size: var(--font-size-sm);
+        margin: 0;
+    }
+
+    .demo-goals__controls {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        background: var(--color-neutral-50);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--space-4);
+        flex-wrap: wrap;
+    }
+
+    .demo-goals__label {
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--color-neutral-700);
+        white-space: nowrap;
+    }
+
+    .demo-goals__input {
+        width: 100px;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--color-neutral-300);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-family: var(--font-primary);
+    }
+
+    .demo-goals__input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+
+    .demo-goals__btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        min-height: 40px;
+        font-family: var(--font-primary);
+        transition: all var(--transition-fast);
+    }
+
+    .demo-goals__btn--primary {
+        background: var(--color-primary);
+        color: #fff;
+    }
+
+    .demo-goals__btn--primary:hover {
+        background: var(--color-primary-dark);
+    }
+
+    .demo-goals__btn--secondary {
+        background: var(--color-neutral-100);
+        color: var(--color-neutral-700);
+        border: 1px solid var(--color-neutral-300);
+    }
+
+    .demo-goals__btn--secondary:hover {
+        background: var(--color-neutral-200);
+    }
+
+    .demo-goals__btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .demo-goals__actions {
+        margin-left: auto;
+        display: flex;
+        gap: var(--space-2);
+    }
+
+    .demo-goals__status {
+        text-align: center;
+        padding: var(--space-8);
+        color: var(--color-neutral-500);
+    }
+
+    .demo-goals__spinner {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        border: 3px solid var(--color-neutral-200);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: var(--space-2);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .demo-goals__error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        padding: var(--space-4);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+    }
+
+    .demo-goals__empty {
+        font-size: var(--font-size-sm);
+    }
+
+    .demo-goals__table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--color-neutral-200);
+        border-radius: var(--radius-md);
+    }
+
+    .demo-goals__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--font-size-sm);
+    }
+
+    .demo-goals__table th {
+        background: var(--color-neutral-50);
+        font-weight: 600;
+        color: var(--color-neutral-700);
+        text-align: left;
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 2px solid var(--color-neutral-200);
+        white-space: nowrap;
+    }
+
+    .demo-goals__table td {
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--color-neutral-100);
+        color: var(--color-neutral-800);
+    }
+
+    .demo-goals__table tbody tr:hover {
+        background: var(--color-neutral-50);
+    }
+
+    .demo-goals__count {
+        font-size: var(--font-size-sm);
+        color: var(--color-neutral-500);
+        margin-bottom: var(--space-3);
+    }
+
+    /* Print header - hidden on screen */
+    .demo-goals__print-header {
+        display: none;
+    }
+
+    /* Print styles */
+    @media print {
+        /* Hide non-content elements */
+        .app-header, .header, .sidebar, .bottom-nav, .demo-goals__controls,
+        .demo-goals__subtitle, .no-print, .skip-to-content, .offline-banner,
+        .flash-messages, footer, nav {
+            display: none !important;
+        }
+
+        /* Zero out all wrapper margins/padding so content starts at top */
+        body, html {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 8pt !important;
+        }
+
+        .container, .main-content {
+            margin: 0 !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+        }
+
+        .demo-goals {
+            max-width: 100%;
+            padding: 0;
+            margin: 0;
+        }
+
+        .demo-goals__header {
+            padding: 0 0 2px;
+        }
+
+        .demo-goals__title {
+            font-size: 11pt;
+            margin: 0;
+        }
+
+        .demo-goals__print-header {
+            display: block;
+            font-size: 8pt;
+            color: #666;
+            margin-bottom: 1px;
+        }
+
+        .demo-goals__table-wrap {
+            border: none;
+        }
+
+        .demo-goals__table {
+            font-size: 7.5pt;
+            page-break-inside: avoid;
+        }
+
+        .demo-goals__table th {
+            background: #f3f4f6 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .demo-goals__table th,
+        .demo-goals__table td {
+            padding: 1px 4px;
+            border: 1px solid #d1d5db;
+            line-height: 1.15;
+        }
+
+        .demo-goals__count {
+            font-size: 7.5pt;
+            margin-bottom: 1px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .demo-goals__controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .demo-goals__actions {
+            margin-left: 0;
+            justify-content: stretch;
+        }
+
+        .demo-goals__actions .demo-goals__btn {
+            flex: 1;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="demo-goals">
+    <header class="demo-goals__header">
+        <h1 class="demo-goals__title">Demo Goals</h1>
+        <p class="demo-goals__subtitle">Sam's Club demo goals from Product Connections</p>
+    </header>
+
+    <div class="demo-goals__controls">
+        <label for="club-number" class="demo-goals__label">Club #:</label>
+        <input type="text" id="club-number" class="demo-goals__input"
+               value="{{ default_club_number }}" placeholder="e.g. 8135" inputmode="numeric">
+        <button type="button" id="load-btn" class="demo-goals__btn demo-goals__btn--primary">
+            <span class="material-symbols-outlined" style="font-size:18px">search</span>
+            Load Goals
+        </button>
+        <div class="demo-goals__actions no-print">
+            <button type="button" id="print-btn" class="demo-goals__btn demo-goals__btn--secondary" disabled>
+                <span class="material-symbols-outlined" style="font-size:18px">print</span>
+                Print
+            </button>
+            <button type="button" id="download-btn" class="demo-goals__btn demo-goals__btn--secondary" disabled>
+                <span class="material-symbols-outlined" style="font-size:18px">download</span>
+                Excel
+            </button>
+        </div>
+    </div>
+
+    <div id="results-area">
+        <div class="demo-goals__status">
+            <p>Enter a club number and click <strong>Load Goals</strong> to view demo goals.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var clubInput = document.getElementById('club-number');
+    var loadBtn = document.getElementById('load-btn');
+    var printBtn = document.getElementById('print-btn');
+    var downloadBtn = document.getElementById('download-btn');
+    var resultsArea = document.getElementById('results-area');
+    var currentClub = '';
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showLoading() {
+        resultsArea.innerHTML =
+            '<div class="demo-goals__status">' +
+                '<div class="demo-goals__spinner"></div>' +
+                '<p>Fetching demo goals\u2026</p>' +
+            '</div>';
+        printBtn.disabled = true;
+        downloadBtn.disabled = true;
+    }
+
+    function showError(msg) {
+        resultsArea.innerHTML =
+            '<div class="demo-goals__error">' + escapeHtml(msg) + '</div>';
+        printBtn.disabled = true;
+        downloadBtn.disabled = true;
+    }
+
+    function showEmpty(club) {
+        resultsArea.innerHTML =
+            '<div class="demo-goals__status demo-goals__empty">' +
+                '<p>No demo goals found for club <strong>' + escapeHtml(club) + '</strong>.</p>' +
+            '</div>';
+        printBtn.disabled = true;
+        downloadBtn.disabled = true;
+    }
+
+    function renderTable(rows, club) {
+        var now = new Date();
+        var timestamp = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+
+        var html =
+            '<div class="demo-goals__print-header">' +
+                'Club #' + escapeHtml(club) + ' &mdash; Generated ' + escapeHtml(timestamp) +
+            '</div>' +
+            '<div class="demo-goals__count">' +
+                rows.length + ' goal' + (rows.length !== 1 ? 's' : '') + ' found for club ' + escapeHtml(club) +
+            '</div>' +
+            '<div class="demo-goals__table-wrap">' +
+                '<table class="demo-goals__table">' +
+                    '<thead><tr>' +
+                        '<th>Demo Date</th>' +
+                        '<th>Demo ID</th>' +
+                        '<th>Demo Item</th>' +
+                        '<th>Sales Target</th>' +
+                    '</tr></thead>' +
+                    '<tbody>';
+
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            html += '<tr>' +
+                '<td>' + escapeHtml(r.demoscheduleddate || 'N/A') + '</td>' +
+                '<td>' + escapeHtml(r.demoid || 'N/A') + '</td>' +
+                '<td>' + escapeHtml(r.itemnumber || 'N/A') + '</td>' +
+                '<td>' + escapeHtml(r.itemdescription || 'N/A') + '</td>' +
+            '</tr>';
+        }
+
+        html += '</tbody></table></div>';
+        resultsArea.innerHTML = html;
+        printBtn.disabled = false;
+        downloadBtn.disabled = false;
+    }
+
+    function loadGoals() {
+        var club = clubInput.value.trim();
+        if (!club) {
+            clubInput.focus();
+            return;
+        }
+        currentClub = club;
+        showLoading();
+        loadBtn.disabled = true;
+
+        fetch('/api/demo-goals/data?club_number=' + encodeURIComponent(club))
+            .then(function(resp) {
+                if (!resp.ok) {
+                    return resp.json().then(function(data) {
+                        throw new Error(data.error || 'Failed to load demo goals');
+                    });
+                }
+                return resp.json();
+            })
+            .then(function(data) {
+                if (!data.data || data.data.length === 0) {
+                    showEmpty(club);
+                } else {
+                    renderTable(data.data, club);
+                }
+            })
+            .catch(function(err) {
+                showError(err.message || 'Failed to load demo goals');
+            })
+            .finally(function() {
+                loadBtn.disabled = false;
+            });
+    }
+
+    function downloadExcel() {
+        if (!currentClub) return;
+        downloadBtn.disabled = true;
+        var originalText = downloadBtn.innerHTML;
+        downloadBtn.textContent = 'Downloading\u2026';
+
+        fetch('/api/demo-goals/download?club_number=' + encodeURIComponent(currentClub))
+            .then(function(resp) {
+                if (!resp.ok) {
+                    return resp.json().then(function(data) {
+                        throw new Error(data.error || 'Download failed');
+                    });
+                }
+                var disposition = resp.headers.get('Content-Disposition') || '';
+                var match = disposition.match(/filename="?([^"]+)"?/);
+                var filename = match ? match[1] : 'Demo_Goals_' + currentClub + '.xlsx';
+                return resp.blob().then(function(blob) {
+                    return { blob: blob, filename: filename };
+                });
+            })
+            .then(function(result) {
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(result.blob);
+                a.download = result.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            })
+            .catch(function(err) {
+                showError(err.message || 'Download failed');
+            })
+            .finally(function() {
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            });
+    }
+
+    loadBtn.addEventListener('click', loadGoals);
+    printBtn.addEventListener('click', function() { window.print(); });
+    downloadBtn.addEventListener('click', downloadExcel);
+
+    clubInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') loadGoals();
+    });
+
+    // Auto-load if club number is pre-filled
+    if (clubInput.value.trim()) {
+        loadGoals();
+    }
+})();
+</script>
+{% endblock %}
