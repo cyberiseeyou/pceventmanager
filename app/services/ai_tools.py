@@ -10,6 +10,7 @@ import logging
 from difflib import SequenceMatcher
 from sqlalchemy import func
 from app.constants import CONDITION_CANCELED, INACTIVE_CONDITIONS
+from app.utils.event_helpers import calculate_schedule_duration
 
 logger = logging.getLogger(__name__)
 
@@ -2625,7 +2626,7 @@ class AITools:
 
             event_count = len(schedules)
             days_worked = len(set(s.schedule_datetime.date() for s, e in schedules))
-            total_hours = sum((e.estimated_time or e.get_default_duration(e.event_type)) / 60 for s, e in schedules)
+            total_hours = sum(calculate_schedule_duration(e) / 60 for s, e in schedules)
 
             workload.append({
                 'employee_id': emp.id,

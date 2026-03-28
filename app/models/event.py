@@ -185,7 +185,8 @@ def create_event_model(db):
 
         def calculate_end_datetime(self, start_datetime):
             """
-            Calculate the end datetime based on start datetime and estimated duration
+            Calculate the end datetime based on start datetime and estimated duration.
+            Includes lunch break adjustment when estimated_time is from the API.
 
             Args:
                 start_datetime (datetime): The start datetime of the event
@@ -194,7 +195,8 @@ def create_event_model(db):
                 datetime: The calculated end datetime
             """
             from datetime import timedelta
-            duration_minutes = self.estimated_time or self.get_default_duration(self.event_type)
+            from app.utils.event_helpers import calculate_schedule_duration
+            duration_minutes = calculate_schedule_duration(self)
             return start_datetime + timedelta(minutes=duration_minutes)
 
         def __repr__(self):

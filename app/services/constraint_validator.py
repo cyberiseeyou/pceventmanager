@@ -7,6 +7,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.utils.event_helpers import calculate_schedule_duration
 from .validation_types import (
     ValidationResult,
     ConstraintViolation,
@@ -111,7 +112,7 @@ class ConstraintValidator:
 
         # Get duration from event if not provided
         if duration_minutes is None:
-            duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            duration_minutes = calculate_schedule_duration(event)
 
         # Check all constraints (past-date first as a safety net)
         self._check_past_date(schedule_datetime, result)
@@ -399,7 +400,7 @@ class ConstraintValidator:
                 if existing_event.event_type not in ['Core', 'Juicer Production']:
                     continue
 
-                existing_duration = existing_event.estimated_time or existing_event.get_default_duration(existing_event.event_type)
+                existing_duration = calculate_schedule_duration(existing_event)
                 existing_end = existing.schedule_datetime + timedelta(minutes=existing_duration)
 
                 # Check if times overlap:
@@ -452,7 +453,7 @@ class ConstraintValidator:
                         if pending_event.event_type not in ['Core', 'Juicer Production']:
                             continue
 
-                        pending_duration = pending_event.estimated_time or pending_event.get_default_duration(pending_event.event_type)
+                        pending_duration = calculate_schedule_duration(pending_event)
                         pending_end = pending.schedule_datetime + timedelta(minutes=pending_duration)
 
                         # Check if times overlap

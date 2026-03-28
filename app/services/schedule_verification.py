@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from collections import Counter
 from app.constants import CONDITION_CANCELED
 from app.utils.db_compat import extract_time
+from app.utils.event_helpers import calculate_schedule_duration
 import logging
 import re
 
@@ -1603,7 +1604,7 @@ class ScheduleVerificationService:
                 'event': event,
                 'employee': employee,
                 'source': 'committed',
-                'duration_minutes': event.estimated_time or event.get_default_duration(event.event_type)
+                'duration_minutes': calculate_schedule_duration(event)
             })
 
         # Get pending schedules if requested
@@ -1631,7 +1632,7 @@ class ScheduleVerificationService:
                         'event': event,
                         'employee': employee,
                         'source': 'pending',
-                        'duration_minutes': event.estimated_time or event.get_default_duration(event.event_type)
+                        'duration_minutes': calculate_schedule_duration(event)
                     })
 
         return schedules
@@ -2212,7 +2213,7 @@ class ScheduleVerificationService:
                 'conflict_details': None
             }
 
-        duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        duration_minutes = calculate_schedule_duration(event)
         end_datetime = schedule_datetime + timedelta(minutes=duration_minutes)
 
         # Check 1: Double-booking with existing schedules
@@ -2225,7 +2226,7 @@ class ScheduleVerificationService:
 
         for existing_sched, existing_event in existing_schedules:
             existing_start = existing_sched.schedule_datetime
-            existing_duration = existing_event.estimated_time or existing_event.get_default_duration(existing_event.event_type)
+            existing_duration = calculate_schedule_duration(existing_event)
             existing_end = existing_start + timedelta(minutes=existing_duration)
 
             # Check for overlap

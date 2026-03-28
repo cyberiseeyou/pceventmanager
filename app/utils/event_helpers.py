@@ -15,6 +15,44 @@ from datetime import datetime, date
 from app.constants import INACTIVE_CONDITIONS
 
 
+# Lunch break durations (minutes) by event type.
+# Applied when estimated_time is from the external API (work time only, excludes lunch).
+# DEFAULT_DURATIONS in the Event model already include lunch, so no adjustment needed there.
+LUNCH_BREAK_MINUTES = {
+    'Core': 30,
+    'Juicer Production': 60,
+}
+
+
+def calculate_schedule_duration(event) -> int:
+    """
+    Calculate total schedule duration in minutes, including lunch breaks.
+
+    The external API's estimated_time represents work time only (e.g. 360 min
+    for Core, 480 min for Juicer Production). Lunch breaks must be added:
+      - Core: +30 minutes
+      - Juicer Production: +60 minutes
+
+    When estimated_time is not set and we fall back to DEFAULT_DURATIONS,
+    lunch is already baked in (Core=390, Juicer Production=540).
+
+    Args:
+        event: Event model instance
+
+    Returns:
+        Total duration in minutes (work time + lunch if applicable)
+    """
+    event_type = getattr(event, 'event_type', 'Other')
+    estimated = getattr(event, 'estimated_time', None)
+
+    if estimated:
+        # API estimated_time is work time only — add lunch break
+        return estimated + LUNCH_BREAK_MINUTES.get(event_type, 0)
+
+    # Default duration already includes lunch
+    return event.get_default_duration(event_type)
+
+
 def get_walmart_event_id(event) -> Optional[str]:
     """
     Get the Walmart EDR event ID for an event, preferring the explicit

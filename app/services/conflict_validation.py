@@ -17,6 +17,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.utils.event_helpers import calculate_schedule_duration
 from .validation_types import (
     ValidationResult,
     ConstraintViolation,
@@ -112,7 +113,7 @@ class ConflictValidator:
 
         # Get actual duration from event if not provided
         if duration_minutes is None or duration_minutes == 120:
-            duration_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+            duration_minutes = calculate_schedule_duration(event)
 
         # Run all validation checks
         self._check_core_event_duplicate(employee, event, schedule_datetime, result)
@@ -390,7 +391,7 @@ class ConflictValidator:
 
         for schedule, nearby_event in nearby_schedules:
             # Get actual duration of the nearby event
-            nearby_duration = nearby_event.estimated_time or nearby_event.get_default_duration(nearby_event.event_type)
+            nearby_duration = calculate_schedule_duration(nearby_event)
             nearby_end_time = schedule.schedule_datetime + timedelta(minutes=nearby_duration)
 
             # Check for actual time overlap

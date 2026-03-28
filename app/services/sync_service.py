@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from celery import Celery, Task
 from flask import Flask
+from app.utils.event_helpers import calculate_schedule_duration
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -101,7 +102,7 @@ def sync_schedule_to_crossmark(self, schedule_id):
 
         # Call Crossmark API to schedule the event
         # Calculate end datetime based on event's estimated time or event type default
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = schedule.schedule_datetime + timedelta(minutes=estimated_minutes)
 
         api_result = external_api.schedule_mplan_event(
@@ -215,7 +216,7 @@ def sync_schedule_update_to_crossmark(self, schedule_id, new_employee_id=None, n
 
         # Call Crossmark API to update the scheduled event
         # Calculate end datetime based on event's estimated time or event type default
-        estimated_minutes = event.estimated_time or event.get_default_duration(event.event_type)
+        estimated_minutes = calculate_schedule_duration(event)
         end_datetime = schedule_datetime + timedelta(minutes=estimated_minutes)
 
         api_result = external_api.schedule_mplan_event(
