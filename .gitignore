@@ -26,6 +26,7 @@ instance/*.db
 cookies.txt
 login_resp.json
 login_response.html
+*.har
 
 # Logs
 logs/

@@ -2,164 +2,115 @@
 
 ## Code Quality Findings
 
-### Critical
+### Critical (3)
 
-**CRT-01: `_tool_verify_schedule` defined but missing from `tool_map` (Dead Code)**
-- File: `app/services/ai_tools.py` ~line 980 (definition) vs ~line 911 (tool_map)
-- The method is fully implemented (~100 lines) but never wired into the dispatcher. AI assistant cannot invoke this tool.
-- Fix: Add `'verify_schedule': self._tool_verify_schedule` to `tool_map`.
+1. **C1 — Login logs credentials in plain text** (`app/routes/auth.py:235-237`). The login endpoint logs `request.form` (contains password) and raw POST body at INFO level. These will appear in production log files.
 
-**CRT-02: Migration missing `server_default` that model defines**
-- File: `app/models/schedule.py` lines 37-39 vs `migrations/versions/6a96501dd084_add_schedule_outcomes.py`
-- Model declares `server_default=sa.text('0')` for `was_completed`/`was_swapped`/`was_no_show`, but migration adds columns as `nullable=True` with no `server_default`. Existing rows will have NULL instead of False/0. Queries like `Schedule.was_completed == False` will miss NULLs.
-- Fix: Add `server_default=sa.text('0')` to the migration's `add_column` calls.
+2. **C2 — Hardcoded employee PII in source code** (`app/services/sync_service.py:84-92, 198-209`). Employee names and Crossmark RepIDs are hardcoded in two duplicate dicts. Leaks PII via git history.
 
-**CRT-03: Fix Wizard routes lack authentication**
-- File: `app/routes/dashboard.py` lines 1069-1165
-- None of the 4 Fix Wizard routes (`fix_wizard`, `fix_wizard_issues`, `fix_wizard_apply`, `fix_wizard_skip`) have `@require_authentication()` decorator. The apply endpoint accepts `action_type` and `target` from JSON body and can modify schedules.
-- Fix: Add `@require_authentication()` to all Fix Wizard routes.
+3. **C3 — Unauthenticated API endpoints** (`app/routes/api.py`, 18 of 40 endpoints). Critical write operations (`/api/event/<id>/unschedule`, `/api/import/events`) and read endpoints exposing employee names, schedules, and attendance data lack authentication.
 
-### High
+### High (9)
 
-**HGH-01: `showError()` defined twice in fix-wizard.js**
-- File: `app/static/js/pages/fix-wizard.js` lines 35 and 325
-- Second definition silently overrides the first due to JS hoisting. The first (transient alert) is the one intended for apply/skip operations but is unreachable.
-- Fix: Rename second function to `showFatalError` or `showBlockingError`.
+- **H1** — `EVENT_TYPE_PRIORITY` duplicated in `scheduling_engine.py` and `cpsat_scheduler.py` with slight differences; `LEAD_ONLY_EVENT_TYPES` defined in 3 places with different contents.
+- **H2** — Three competing DB access patterns: `get_models()` (correct), `current_app.config[Model]` (deprecated, 20+ usages), and `current_app.extensions['sqlalchemy']` (30+ usages).
+- **H3** — 30+ usages of deprecated `Query.get()` that will break on SQLAlchemy 2.0.
+- **H4** — 25+ bare `except:` clauses silently swallowing errors including in database operations.
+- **H5** — Mixed `datetime.utcnow()` (131 usages) and `datetime.now()` (134 usages) — both deprecated in Python 3.12+, and mixing them creates timezone bugs.
+- **H6** — Login rate limiting is broken — the `limiter.limit()(lambda: None)()` pattern creates a new lambda each request, so the rate limit counter resets every time.
+- **H7** — Rate limiter uses `storage_uri="memory://"` in production, making it per-worker (ineffective with Gunicorn).
+- **H8** — `/api/auth/diag` exposes Redis infrastructure details without authentication.
+- **H9** — Role lookup in Crossmark login uses an undefined `db` variable, so `hasattr(db, 'or_')` likely returns False, causing all Crossmark users to default to `'supervisor'` role.
 
-**HGH-02: Duplicate model dict construction repeated 5 times in dashboard.py**
-- File: `app/routes/dashboard.py` lines ~1069-1080, 1122-1132, 1173-1179
-- Every Fix Wizard endpoint builds nearly identical models dict. Maintenance risk.
-- Fix: Extract `_get_fix_wizard_models()` helper function.
+### Medium (14)
 
-**HGH-03: `_check_past_date` uses `date.today()` which is timezone-naive**
-- File: `app/services/constraint_validator.py` lines 473-484
-- Server-local time used, but scheduling operates in `America/Indiana/Indianapolis`. Production servers in UTC could reject valid evening scheduling.
-- Fix: Use `datetime.now(local_tz).date()` from the configured timezone.
+- `api.py` is 6,940 lines — a god file spanning 53 route handlers across 7 business domains
+- `approve_schedule` function exceeds 500 lines of cyclomatic complexity
+- N+1 queries in `get_pending_schedules` and time-off team view
+- Logic bug in `_is_within_7_days` that sends notifications for events 100 days in the past
+- Duplicate route registration for `/api/event/<id>/change-employee`
+- `ProductionConfig` pool options that break SQLite
+- Two competing `get_models()` functions with different return signatures (`app.models` vs `app.utils.db_helpers`)
+- Mixed use of `get_models()` sources within single files (`api.py` uses both)
+- Services accessing `current_app.config` for models instead of constructor injection
+- Inconsistent blueprint initialization patterns (3 different patterns)
+- Event type priority duplicated across files without single source of truth
+- Two validation systems (`ConstraintValidator` and `ConflictValidator`) with overlapping responsibilities
+- `@handle_errors` decorator exists but has zero usages in any route file
+- SSL verification disabled in `demo_goals_service.py`
 
-**HGH-04: `_confirmed` flag can be injected by untrusted AI model output**
-- File: `app/services/ai_assistant.py` lines 538-541, `app/services/ai_tools.py` multiple
-- The `_confirmed` key is checked via `args.get('_confirmed', False)`. If the LLM generates a function_call with `_confirmed: true`, it bypasses confirmation.
-- Fix: Strip `_confirmed` from `tool_args` before dispatch; pass `confirmed` as a separate parameter.
+### Low (8)
 
-**HGH-05: CP-SAT `_add_weekly_hours_cap` creates O(E x D) boolean variables per employee-week**
-- File: `app/services/cpsat_scheduler.py` weekly hours constraint
-- Creates BoolVar for every (event, employee, week, day) combination even when remaining <= 0. Hundreds of unnecessary variables.
-- Fix: Skip variable creation for invalid combinations; use `AddImplication` with existing variables.
-
-**HGH-06: `to_local_time` regex strips leading zeros from minutes**
-- File: `app/utils/timezone.py` line 37
-- `re.sub(r'\b0(\d)', r'\1', formatted)` matches `:06` → `:6` in times like `10:06 PM`.
-- Fix: Use `%-m/%-d/%-I` format codes (Linux) or make regex target-specific.
-
-### Medium
-
-**MED-01: FixWizardService._apply_unschedule uses old 6-digit regex for Supervisor pairing**
-- File: `app/services/fix_wizard.py` lines 744-759
-- CP-SAT uses improved 9-12 digit pattern; Fix Wizard still uses `r'\d{6}'`. False positive risk.
-
-**MED-02: `ConstraintModifier` creates `get_models()`/`get_db()` in `__init__`**
-- File: `app/services/constraint_modifier.py` lines 81-84
-- Should accept db_session/models as constructor parameters for testability and consistency.
-
-**MED-03: `_get_ml_affinity_scores` iterates all events x employees — O(N*M) database queries**
-- File: `app/services/cpsat_scheduler.py`
-- 50 events x 15 employees = 50 ML inference round-trips before solver starts.
-
-**MED-04: Auto-scheduler approval creates Schedule inside loop without batch commit**
-- File: `app/routes/auto_scheduler.py`
-- If supervisor auto-scheduling exception occurs, Core schedule is created but Supervisor failure is only logged. No flush between iterations.
-
-**MED-05: `database_refresh_service` schedule restoration doesn't check employee validity**
-- File: `app/services/database_refresh_service.py`
-- Restored schedule could reference inactive/deleted employee.
-
-**MED-06: `_post_solve_review` cross-run conflict check is O(N^2)**
-- File: `app/services/cpsat_scheduler.py`
-- Manageable for typical 30-40 Core events but could be O(N) with pre-grouped data.
-
-**MED-07: AI tools `_tool_list_employees` has TODO for `available_on` that silently passes**
-- File: `app/services/ai_tools.py` lines 1521-1525
-- Parses date but does nothing. User gets unfiltered results with no indication filter was ignored.
-
-**MED-08: `get_models()` called inside approval loop**
-- File: `app/routes/auto_scheduler.py`
-- Should be called once before the loop.
-
-### Low
-
-**LOW-01: `ai_assistant.py` indentation inconsistency in `confirm_action`**
-**LOW-02: `fix_wizard.html` loads Font Awesome when base template likely already includes it**
-**LOW-03: CP-SAT `_log_solution_explanations` output is never stored**
-**LOW-04: `validation_failed` status renamed to `api_failed` without migration of existing data**
-**LOW-05: `_apply_reschedule` lacks constraint validation before updating datetime**
-**LOW-06: Scheduling engine past-date checks duplicate constraint validator logic**
+- PHPSESSID partial logging
+- Inconsistent `import re` placement
+- Fragile string matching in event type detection
+- Magic number fallbacks
+- Inconsistent API error response formats
+- Stale import in `main.py` (`init_models` imported but never called)
+- No API versioning
+- Global engine listener in `__init__.py`
 
 ---
 
 ## Architecture Findings
 
-### Critical
+### Critical (1)
 
-**ARCH-CRT-01: `CONDITION_CANCELED` used as iterable in `.in_()` — runtime bug**
-- File: `app/services/ai_tools.py` ~line 4030 in `_tool_suggest_schedule_improvement`
-- `CONDITION_CANCELED` is a string `'Canceled'`, not a tuple. Passing to `.in_()` iterates characters → `IN ('C','a','n','c','e','l','e','d')`.
-- Fix: Change to `~Event.condition.in_(INACTIVE_CONDITIONS)`.
+1. **Hardcoded employee PII** — `sync_service.py` contains real employee names and Crossmark RepIDs in two duplicate dictionaries committed to version control.
 
-### High
+### High (6)
 
-**ARCH-HGH-01: Fix Wizard imports route-level private function — inverts dependency direction**
-- File: `app/services/fix_wizard.py` line 228 imports `from app.routes.api_suggest_employees import _score_employee`
-- Services consumed by routes, not the other way around. Private function (underscore prefix) from route module.
-- Fix: Extract `_score_employee` into a shared service module.
+1. **Monolithic api.py** (6,940 lines) — Contains 53 route handlers spanning 7 domains. Partial decomposition started but vast majority of logic remains monolithic.
+2. **Three competing model access patterns** — `get_models()`, `current_app.config[Model]` (60+ sites), and `db_helpers.get_models()` all active simultaneously.
+3. **Direct model imports in sync modules** — `sync_service.py` and `sync_engine.py` use `from app import db, Schedule, Event, Employee`, the exact anti-pattern CLAUDE.md prohibits.
+4. **Route handlers contain business logic** — 488 occurrences of `db.session.*` in route files. `unschedule_event` is 140 lines of orchestration in a route handler.
+5. **Exception details leaked in API responses** — 117 occurrences of `return jsonify({'error': str(e)})` exposing database schema, file paths, and SQL queries.
+6. **Missing authentication on 18+ API endpoints** — Read and write endpoints for employee data, schedules, and events lack auth decorators.
 
-**ARCH-HGH-02: CP-SAT AI tool ignores date range arguments**
-- File: `app/services/ai_tools.py` `_tool_run_cpsat_scheduler`
-- Parses `start_date`/`end_date` from args but never passes them to engine. Tool description misleads AI.
-- Fix: Either pass dates to engine or update tool description.
+### Medium (13)
 
-**ARCH-HGH-03: Schedule model columns migration has handcrafted revision ID**
-- File: `migrations/versions/6a96501dd084_add_schedule_outcomes.py`
-- Revision ID was manually replaced. Verify `down_revision` matches current head and test against `scheduler_test.db`.
+1. Duplicate API endpoints for same operations (reschedule, trade, unschedule, change-employee)
+2. Inconsistent blueprint initialization (3 different patterns)
+3. Services reaching through Flask context for models via deprecated `current_app.config`
+4. Two validation systems with overlapping business rules
+5. Singleton `SessionAPIService` with shared auth state (not thread-safe)
+6. Inconsistent API response envelope formats (4+ different shapes)
+7. Bare `except:` clauses swallowing errors (26 sites)
+8. Unused `@handle_errors` decorator framework
+9. N+1 query patterns in time-off team view
+10. In-memory rate limiter ineffective in multi-worker production
+11. SSL verification disabled for external requests
+12. Admin routes using deprecated model access pattern
+13. Mixed `get_models()` sources within single files
 
-### Medium
+### Low (5)
 
-**ARCH-MED-01: Inconsistent string vs enum for `action_type` across endpoints**
-- File: `app/services/fix_wizard.py` / `app/routes/dashboard.py`
-- One endpoint sends raw string, another sends enum. Works due to `str, Enum` but unclear API contract.
-
-**ARCH-MED-02: Supervisor validation bypass without fallback check**
-- File: `app/routes/auto_scheduler.py`
-- Completely bypasses period validation for Supervisor events. Invalid Supervisor schedules silently accepted.
-- Fix: Validate Supervisor schedule matches a scheduled Core event's date.
-
-**ARCH-MED-03: Date comparison relaxation changes safety semantics**
-- File: `app/services/scheduling_engine.py` line 3499
-- Changed from datetime to date-only comparison. Event with `due_datetime = 2026-02-18 08:00` accepts schedule at `17:00`.
-- Fix: Document why date-only is correct for this domain.
+1. Factory pattern overhead vs modern Flask-SQLAlchemy patterns
+2. Business key used as foreign key (Schedule → Event via `project_ref_num`)
+3. No API versioning
+4. Stale import in `main.py`
+5. Global engine listener registration
 
 ---
 
 ## Critical Issues for Phase 2 Context
 
-Security-relevant for Phase 2:
-1. **CRT-03**: Fix Wizard routes lack authentication — anyone can modify schedules
-2. **HGH-04**: AI `_confirmed` flag injection — LLM can bypass confirmation for destructive ops
-3. **ARCH-CRT-01**: `CONDITION_CANCELED` string-as-iterable — data filtering bug in AI tools
+The following findings should directly inform the Security and Performance reviews:
 
-Performance-relevant for Phase 2:
-1. **HGH-05**: CP-SAT variable explosion in weekly hours cap
-2. **MED-03**: O(N*M) ML affinity scoring
-3. **MED-06**: O(N^2) post-solve review
+### Security-Critical
+- **Plain-text credential logging** in auth.py (C1)
+- **18+ unauthenticated API endpoints** exposing PII and schedule data (C3)
+- **Hardcoded employee PII** in source code (C2)
+- **Exception details leaked** in 117 API responses
+- **Broken rate limiting** on login endpoint (H6, H7)
+- **Unauthenticated diagnostics endpoint** exposing Redis details (H8)
+- **SSL verification disabled** for external requests
+- **Role assignment bug** possibly granting all Crossmark users supervisor role (H9)
 
----
-
-## Positive Observations
-
-1. **Model factory pattern compliance**: 100% across all new code — no direct model imports
-2. **CP-SAT post-solve review**: Excellent defense-in-depth for constraint validation
-3. **Database refresh schedule preservation**: Well-designed reconciliation pattern
-4. **CSRF header standardization**: Consistent `X-CSRF-Token` across all new/modified JS
-5. **Fix Wizard architecture**: Clean separation with dataclasses, enums, and dispatcher pattern
-6. **Escalating penalty encoding**: Mathematically clean CP-SAT soft constraint implementation
-7. **Supervisor event bypass comment**: Good domain-specific documentation preventing future "fixes"
-8. **Defense-in-depth past-date validation**: Enforced across 3 independent layers
+### Performance-Critical
+- **N+1 query patterns** in pending schedules and time-off views
+- **6,940-line monolithic api.py** impacting developer productivity
+- **In-memory rate limiter** ineffective with Gunicorn workers
+- **Singleton API service** not thread-safe under concurrent requests
+- **30+ deprecated `Query.get()` calls** that will break on SQLAlchemy 2.0 upgrade
+- **Mixed datetime functions** creating potential timezone bugs

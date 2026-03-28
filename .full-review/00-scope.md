@@ -2,62 +2,46 @@
 
 ## Target
 
-All uncommitted changes in the flask-schedule-webapp repository — includes code review remediation fixes, ML test repairs, new features (CP-SAT scheduler, fix wizard, constraint modifier, AI tools), CSRF security fixes, and scheduling engine improvements.
+Full codebase review of the Flask Schedule Webapp — an employee scheduling system for Crossmark with auto-scheduler, AI assistant, and external integrations (Walmart EDR, MVRetail). Focused on **inconsistencies, code smells, privacy concerns, and performance opportunities**.
 
-## Files — Modified (27 production + test files)
+## Files
 
-### Production Code
-- `app/__init__.py` — localtime filter registration
-- `app/ai/prompts/templates.py` — AI prompt templates
-- `app/ml/inference/ml_scheduler_adapter.py` — ML adapter fallback logic fixes
-- `app/models/schedule.py` — Boolean column defaults
-- `app/routes/api.py` — REST API changes
-- `app/routes/auto_scheduler.py` — Auto-scheduler route refactor
-- `app/routes/dashboard.py` — Dashboard validation routes
-- `app/routes/scheduling.py` — Schedule management
-- `app/services/ai_assistant.py` — AI assistant service
-- `app/services/ai_tools.py` — AI tool definitions (+723 lines)
-- `app/services/constraint_validator.py` — Business rule validation
-- `app/services/cpsat_scheduler.py` — CP-SAT constraint solver (+622 lines)
-- `app/services/database_refresh_service.py` — Database refresh ops
-- `app/services/scheduling_engine.py` — Core scheduling logic, date validation fix
-- `app/services/validation_types.py` — Validation type definitions
-- `app/static/js/components/ai-assistant.js` — AI panel JS, aria-hidden fix
-- `app/static/js/pages/daily-view.js` — CSRF header standardization
-- `app/templates/auto_scheduler_main.html` — CSRF header fix
-- `app/templates/components/ai_panel.html` — AI panel template
-- `app/templates/dashboard/weekly_validation.html` — Dialog role/aria fixes
-- `app/templates/scheduler_history.html` — Scheduler history template
+### Python Backend (145 files)
+- `app/__init__.py`, `app/config.py`, `app/constants.py`, `app/extensions.py`
+- `app/models/` — 17 model files (Employee, Event, Schedule, etc.)
+- `app/routes/` — 34 route files (api.py, auth.py, auto_scheduler.py, etc.)
+- `app/services/` — 35 service files (scheduling_engine.py, cpsat_scheduler.py, etc.)
+- `app/integrations/` — External API (session_api_service.py, sync_engine.py), Walmart EDR, EDR
+- `app/ai/` — AI assistant (Ollama provider, RAG context, chat service)
+- `app/ml/` — ML scheduling (feature engineering, employee ranker, training)
+- `app/error_handlers/`, `app/utils/`
 
-### New Files
-- `app/services/constraint_modifier.py` — Runtime constraint adjustments
-- `app/services/fix_wizard.py` — Guided schedule issue resolution
-- `app/static/js/pages/fix-wizard.js` — Fix wizard UI (CSRF + error handling)
-- `app/templates/dashboard/fix_wizard.html` — Fix wizard template
-- `app/utils/timezone.py` — Timezone utility (configurable, cached)
-- `migrations/versions/6a96501dd084_add_schedule_outcomes.py` — Migration
+### JavaScript Frontend (51 files)
+- `app/static/js/main.js`, `app/static/js/login.js`
+- `app/static/js/pages/` — Page-specific JS (daily-view, index-page, fix-wizard, etc.)
+- `app/static/js/components/` — Reusable components (modals, AI chat, push-prompt, etc.)
+- `app/static/js/modules/` — Shared modules (state-manager, toast-notifications, etc.)
+- `app/static/js/utils/` — Utilities (api-client.js)
 
-### Tests
-- `tests/test_ml_effectiveness.py` — ML effectiveness tests (schema fixes)
-- `tests/test_ml_functional.py` — ML functional tests (schema fixes)
-- `tests/test_ml_performance.py` — ML performance tests (schema fixes)
-- `tests/test_ml_safety.py` — ML safety tests (schema fixes)
-- `tests/test_ml_shadow_mode.py` — ML shadow mode tests (schema fixes)
-- `tests/test_validator.py` — Validator tests
-- `tests/test_cancelled_events.py` — Cancelled events tests (new)
-- `tests/test_cpsat_double_booking.py` — CP-SAT double booking tests (new)
-- `tests/test_fix_wizard.py` — Fix wizard tests (new)
+### Templates (77 files)
+- `app/templates/` — Jinja2 templates (base.html, index.html, daily_view.html, etc.)
+- `app/templates/components/` — Reusable template components
+- `app/templates/dashboard/` — Dashboard pages
+- `app/templates/help/` — Help pages
 
-### Config
-- `CLAUDE.md` — Project instructions update
-- `.mcp.json` — MCP server configuration (new)
+### CSS (31 files)
+- `app/static/css/` — Stylesheets (style.css, design-tokens.css, responsive.css, etc.)
+- `app/static/css/pages/` — Page-specific styles
+- `app/static/css/components/` — Component styles
+
+### Total: ~167,352 lines of code
 
 ## Flags
 
-- Security Focus: no
-- Performance Critical: no
+- Security Focus: yes (privacy concerns explicitly requested)
+- Performance Critical: yes (performance opportunities explicitly requested)
 - Strict Mode: no
-- Framework: Flask/SQLAlchemy/Jinja2 (auto-detected)
+- Framework: Flask 2.0+ / SQLAlchemy / Jinja2 / PostgreSQL/SQLite
 
 ## Review Phases
 

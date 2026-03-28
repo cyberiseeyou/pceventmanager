@@ -2,140 +2,136 @@
 
 ## Security Findings
 
-### Critical
+### Critical (7) — CVSS 7.5-9.8
 
-**SEC-CRT-01: Fix Wizard Routes Missing Authentication (CVSS 9.1)**
-- CWE-306 / OWASP A01:2021 — Broken Access Control
-- File: `app/routes/dashboard.py` lines 1028-1195
-- Four Fix Wizard routes (`fix_wizard`, `fix_wizard_issues`, `fix_wizard_apply`, `fix_wizard_skip`) lack `@require_authentication()`. POST endpoints can modify/delete schedules without auth.
-- Systemic: The entire dashboard blueprint appears to lack auth decorators.
-- Fix: Add `@require_authentication()` to all Fix Wizard routes, or apply `@dashboard_bp.before_request`.
+| ID | Finding | CVSS | CWE | Location |
+|----|---------|------|-----|----------|
+| CRIT-01 | **Mass unauthenticated API endpoints** — 24+ endpoints expose PII, allow data modification (schedule/unschedule/import) without any auth | 9.8 | CWE-306 | `api.py` (24+ routes), `health_bp`, `ai_rag_bp`, `attendance_api_bp`, `api_demo_goals_bp` |
+| CRIT-02 | **Plaintext credential logging** — `request.form` (contains password) and raw POST body logged at INFO level | 9.1 | CWE-532 | `auth.py:235-237` |
+| CRIT-03 | **Broken rate limiting** — lambda pattern resets counter per request + memory:// storage is per-worker | 9.1 | CWE-307 | `auth.py:228-231`, `extensions.py:20-24` |
+| CRIT-04 | **Unauthenticated webhook** — CSRF-exempt, no HMAC verification, allows direct DB deletion | 9.1 | CWE-345 | `admin.py:268-323` |
+| CRIT-05 | **Singleton race condition** — concurrent logins can cross-contaminate auth state between users | 8.7 | CWE-362 | `session_api_service.py:1802`, `auth.py:256-277` |
+| CRIT-06 | **Role assignment bug** — undefined `db` variable + bare except = all Crossmark users get supervisor role | 8.6 | CWE-269 | `auth.py:319-336` |
+| CRIT-07 | **Unauthenticated diagnostics** — `/api/auth/diag` exposes Redis infrastructure details | 7.5 | CWE-200 | `auth.py:636-654` |
 
-**SEC-CRT-02: AI `_confirmed` Flag Bypass via LLM Injection (CVSS 8.6)**
-- CWE-807 / OWASP A01:2021 — Reliance on Untrusted Inputs in Security Decision
-- File: `app/services/ai_assistant.py` lines 534-543; `app/services/ai_tools.py` 12+ locations
-- `_confirmed` flag lives inside `args` dict, which is LLM-generated. Prompt injection can set `_confirmed: true` to bypass confirmation on destructive ops (remove_schedule, bulk_reschedule, swap_schedules, etc.).
-- Fix: Strip `_confirmed` from args; pass `confirmed` as separate server-side parameter.
+### High (11) — CVSS 6.5-7.5
 
-**SEC-CRT-03: `CONDITION_CANCELED` String-as-Iterable in `.in_()` (CVSS 7.5)**
-- CWE-704 / OWASP A04:2021 — Incorrect Type Conversion
-- File: `app/services/ai_tools.py` line 4030
-- `CONDITION_CANCELED` is a string `'Canceled'`, not a tuple. `.in_()` iterates characters → `IN ('C','a','n','c','e','l','e','d')`. Canceled events are never actually filtered, producing incorrect schedule improvement suggestions.
-- Fix: Use `INACTIVE_CONDITIONS` tuple instead.
+| ID | Finding | Location |
+|----|---------|----------|
+| HIGH-01 | Exception details leaked in 100+ API responses via `str(e)` — exposes DB schema, paths, SQL | `api.py`, `admin.py`, `api_notes.py`, etc. |
+| HIGH-02 | SSL verification disabled (`verify=False`) for external requests | `demo_goals_service.py:40,59` |
+| HIGH-03 | Hardcoded employee PII (names + Crossmark RepIDs) in source code, committed to git | `sync_service.py:84-92, 198-206` |
+| HIGH-04 | Pickle deserialization of cached session data — code execution risk if tmp writable | `admin.py:924-937, 982-984` |
+| HIGH-05 | Insecure default SECRET_KEY in production config | `config.py:141` |
+| HIGH-06 | PHPSESSID stored in Redis session data — Redis compromise = Crossmark access | `auth.py:344-352` |
+| HIGH-07 | Debug mode enabled by default (`FLASK_ENV` not set = development mode) | `config.py` |
+| HIGH-08 | HAR file containing HTTP requests/responses committed to repository | `crossmark.mvretail.com.har` |
+| HIGH-09 | Unsafe CSP — no Content-Security-Policy header configured | `__init__.py` |
+| HIGH-10 | Missing security headers (X-Content-Type-Options, X-Frame-Options on API) | Various |
+| HIGH-11 | Insecure cookie flags — session cookie missing Secure and HttpOnly in non-HTTPS | `auth.py` |
 
-**SEC-CRT-04: Fix Wizard `apply_fix` Accepts Arbitrary Targets Without Validation (CVSS 8.1)**
-- CWE-20 / OWASP A03:2021 — Improper Input Validation
-- File: `app/routes/dashboard.py` lines 1109-1155; `app/services/fix_wizard.py` lines 666-693
-- `action_type` and `target` dict passed through from JSON body without validation. Combined with CRT-01, allows unauthenticated modification of any schedule.
-- Fix: Allowlist `action_type` values, validate `target` fields per action type.
+### Medium (14)
 
-### High
+- 26 bare `except:` clauses silently swallowing all exceptions
+- Credential logging in `session_api_service.py` (PHPSESSID partial logging)
+- SQL-like pattern injection potential in search/filter endpoints
+- Account enumeration via different error messages for valid/invalid usernames
+- Weak PIN policy (4-digit PINs, no complexity requirements)
+- CSRF gaps on some AJAX endpoints
+- Missing rate limiting on PIN login endpoint
+- Role default escalation (supervisor as default instead of least privilege)
+- Exposed metrics at `/health/metrics` without auth
+- Deprecated endpoint bypass (old endpoints bypass new auth checks)
+- Password stored in singleton instance attributes
+- Missing input length validation on search parameters
+- Session fixation potential during role changes
+- No audit logging for sensitive operations
 
-**SEC-HGH-01: Auto-Scheduler Routes Missing Authentication (CVSS 7.5)**
-- File: `app/routes/auto_scheduler.py`
-- Many state-changing routes lack `@require_authentication()`: `POST /auto-schedule/run`, `POST /auto-schedule/approve`, `DELETE /auto-schedule/api/pending/by-ref/<ref>`, etc.
-- Fix: Apply `@auto_scheduler_bp.before_request` guard.
+### Low (8)
 
-**SEC-HGH-02: `completion_notes` Stored Without Sanitization — Stored XSS Risk (CVSS 7.2)**
-- CWE-79 / OWASP A03:2021
-- File: `app/services/ai_tools.py` line 3885
-- New `completion_notes` field accepts arbitrary text from LLM args. If rendered with `|safe`, creates stored XSS.
-- Fix: Sanitize, limit length (500 chars), ensure template auto-escaping.
-
-**SEC-HGH-03: Production Database (`scheduler.db`) in Uncommitted Changes (CVSS 6.5)**
-- CWE-200 / OWASP A01:2021
-- File: `instance/scheduler.db` (changed from 1.4MB to 2.8MB)
-- Contains employee schedules, names, time-off records. Should never be committed.
-- Fix: Discard with `git checkout -- instance/scheduler.db`.
-
-**SEC-HGH-04: Savepoint-Based Dry Run May Leak Side Effects (CVSS 6.8)**
-- CWE-662
-- File: `app/services/ai_tools.py` lines 3755-3792 (`_tool_compare_schedulers`)
-- Runs schedulers inside SQLAlchemy savepoints then rolls back. SQLite savepoints may not isolate correctly; autoflush before rollback could persist partial state.
-- Fix: Use separate session or `dry_run=True` flag.
-
-**SEC-HGH-05: Fix Wizard `_apply_reschedule` Accepts Arbitrary Datetime (CVSS 6.5)**
-- CWE-20
-- File: `app/services/fix_wizard.py` lines 764-783
-- `new_datetime` set directly without validating event period, past dates, or business hours.
-- Fix: Validate against event period and `date.today()`.
-
-### Medium
-
-**SEC-MED-01**: CSRF protection gap on dashboard POST endpoints (CVSS 5.4)
-**SEC-MED-02**: Supervisor event approval bypasses period validation (CVSS 5.3)
-**SEC-MED-03**: `_apply_reassign` TOCTOU race — no re-validation before commit (CVSS 5.0)
-**SEC-MED-04**: AI confirmation data round-trips through browser unverified (CVSS 5.3)
-**SEC-MED-05**: Raw exception messages exposed in API responses (CVSS 4.3)
-**SEC-MED-06**: CDN SRI hash potentially incorrect in fix_wizard.html (CVSS 4.0)
-
-### Low
-
-**SEC-LOW-01**: `showError` defined twice in fix-wizard.js (dead code)
-**SEC-LOW-02**: `_parse_direction` defaults to 1.5x multiplier on unknown input
-**SEC-LOW-03**: Migration missing `server_default` that model defines
+- Deprecated X-XSS-Protection header still set
+- CSRF cookie design considerations
+- `remember_me` parameter accepted but not implemented
+- Role derivation from external API without validation
+- Cookie SameSite policy considerations
+- Database file path disclosed in error messages
+- Import functionality exposure
+- Redis session cleanup timing
 
 ---
 
 ## Performance Findings
 
-### Critical
+### Critical (7)
 
-**PERF-CRT-01: N+1 Query in `_load_existing_schedules` — O(S) Individual Queries**
-- File: `app/services/cpsat_scheduler.py` lines 456-480
-- Per-schedule `Event.query.filter_by(project_ref_num=...).first()` inside loop. 200 schedules = 200 round-trips (~400ms).
-- Fix: Pre-load all events into lookup dict with single query.
+| ID | Finding | Impact | Location |
+|----|---------|--------|----------|
+| PERF-01 | **N+1 query in CP-SAT `_load_existing_schedules`** — one DB query per schedule to find its event (201 queries for 200 schedules) | +400ms per solver run | `cpsat_scheduler.py:581-605` |
+| PERF-02 | **N+1 query in `_inject_pending_as_existing`** — one query per pending schedule | +100ms per Phase 3 | `cpsat_scheduler.py:700-738` |
+| PERF-03 | **In-memory rate limiter** — per-worker counters, ineffective with Gunicorn | Security gap + wasted memory | `extensions.py:20-24` |
+| PERF-04 | **Singleton SessionAPIService not thread-safe** — 10-thread parallel fetcher shares mutable auth state | Intermittent auth failures | `session_api_service.py:25-36` |
+| PERF-05 | **Synchronous API calls in approve loop** — sequential 30s-timeout HTTP calls per schedule | Up to 10 minutes blocking | `auto_scheduler.py:855-913` |
+| PERF-06 | **Delete-all database refresh** — deletes ALL events/schedules then re-inserts | Extended downtime, data loss risk | `database_refresh_service.py:207-217` |
+| PERF-07 | **`Schedule.query.all()` in CP-SAT** — loads entire history instead of filtering to horizon | Unbounded memory growth | `cpsat_scheduler.py:586` |
 
-**PERF-CRT-02: Redundant Indicator BoolVars Across CP-SAT Constraints — 50K-100K Variables**
-- File: `app/services/cpsat_scheduler.py` lines 944-1000
-- `_add_weekly_hours_cap` creates O(E x D x W) BoolVars per employee. Same pattern in 6+ constraint methods creates identical (event, emp, day) indicators independently.
-- With 15 employees, 3 weeks, 80 events: ~18K vars per constraint method, 50K-100K total.
-- Fix: Create shared indicator variables once in `_build_model()`, reuse across all constraints.
+### High (10)
 
-**PERF-CRT-03: O(N*M) ML Affinity Scoring — 5-15 Seconds with ML Enabled**
-- File: `app/services/cpsat_scheduler.py` lines 184-218
-- `_get_ml_affinity_scores()` calls `adapter.rank_employees()` per event, each extracting features from DB. 80 events x 15 employees = 80 external calls.
-- Fix: Batch feature extraction and vectorized scoring.
+| ID | Finding | Impact | Location |
+|----|---------|--------|----------|
+| PERF-08 | **217 `func.date()` calls preventing index usage** across 26 files | Full table scans on every date query | `api.py`, `schedule_verification.py`, `ai_tools.py`, etc. |
+| PERF-09 | **200KB monolithic daily-view.js** (4,843 lines) | Slow page load, parse blocking | `static/js/pages/daily-view.js` |
+| PERF-10 | **No JS/CSS minification** — 743KB JS + 440KB CSS served raw | 6s load on 3G | All static assets |
+| PERF-11 | **No shift block config caching** — re-queried on every request | 3+ redundant DB queries/request | `shift_block_config.py` |
+| PERF-12 | **No event time settings caching** — re-queried on every scheduler init | 4+ redundant queries | `scheduling_engine.py`, `cpsat_scheduler.py` |
+| PERF-13 | **Database refresh blocks auto-scheduler** — 40+ seconds synchronous refresh | Blocks web worker for 40s | `scheduling_engine.py:350-376` |
+| PERF-14 | **No pagination on event/schedule list endpoints** | Large unbounded payloads | `api.py`, `auto_scheduler.py` |
+| PERF-15 | **N+1 in employee management API** — one query per employee for availability | 16 queries for 15 employees | `employees.py:72-103` |
+| PERF-16 | **N+1 in daily employees attendance** — one query per employee | 11 queries for 10 employees | `api.py:564-571` |
+| PERF-17 | **Single-process auto-scheduler** — blocks web worker for 15-60 seconds | Capacity starvation | `auto_scheduler.py` |
 
-### High
+### Medium (15)
 
-**PERF-HGH-01**: O(N^2) post-solve cross-run conflict check (`_post_solve_review`)
-**PERF-HGH-02**: `get_models()` called inside approval loop (auto_scheduler.py line 860)
-**PERF-HGH-03**: Unbounded `.query.all()` loads entire tables (time-off, exceptions, locked days)
-**PERF-HGH-04**: N+1 event type resolution in `_post_solve_review` (~80 individual queries)
-**PERF-HGH-05**: Fix Wizard `_options_for_reassign` creates ConstraintValidator per issue
+- N+1 in time-off team view (`main.py:196-197`)
+- 49 deprecated `Query.get()` usages — will break on SQLAlchemy 2.0
+- Missing composite index on `EmployeeAvailability(employee_id, date, is_available)`
+- CP-SAT indicator cache grows O(events * employees * days)
+- Unbounded event list in parallel fetch (potential 125MB peak)
+- Large schedule collections iterated multiple times in approve flow
+- No dashboard query caching (complex aggregation on every page load)
+- Synchronous external API calls in unschedule endpoints
+- Race condition in batch schedule approval (no row-level lock)
+- Global MFA state in printing module (not worker-safe)
+- Background scheduler runs in each worker (N duplicate jobs)
+- 12 CSS files loaded render-blocking in `<head>`
+- Material Symbols font loaded without `display=swap`
+- Mixed `datetime.utcnow()` (131) vs `datetime.now()` (134) — timezone bugs
+- Repeated `get_models()` call overhead across 525 db.session sites
 
-### Medium
+### Low (8)
 
-**PERF-MED-01**: Database refresh schedule preservation queries inside loop
-**PERF-MED-02**: Database refresh restoration loop queries per item
-**PERF-MED-03**: AI tools `_find_employee_fuzzy` loads all employees per call
-**PERF-MED-04**: `_valid_days_for_event` called 8+ times per event (not memoized)
-**PERF-MED-05**: Fix Wizard generates all issues upfront (no pagination)
-**PERF-MED-06**: AI Tools module 4,344 lines — 40 schemas rebuilt per request
-**PERF-MED-07**: `_compute_eligibility` nested O(E x M) loop
-**PERF-MED-08**: Fix Wizard re-renders entire DOM on each issue transition
-
-### Low
-
-**PERF-LOW-01**: `to_local_time` regex not pre-compiled
-**PERF-LOW-02**: `ConstraintModifier.__init__` calls `get_models()`/`get_db()` per instantiation
-**PERF-LOW-03**: New Schedule model columns lack database indexes
-**PERF-LOW-04**: Approval workflow commits per-schedule instead of batch
-
-### Concurrency
-
-**PERF-CONC-01**: CP-SAT `num_workers=4` may starve request threads under gunicorn
-**PERF-CONC-02**: `ConstraintModifier.clear_all_preferences()` no transaction safety
+- Connection pool not configured for non-production
+- No response compression (missing gzip/brotli)
+- Service worker pre-cache incomplete
+- Cache busting via server restart timestamp instead of content hash
+- No database read replica support
+- Hardcoded employee-to-RepID mapping prevents scaling
+- No query result caching for reports
+- `SELECT *` patterns where only specific columns needed
 
 ---
 
 ## Critical Issues for Phase 3 Context
 
-Testing requirements driven by Phase 2:
-1. **Authentication tests**: Verify unauthenticated requests to Fix Wizard and auto-scheduler return 401/302
-2. **CSRF tests**: Verify POST requests without CSRF tokens are rejected
-3. **Input validation tests**: Test Fix Wizard with invalid action_type, non-existent schedule_id, past datetime, XSS payloads
-4. **AI confirmation bypass test**: Verify `_confirmed: true` in LLM-generated args is stripped
-5. **`.in_()` bug test**: Unit test `_tool_suggest_schedule_improvement` with canceled events
-6. **N+1 regression tests**: Measure query count for CP-SAT data loading
+### Testing Implications
+- **24+ unauthenticated endpoints** need auth decorator tests to prevent regressions
+- **Role assignment bug** needs test proving Crossmark users get correct roles
+- **Race conditions** (singleton, batch approval) need concurrency tests
+- **N+1 queries** should have performance regression tests
+- **Rate limiter** needs integration test proving it actually limits
+
+### Documentation Implications
+- **Security headers** configuration needs to be documented
+- **Auth decorator requirements** for new endpoints should be in contributing guide
+- **Singleton API service** thread-safety constraints must be documented
+- **Datetime conventions** (which timezone, which function) need standards doc
+- **API response envelope** format must be standardized and documented

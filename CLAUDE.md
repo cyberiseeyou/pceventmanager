@@ -59,7 +59,7 @@ When you change **JavaScript**: Also update API endpoints, templates, CSS
 
 | Model | Also Check |
 |-------|------------|
-| Event | `scheduling_engine.py`, `schedule_verification.py`, `api.py`, `index.html`, `main.js`, `sync_engine.py` |
+| Event | `scheduling_engine.py`, `schedule_verification.py`, `api.py`, `index.html`, `main.js`, `sync_service.py` |
 | Employee | `constraint_validator.py`, `rotation_manager.py`, `employees.py`, `employees.js` |
 | Schedule | `scheduling_engine.py`, `conflict_resolver.py`, `api.py`, `main.js` |
 | RotationAssignment | `rotation_manager.py`, `scheduling_engine.py`, `auto_scheduler.py` |
@@ -308,10 +308,13 @@ if external_api.session:
 ```
 
 ### Auth System
-- Sessions stored in **Redis** with `session_id` cookie (24h TTL, 10-min inactivity timeout)
+- Sessions stored in **Redis** with `session_id` cookie
 - Three roles: `supervisor` > `lead` > `specialist`
+- **Supervisors**: 24h TTL, 10-min inactivity timeout
+- **Leads & Specialists**: 30-day persistent sessions, no inactivity timeout (logout only via button)
 - Login pages must **never** auto-redirect authenticated users (shared device risk)
 - Always destroy old sessions before creating new ones on login
+- Persistent session logic: `PERSISTENT_SESSION_ROLES` and `_is_persistent_session()` in `auth.py`
 
 ### Scheduling
 ```python
@@ -395,6 +398,9 @@ Create `changelog/YYYY-MM-DD-description.md` for:
 | api_paperwork_templates_bp | /api/paperwork-templates | Paperwork template endpoints |
 | reports_bp | /reports | Reports |
 | lost_demos_bp | / | Lost demo tracking |
+| api_push_bp | /api/push | Web push subscriptions |
+| api_schedule_changes_bp | /api/schedule-changes | Schedule change notifications |
+| api_demo_goals_bp | /api | Demo goals endpoints |
 
 ---
 
@@ -443,4 +449,4 @@ cp instance/scheduler.db instance/scheduler_test.db
 
 ---
 
-**Last updated**: 2026-03-21 | **Architecture docs**: `docs/CODEBASE_MAP.md`
+**Last updated**: 2026-03-26 | **Architecture docs**: `docs/CODEBASE_MAP.md`
