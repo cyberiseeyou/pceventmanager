@@ -1,0 +1,149 @@
+/* App Lock Screen */
+#app-lock-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.app-lock-container {
+    text-align: center;
+    color: #fff;
+    max-width: 320px;
+    width: 100%;
+    padding: 2rem 1rem;
+}
+
+.app-lock-icon {
+    margin-bottom: 1rem;
+    opacity: 0.7;
+}
+
+.app-lock-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+}
+
+.app-lock-subtitle {
+    font-size: 0.875rem;
+    opacity: 0.6;
+    margin: 0 0 1.5rem;
+}
+
+.app-lock-pin-display {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.pin-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.pin-dot.filled {
+    background-color: #fff;
+    border-color: #fff;
+}
+
+.app-lock-error {
+    min-height: 1.5rem;
+    font-size: 0.8125rem;
+    color: #ff6b6b;
+    margin-bottom: 1rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.app-lock-error.visible {
+    opacity: 1;
+}
+
+.app-lock-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    max-width: 260px;
+    margin: 0 auto;
+}
+
+.keypad-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.keypad-btn:active {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.keypad-btn.keypad-clear,
+.keypad-btn.keypad-delete {
+    font-size: 1.125rem;
+    opacity: 0.7;
+}
+
+/* WebAuthn Biometric Button */
+.app-lock-biometric-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 1rem;
+}
+
+.app-lock-biometric-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.app-lock-biometric-btn:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.app-lock-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    opacity: 0.4;
+    font-size: 0.75rem;
+}
+
+.app-lock-divider::before,
+.app-lock-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.3);
+}

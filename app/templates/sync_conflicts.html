@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Conflicts - Product Connections Scheduler{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <h2>Sync Conflicts</h2>
+    <p class="text-muted">These events show discrepancies between your local database and Crossmark. Investigate before making changes.</p>
+
+    <div class="sync-filters">
+        <a href="{{ url_for('sync.conflicts_page') }}" class="btn btn-sm {% if not show_resolved %}btn-primary{% else %}btn-outline{% endif %}">Unresolved</a>
+        <a href="{{ url_for('sync.conflicts_page', show_resolved='true') }}" class="btn btn-sm {% if show_resolved %}btn-primary{% else %}btn-outline{% endif %}">All</a>
+        <a href="{{ url_for('sync.changes_page') }}" class="btn btn-sm btn-outline">View All Activity</a>
+    </div>
+
+    {% if conflicts %}
+    <div class="sync-conflict-list">
+        {% for conflict in conflicts %}
+        <div class="sync-conflict-card {% if conflict.resolved %}resolved{% endif %}" id="conflict-{{ conflict.id }}">
+            <div class="conflict-header">
+                <span class="conflict-entity">Event {{ conflict.entity_id }}</span>
+                <span class="conflict-time">{{ conflict.detected_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            </div>
+            <div class="conflict-summary">{{ conflict.summary }}</div>
+
+            {% if conflict.field_changes %}
+            <div class="conflict-diff">
+                <table class="conflict-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Local Value</th>
+                            <th>Crossmark Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="diff-body-{{ conflict.id }}">
+                    </tbody>
+                </table>
+            </div>
+            <script>
+                (function() {
+                    try {
+                        const raw = {{ conflict.field_changes | tojson }};
+                        const data = JSON.parse(raw);
+                        const tbody = document.getElementById('diff-body-{{ conflict.id }}');
+                        for (const [field, vals] of Object.entries(data)) {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `<td><strong>${field}</strong></td>` +
+                                `<td class="val-local">${vals.local || 'N/A'}</td>` +
+                                `<td class="val-upstream">${vals.upstream || 'N/A'}</td>`;
+                            tbody.appendChild(tr);
+                        }
+                    } catch(e) {}
+                })();
+            </script>
+            {% endif %}
+
+            {% if not conflict.resolved %}
+            <div class="conflict-actions">
+                <input type="text" class="conflict-notes-input" id="notes-{{ conflict.id }}" placeholder="Resolution notes (optional)">
+                <button class="btn btn-sm btn-primary" data-action="resolve-conflict" data-conflict-id="{{ conflict.id }}">Mark Resolved</button>
+            </div>
+            {% else %}
+            <div class="conflict-resolved-badge">
+                Resolved {{ conflict.resolved_at.strftime('%b %d') if conflict.resolved_at else '' }}
+                {% if conflict.resolution_notes %} - {{ conflict.resolution_notes }}{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="sync-empty">
+        <p>No {% if not show_resolved %}unresolved {% endif %}conflicts found.</p>
+        <p class="text-muted">Conflicts are detected when local schedule data doesn't match Crossmark.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .sync-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .sync-conflict-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .sync-conflict-card {
+        background: var(--bg-card, #fff);
+        border: 1px solid var(--border-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 1rem;
+        border-left: 4px solid #ff9800;
+    }
+    .sync-conflict-card.resolved {
+        border-left-color: #4caf50;
+        opacity: 0.7;
+    }
+    .conflict-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+    }
+    .conflict-entity {
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    .conflict-time { font-size: 0.75rem; color: var(--text-muted, #999); }
+    .conflict-summary { font-size: 0.875rem; margin-bottom: 0.75rem; }
+    .conflict-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8125rem;
+        margin-bottom: 0.75rem;
+    }
+    .conflict-table th, .conflict-table td {
+        padding: 0.375rem 0.5rem;
+        border-bottom: 1px solid var(--border-color, #eee);
+        text-align: left;
+    }
+    .conflict-table th { font-weight: 600; background: var(--bg-secondary, #f9f9f9); }
+    .val-local { color: #1565c0; }
+    .val-upstream { color: #e65100; }
+    .conflict-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .conflict-notes-input {
+        flex: 1;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 6px;
+        font-size: 0.8125rem;
+    }
+    .conflict-resolved-badge {
+        font-size: 0.75rem;
+        color: #4caf50;
+        font-weight: 500;
+    }
+    .sync-empty { text-align: center; padding: 2rem; color: var(--text-muted, #999); }
+</style>
+
+<script>
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-action="resolve-conflict"]');
+        if (!btn) return;
+
+        const logId = btn.dataset.conflictId;
+        const notes = document.getElementById('notes-' + logId)?.value || '';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ||
+                          document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+
+        fetch('/sync/api/resolve/' + logId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ notes: notes }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const card = document.getElementById('conflict-' + logId);
+                card.classList.add('resolved');
+                card.querySelector('.conflict-actions').innerHTML =
+                    '<span class="conflict-resolved-badge">Resolved just now' +
+                    (notes ? ' - ' + notes : '') + '</span>';
+            }
+        })
+        .catch(function() { /* Resolve failed silently */ });
+    });
+</script>
+{% endblock %}

@@ -10,6 +10,7 @@ import redis
 import json
 import os
 import time
+import hashlib
 
 import urllib.parse
 
@@ -83,7 +84,7 @@ def get_inactivity_timeout():
 
 
 # Roles that stay logged in indefinitely (no inactivity timeout, no 24h expiry)
-PERSISTENT_SESSION_ROLES = ('lead', 'specialist')
+PERSISTENT_SESSION_ROLES = ('lead', 'specialist', 'supervisor')
 PERSISTENT_SESSION_TTL = 2592000  # 30 days in seconds
 
 
@@ -370,16 +371,34 @@ def login():
 
                 current_app.logger.info(f"Successful authentication for user: {username}")
 
-                # Create response - redirect to loading page for database sync
+                # Check if background sync daemon has fresh data — skip loading page if so
+                from app.services.sync_daemon import is_daemon_healthy
+                daemon_fresh = False
+                try:
+                    daemon_fresh = is_daemon_healthy(max_age_seconds=300)
+                except Exception:
+                    pass  # Daemon not running or first boot — fall back to loading page
+
+                if daemon_fresh:
+                    # Daemon has synced within 5 min — skip loading page
+                    if user_info.get('role') in ('specialist', 'lead'):
+                        dest = url_for('main.my_dashboard')
+                    else:
+                        today = datetime.now().strftime('%Y-%m-%d')
+                        dest = url_for('main.daily_schedule_view', date=today)
+                    current_app.logger.info("Daemon healthy — skipping loading page")
+                else:
+                    dest = url_for('auth.loading_page')
+
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     response = jsonify({
                         'success': True,
-                        'redirect': url_for('auth.loading_page'),
+                        'redirect': dest,
                         'user': user_info,
                         'event_times_configured': event_times_configured
                     })
                 else:
-                    response = redirect(url_for('auth.loading_page'))
+                    response = redirect(dest)
 
                 # Set session cookie — 30 days for leads/specialists, 24h for others
                 cookie_max_age = PERSISTENT_SESSION_TTL if persistent else (86400 if remember_me else None)
@@ -927,3 +946,412 @@ def start_loading_refresh(task_id):
         current_app.logger.error(f"Failed to start database refresh: {e}")
         update_refresh_progress(task_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ─── App Lock PIN Endpoints ─────────────────────────────────────────────────
+# These endpoints manage a screen-lock PIN for persistent supervisor sessions.
+# The PIN hash is stored in the Redis session, not the database.
+
+MAX_PIN_ATTEMPTS = 5
+
+
+def _hash_lock_pin(pin):
+    """Hash a lock PIN using SHA-256 with a salt."""
+    salt = 'app_lock_v1'
+    return hashlib.sha256(f"{salt}:{pin}".encode()).hexdigest()
+
+
+@auth_bp.route('/api/auth/set-lock-pin', methods=['POST'])
+@require_authentication()
+def set_lock_pin():
+    """Set or update the app lock PIN for the current session."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    data = request.get_json()
+    pin = data.get('pin', '').strip() if data else ''
+
+    if not pin or len(pin) < 4 or len(pin) > 6:
+        return jsonify({'success': False, 'error': 'PIN must be 4-6 digits'}), 400
+
+    if not pin.isdigit():
+        return jsonify({'success': False, 'error': 'PIN must contain only digits'}), 400
+
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({'success': False, 'error': 'No active session'}), 401
+
+    session_data = get_session(session_id)
+    if not session_data:
+        return jsonify({'success': False, 'error': 'Session expired'}), 401
+
+    session_data['lock_pin_hash'] = _hash_lock_pin(pin)
+    session_data['lock_pin_attempts'] = 0
+
+    # Preserve TTL
+    r = get_redis_client()
+    ttl = r.ttl(f"session:{session_id}")
+    if ttl and ttl > 0:
+        save_session(session_id, session_data, ttl_seconds=ttl)
+    else:
+        save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+
+    return jsonify({'success': True, 'message': 'Lock PIN set successfully'})
+
+
+@auth_bp.route('/api/auth/verify-lock-pin', methods=['POST'])
+@require_authentication()
+def verify_lock_pin():
+    """Verify the app lock PIN to unlock the screen."""
+    data = request.get_json()
+    pin = data.get('pin', '').strip() if data else ''
+
+    if not pin:
+        return jsonify({'success': False, 'error': 'PIN required'}), 400
+
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({'success': False, 'error': 'No active session'}), 401
+
+    session_data = get_session(session_id)
+    if not session_data:
+        return jsonify({'success': False, 'error': 'Session expired'}), 401
+
+    stored_hash = session_data.get('lock_pin_hash')
+    if not stored_hash:
+        return jsonify({'success': False, 'error': 'No lock PIN configured'}), 400
+
+    attempts = session_data.get('lock_pin_attempts', 0)
+    if attempts >= MAX_PIN_ATTEMPTS:
+        # Too many failed attempts — destroy session
+        delete_session(session_id)
+        return jsonify({
+            'success': False,
+            'error': 'Too many failed attempts. Session destroyed. Please log in again.',
+            'session_destroyed': True,
+        }), 403
+
+    if _hash_lock_pin(pin) == stored_hash:
+        session_data['lock_pin_attempts'] = 0
+        r = get_redis_client()
+        ttl = r.ttl(f"session:{session_id}")
+        if ttl and ttl > 0:
+            save_session(session_id, session_data, ttl_seconds=ttl)
+        else:
+            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+        return jsonify({'success': True})
+    else:
+        session_data['lock_pin_attempts'] = attempts + 1
+        remaining = MAX_PIN_ATTEMPTS - session_data['lock_pin_attempts']
+        r = get_redis_client()
+        ttl = r.ttl(f"session:{session_id}")
+        if ttl and ttl > 0:
+            save_session(session_id, session_data, ttl_seconds=ttl)
+        else:
+            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+        return jsonify({
+            'success': False,
+            'error': f'Incorrect PIN. {remaining} attempts remaining.',
+            'attempts_remaining': remaining,
+        }), 401
+
+
+@auth_bp.route('/api/auth/has-lock-pin', methods=['GET'])
+@require_authentication()
+def has_lock_pin():
+    """Check if the current session has a lock PIN configured."""
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({'has_pin': False})
+
+    session_data = get_session(session_id)
+    if not session_data:
+        return jsonify({'has_pin': False})
+
+    return jsonify({'has_pin': bool(session_data.get('lock_pin_hash'))})
+
+
+# ─── WebAuthn Biometric Endpoints ────────────────────────────────────────────
+# Registration + authentication for FIDO2/WebAuthn biometric unlock.
+# Challenges are stored in Redis with a 2-minute TTL.
+
+WEBAUTHN_CHALLENGE_TTL = 120  # seconds
+
+
+def _get_rp_id():
+    """Get the Relying Party ID (domain) from the request."""
+    return request.host.split(':')[0]
+
+
+def _get_expected_origin():
+    """Get the expected origin for WebAuthn verification."""
+    scheme = 'https' if request.is_secure else 'http'
+    return f"{scheme}://{request.host}"
+
+
+@auth_bp.route('/api/auth/webauthn/register/options', methods=['POST'])
+@require_authentication()
+def webauthn_register_options():
+    """Generate WebAuthn registration options (challenge) for the current user."""
+    try:
+        from webauthn import generate_registration_options, options_to_json
+        from webauthn.helpers.structs import (
+            AuthenticatorSelectionCriteria,
+            UserVerificationRequirement,
+            ResidentKeyRequirement,
+            PublicKeyCredentialDescriptor,
+        )
+    except ImportError:
+        return jsonify({'error': 'WebAuthn not available'}), 503
+
+    user = get_current_user()
+    if not user or not user.get('employee_id'):
+        return jsonify({'error': 'Not authenticated or no employee record'}), 401
+
+    employee_id = user['employee_id']
+    display_name = user.get('full_name') or user.get('username') or employee_id
+
+    from app.models import get_models
+    models = get_models()
+    WebAuthnCredential = models['WebAuthnCredential']
+
+    # Exclude already-registered credentials
+    existing = WebAuthnCredential.query.filter_by(
+        employee_id=employee_id, is_active=True
+    ).all()
+    exclude = [
+        PublicKeyCredentialDescriptor(id=c.credential_id)
+        for c in existing
+    ]
+
+    options = generate_registration_options(
+        rp_id=_get_rp_id(),
+        rp_name='Product Connections Scheduler',
+        user_name=employee_id,
+        user_display_name=display_name,
+        exclude_credentials=exclude,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.PREFERRED,
+            resident_key=ResidentKeyRequirement.DISCOURAGED,
+        ),
+        timeout=60000,
+    )
+
+    # Store challenge in Redis for verification
+    r = get_redis_client()
+    import base64
+    challenge_b64 = base64.b64encode(options.challenge).decode('ascii')
+    r.setex(
+        f"webauthn_challenge:{employee_id}",
+        WEBAUTHN_CHALLENGE_TTL,
+        challenge_b64,
+    )
+
+    return options_to_json(options), 200, {'Content-Type': 'application/json'}
+
+
+@auth_bp.route('/api/auth/webauthn/register/verify', methods=['POST'])
+@require_authentication()
+def webauthn_register_verify():
+    """Verify WebAuthn registration response and store the credential."""
+    try:
+        from webauthn import verify_registration_response
+    except ImportError:
+        return jsonify({'error': 'WebAuthn not available'}), 503
+
+    user = get_current_user()
+    if not user or not user.get('employee_id'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    employee_id = user['employee_id']
+
+    # Retrieve stored challenge
+    r = get_redis_client()
+    import base64
+    challenge_b64 = r.get(f"webauthn_challenge:{employee_id}")
+    if not challenge_b64:
+        return jsonify({'error': 'Challenge expired. Please try again.'}), 400
+
+    challenge_bytes = base64.b64decode(challenge_b64)
+    r.delete(f"webauthn_challenge:{employee_id}")
+
+    credential_json = request.get_json()
+    if not credential_json:
+        return jsonify({'error': 'No credential data'}), 400
+
+    try:
+        verification = verify_registration_response(
+            credential=credential_json,
+            expected_challenge=challenge_bytes,
+            expected_rp_id=_get_rp_id(),
+            expected_origin=_get_expected_origin(),
+        )
+    except Exception as e:
+        current_app.logger.warning(f"WebAuthn registration verification failed: {e}")
+        return jsonify({'error': 'Verification failed. Please try again.'}), 400
+
+    from app.models import get_models, get_db
+    models = get_models()
+    db = get_db()
+    WebAuthnCredential = models['WebAuthnCredential']
+
+    device_name = credential_json.get('device_name', 'Biometric Device')
+
+    cred = WebAuthnCredential(
+        employee_id=employee_id,
+        credential_id=verification.credential_id,
+        public_key=verification.credential_public_key,
+        sign_count=verification.sign_count,
+        device_name=device_name,
+    )
+    db.session.add(cred)
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'message': 'Biometric registered successfully'})
+
+
+@auth_bp.route('/api/auth/webauthn/authenticate/options', methods=['POST'])
+@require_authentication()
+def webauthn_auth_options():
+    """Generate WebAuthn authentication options for biometric unlock."""
+    try:
+        from webauthn import generate_authentication_options, options_to_json
+        from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+    except ImportError:
+        return jsonify({'error': 'WebAuthn not available'}), 503
+
+    user = get_current_user()
+    if not user or not user.get('employee_id'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    employee_id = user['employee_id']
+
+    from app.models import get_models
+    models = get_models()
+    WebAuthnCredential = models['WebAuthnCredential']
+
+    creds = WebAuthnCredential.query.filter_by(
+        employee_id=employee_id, is_active=True
+    ).all()
+    if not creds:
+        return jsonify({'error': 'No biometric credentials registered'}), 404
+
+    allow = [
+        PublicKeyCredentialDescriptor(id=c.credential_id)
+        for c in creds
+    ]
+
+    options = generate_authentication_options(
+        rp_id=_get_rp_id(),
+        allow_credentials=allow,
+        timeout=60000,
+    )
+
+    r = get_redis_client()
+    import base64
+    challenge_b64 = base64.b64encode(options.challenge).decode('ascii')
+    r.setex(
+        f"webauthn_auth_challenge:{employee_id}",
+        WEBAUTHN_CHALLENGE_TTL,
+        challenge_b64,
+    )
+
+    return options_to_json(options), 200, {'Content-Type': 'application/json'}
+
+
+@auth_bp.route('/api/auth/webauthn/authenticate/verify', methods=['POST'])
+@require_authentication()
+def webauthn_auth_verify():
+    """Verify WebAuthn authentication response to unlock the app."""
+    try:
+        from webauthn import verify_authentication_response
+        from webauthn.helpers import base64url_to_bytes
+    except ImportError:
+        return jsonify({'error': 'WebAuthn not available'}), 503
+
+    user = get_current_user()
+    if not user or not user.get('employee_id'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    employee_id = user['employee_id']
+
+    r = get_redis_client()
+    import base64
+    challenge_b64 = r.get(f"webauthn_auth_challenge:{employee_id}")
+    if not challenge_b64:
+        return jsonify({'error': 'Challenge expired. Please try again.'}), 400
+
+    challenge_bytes = base64.b64decode(challenge_b64)
+    r.delete(f"webauthn_auth_challenge:{employee_id}")
+
+    credential_json = request.get_json()
+    if not credential_json:
+        return jsonify({'error': 'No credential data'}), 400
+
+    # Find the matching credential
+    from app.models import get_models, get_db
+    models = get_models()
+    db = get_db()
+    WebAuthnCredential = models['WebAuthnCredential']
+
+    raw_id = credential_json.get('rawId', '')
+    try:
+        credential_id_bytes = base64url_to_bytes(raw_id)
+    except Exception:
+        return jsonify({'error': 'Invalid credential ID'}), 400
+
+    stored_cred = WebAuthnCredential.query.filter_by(
+        credential_id=credential_id_bytes, is_active=True
+    ).first()
+    if not stored_cred:
+        return jsonify({'error': 'Credential not found'}), 404
+
+    try:
+        verification = verify_authentication_response(
+            credential=credential_json,
+            expected_challenge=challenge_bytes,
+            expected_rp_id=_get_rp_id(),
+            expected_origin=_get_expected_origin(),
+            credential_public_key=stored_cred.public_key,
+            credential_current_sign_count=stored_cred.sign_count,
+        )
+    except Exception as e:
+        current_app.logger.warning(f"WebAuthn auth verification failed: {e}")
+        return jsonify({'error': 'Biometric verification failed'}), 401
+
+    # Update sign count
+    stored_cred.sign_count = verification.new_sign_count
+    stored_cred.last_used_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+
+@auth_bp.route('/api/auth/webauthn/credentials', methods=['GET'])
+@require_authentication()
+def list_webauthn_credentials():
+    """List registered WebAuthn credentials for the current user."""
+    user = get_current_user()
+    if not user or not user.get('employee_id'):
+        return jsonify({'credentials': []})
+
+    from app.models import get_models
+    models = get_models()
+    WebAuthnCredential = models['WebAuthnCredential']
+
+    creds = WebAuthnCredential.query.filter_by(
+        employee_id=user['employee_id'], is_active=True
+    ).all()
+
+    return jsonify({
+        'credentials': [
+            {
+                'id': c.id,
+                'device_name': c.device_name,
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'last_used_at': c.last_used_at.isoformat() if c.last_used_at else None,
+            }
+            for c in creds
+        ]
+    })

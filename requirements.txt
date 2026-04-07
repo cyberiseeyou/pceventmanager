@@ -35,6 +35,9 @@ python-dotenv==1.0.1
 pywebpush>=2.0.0
 py-vapid>=1.9.0
 
+# WebAuthn Biometric Authentication
+webauthn>=2.0
+
 # SMS Notifications (Twilio)
 twilio>=9.0.0
 

@@ -28,7 +28,7 @@ def init_push_routes(db, models):
 
         employee_id = user.get('employee_id')
         role = user.get('role')
-        if not employee_id or role not in ('specialist', 'lead'):
+        if not employee_id or role not in ('specialist', 'lead', 'supervisor'):
             return jsonify({'error': 'Push notifications not available for this role'}), 403
 
         data = request.get_json()
