@@ -45,9 +45,19 @@
                         const tbody = document.getElementById('diff-body-{{ conflict.id }}');
                         for (const [field, vals] of Object.entries(data)) {
                             const tr = document.createElement('tr');
-                            tr.innerHTML = `<td><strong>${field}</strong></td>` +
-                                `<td class="val-local">${vals.local || 'N/A'}</td>` +
-                                `<td class="val-upstream">${vals.upstream || 'N/A'}</td>`;
+                            const tdField = document.createElement('td');
+                            const strong = document.createElement('strong');
+                            strong.textContent = field;
+                            tdField.appendChild(strong);
+                            const tdLocal = document.createElement('td');
+                            tdLocal.className = 'val-local';
+                            tdLocal.textContent = vals.local || 'N/A';
+                            const tdUpstream = document.createElement('td');
+                            tdUpstream.className = 'val-upstream';
+                            tdUpstream.textContent = vals.upstream || 'N/A';
+                            tr.appendChild(tdField);
+                            tr.appendChild(tdLocal);
+                            tr.appendChild(tdUpstream);
                             tbody.appendChild(tr);
                         }
                     } catch(e) {}
@@ -169,12 +179,22 @@
             if (data.status === 'success') {
                 const card = document.getElementById('conflict-' + logId);
                 card.classList.add('resolved');
-                card.querySelector('.conflict-actions').innerHTML =
-                    '<span class="conflict-resolved-badge">Resolved just now' +
-                    (notes ? ' - ' + notes : '') + '</span>';
+                const actionsEl = card.querySelector('.conflict-actions');
+                actionsEl.textContent = '';
+                const badge = document.createElement('span');
+                badge.className = 'conflict-resolved-badge';
+                badge.textContent = 'Resolved just now' + (notes ? ' - ' + notes : '');
+                actionsEl.appendChild(badge);
+            } else if (data.status === 'already_resolved') {
+                btn.textContent = 'Already resolved';
+                btn.disabled = true;
             }
         })
-        .catch(function() { /* Resolve failed silently */ });
+        .catch(function(err) {
+            console.warn('Failed to resolve conflict:', err);
+            btn.textContent = 'Error - retry';
+            btn.disabled = false;
+        });
     });
 </script>
 {% endblock %}

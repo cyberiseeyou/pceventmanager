@@ -376,8 +376,8 @@ def login():
                 daemon_fresh = False
                 try:
                     daemon_fresh = is_daemon_healthy(max_age_seconds=300)
-                except Exception:
-                    pass  # Daemon not running or first boot — fall back to loading page
+                except Exception as e:
+                    current_app.logger.warning("Could not check daemon health: %s", e)
 
                 if daemon_fresh:
                     # Daemon has synced within 5 min — skip loading page
@@ -517,7 +517,7 @@ def employee_login():
         'event_times_configured': True  # Employees don't need to configure this
     }
 
-    # Leads and specialists get persistent sessions (30 days); supervisors get 24h
+    # Persistent roles (supervisor, lead, specialist) get 30-day sessions; others get 24h
     persistent = employee.role in PERSISTENT_SESSION_ROLES
     session_ttl = PERSISTENT_SESSION_TTL if persistent else 86400
     save_session(session_id, session_data, ttl_seconds=session_ttl)
@@ -955,10 +955,34 @@ def start_loading_refresh(task_id):
 MAX_PIN_ATTEMPTS = 5
 
 
-def _hash_lock_pin(pin):
-    """Hash a lock PIN using SHA-256 with a salt."""
-    salt = 'app_lock_v1'
-    return hashlib.sha256(f"{salt}:{pin}".encode()).hexdigest()
+def _hash_lock_pin(pin, salt=None):
+    """Hash a lock PIN using PBKDF2 with a per-session random salt."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac('sha256', pin.encode(), salt.encode(), 100_000).hex()
+    return f"{salt}:{digest}"
+
+
+def _verify_lock_pin(pin, stored_hash):
+    """Verify a PIN against a stored PBKDF2 hash."""
+    if ':' not in stored_hash:
+        return False
+    salt = stored_hash.split(':', 1)[0]
+    return _hash_lock_pin(pin, salt=salt) == stored_hash
+
+
+def _save_session_preserving_ttl(session_id, session_data):
+    """Save session data to Redis while preserving the existing TTL."""
+    try:
+        r = get_redis_client()
+        ttl = r.ttl(f"session:{session_id}")
+        if ttl and ttl > 0:
+            save_session(session_id, session_data, ttl_seconds=ttl)
+        else:
+            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+    except Exception as e:
+        current_app.logger.error("Redis error saving session: %s", e)
+        save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
 
 
 @auth_bp.route('/api/auth/set-lock-pin', methods=['POST'])
@@ -989,13 +1013,7 @@ def set_lock_pin():
     session_data['lock_pin_hash'] = _hash_lock_pin(pin)
     session_data['lock_pin_attempts'] = 0
 
-    # Preserve TTL
-    r = get_redis_client()
-    ttl = r.ttl(f"session:{session_id}")
-    if ttl and ttl > 0:
-        save_session(session_id, session_data, ttl_seconds=ttl)
-    else:
-        save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+    _save_session_preserving_ttl(session_id, session_data)
 
     return jsonify({'success': True, 'message': 'Lock PIN set successfully'})
 
@@ -1032,24 +1050,14 @@ def verify_lock_pin():
             'session_destroyed': True,
         }), 403
 
-    if _hash_lock_pin(pin) == stored_hash:
+    if _verify_lock_pin(pin, stored_hash):
         session_data['lock_pin_attempts'] = 0
-        r = get_redis_client()
-        ttl = r.ttl(f"session:{session_id}")
-        if ttl and ttl > 0:
-            save_session(session_id, session_data, ttl_seconds=ttl)
-        else:
-            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+        _save_session_preserving_ttl(session_id, session_data)
         return jsonify({'success': True})
     else:
         session_data['lock_pin_attempts'] = attempts + 1
         remaining = MAX_PIN_ATTEMPTS - session_data['lock_pin_attempts']
-        r = get_redis_client()
-        ttl = r.ttl(f"session:{session_id}")
-        if ttl and ttl > 0:
-            save_session(session_id, session_data, ttl_seconds=ttl)
-        else:
-            save_session(session_id, session_data, ttl_seconds=PERSISTENT_SESSION_TTL)
+        _save_session_preserving_ttl(session_id, session_data)
         return jsonify({
             'success': False,
             'error': f'Incorrect PIN. {remaining} attempts remaining.',
@@ -1320,9 +1328,8 @@ def webauthn_auth_verify():
         current_app.logger.warning(f"WebAuthn auth verification failed: {e}")
         return jsonify({'error': 'Biometric verification failed'}), 401
 
-    # Update sign count
-    stored_cred.sign_count = verification.new_sign_count
-    stored_cred.last_used_at = datetime.utcnow()
+    # Update sign count (enforces monotonicity for replay detection)
+    stored_cred.update_sign_count(verification.new_sign_count)
     db.session.commit()
 
     return jsonify({'success': True})
@@ -1345,13 +1352,5 @@ def list_webauthn_credentials():
     ).all()
 
     return jsonify({
-        'credentials': [
-            {
-                'id': c.id,
-                'device_name': c.device_name,
-                'created_at': c.created_at.isoformat() if c.created_at else None,
-                'last_used_at': c.last_used_at.isoformat() if c.last_used_at else None,
-            }
-            for c in creds
-        ]
+        'credentials': [c.to_safe_dict() for c in creds]
     })

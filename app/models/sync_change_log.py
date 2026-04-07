@@ -3,6 +3,8 @@ SyncChangeLog model - tracks changes detected by the background sync daemon
 """
 from datetime import datetime
 
+VALID_CHANGE_TYPES = ('new_event', 'cancelled', 'modified', 'conflict')
+
 
 def create_sync_change_log_model(db):
     """Factory function to create SyncChangeLog model with db instance"""
@@ -50,11 +52,21 @@ def create_sync_change_log_model(db):
         push_sent_at = db.Column(db.DateTime, nullable=True)
 
         __table_args__ = (
+            db.CheckConstraint(
+                "change_type IN ('new_event', 'cancelled', 'modified', 'conflict')",
+                name='ck_sync_change_type'
+            ),
             db.Index('idx_sync_changelog_type_status', 'change_type', 'resolved'),
             db.Index('idx_sync_changelog_detected', 'detected_at'),
             db.Index('idx_sync_changelog_conflicts', 'is_conflict', 'resolved'),
             db.Index('idx_sync_changelog_push_pending', 'push_sent', 'detected_at'),
         )
+
+        def resolve(self, notes=''):
+            """Mark this conflict as resolved, encapsulating the state transition."""
+            self.resolved = True
+            self.resolved_at = datetime.utcnow()
+            self.resolution_notes = notes
 
         def to_dict(self):
             """Serialize for API responses"""

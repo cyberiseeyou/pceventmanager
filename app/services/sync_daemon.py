@@ -5,6 +5,7 @@ and detects conflicts between local and upstream data.
 """
 import json
 import logging
+import requests
 from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
@@ -23,12 +24,21 @@ PROTECTED_FIELDS = {
     'start_datetime', 'due_datetime',
 }
 
+# Verify safe/protected sets don't overlap (catches future mistakes)
+assert SAFE_FIELDS.isdisjoint(PROTECTED_FIELDS), \
+    f"SAFE_FIELDS and PROTECTED_FIELDS overlap: {SAFE_FIELDS & PROTECTED_FIELDS}"
+
 
 def run_sync_cycle():
     """
     Main sync cycle — called by APScheduler every 5 minutes.
     Runs inside Flask app context provided by the scheduler wrapper.
     """
+    # Feature flag guard — CLAUDE.md mandates checking before external API calls
+    if not current_app.config.get('SYNC_ENABLED'):
+        logger.debug("Sync disabled, skipping cycle")
+        return {'status': 'disabled'}
+
     from app.models import get_models, get_db
 
     try:
@@ -52,6 +62,20 @@ def run_sync_cycle():
 
     except Exception as e:
         logger.error("Sync cycle failed: %s", e, exc_info=True)
+        # Track failure in SystemSetting so health check can surface the error
+        try:
+            from app.models import get_models, get_db
+            models = get_models()
+            SystemSetting = models['SystemSetting']
+            SystemSetting.set_setting(
+                'last_sync_error',
+                str(e),
+                setting_type='string',
+                user='sync_daemon',
+            )
+            get_db().session.commit()
+        except Exception:
+            logger.error("Failed to persist sync error to SystemSetting", exc_info=True)
         return {'status': 'error', 'error': str(e)}
 
 
@@ -85,7 +109,12 @@ class SyncDaemon:
         counts = {'new': 0, 'modified': 0, 'cancelled': 0, 'conflicts': 0}
         change_logs = []
 
-        # 1. Authenticate (reuses existing session if still valid)
+        # 1. Clear singleton state and authenticate (CLAUDE.md: always clear before login)
+        external_api.authenticated = False
+        external_api.phpsessid = None
+        if external_api.session:
+            external_api.session.cookies.clear()
+
         if not external_api.ensure_authenticated():
             logger.error("Sync daemon: authentication failed")
             return {**counts, 'status': 'auth_failed', 'duration': 0}
@@ -142,13 +171,13 @@ class SyncDaemon:
                         change_logs.append(change)
                         counts['cancelled'] += 1
 
-        # 8. Write change logs to database
-        if change_logs:
-            self._write_change_logs(change_logs)
-
-        # 8b. Send push notifications to supervisor
+        # 8. Send push notifications FIRST (mutates push_sent flag on dicts)
         if change_logs:
             self._send_push_notifications(change_logs, counts)
+
+        # 8b. Write change logs to database (reads push_sent from dicts)
+        if change_logs:
+            self._write_change_logs(change_logs)
 
         # 9. Commit all changes
         try:
@@ -156,7 +185,9 @@ class SyncDaemon:
         except SQLAlchemyError:
             logger.error("Sync daemon: commit failed", exc_info=True)
             self.session.rollback()
-            return {**counts, 'status': 'commit_failed', 'duration': 0}
+            # Return zeroed counts — the work was rolled back
+            return {'new': 0, 'modified': 0, 'cancelled': 0, 'conflicts': 0,
+                    'status': 'commit_failed', 'duration': 0}
 
         # 10. Update sync metadata
         duration = (datetime.utcnow() - start_time).total_seconds()
@@ -188,8 +219,11 @@ class SyncDaemon:
                        result.get('records') or [])
             return records
 
+        except requests.exceptions.RequestException as e:
+            logger.warning("Transient API failure fetching upstream events: %s", e)
+            return None
         except Exception as e:
-            logger.error("Failed to fetch upstream events: %s", e)
+            logger.error("Unexpected error fetching upstream events: %s", e, exc_info=True)
             return None
 
     def _fetch_estimated_times(self, api):
@@ -209,9 +243,9 @@ class SyncDaemon:
                         try:
                             estimated_time_map[str(mplan_id)] = int(float(est_time))
                         except (ValueError, TypeError):
-                            pass
+                            logger.debug("Unparseable estimated time for mPlan %s: %s", mplan_id, est_time)
         except Exception as e:
-            logger.warning("Failed to fetch estimated times: %s", e)
+            logger.error("Failed to fetch estimated times: %s", e, exc_info=True)
 
         return estimated_time_map
 
@@ -431,8 +465,10 @@ class SyncDaemon:
         schedule_date = self._parse_date(record.get('scheduleDate'), '%m/%d/%Y %I:%M:%S %p')
 
         if not start_date:
+            logger.warning("Missing start date for mPlan %s, defaulting to now", mplan_id)
             start_date = datetime.utcnow()
         if not end_date:
+            logger.warning("Missing end date for mPlan %s, defaulting to now", mplan_id)
             end_date = datetime.utcnow()
 
         condition = record.get('condition', 'Unstaffed')
@@ -520,6 +556,7 @@ class SyncDaemon:
         try:
             return datetime.strptime(date_str, format_str)
         except ValueError:
+            logger.debug("Unparseable date '%s' (expected format: %s)", date_str, format_str)
             return None
 
     def _write_change_logs(self, change_entries):
@@ -601,6 +638,7 @@ class SyncDaemon:
             'tag': tag,
         })
 
+        any_sent = False
         for sub in subs:
             try:
                 webpush(
@@ -617,16 +655,21 @@ class SyncDaemon:
                     timeout=5,
                 )
                 sub.last_used_at = datetime.utcnow()
+                any_sent = True
             except WebPushException as e:
-                if '410' in str(e) or '404' in str(e):
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code in (404, 410):
+                        sub.is_active = False
+                elif '410' in str(e) or '404' in str(e):
                     sub.is_active = False
                 logger.warning("Push failed for sub %s: %s", sub.id, e)
             except Exception as e:
                 logger.warning("Push error for sub %s: %s", sub.id, e)
 
-        # Mark change logs as push-sent
-        for entry in change_logs:
-            entry['push_sent'] = True
+        # Only mark as push-sent if at least one push succeeded
+        if any_sent:
+            for entry in change_logs:
+                entry['push_sent'] = True
 
     def _update_sync_metadata(self, duration, counts):
         """Store sync metadata in SystemSetting for health checks."""
@@ -654,7 +697,11 @@ class SyncDaemon:
             )
             self.session.commit()
         except Exception as e:
-            logger.warning("Failed to update sync metadata: %s", e)
+            logger.error("Failed to update sync metadata: %s", e, exc_info=True)
+            try:
+                self.session.rollback()
+            except Exception:
+                pass
 
 
 def get_last_sync_time():

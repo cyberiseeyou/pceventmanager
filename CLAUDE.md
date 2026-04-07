@@ -310,8 +310,8 @@ if external_api.session:
 ### Auth System
 - Sessions stored in **Redis** with `session_id` cookie
 - Three roles: `supervisor` > `lead` > `specialist`
-- **Supervisors**: 24h TTL, 10-min inactivity timeout
-- **Leads & Specialists**: 30-day persistent sessions, no inactivity timeout (logout only via button)
+- **All roles**: 30-day persistent sessions, no inactivity timeout (logout only via button or PIN lock)
+- **App lock screen**: After 5 min inactivity, PIN or WebAuthn biometric unlock required (session stays alive)
 - Login pages must **never** auto-redirect authenticated users (shared device risk)
 - Always destroy old sessions before creating new ones on login
 - Persistent session logic: `PERSISTENT_SESSION_ROLES` and `_is_persistent_session()` in `auth.py`

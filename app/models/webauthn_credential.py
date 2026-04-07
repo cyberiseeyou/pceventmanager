@@ -32,8 +32,28 @@ def create_webauthn_credential_model(db):
         is_active = db.Column(db.Boolean, default=True, nullable=False)
 
         __table_args__ = (
+            db.CheckConstraint('sign_count >= 0', name='ck_webauthn_sign_count_positive'),
             db.Index('idx_webauthn_employee', 'employee_id', 'is_active'),
         )
+
+        def update_sign_count(self, new_count):
+            """Update sign count with monotonicity enforcement (WebAuthn replay detection)."""
+            if new_count < self.sign_count:
+                raise ValueError(
+                    f"sign_count regression: {self.sign_count} -> {new_count} "
+                    f"(possible cloned authenticator)"
+                )
+            self.sign_count = new_count
+            self.last_used_at = datetime.utcnow()
+
+        def to_safe_dict(self):
+            """Serialize for API responses, excluding cryptographic material."""
+            return {
+                'id': self.id,
+                'device_name': self.device_name or 'Unnamed Device',
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            }
 
         def __repr__(self):
             return f'<WebAuthnCredential {self.id}: employee={self.employee_id} device={self.device_name}>'

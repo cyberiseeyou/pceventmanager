@@ -3,6 +3,7 @@ Sync Dashboard Routes
 Provides UI for viewing sync activity and resolving conflicts.
 """
 from flask import Blueprint, render_template, jsonify, request
+from sqlalchemy.exc import SQLAlchemyError
 from app.routes.auth import require_authentication, get_current_user
 from app.models import get_models, get_db
 import logging
@@ -27,12 +28,16 @@ def changes_page():
     per_page = 50
     change_type = request.args.get('type')
 
-    query = SyncChangeLog.query.order_by(SyncChangeLog.detected_at.desc())
-    if change_type:
-        query = query.filter_by(change_type=change_type)
+    try:
+        query = SyncChangeLog.query.order_by(SyncChangeLog.detected_at.desc())
+        if change_type:
+            query = query.filter_by(change_type=change_type)
 
-    total = query.count()
-    changes = query.offset((page - 1) * per_page).limit(per_page).all()
+        total = query.count()
+        changes = query.offset((page - 1) * per_page).limit(per_page).all()
+    except SQLAlchemyError as e:
+        logger.error("Failed to query sync changes: %s", e)
+        changes, total = [], 0
 
     return render_template(
         'sync_changes.html',
@@ -57,11 +62,15 @@ def conflicts_page():
 
     show_resolved = request.args.get('show_resolved', 'false') == 'true'
 
-    query = SyncChangeLog.query.filter_by(is_conflict=True)
-    if not show_resolved:
-        query = query.filter_by(resolved=False)
+    try:
+        query = SyncChangeLog.query.filter_by(is_conflict=True)
+        if not show_resolved:
+            query = query.filter_by(resolved=False)
 
-    conflicts = query.order_by(SyncChangeLog.detected_at.desc()).all()
+        conflicts = query.order_by(SyncChangeLog.detected_at.desc()).all()
+    except SQLAlchemyError as e:
+        logger.error("Failed to query sync conflicts: %s", e)
+        conflicts = []
 
     return render_template(
         'sync_conflicts.html',
@@ -86,13 +95,20 @@ def resolve_conflict(log_id):
     if not log_entry:
         return jsonify({'error': 'Not found'}), 404
 
-    from datetime import datetime
-    data = request.get_json() or {}
-    log_entry.resolved = True
-    log_entry.resolved_at = datetime.utcnow()
-    log_entry.resolution_notes = data.get('notes', '')
+    # Idempotency check — prevent double-resolution
+    if log_entry.resolved:
+        return jsonify({'status': 'already_resolved', 'message': 'This conflict was already resolved.'}), 409
 
-    db.session.commit()
+    data = request.get_json() or {}
+    log_entry.resolve(notes=data.get('notes', ''))
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Failed to resolve conflict %d: %s", log_id, e)
+        return jsonify({'error': 'Failed to save resolution. Please try again.'}), 500
+
     return jsonify({'status': 'success'})
 
 
@@ -106,15 +122,21 @@ def sync_status():
     SystemSetting = models['SystemSetting']
     SyncChangeLog = models['SyncChangeLog']
 
-    last_sync = get_last_sync_time()
-    duration = SystemSetting.get_setting('last_sync_duration')
-    unresolved = SyncChangeLog.query.filter_by(is_conflict=True, resolved=False).count()
-    pending_changes = SyncChangeLog.query.filter_by(resolved=False).count()
+    try:
+        last_sync = get_last_sync_time()
+        duration = SystemSetting.get_setting('last_sync_duration')
+        last_error = SystemSetting.get_setting('last_sync_error')
+        unresolved = SyncChangeLog.query.filter_by(is_conflict=True, resolved=False).count()
+        pending_changes = SyncChangeLog.query.filter_by(resolved=False).count()
+    except SQLAlchemyError as e:
+        logger.error("Failed to get sync status: %s", e)
+        return jsonify({'healthy': False, 'error': 'Database error'}), 500
 
     return jsonify({
         'healthy': is_daemon_healthy(),
         'last_sync': last_sync.isoformat() if last_sync else None,
         'duration': duration,
+        'last_error': last_error,
         'unresolved_conflicts': unresolved,
         'pending_changes': pending_changes,
     })

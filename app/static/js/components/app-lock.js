@@ -22,7 +22,8 @@
     }
 
     /** Check if the current user has a lock PIN and/or WebAuthn configured */
-    async function checkLockMethods() {
+    async function checkLockMethods(retryCount) {
+        retryCount = retryCount || 0;
         try {
             const resp = await fetch('/api/auth/has-lock-pin', {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -31,7 +32,13 @@
                 const data = await resp.json();
                 hasPinConfigured = data.has_pin;
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.warn('Failed to check lock PIN status:', e.message);
+            if (retryCount < 2) {
+                setTimeout(function() { checkLockMethods(retryCount + 1); }, 5000);
+                return;
+            }
+        }
 
         // Check for WebAuthn credentials
         if (window.PublicKeyCredential) {
@@ -43,7 +50,9 @@
                     const data = await resp.json();
                     hasWebAuthn = data.credentials && data.credentials.length > 0;
                 }
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                console.warn('Failed to check WebAuthn credentials:', e.message);
+            }
         }
     }
 
