@@ -212,6 +212,30 @@
         </section>
 
         <!-- Event Time Settings Link -->
+        <section class="settings-section" id="screen-lock-settings">
+            <h3>Screen Lock</h3>
+            <p class="section-description">Set a PIN to lock the screen after 5 minutes of inactivity. Your session stays active — just enter your PIN to resume.</p>
+
+            <div id="lock-pin-status" style="margin-bottom: 12px; font-size: 0.9em; color: #666;"></div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+                <div>
+                    <label for="lock-pin-input" style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">4-6 digit PIN</label>
+                    <input type="password" id="lock-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="4"
+                           placeholder="Enter PIN" autocomplete="off"
+                           style="width: 140px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; letter-spacing: 0.3em; text-align: center;">
+                </div>
+                <div>
+                    <label for="lock-pin-confirm" style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">Confirm PIN</label>
+                    <input type="password" id="lock-pin-confirm" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="4"
+                           placeholder="Confirm" autocomplete="off"
+                           style="width: 140px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; letter-spacing: 0.3em; text-align: center;">
+                </div>
+                <button type="button" id="save-lock-pin-btn" class="btn btn-primary" style="height: 38px;">Set PIN</button>
+            </div>
+            <div id="lock-pin-save-status" style="margin-top: 8px; display: none; padding: 8px 12px; border-radius: 6px; font-size: 0.85em;"></div>
+        </section>
+
         <section class="settings-section" id="event-times-link">
             <h3>Event Time Settings</h3>
             <p class="section-description">Configure scheduling times for all event types including Freeosk, Digital Setup/Teardown, Supervisor, Core shift blocks, and more.</p>
@@ -985,6 +1009,95 @@
                 // Fallback to alert if toaster not available
                 alert(message);
             }
+        }
+
+        // ===== SCREEN LOCK PIN =====
+        const lockPinBtn = document.getElementById('save-lock-pin-btn');
+        const lockPinStatus = document.getElementById('lock-pin-status');
+        const lockPinSaveStatus = document.getElementById('lock-pin-save-status');
+
+        function showLockPinStatus(message, type) {
+            lockPinSaveStatus.textContent = message;
+            lockPinSaveStatus.style.display = 'block';
+            lockPinSaveStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+            lockPinSaveStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+            lockPinSaveStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+            setTimeout(function() { lockPinSaveStatus.style.display = 'none'; }, 5000);
+        }
+
+        // Check current lock PIN status
+        fetch('/api/auth/has-lock-pin', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.has_pin) {
+                    lockPinStatus.textContent = 'Screen lock PIN is set. Enter a new PIN below to change it.';
+                    lockPinStatus.style.color = '#155724';
+                } else {
+                    lockPinStatus.textContent = 'No PIN set. Screen lock is inactive until you set one.';
+                    lockPinStatus.style.color = '#856404';
+                }
+            })
+            .catch(function() {
+                lockPinStatus.textContent = 'Could not check PIN status.';
+            });
+
+        if (lockPinBtn) {
+            lockPinBtn.addEventListener('click', async function() {
+                const pin = document.getElementById('lock-pin-input').value.trim();
+                const confirm = document.getElementById('lock-pin-confirm').value.trim();
+
+                if (!pin) {
+                    showLockPinStatus('Please enter a PIN.', 'error');
+                    return;
+                }
+                if (pin.length < 4 || pin.length > 6) {
+                    showLockPinStatus('PIN must be 4-6 digits.', 'error');
+                    return;
+                }
+                if (!/^\d+$/.test(pin)) {
+                    showLockPinStatus('PIN must contain only digits.', 'error');
+                    return;
+                }
+                if (pin !== confirm) {
+                    showLockPinStatus('PINs do not match.', 'error');
+                    return;
+                }
+
+                lockPinBtn.disabled = true;
+                lockPinBtn.textContent = 'Saving...';
+
+                try {
+                    const csrfToken = document.cookie.split('; ')
+                        .find(function(row) { return row.startsWith('csrf_token='); })
+                        ?.split('=')[1] || '';
+
+                    const resp = await fetch('/api/auth/set-lock-pin', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({ pin: pin }),
+                    });
+                    const data = await resp.json();
+
+                    if (data.success) {
+                        showLockPinStatus('Screen lock PIN set successfully! Lock activates after 5 min of inactivity.', 'success');
+                        lockPinStatus.textContent = 'Screen lock PIN is set. Enter a new PIN below to change it.';
+                        lockPinStatus.style.color = '#155724';
+                        document.getElementById('lock-pin-input').value = '';
+                        document.getElementById('lock-pin-confirm').value = '';
+                    } else {
+                        showLockPinStatus(data.error || 'Failed to set PIN.', 'error');
+                    }
+                } catch (err) {
+                    showLockPinStatus('Error: ' + err.message, 'error');
+                } finally {
+                    lockPinBtn.disabled = false;
+                    lockPinBtn.textContent = 'Set PIN';
+                }
+            });
         }
 
         // ===== COMPANY HOLIDAYS MANAGEMENT =====
