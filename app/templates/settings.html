@@ -214,10 +214,26 @@
         <!-- Event Time Settings Link -->
         <section class="settings-section" id="screen-lock-settings">
             <h3>Screen Lock</h3>
-            <p class="section-description">Set a PIN to lock the screen after 5 minutes of inactivity. Your session stays active — just enter your PIN to resume.</p>
+            <p class="section-description">Lock the screen after 5 minutes of inactivity. Unlock with your fingerprint, face ID, or a PIN. Your session stays active.</p>
 
             <div id="lock-pin-status" style="margin-bottom: 12px; font-size: 0.9em; color: #666;"></div>
 
+            <!-- Biometric Registration -->
+            <div id="biometric-section" style="margin-bottom: 20px; display: none;">
+                <h4 style="font-size: 0.95em; margin: 0 0 8px; color: #2E4C73;">Fingerprint / Face ID</h4>
+                <div id="biometric-devices" style="margin-bottom: 10px;"></div>
+                <button type="button" id="register-biometric-btn" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04a17.95 17.95 0 0 1-.227-2.531c0-5.523 4.477-10 10-10a9.96 9.96 0 0 1 5.42 1.598m2.007 4.402a10 10 0 0 1-2.007 6"/>
+                        <circle cx="12" cy="11" r="3"/>
+                    </svg>
+                    Register This Device
+                </button>
+                <div id="biometric-status" style="margin-top: 8px; display: none; padding: 8px 12px; border-radius: 6px; font-size: 0.85em;"></div>
+            </div>
+
+            <!-- PIN Setup -->
+            <h4 style="font-size: 0.95em; margin: 0 0 8px; color: #2E4C73;">PIN (required as fallback)</h4>
             <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
                 <div>
                     <label for="lock-pin-input" style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">4-6 digit PIN</label>
@@ -1009,6 +1025,144 @@
                 // Fallback to alert if toaster not available
                 alert(message);
             }
+        }
+
+        // ===== BIOMETRIC REGISTRATION =====
+        const biometricSection = document.getElementById('biometric-section');
+        const registerBioBtn = document.getElementById('register-biometric-btn');
+        const biometricDevices = document.getElementById('biometric-devices');
+        const biometricStatus = document.getElementById('biometric-status');
+
+        function showBiometricStatus(message, type) {
+            biometricStatus.textContent = message;
+            biometricStatus.style.display = 'block';
+            biometricStatus.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+            biometricStatus.style.color = type === 'success' ? '#155724' : '#721c24';
+            biometricStatus.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+            setTimeout(function() { biometricStatus.style.display = 'none'; }, 5000);
+        }
+
+        function base64urlToBuffer(base64url) {
+            var padding = '='.repeat((4 - base64url.length % 4) % 4);
+            var base64 = base64url.replace(/-/g, '+').replace(/_/g, '/') + padding;
+            var binary = atob(base64);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        }
+
+        function bufferToBase64url(buffer) {
+            var bytes = new Uint8Array(buffer);
+            var binary = '';
+            for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        // Show biometric section only if browser supports it
+        if (window.PublicKeyCredential) {
+            biometricSection.style.display = 'block';
+
+            // Load existing credentials
+            fetch('/api/auth/webauthn/credentials', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.credentials && data.credentials.length > 0) {
+                        biometricDevices.innerHTML = data.credentials.map(function(c) {
+                            var lastUsed = c.last_used_at ? 'Last used: ' + new Date(c.last_used_at).toLocaleDateString() : 'Never used';
+                            var el = document.createElement('div');
+                            el.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;font-size:0.875em;color:#333;';
+                            el.textContent = c.device_name + ' — ' + lastUsed;
+                            return el.outerHTML;
+                        }).join('');
+                    } else {
+                        biometricDevices.innerHTML = '<div style="font-size:0.85em;color:#888;margin-bottom:4px;">No devices registered yet.</div>';
+                    }
+                })
+                .catch(function() {});
+        }
+
+        // Register biometric
+        if (registerBioBtn) {
+            registerBioBtn.addEventListener('click', async function() {
+                registerBioBtn.disabled = true;
+                registerBioBtn.textContent = 'Waiting for device...';
+
+                try {
+                    var csrfToken = document.cookie.split('; ')
+                        .find(function(row) { return row.startsWith('csrf_token='); })
+                        ?.split('=')[1] || '';
+
+                    // Step 1: Get registration options from server
+                    var optResp = await fetch('/api/auth/webauthn/register/options', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    if (!optResp.ok) {
+                        var errData = await optResp.json();
+                        throw new Error(errData.error || 'Failed to get registration options');
+                    }
+                    var options = await optResp.json();
+
+                    // Step 2: Convert base64url fields for browser API
+                    options.challenge = base64urlToBuffer(options.challenge);
+                    options.user.id = base64urlToBuffer(options.user.id);
+                    if (options.excludeCredentials) {
+                        options.excludeCredentials = options.excludeCredentials.map(function(c) {
+                            return { id: base64urlToBuffer(c.id), type: c.type };
+                        });
+                    }
+
+                    // Step 3: Trigger the phone's fingerprint/face ID prompt
+                    registerBioBtn.textContent = 'Touch sensor now...';
+                    var credential = await navigator.credentials.create({ publicKey: options });
+
+                    // Step 4: Send credential to server
+                    var credentialJSON = {
+                        id: credential.id,
+                        rawId: bufferToBase64url(credential.rawId),
+                        type: credential.type,
+                        response: {
+                            attestationObject: bufferToBase64url(credential.response.attestationObject),
+                            clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+                        },
+                        device_name: navigator.userAgent.indexOf('Android') > -1 ? 'Android Device' :
+                                     navigator.userAgent.indexOf('iPhone') > -1 ? 'iPhone' :
+                                     navigator.userAgent.indexOf('iPad') > -1 ? 'iPad' : 'Device',
+                    };
+
+                    var verifyResp = await fetch('/api/auth/webauthn/register/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify(credentialJSON),
+                    });
+                    var result = await verifyResp.json();
+
+                    if (result.status === 'success') {
+                        showBiometricStatus('Biometric registered! It will appear on the lock screen.', 'success');
+                        // Reload device list
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        showBiometricStatus(result.error || 'Registration failed.', 'error');
+                    }
+                } catch (err) {
+                    if (err.name === 'NotAllowedError') {
+                        showBiometricStatus('Registration cancelled.', 'error');
+                    } else {
+                        showBiometricStatus('Error: ' + err.message, 'error');
+                    }
+                } finally {
+                    registerBioBtn.disabled = false;
+                    registerBioBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04a17.95 17.95 0 0 1-.227-2.531c0-5.523 4.477-10 10-10a9.96 9.96 0 0 1 5.42 1.598m2.007 4.402a10 10 0 0 1-2.007 6"/><circle cx="12" cy="11" r="3"/></svg> Register This Device';
+                }
+            });
         }
 
         // ===== SCREEN LOCK PIN =====
