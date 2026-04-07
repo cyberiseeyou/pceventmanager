@@ -103,24 +103,25 @@ class SyncDaemon:
         Returns:
             dict with counts of new, modified, cancelled, conflicts, and duration
         """
-        from app.integrations.external_api.session_api_service import session_api as external_api
+        # Create a DEDICATED API client for the daemon — never use the shared singleton.
+        # The singleton (session_api) holds the supervisor's PHPSESSID from their login.
+        # If we clear it, the supervisor's active session breaks mid-request.
+        from app.integrations.external_api.session_api_service import SessionAPIService
+
+        daemon_api = SessionAPIService()
+        daemon_api.init_app(current_app._get_current_object())
 
         start_time = datetime.utcnow()
         counts = {'new': 0, 'modified': 0, 'cancelled': 0, 'conflicts': 0}
         change_logs = []
 
-        # 1. Clear singleton state and authenticate (CLAUDE.md: always clear before login)
-        external_api.authenticated = False
-        external_api.phpsessid = None
-        if external_api.session:
-            external_api.session.cookies.clear()
-
-        if not external_api.ensure_authenticated():
+        # 1. Authenticate with own session (does not touch the shared singleton)
+        if not daemon_api.ensure_authenticated():
             logger.error("Sync daemon: authentication failed")
             return {**counts, 'status': 'auth_failed', 'duration': 0}
 
         # 2. Fetch upstream events (full 150-day window, parallel)
-        upstream_events = self._fetch_upstream_events(external_api)
+        upstream_events = self._fetch_upstream_events(daemon_api)
         if upstream_events is None:
             logger.error("Sync daemon: failed to fetch upstream events")
             return {**counts, 'status': 'fetch_failed', 'duration': 0}
@@ -133,7 +134,7 @@ class SyncDaemon:
                 upstream_map[str(mplan_id)] = record
 
         # 4. Fetch estimated times from scheduling API
-        estimated_time_map = self._fetch_estimated_times(external_api)
+        estimated_time_map = self._fetch_estimated_times(daemon_api)
 
         # 5. Build set of local events for comparison
         local_events = self.Event.query.all()
