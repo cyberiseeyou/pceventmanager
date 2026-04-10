@@ -1,5 +1,9 @@
-"""Scheduler invariants that must hold for every run, regardless of spec branch."""
-from datetime import datetime, timedelta
+"""Scheduler invariants that must hold for every run, regardless of spec branch.
+
+These must hold for both the legacy greedy engine and the new spec
+implementation. Do NOT xfail these even if plans 02-07 temporarily break them;
+fix the engine instead.
+"""
 
 
 def test_every_event_produces_exactly_one_pending_schedule(
