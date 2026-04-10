@@ -60,6 +60,11 @@ class Config:
     ML_SHADOW_MODE = config('ML_SHADOW_MODE', default=False, cast=bool)  # Log predictions without using them
 
     # CP-SAT Constraint Solver settings
+    # Default is False: the greedy scheduling_engine.py is the production scheduler
+    # per the 2026-04-10 rewrite (docs/superpowers/plans/2026-04-10-scheduler-rewrite/).
+    # Set CPSAT_ENABLED=True in .env to opt back in for local testing.
+    # TODO(plan-08): remove this flag entirely when CP-SAT is retired from the
+    # production code path.
     CPSAT_ENABLED = config('CPSAT_ENABLED', default=False, cast=bool)
     CPSAT_TIME_LIMIT = config('CPSAT_TIME_LIMIT', default=15, cast=int)  # Solver time limit in seconds
 

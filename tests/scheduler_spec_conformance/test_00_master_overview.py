@@ -1,7 +1,4 @@
 """Conformance tests for spec 00-master-overview.md."""
-from unittest.mock import patch
-
-import pytest
 
 
 def test_m0_default_scheduler_is_greedy(app):
