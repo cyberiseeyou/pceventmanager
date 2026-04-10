@@ -1,7 +1,6 @@
 [
   {
     "id": "SHANNON_FIELDS",
-    "name": "SHANNON FIELDS",
     "job_title": "Event Specialist",
     "is_active": false,
     "juicer_trained": false,
@@ -9,7 +8,6 @@
   },
   {
     "id": "US814117",
-    "name": "CAROLYN MANN",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -17,7 +15,6 @@
   },
   {
     "id": "US815021",
-    "name": "DIANE CARR",
     "job_title": "Lead Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -25,7 +22,6 @@
   },
   {
     "id": "US854740",
-    "name": "FAITH MONTGOMERY",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -33,7 +29,6 @@
   },
   {
     "id": "US857761",
-    "name": "MICHELLE MONTAGUE",
     "job_title": "Lead Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -41,7 +36,6 @@
   },
   {
     "id": "US863735",
-    "name": "THOMAS RARICK",
     "job_title": "Juicer Barista",
     "is_active": true,
     "juicer_trained": true,
@@ -49,7 +43,6 @@
   },
   {
     "id": "US899165",
-    "name": "ROBI DUNFEE",
     "job_title": "Lead Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -57,7 +50,6 @@
   },
   {
     "id": "US913438",
-    "name": "LANIE SULLIVAN",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -65,7 +57,6 @@
   },
   {
     "id": "US914335",
-    "name": "NANCY DINKINS",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -73,7 +64,6 @@
   },
   {
     "id": "US920644",
-    "name": "Mat Conder",
     "job_title": "Club Supervisor",
     "is_active": true,
     "juicer_trained": true,
@@ -81,7 +71,6 @@
   },
   {
     "id": "US935005",
-    "name": "OLIVIA BULANDA",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -89,7 +78,6 @@
   },
   {
     "id": "US935801",
-    "name": "CLAUDIA SICKLES",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": true,
@@ -97,7 +85,6 @@
   },
   {
     "id": "US936359",
-    "name": "SHANNON CASEY",
     "job_title": "Event Specialist",
     "is_active": true,
     "juicer_trained": false,
@@ -105,7 +92,6 @@
   },
   {
     "id": "US936374",
-    "name": "JOSE PLASENCIA",
     "job_title": "Event Specialist",
     "is_active": false,
     "juicer_trained": false,

@@ -1,7 +1,7 @@
 """Capture a scheduler-run fixture from the current DB state.
 
 Usage:
-    python scripts/capture_run_fixture.py --run-id 192 --out tests/scheduler_spec_conformance/fixtures/run_192
+    PYTHONPATH=. python scripts/capture_run_fixture.py --run-id 192 --out tests/scheduler_spec_conformance/fixtures/run_192
 
 This script reads the dev DB (instance/scheduler.db via the 'development' Flask
 config) and captures the exact set of events that were in a scheduler run's
@@ -43,7 +43,7 @@ def capture(run_id: int, out_dir: Path):
         SchedulerRunHistory = models['SchedulerRunHistory']
         PendingSchedule = models['PendingSchedule']
 
-        run = SchedulerRunHistory.query.get(run_id)
+        run = db.session.get(SchedulerRunHistory, run_id)
         if not run:
             raise SystemExit(f"No run {run_id}")
 
@@ -55,6 +55,9 @@ def capture(run_id: int, out_dir: Path):
             PendingSchedule.event_ref_num
         ).filter_by(scheduler_run_id=run_id).distinct().all()
         event_refs_in_run = {r[0] for r in pending_in_run}
+        if not event_refs_in_run:
+            print(f"WARNING: run {run_id} has no pending_schedules rows; "
+                  f"events.json will be empty")
         events = (
             Event.query
             .filter(Event.project_ref_num.in_(event_refs_in_run))
@@ -107,11 +110,8 @@ def capture(run_id: int, out_dir: Path):
 
         employees = Employee.query.order_by(Employee.id).all()
         emp_data = [{
-            'id': e.id,
-            'name': e.name,
-            'job_title': e.job_title,
-            'is_active': e.is_active,
-            'juicer_trained': e.juicer_trained,
+            'id': e.id, 'job_title': e.job_title,
+            'is_active': e.is_active, 'juicer_trained': e.juicer_trained,
             'termination_date': e.termination_date,
         } for e in employees]
 
@@ -134,8 +134,12 @@ def capture(run_id: int, out_dir: Path):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--run-id', type=int, required=True)
-    parser.add_argument('--out', type=str, required=True)
+    parser = argparse.ArgumentParser(
+        description="Capture a scheduler-run fixture from the current DB state."
+    )
+    parser.add_argument('--run-id', type=int, required=True,
+                        help="The scheduler_run_history id to capture (e.g. 192)")
+    parser.add_argument('--out', type=str, required=True,
+                        help="Output directory for the JSON fixture files")
     args = parser.parse_args()
     capture(args.run_id, Path(args.out))
