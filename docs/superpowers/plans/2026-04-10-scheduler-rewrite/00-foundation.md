@@ -217,9 +217,12 @@ Dispatch Gate D with the prompt from `review-gates.md` substituting `<T-id>` = `
 ## Task T1 — Capture run-192 fixture data
 
 **Files:**
-- Create: `tests/scheduler_spec_conformance/fixtures/run_192_events.json`
-- Create: `tests/scheduler_spec_conformance/fixtures/run_192_rotations.json`
-- Create: `tests/scheduler_spec_conformance/fixtures/run_192_expected.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/events.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/rotations.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/time_off.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/weekly_availability.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/employees.json`
+- Create: `tests/scheduler_spec_conformance/fixtures/run_192/expected.json`
 - Create: `scripts/capture_run_fixture.py`
 
 This task captures the actual event/rotation snapshot from the production DB as it existed when run 192 failed, plus the human-authored "expected outcome" that the spec predicts.
