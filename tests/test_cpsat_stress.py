@@ -1558,3 +1558,174 @@ class TestScenarioPhase3Mega:
         scheduled = _get_successful(db_session, models, run.id)
         assert len(scheduled) >= 10, \
             f"Only {len(scheduled)}/23 events scheduled in mega scenario"
+
+
+# ---------------------------------------------------------------------------
+# SCENARIO 21: Primary/Secondary Rules (Juicer > Core priority)
+# ---------------------------------------------------------------------------
+# Per docs/scheduling_validation_rules.md RULE-001/RULE-022/RULE-023 (2026-04-10):
+#  - At most one primary (Core or Juicer Production) per employee per day.
+#  - Juicer Production outranks Core — on a conflict, the Core is bumped to
+#    another day in its window.
+#  - Backup juicers are only used when the primary juicer has approved PTO,
+#    not when the primary merely has a Core conflict.
+
+class TestScenarioPrimarySecondaryRules:
+    """Primary/secondary rules alignment — Juicer Production displaces Core."""
+
+    def test_juicer_bumps_core_on_same_day(self, db_session, models):
+        """A bumpable Core posted to the primary juicer must be moved off the
+        Juicer Production's target day so the Juicer can land there."""
+        Schedule = models['Schedule']
+
+        setup_basic_team(models, db_session)
+        setup_rotations(models, db_session)  # jb1 = primary juicer
+
+        # Pre-existing "Scheduled" Core assigned to jb1 with a wide window
+        # (start_days=5, due_days=15) so the bumped Core has room to move.
+        posted_core = _make_event(
+            models, db_session, 950001, 'Core',
+            name='950001-CORE-Preposted',
+            condition='Scheduled', start_days=5, due_days=15,
+            estimated_time=390,
+        )
+        posted_core.is_scheduled = True
+        db_session.flush()
+
+        # Post the Core to jb1 on day 5 (the day the Juicer will need).
+        posted_date = _future(5)
+        sched = Schedule(
+            event_ref_num=950001,
+            employee_id='jb1',
+            schedule_datetime=posted_date,
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # New Juicer Production pinned to day 5 (its start date).
+        _make_event(models, db_session, 950002, 'Juicer Production',
+                    name='950002-JUICER-PRODUCTION-SPCLTY',
+                    start_days=5, due_days=6, estimated_time=540)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        verifier = ConstraintVerifier(models, db_session, run.id)
+        violations = verifier.verify_all()
+        assert violations == [], f"Violations:\n" + "\n".join(violations)
+
+        # Juicer Production must be scheduled on day 5 to jb1.
+        scheduled = _get_successful(db_session, models, run.id)
+        juicer_ps = [ps for ps in scheduled if ps.event_ref_num == 950002]
+        assert juicer_ps, "Juicer Production should be scheduled (primary beats Core)"
+        assert juicer_ps[0].employee_id == 'jb1', \
+            f"Juicer should go to primary rotation juicer jb1, got {juicer_ps[0].employee_id}"
+        juicer_day = juicer_ps[0].schedule_datetime.date() \
+            if isinstance(juicer_ps[0].schedule_datetime, datetime) \
+            else juicer_ps[0].schedule_datetime
+        assert juicer_day == posted_date.date(), \
+            f"Juicer should land on day {posted_date.date()}, got {juicer_day}"
+
+        # The bumped Core must either land on a different day (still scheduled
+        # somewhere in its window) OR be re-pinned to a different employee —
+        # but it must NOT share day 5 with jb1.
+        core_ps = [ps for ps in scheduled if ps.event_ref_num == 950001]
+        if core_ps:
+            core_day = core_ps[0].schedule_datetime.date() \
+                if isinstance(core_ps[0].schedule_datetime, datetime) \
+                else core_ps[0].schedule_datetime
+            same_day_same_emp = (core_day == posted_date.date()
+                                 and core_ps[0].employee_id == 'jb1')
+            assert not same_day_same_emp, \
+                "Core must be bumped off jb1's day 5 when Juicer takes that slot"
+
+    def test_juicer_falls_back_to_backup_only_on_pto(self, db_session, models):
+        """When the primary juicer has approved PTO, the Juicer Production
+        falls back to the rotation backup (not when there's merely a Core
+        conflict — that's covered by the bump-the-Core test above)."""
+        # Two juicer-trained employees: primary jb1, backup jb2
+        _make_employee(models, db_session, 'es1', 'Alice', 'Event Specialist')
+        _make_employee(models, db_session, 'jb1', 'Frank', 'Juicer Barista',
+                       juicer_trained=True)
+        _make_employee(models, db_session, 'jb2', 'Gina', 'Juicer Barista',
+                       juicer_trained=True)
+        db_session.flush()
+
+        # Rotation: primary=jb1, backup=jb2 every day
+        for dow in range(7):
+            _make_rotation(models, db_session, dow, 'juicer', 'jb1',
+                           backup_id='jb2')
+
+        # jb1 has approved time off on day 5 (the Juicer Production's start).
+        _make_time_off(models, db_session, 'jb1', start_days=5, end_days=5)
+
+        # Juicer Production pinned to day 5
+        _make_event(models, db_session, 960001, 'Juicer Production',
+                    name='960001-JUICER-PRODUCTION-SPCLTY',
+                    start_days=5, due_days=6, estimated_time=540)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        verifier = ConstraintVerifier(models, db_session, run.id)
+        violations = verifier.verify_all()
+        assert violations == [], f"Violations:\n" + "\n".join(violations)
+
+        scheduled = _get_successful(db_session, models, run.id)
+        juicer_ps = [ps for ps in scheduled if ps.event_ref_num == 960001]
+        assert juicer_ps, "Juicer Production should schedule to backup on PTO day"
+        assert juicer_ps[0].employee_id == 'jb2', \
+            f"Juicer should fall back to backup jb2, got {juicer_ps[0].employee_id}"
+
+    def test_juicer_bumps_core_with_no_room_core_fails(self, db_session, models):
+        """When a bumped Core has a tight window with nowhere to move, the
+        Juicer still schedules (wins priority) and the Core surfaces as a
+        manual-intervention failure."""
+        Schedule = models['Schedule']
+
+        setup_basic_team(models, db_session)
+        setup_rotations(models, db_session)
+
+        # Narrow-window Core: start=5, due=6 → exactly 1 valid day (day 5).
+        # Pre-posted to jb1 on day 5.  There is nowhere for it to move.
+        posted_core = _make_event(
+            models, db_session, 970001, 'Core',
+            name='970001-CORE-Narrow',
+            condition='Scheduled', start_days=5, due_days=6,
+            estimated_time=390,
+        )
+        posted_core.is_scheduled = True
+        db_session.flush()
+
+        sched = Schedule(
+            event_ref_num=970001,
+            employee_id='jb1',
+            schedule_datetime=_future(5),
+            shift_block=1,
+        )
+        db_session.add(sched)
+
+        # Juicer Production pinned to day 5 (competes with the Core).
+        _make_event(models, db_session, 970002, 'Juicer Production',
+                    name='970002-JUICER-PRODUCTION-SPCLTY',
+                    start_days=5, due_days=6, estimated_time=540)
+        db_session.commit()
+
+        run = _run_cpsat(db_session, models)
+        verifier = ConstraintVerifier(models, db_session, run.id)
+        violations = verifier.verify_all()
+        assert violations == [], f"Violations:\n" + "\n".join(violations)
+
+        scheduled = _get_successful(db_session, models, run.id)
+        juicer_ps = [ps for ps in scheduled if ps.event_ref_num == 970002]
+        assert juicer_ps, "Juicer Production should still win (higher priority)"
+        assert juicer_ps[0].employee_id == 'jb1', \
+            f"Juicer should go to primary rotation juicer, got {juicer_ps[0].employee_id}"
+
+        # The narrow-window Core cannot coexist with the Juicer on day 5 for
+        # jb1, so it must NOT appear on jb1 day 5 in the final schedule.
+        core_ps = [ps for ps in scheduled if ps.event_ref_num == 970001]
+        for ps in core_ps:
+            d = ps.schedule_datetime.date() \
+                if isinstance(ps.schedule_datetime, datetime) \
+                else ps.schedule_datetime
+            assert not (d == _future(5).date() and ps.employee_id == 'jb1'), \
+                "Narrow-window Core must not share jb1 day 5 with Juicer"

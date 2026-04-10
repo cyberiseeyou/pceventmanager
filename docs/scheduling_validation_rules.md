@@ -6,9 +6,9 @@ This document contains all validation rules for daily schedules. These rules are
 
 ## 1. Employee Assignment Rules
 
-### RULE-001: Single Core/Juicer Production Limit
+### RULE-001: One Primary Event Per Employee Per Day
 **Applies to:** All employees EXCEPT Club Supervisor  
-**Constraint:** Each employee should only be scheduled to **ONE** Core event OR **ONE** Juicer Production event per day.  
+**Constraint:** Each employee may be scheduled for at most **one primary event per day**. Primary events are **Core** and **Juicer Production**. Secondary events (Digitals, Freeosk, Supervisor, Juicer Survey, Other) are unlimited per day but require the same employee to also hold a primary event on that day (see RULE-005).  
 **Exception:** Club Supervisor is exempt from this rule.
 
 ### RULE-002: Primary Lead Daily Assignments
@@ -36,7 +36,7 @@ This document contains all validation rules for daily schedules. These rules are
 
 ### RULE-006: Juicer Production Exclusivity
 **Applies to:** Employees scheduled for Juicer Production  
-**Constraint:** If an employee is scheduled for Juicer Production, they should **NOT** be scheduled for a Core event on the same day.
+**Constraint:** An employee scheduled for Juicer Production on a given day may not also hold a Core on that same day (both are primary events — RULE-001 caps the total at one). When a Juicer Production needs the primary juicer's day and that juicer already has a Core posted, the Core must be bumped per RULE-022 rather than blocking the Juicer.
 
 ---
 
@@ -134,6 +134,14 @@ This document contains all validation rules for daily schedules. These rules are
 **Constraint:** Events should be scheduled based on their **due date** (earliest due date first).  
 **Exception:** This rule may be bypassed only to avoid violating RULE-020 (Duplicate Product Prevention).
 
+### RULE-022: Juicer Production Outranks Core (Bump-the-Core)
+**Applies to:** Juicer Production vs. Core primary-cap conflicts  
+**Constraint:** Juicer Production has strictly higher priority than Core. When the primary rotation juicer already has a Core event posted on the day a Juicer Production needs to run, the **Core must be bumped** to another day inside its own scheduling window to make room for the Juicer Production. Core events are window-flexible — they may land on any day within their `start_datetime ≤ d < due_datetime` range.
+
+### RULE-023: Backup Juicer Only on Approved PTO
+**Applies to:** Juicer Production rotation fallback  
+**Constraint:** The rotation backup juicer is used **only** when the primary rotation juicer has **approved time off** on the target day. A Core conflict on the primary juicer is NOT a reason to fall through to the backup — instead, bump the Core off that day per RULE-022. This preserves the intent of the rotation schedule (primary = default, backup = PTO coverage).
+
 ---
 
 ## Quick Reference: Day-Specific Rules
@@ -158,5 +166,5 @@ This document contains all validation rules for daily schedules. These rules are
 
 ---
 
-*Document last updated: 2026-01-01*
-*Total rules: 19*
+*Document last updated: 2026-04-10*
+*Total rules: 23*
