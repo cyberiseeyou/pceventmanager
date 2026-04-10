@@ -5,9 +5,9 @@ a fresh scheduler instance bound to an isolated test database. Tests
 assert exact outputs (employee, date, time) against the spec branches
 defined in docs/superpowers/specs/2026-04-10-scheduler-rewrite/.
 """
-import pytest
 from datetime import date, datetime, timedelta
-from typing import Any
+
+import pytest
 
 
 @pytest.fixture
@@ -76,8 +76,9 @@ def spec_assert(greedy_scheduler, models, db_session):
             assert ps.is_swap == is_swap, (
                 f"Event {event_ref_num}: expected is_swap={is_swap}, "
                 f"got {ps.is_swap}")
-            if bumped_event_ref_num is not None:
-                assert ps.bumped_event_ref_num == bumped_event_ref_num
+            assert ps.bumped_event_ref_num == bumped_event_ref_num, (
+                f"Event {event_ref_num}: expected bumped_event_ref_num "
+                f"{bumped_event_ref_num}, got {ps.bumped_event_ref_num}")
 
         def manual_review(self, run_id, event_ref_num, reason_contains=None):
             PendingSchedule = models['PendingSchedule']
