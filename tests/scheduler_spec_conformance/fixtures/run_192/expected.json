@@ -1,0 +1,142 @@
+{
+  "meta": {
+    "run_id": 192,
+    "description": "Expected outcomes per the 7-image spec (2026-04-10)",
+    "spec_version": "2026-04-10-scheduler-rewrite",
+    "source": ".claude/plans/glowing-fluttering-kazoo.md Pattern A+B",
+    "notes": [
+      "Juicer Production expected employees derived from the juicer rotation",
+      "(rotation_assignments rotation_type='juicer') + THOMAS's approved PTO",
+      "on Apr 11-12 and Apr 19-20. Mon=0 Python weekday convention.",
+      "Rotation: Mon CLAUDIA/THOMAS, Tue THOMAS/CLAUDIA, Wed CLAUDIA/THOMAS,",
+      "Thu THOMAS/CLAUDIA, Fri CLAUDIA/THOMAS, Sat THOMAS/CLAUDIA,",
+      "Sun CLAUDIA/Mat. Expected time 09:00:00 for all ESI Juicer Production.",
+      "",
+      "Core expected outcomes: wide-window Cores (>3 day window) are expected",
+      "to reach scheduled_success under the new primary-cap + window-flexible",
+      "Core rules. Narrow-window MDay Cores (May 8-11 batch, 3-day window)",
+      "compete with each other and with the bumped Cores from Juicer",
+      "productions on the same dates — legitimate capacity exhaustion is the",
+      "spec's expected behavior per Pattern A, so they land in manual_review."
+    ]
+  },
+  "juicer_productions": [
+    {
+      "project_ref_num": 31905589,
+      "expected_employee": "US935801",
+      "expected_date": "2026-04-11",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-04-11 Sat; Sat primary is THOMAS but he is on approved PTO Apr 11-12, so fall through to backup CLAUDIA per rule #4.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31905604,
+      "expected_employee": "US935801",
+      "expected_date": "2026-04-17",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-04-17 Fri; Fri primary is CLAUDIA, no PTO. Her posted Core 624232 must be bumped off Apr 17 per rule #3 (Juicer outranks Core).",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31905611,
+      "expected_employee": "US935801",
+      "expected_date": "2026-04-19",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-04-19 Sun; Sun primary is CLAUDIA, no PTO. Her posted Core 624429 must be bumped off Apr 19 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31905610,
+      "expected_employee": "US935801",
+      "expected_date": "2026-04-24",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-04-24 Fri; Fri primary is CLAUDIA, no PTO. Her posted Core 623906 must be bumped off Apr 24. THOMAS's own Core 622402 stays where it is — CLAUDIA is primary, only her Core is displaced.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31912624,
+      "expected_employee": "US935801",
+      "expected_date": "2026-05-01",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-01 Fri; Fri primary is CLAUDIA, no PTO. Her posted Core 622813 must be bumped off May 1 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31921525,
+      "expected_employee": "US863735",
+      "expected_date": "2026-05-02",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-02 Sat; Sat primary is THOMAS, no PTO. His posted Core 623542 must be bumped off May 2 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31921526,
+      "expected_employee": "US863735",
+      "expected_date": "2026-05-05",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-05 Tue; Tue primary is THOMAS, no PTO. His posted Core 625384 must be bumped off May 5 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31921535,
+      "expected_employee": "US935801",
+      "expected_date": "2026-05-06",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-06 Wed; Wed primary is CLAUDIA, no PTO. Her posted Core 623541 must be bumped off May 6 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31921537,
+      "expected_employee": "US863735",
+      "expected_date": "2026-05-07",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-07 Thu; Thu primary is THOMAS, no PTO. His posted Core 623535 must be bumped off May 7. CLAUDIA (backup) is NOT used per rule #4 — backup only on PTO.",
+      "spec_branches": ["JP6", "JP17"]
+    },
+    {
+      "project_ref_num": 31921534,
+      "expected_employee": "US935801",
+      "expected_date": "2026-05-08",
+      "expected_time": "09:00:00",
+      "notes": "ESI Juicer Production 2026-05-08 Fri; Fri primary is CLAUDIA, no PTO. Her posted Core 625221 must be bumped off May 8 per rule #3.",
+      "spec_branches": ["JP6", "JP17"]
+    }
+  ],
+  "cores": [
+    {
+      "project_ref_num": 31900647,
+      "expected_outcome": "scheduled_success",
+      "notes": "621735 Creatine Gummies — wide 14-day window (Mar 28 to Apr 11). Failed in run 192 as a post-review cross-run Core collision; under the new window-flexible Core rules the solver is expected to place it on a free day in the window."
+    },
+    {
+      "project_ref_num": 31909179,
+      "expected_outcome": "scheduled_success",
+      "notes": "622370 Cool Ranch Pretzel Twists — wide 8-day window (Apr 10 to Apr 18). Scheduled successfully in run 192; the new rules keep it as a success."
+    },
+    {
+      "project_ref_num": 31919461,
+      "expected_outcome": "scheduled_success",
+      "notes": "623531 JD FC Pork Patties — wide 14-day window (May 2 to May 16). Scheduled successfully in run 192; the new rules keep it as a success."
+    },
+    {
+      "project_ref_num": 31921531,
+      "expected_outcome": "scheduled_success",
+      "notes": "625758 Tuna Burger / Frozen Fish Nuggets — wide 14-day window (May 2 to May 16). Failed in run 192 as a post-review Core collision; under the new window-flexible Core rules it schedules cleanly per the plan's Pattern A analysis."
+    },
+    {
+      "project_ref_num": 31921484,
+      "expected_outcome": "manual_review",
+      "notes": "625550 MDay05.07-05.10 Avocado — narrow 3-day window (May 8 to May 11), MDay batch. Competes with the other May 8-10 MDay Cores and with the CLAUDIA-bumped Core from the May 8 Juicer Production. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+    },
+    {
+      "project_ref_num": 31922471,
+      "expected_outcome": "manual_review",
+      "notes": "624551 MDay05.07-05.10 Gold Kiwi/Honey Mango — narrow 3-day window (May 8 to May 11), MDay batch. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+    },
+    {
+      "project_ref_num": 31922475,
+      "expected_outcome": "manual_review",
+      "notes": "624555 MDay05.07-05.10 Cauliflower Pizza/Salad — narrow 3-day window (May 8 to May 11), MDay batch. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+    }
+  ]
+}

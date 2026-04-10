@@ -1,0 +1,142 @@
+[
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US814117",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US815021",
+    "monday": true,
+    "tuesday": false,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US854740",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US857761",
+    "monday": false,
+    "tuesday": true,
+    "wednesday": false,
+    "thursday": true,
+    "friday": false,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US863735",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US899165",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US913438",
+    "monday": false,
+    "tuesday": false,
+    "wednesday": false,
+    "thursday": false,
+    "friday": false,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US914335",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": false,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US920644",
+    "monday": false,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": false
+  },
+  {
+    "employee_id": "US935005",
+    "monday": false,
+    "tuesday": true,
+    "wednesday": false,
+    "thursday": true,
+    "friday": false,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US935801",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": true
+  },
+  {
+    "employee_id": "US936359",
+    "monday": false,
+    "tuesday": true,
+    "wednesday": false,
+    "thursday": true,
+    "friday": true,
+    "saturday": false,
+    "sunday": true
+  },
+  {
+    "employee_id": "US936374",
+    "monday": true,
+    "tuesday": true,
+    "wednesday": true,
+    "thursday": true,
+    "friday": true,
+    "saturday": true,
+    "sunday": true
+  }
+]

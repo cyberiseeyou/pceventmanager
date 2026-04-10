@@ -1,0 +1,86 @@
+[
+  {
+    "day_of_week": 0,
+    "rotation_type": "juicer",
+    "employee_id": "US935801",
+    "backup_employee_id": "US863735"
+  },
+  {
+    "day_of_week": 1,
+    "rotation_type": "juicer",
+    "employee_id": "US863735",
+    "backup_employee_id": "US935801"
+  },
+  {
+    "day_of_week": 2,
+    "rotation_type": "juicer",
+    "employee_id": "US935801",
+    "backup_employee_id": "US863735"
+  },
+  {
+    "day_of_week": 3,
+    "rotation_type": "juicer",
+    "employee_id": "US863735",
+    "backup_employee_id": "US935801"
+  },
+  {
+    "day_of_week": 4,
+    "rotation_type": "juicer",
+    "employee_id": "US935801",
+    "backup_employee_id": "US863735"
+  },
+  {
+    "day_of_week": 5,
+    "rotation_type": "juicer",
+    "employee_id": "US863735",
+    "backup_employee_id": "US935801"
+  },
+  {
+    "day_of_week": 6,
+    "rotation_type": "juicer",
+    "employee_id": "US935801",
+    "backup_employee_id": "US920644"
+  },
+  {
+    "day_of_week": 0,
+    "rotation_type": "primary_lead",
+    "employee_id": "US815021",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 1,
+    "rotation_type": "primary_lead",
+    "employee_id": "US857761",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 2,
+    "rotation_type": "primary_lead",
+    "employee_id": "US815021",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 3,
+    "rotation_type": "primary_lead",
+    "employee_id": "US857761",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 4,
+    "rotation_type": "primary_lead",
+    "employee_id": "US815021",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 5,
+    "rotation_type": "primary_lead",
+    "employee_id": "US857761",
+    "backup_employee_id": "US899165"
+  },
+  {
+    "day_of_week": 6,
+    "rotation_type": "primary_lead",
+    "employee_id": "US857761",
+    "backup_employee_id": "US899165"
+  }
+]
