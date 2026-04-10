@@ -1,0 +1,155 @@
+[
+  {
+    "project_ref_num": 31900647,
+    "project_name": "621735-MAP-Creatine Gummies (260130542957)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Scheduled",
+    "start_datetime": "2026-03-28T00:00:00",
+    "due_datetime": "2026-04-11T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31909179,
+    "project_name": "622370-MAP-Cool Ranch Pretzel Twists (260213543863)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Scheduled",
+    "start_datetime": "2026-04-10T00:00:00",
+    "due_datetime": "2026-04-18T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31919461,
+    "project_name": "623531-MAP-JD FC PORK PATTIES (260305545463)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Scheduled",
+    "start_datetime": "2026-05-02T00:00:00",
+    "due_datetime": "2026-05-16T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31921531,
+    "project_name": "625758-MAP-Tuna Burger / Frozen Fish Nuggets (260409548489)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-02T00:00:00",
+    "due_datetime": "2026-05-16T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31921484,
+    "project_name": "625550-MDay05.07-05.10-MAPPS-Avocado / Everything Bagel Seasoning / Cracker (260408548404)  - V2.1-C",
+    "event_type": "Core",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-08T00:00:00",
+    "due_datetime": "2026-05-11T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31922471,
+    "project_name": "624551-MDay05.07-05.10-CF-GoldKiwiandHoneyMango (260323546912)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-08T00:00:00",
+    "due_datetime": "2026-05-11T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31922475,
+    "project_name": "624555-MDay05.07-05.10-CF-CauliflowerPizza/Salad (260323546918)  - V2.1-CORE",
+    "event_type": "Core",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-08T00:00:00",
+    "due_datetime": "2026-05-11T00:00:00",
+    "estimated_time": 360
+  },
+  {
+    "project_ref_num": 31905589,
+    "project_name": "04-11 8HR-ES1-Juicer Production-SPCLTY (260310545870)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-04-11T00:00:00",
+    "due_datetime": "2026-04-18T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31905604,
+    "project_name": "04-17 8HR-ES1-Juicer Production-SPCLTY (260310545854)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-04-17T00:00:00",
+    "due_datetime": "2026-04-18T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31905611,
+    "project_name": "04-19 8HR-ES1-Juicer Production-SPCLTY (260310545872)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-04-19T00:00:00",
+    "due_datetime": "2026-04-25T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31905610,
+    "project_name": "04-24 8HR-ES1-Juicer Production-SPCLTY (260310545868)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-04-24T00:00:00",
+    "due_datetime": "2026-04-25T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31912624,
+    "project_name": "05-01 8HR-ES1-Juicer Production-SPCLTY (260324547078)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-01T00:00:00",
+    "due_datetime": "2026-05-02T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31921525,
+    "project_name": "05-02 8HR-ES1-Juicer Production-SPCLTY (260409548470)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-02T00:00:00",
+    "due_datetime": "2026-05-09T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31921526,
+    "project_name": "05-05 8HR-ES1-Juicer Production-SPCLTY (260409548471)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-05T00:00:00",
+    "due_datetime": "2026-05-09T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31921535,
+    "project_name": "05-06 8HR-ES1-Juicer Production-SPCLTY (260409548473)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-06T00:00:00",
+    "due_datetime": "2026-05-09T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31921537,
+    "project_name": "05-07 8HR-ES1-Juicer Production-SPCLTY (260409548476)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-07T00:00:00",
+    "due_datetime": "2026-05-09T00:00:00",
+    "estimated_time": 480
+  },
+  {
+    "project_ref_num": 31921534,
+    "project_name": "05-08 8HR-ES1-Juicer Production-SPCLTY (260409548466)  - ES1",
+    "event_type": "Juicer Production",
+    "condition": "Unstaffed",
+    "start_datetime": "2026-05-08T00:00:00",
+    "due_datetime": "2026-05-09T00:00:00",
+    "estimated_time": 480
+  }
+]

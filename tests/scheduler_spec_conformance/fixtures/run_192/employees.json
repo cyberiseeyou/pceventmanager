@@ -1,0 +1,100 @@
+[
+  {
+    "id": "SHANNON_FIELDS",
+    "job_title": "Event Specialist",
+    "is_active": false,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US814117",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US815021",
+    "job_title": "Lead Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US854740",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US857761",
+    "job_title": "Lead Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US863735",
+    "job_title": "Juicer Barista",
+    "is_active": true,
+    "juicer_trained": true,
+    "termination_date": null
+  },
+  {
+    "id": "US899165",
+    "job_title": "Lead Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US913438",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US914335",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US920644",
+    "job_title": "Club Supervisor",
+    "is_active": true,
+    "juicer_trained": true,
+    "termination_date": null
+  },
+  {
+    "id": "US935005",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US935801",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": true,
+    "termination_date": null
+  },
+  {
+    "id": "US936359",
+    "job_title": "Event Specialist",
+    "is_active": true,
+    "juicer_trained": false,
+    "termination_date": null
+  },
+  {
+    "id": "US936374",
+    "job_title": "Event Specialist",
+    "is_active": false,
+    "juicer_trained": false,
+    "termination_date": null
+  }
+]

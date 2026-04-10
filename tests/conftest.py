@@ -53,3 +53,21 @@ def runner(app):
 def models(app):
     """Get models from registry."""
     return get_models()
+
+
+@pytest.fixture
+def force_cpsat(app):
+    """Force CPSAT_ENABLED=True for CP-SAT tests during the 2026-04-10 rewrite.
+
+    Used by test_cpsat_stress.py and test_cpsat_scheduler.py, which instantiate
+    CPSATSchedulingEngine directly and rely on the solver being enabled. This
+    fixture overrides the new production default (CPSAT_ENABLED=False) for the
+    duration of each test and restores the previous value afterward.
+
+    TODO(plan-08): remove this fixture when plans 02-07 complete and plan 08
+    retires the CPSAT_ENABLED flag entirely.
+    """
+    old = app.config.get('CPSAT_ENABLED', False)
+    app.config['CPSAT_ENABLED'] = True
+    yield
+    app.config['CPSAT_ENABLED'] = old

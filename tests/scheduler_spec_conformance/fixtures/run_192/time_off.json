@@ -1,0 +1,382 @@
+[
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2025-12-30",
+    "end_date": "2026-01-03"
+  },
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2026-01-08",
+    "end_date": "2026-01-08"
+  },
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2026-01-14",
+    "end_date": "2026-01-15"
+  },
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2026-01-21",
+    "end_date": "2026-01-22"
+  },
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2026-01-28",
+    "end_date": "2026-01-28"
+  },
+  {
+    "employee_id": "SHANNON_FIELDS",
+    "start_date": "2026-03-04",
+    "end_date": "2026-03-05"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2025-12-09",
+    "end_date": "2025-12-09"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2025-12-11",
+    "end_date": "2025-12-11"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2025-12-16",
+    "end_date": "2025-12-16"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2025-12-26",
+    "end_date": "2025-12-28"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-02",
+    "end_date": "2026-01-02"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-03",
+    "end_date": "2026-01-03"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-08",
+    "end_date": "2026-01-08"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-13",
+    "end_date": "2026-01-13"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-14",
+    "end_date": "2026-01-14"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-19",
+    "end_date": "2026-01-19"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-01-29",
+    "end_date": "2026-01-29"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-02-03",
+    "end_date": "2026-02-03"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-02-17",
+    "end_date": "2026-02-17"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-03-07",
+    "end_date": "2026-03-07"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-03-17",
+    "end_date": "2026-03-17"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-03-19",
+    "end_date": "2026-03-19"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-03-25",
+    "end_date": "2026-03-25"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-04-01",
+    "end_date": "2026-04-01"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-04-14",
+    "end_date": "2026-04-14"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-04-21",
+    "end_date": "2026-04-21"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-04-23",
+    "end_date": "2026-04-23"
+  },
+  {
+    "employee_id": "US814117",
+    "start_date": "2026-05-11",
+    "end_date": "2026-05-11"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2025-10-02",
+    "end_date": "2025-10-02"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2025-12-04",
+    "end_date": "2025-12-04"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2025-12-06",
+    "end_date": "2025-12-06"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-03"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-01-20",
+    "end_date": "2026-01-20"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-02-05",
+    "end_date": "2026-02-05"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-02-18",
+    "end_date": "2026-02-18"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-03-04",
+    "end_date": "2026-03-05"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-03-11",
+    "end_date": "2026-03-11"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-03-18",
+    "end_date": "2026-03-18"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-04-08",
+    "end_date": "2026-04-09"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-04-21",
+    "end_date": "2026-04-21"
+  },
+  {
+    "employee_id": "US815021",
+    "start_date": "2026-04-28",
+    "end_date": "2026-04-28"
+  },
+  {
+    "employee_id": "US854740",
+    "start_date": "2025-12-28",
+    "end_date": "2026-01-05"
+  },
+  {
+    "employee_id": "US854740",
+    "start_date": "2026-01-17",
+    "end_date": "2026-01-17"
+  },
+  {
+    "employee_id": "US854740",
+    "start_date": "2026-03-30",
+    "end_date": "2026-03-30"
+  },
+  {
+    "employee_id": "US854740",
+    "start_date": "2026-04-06",
+    "end_date": "2026-04-06"
+  },
+  {
+    "employee_id": "US857761",
+    "start_date": "2025-12-09",
+    "end_date": "2025-12-09"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2025-12-04",
+    "end_date": "2025-12-04"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-01-04",
+    "end_date": "2026-01-06"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-01-18",
+    "end_date": "2026-01-18"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-01-21",
+    "end_date": "2026-01-21"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-03-24",
+    "end_date": "2026-03-24"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-03-29",
+    "end_date": "2026-03-30"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-04-05",
+    "end_date": "2026-04-06"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-04-11",
+    "end_date": "2026-04-12"
+  },
+  {
+    "employee_id": "US863735",
+    "start_date": "2026-04-19",
+    "end_date": "2026-04-20"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2025-12-23",
+    "end_date": "2025-12-23"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2026-01-06",
+    "end_date": "2026-01-07"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2026-03-11",
+    "end_date": "2026-03-11"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2026-03-23",
+    "end_date": "2026-03-23"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2026-04-02",
+    "end_date": "2026-04-02"
+  },
+  {
+    "employee_id": "US899165",
+    "start_date": "2026-04-06",
+    "end_date": "2026-04-06"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2025-12-02",
+    "end_date": "2025-12-02"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2025-12-10",
+    "end_date": "2025-12-10"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2025-12-20",
+    "end_date": "2025-12-20"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2025-12-30",
+    "end_date": "2025-12-31"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2026-05-11",
+    "end_date": "2026-05-11"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2026-07-02",
+    "end_date": "2026-07-14"
+  },
+  {
+    "employee_id": "US914335",
+    "start_date": "2026-09-17",
+    "end_date": "2026-09-21"
+  },
+  {
+    "employee_id": "US935005",
+    "start_date": "2026-03-06",
+    "end_date": "2026-03-15"
+  },
+  {
+    "employee_id": "US935005",
+    "start_date": "2026-03-20",
+    "end_date": "2026-03-20"
+  },
+  {
+    "employee_id": "US935005",
+    "start_date": "2026-03-23",
+    "end_date": "2026-03-27"
+  },
+  {
+    "employee_id": "US935005",
+    "start_date": "2026-03-30",
+    "end_date": "2026-03-30"
+  },
+  {
+    "employee_id": "US935005",
+    "start_date": "2026-05-01",
+    "end_date": "2026-12-31"
+  },
+  {
+    "employee_id": "US936359",
+    "start_date": "2026-04-14",
+    "end_date": "2026-04-14"
+  },
+  {
+    "employee_id": "US936359",
+    "start_date": "2026-04-16",
+    "end_date": "2026-04-16"
+  },
+  {
+    "employee_id": "US936374",
+    "start_date": "2026-04-08",
+    "end_date": "2026-12-08"
+  }
+]

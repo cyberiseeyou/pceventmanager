@@ -16,6 +16,16 @@ from collections import defaultdict
 from datetime import datetime, timedelta, date, time
 
 
+@pytest.fixture(autouse=True)
+def _auto_force_cpsat(force_cpsat):
+    """Module-level autouse: every test in this file forces CPSAT_ENABLED=True.
+
+    Delegates to the shared `force_cpsat` fixture in tests/conftest.py.
+    TODO(plan-08): remove when CPSAT_ENABLED flag is retired.
+    """
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
