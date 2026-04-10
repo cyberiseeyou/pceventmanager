@@ -35,10 +35,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/notification-modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/bottom-nav.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/app-lock.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="{% if current_user_role == 'specialist' %}role-specialist{% elif current_user_role == 'lead' %}role-lead{% endif %}">
+<body class="{% if current_user_role == 'specialist' %}role-specialist{% elif current_user_role == 'lead' %}role-lead{% endif %}" {% if current_user_role %}data-user-role="{{ current_user_role }}"{% endif %}>
     <!-- Offline status banner -->
     <div id="offline-banner" class="offline-banner" role="alert" aria-live="polite" hidden>
         You are currently offline. Some features may be unavailable.
@@ -865,6 +866,11 @@
     {% if current_user_role in ('specialist', 'lead') %}
     <!-- Schedule change badge polling (60s) -->
     <script src="{{ url_for('static', filename='js/components/schedule-change-badge.js') }}"></script>
+    {% endif %}
+
+    {% if current_user_role %}
+    <!-- App lock screen for persistent sessions -->
+    <script src="{{ url_for('static', filename='js/components/app-lock.js') }}"></script>
     {% endif %}
 
     <!-- PWA Service Worker Registration, Install Prompt & Offline Detection -->

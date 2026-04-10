@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Activity - Product Connections Scheduler{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <h2>Sync Activity</h2>
+
+    <div class="sync-status-bar" id="sync-status-bar">
+        Loading sync status...
+    </div>
+
+    <div class="sync-filters">
+        <a href="{{ url_for('sync.changes_page') }}" class="btn btn-sm {% if not change_type %}btn-primary{% else %}btn-outline{% endif %}">All</a>
+        <a href="{{ url_for('sync.changes_page', type='new_event') }}" class="btn btn-sm {% if change_type == 'new_event' %}btn-primary{% else %}btn-outline{% endif %}">New Events</a>
+        <a href="{{ url_for('sync.changes_page', type='cancelled') }}" class="btn btn-sm {% if change_type == 'cancelled' %}btn-primary{% else %}btn-outline{% endif %}">Cancelled</a>
+        <a href="{{ url_for('sync.changes_page', type='modified') }}" class="btn btn-sm {% if change_type == 'modified' %}btn-primary{% else %}btn-outline{% endif %}">Modified</a>
+        <a href="{{ url_for('sync.changes_page', type='conflict') }}" class="btn btn-sm {% if change_type == 'conflict' %}btn-primary{% else %}btn-outline{% endif %}">Conflicts</a>
+    </div>
+
+    {% if changes %}
+    <div class="sync-change-list">
+        {% for change in changes %}
+        <div class="sync-change-item sync-change-{{ change.change_type }} {% if change.is_conflict %}sync-conflict{% endif %}">
+            <div class="sync-change-header">
+                <span class="sync-change-badge badge-{{ change.change_type }}">
+                    {% if change.change_type == 'new_event' %}New
+                    {% elif change.change_type == 'cancelled' %}Cancelled
+                    {% elif change.change_type == 'modified' %}Modified
+                    {% elif change.change_type == 'conflict' %}Conflict
+                    {% endif %}
+                </span>
+                <span class="sync-change-time">{{ change.detected_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            </div>
+            <div class="sync-change-summary">{{ change.summary }}</div>
+            {% if change.field_changes %}
+            <details class="sync-change-details">
+                <summary>View changes</summary>
+                <pre>{{ change.field_changes }}</pre>
+            </details>
+            {% endif %}
+            {% if change.is_conflict and not change.resolved %}
+            <div class="sync-change-actions">
+                <a href="{{ url_for('sync.conflicts_page') }}" class="btn btn-sm btn-warning">Review Conflict</a>
+            </div>
+            {% elif change.resolved %}
+            <div class="sync-change-resolved">Resolved{% if change.resolution_notes %}: {{ change.resolution_notes }}{% endif %}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total > per_page %}
+    <div class="sync-pagination">
+        {% if page > 1 %}
+        <a href="{{ url_for('sync.changes_page', page=page-1, type=change_type) }}" class="btn btn-sm btn-outline">Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ (total // per_page) + (1 if total % per_page else 0) }}</span>
+        {% if page * per_page < total %}
+        <a href="{{ url_for('sync.changes_page', page=page+1, type=change_type) }}" class="btn btn-sm btn-outline">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="sync-empty">
+        <p>No sync changes recorded{% if change_type %} for type "{{ change_type }}"{% endif %}.</p>
+        <p class="text-muted">The background sync daemon checks for changes every 5 minutes.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .sync-status-bar {
+        background: var(--bg-secondary, #f5f5f5);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+    }
+    .sync-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .sync-change-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .sync-change-item {
+        background: var(--bg-card, #fff);
+        border: 1px solid var(--border-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        border-left: 4px solid var(--border-color, #e0e0e0);
+    }
+    .sync-change-item.sync-change-new_event { border-left-color: #4caf50; }
+    .sync-change-item.sync-change-cancelled { border-left-color: #9e9e9e; }
+    .sync-change-item.sync-change-modified { border-left-color: #2196f3; }
+    .sync-change-item.sync-conflict { border-left-color: #ff9800; }
+    .sync-change-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.25rem;
+    }
+    .sync-change-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .badge-new_event { background: #e8f5e9; color: #2e7d32; }
+    .badge-cancelled { background: #f5f5f5; color: #616161; }
+    .badge-modified { background: #e3f2fd; color: #1565c0; }
+    .badge-conflict { background: #fff3e0; color: #e65100; }
+    .sync-change-time { font-size: 0.75rem; color: var(--text-muted, #999); }
+    .sync-change-summary { font-size: 0.875rem; }
+    .sync-change-details { margin-top: 0.5rem; }
+    .sync-change-details pre {
+        background: var(--bg-secondary, #f5f5f5);
+        padding: 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        overflow-x: auto;
+    }
+    .sync-change-resolved {
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        color: #4caf50;
+    }
+    .sync-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .sync-empty { text-align: center; padding: 2rem; color: var(--text-muted, #999); }
+</style>
+
+<script>
+    // Load sync status on page load
+    fetch('/sync/api/status')
+        .then(r => r.json())
+        .then(data => {
+            const bar = document.getElementById('sync-status-bar');
+            if (data.healthy) {
+                const lastSync = data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Unknown';
+                bar.innerHTML = `Daemon healthy | Last sync: ${lastSync} | ${data.duration || '?'}s | ` +
+                    `${data.unresolved_conflicts} unresolved conflicts`;
+                bar.style.borderLeft = '4px solid #4caf50';
+            } else {
+                bar.innerHTML = 'Sync daemon not running or has not synced recently.';
+                bar.style.borderLeft = '4px solid #ff9800';
+            }
+        })
+        .catch(() => {
+            document.getElementById('sync-status-bar').textContent = 'Failed to load sync status.';
+        });
+</script>
+{% endblock %}

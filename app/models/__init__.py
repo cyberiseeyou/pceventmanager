@@ -21,6 +21,8 @@ from .lost_demo import create_lost_demo_model
 from .schedule_change_notification import create_schedule_change_notification_model
 from .push_subscription import create_push_subscription_model
 from .calloff import create_calloff_models
+from .sync_change_log import create_sync_change_log_model
+from .webauthn_credential import create_webauthn_credential_model
 
 
 def init_models(db):
@@ -54,6 +56,8 @@ def init_models(db):
     ScheduleChangeNotification = create_schedule_change_notification_model(db)
     PushSubscription = create_push_subscription_model(db)
     EmployeeCalloff, CalloffAttachment = create_calloff_models(db)
+    SyncChangeLog = create_sync_change_log_model(db)
+    WebAuthnCredential = create_webauthn_credential_model(db)
 
     return {
         'Employee': Employee,
@@ -93,6 +97,8 @@ def init_models(db):
         'PushSubscription': PushSubscription,
         'EmployeeCalloff': EmployeeCalloff,
         'CalloffAttachment': CalloffAttachment,
+        'SyncChangeLog': SyncChangeLog,
+        'WebAuthnCredential': WebAuthnCredential,
     }
 
 

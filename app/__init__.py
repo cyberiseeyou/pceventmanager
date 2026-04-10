@@ -284,6 +284,9 @@ def register_blueprints(app, db, models):
     from app.routes.api_calloffs import api_calloffs_bp
     app.register_blueprint(api_calloffs_bp)
 
+    from app.routes.sync import sync_bp
+    app.register_blueprint(sync_bp)
+
     # Configure CSRF exemptions for specific routes (after blueprint registration)
     if 'auth.login' in app.view_functions:
         csrf.exempt(app.view_functions['auth.login'])
@@ -313,6 +316,14 @@ def setup_background_tasks(app):
         with app.app_context():
             session_manager.cleanup_expired_sessions()
 
+    def run_crossmark_sync():
+        """Background task to sync from Crossmark MVRetail API."""
+        with app.app_context():
+            if not app.config.get('SYNC_ENABLED'):
+                return
+            from app.services.sync_daemon import run_sync_cycle
+            run_sync_cycle()
+
     # Create and start background scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(
@@ -321,6 +332,15 @@ def setup_background_tasks(app):
         id='walmart_session_cleanup',
         name='Cleanup expired Walmart sessions',
         replace_existing=True
+    )
+    scheduler.add_job(
+        func=run_crossmark_sync,
+        trigger=IntervalTrigger(seconds=300),
+        id='crossmark_sync_daemon',
+        name='Crossmark MVRetail background sync',
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=60
     )
     scheduler.start()
 
