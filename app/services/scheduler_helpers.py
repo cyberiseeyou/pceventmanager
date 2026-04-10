@@ -13,10 +13,16 @@ Week = Sunday through Saturday inclusive (per spec 01-key-concepts.md K9).
 from collections import defaultdict
 from datetime import date, timedelta
 
+from sqlalchemy import func
+
 
 # Keep these in sync with
 # docs/superpowers/specs/2026-04-10-scheduler-rewrite/01-key-concepts.md
 PRIMARY_EVENT_TYPES = frozenset({'Core', 'Juicer Production'})
+
+# Day-of-week column names in the order matching Python's date.weekday() (Mon=0..Sun=6)
+_WEEKDAY_COLUMNS = ('monday', 'tuesday', 'wednesday', 'thursday',
+                    'friday', 'saturday', 'sunday')
 
 
 class RunCache:
@@ -25,6 +31,9 @@ class RunCache:
     Holds precomputed availability, rotation, and schedule-state data for a
     single SchedulerRunHistory row. Mutated as the run progresses to reflect
     newly-proposed PendingSchedule rows.
+
+    The `run_id` parameter is stored for use by plans 02-07 category handlers,
+    which may need to cross-reference in-run PendingSchedule rows by run id.
     """
 
     def __init__(self, db_session, models, run_id: int):
@@ -42,6 +51,8 @@ class RunCache:
     # -------- availability --------
 
     def is_available(self, emp_id: str, d: date) -> bool:
+        if emp_id is None:
+            return False
         key = (emp_id, d)
         if key in self._available:
             return self._available[key]
@@ -52,7 +63,7 @@ class RunCache:
     def _compute_available(self, emp_id: str, d: date) -> bool:
         EmployeeTimeOff = self.models['EmployeeTimeOff']
         EmployeeWeeklyAvailability = self.models['EmployeeWeeklyAvailability']
-        EmployeeAvailabilityOverride = self.models.get('EmployeeAvailabilityOverride')
+        EmployeeAvailabilityOverride = self.models['EmployeeAvailabilityOverride']
 
         # Approved time off?
         off = (self.db.query(EmployeeTimeOff.id)
@@ -64,22 +75,19 @@ class RunCache:
         if off:
             return False
 
-        day_cols = ['monday', 'tuesday', 'wednesday', 'thursday',
-                    'friday', 'saturday', 'sunday']
-        col = day_cols[d.weekday()]
+        col = _WEEKDAY_COLUMNS[d.weekday()]
 
-        if EmployeeAvailabilityOverride is not None:
-            ov = (self.db.query(EmployeeAvailabilityOverride)
-                  .filter(EmployeeAvailabilityOverride.employee_id == emp_id,
-                          EmployeeAvailabilityOverride.start_date <= d,
-                          EmployeeAvailabilityOverride.end_date >= d)
-                  .first())
-            if ov is not None:
-                val = getattr(ov, col)
-                if val is False:
-                    return False
-                if val is True:
-                    return True
+        ov = (self.db.query(EmployeeAvailabilityOverride)
+              .filter(EmployeeAvailabilityOverride.employee_id == emp_id,
+                      EmployeeAvailabilityOverride.start_date <= d,
+                      EmployeeAvailabilityOverride.end_date >= d)
+              .first())
+        if ov is not None:
+            val = getattr(ov, col)
+            if val is False:
+                return False
+            if val is True:
+                return True
 
         wa = (self.db.query(EmployeeWeeklyAvailability)
               .filter_by(employee_id=emp_id)
@@ -92,7 +100,13 @@ class RunCache:
     # -------- primary events --------
 
     def record_primary(self, emp_id: str, d: date, event_type: str, event_ref_num: int) -> None:
-        """Record that a newly-scheduled primary event exists for (emp, day)."""
+        """Record that a newly-scheduled primary event exists for (emp, day).
+
+        INVARIANT: callers must only pass newly-proposed PendingSchedule assignments
+        from the current run. Never pass rows already in Schedule — `primaries_this_week`
+        sums the in-run cache AND the DB, so passing a posted Schedule here would
+        cause double-counting.
+        """
         if event_type not in PRIMARY_EVENT_TYPES:
             return
         self._events_by_emp_day[(emp_id, d)].append((event_ref_num, event_type))
@@ -102,6 +116,8 @@ class RunCache:
     def has_primary_event(self, emp_id: str, d: date) -> bool:
         """True iff this employee has at least one primary event on day d,
         counting both posted Schedule rows and in-run PendingSchedule rows."""
+        if emp_id is None:
+            return False
         key = (emp_id, d)
         if key in self._events_by_emp_day:
             for (_ref, etype) in self._events_by_emp_day[key]:
@@ -111,7 +127,6 @@ class RunCache:
         return self._query_has_primary_from_db(emp_id, d)
 
     def _query_has_primary_from_db(self, emp_id: str, d: date) -> bool:
-        from sqlalchemy import func
         Schedule = self.models['Schedule']
         Event = self.models['Event']
         posted = (self.db.query(Schedule.id)
@@ -130,7 +145,6 @@ class RunCache:
         return from_cache + from_db
 
     def _query_primaries_this_week_from_db(self, emp_id: str, week_start: date) -> int:
-        from sqlalchemy import func
         Schedule = self.models['Schedule']
         Event = self.models['Event']
         week_end = week_start + timedelta(days=6)
