@@ -60,7 +60,7 @@ class Config:
     ML_SHADOW_MODE = config('ML_SHADOW_MODE', default=False, cast=bool)  # Log predictions without using them
 
     # CP-SAT Constraint Solver settings
-    CPSAT_ENABLED = config('CPSAT_ENABLED', default=True, cast=bool)
+    CPSAT_ENABLED = config('CPSAT_ENABLED', default=False, cast=bool)
     CPSAT_TIME_LIMIT = config('CPSAT_TIME_LIMIT', default=15, cast=int)  # Solver time limit in seconds
 
     # Web Push VAPID keys (for schedule change notifications)

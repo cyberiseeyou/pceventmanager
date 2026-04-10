@@ -16,6 +16,15 @@ from collections import defaultdict
 from datetime import datetime, timedelta, date, time
 
 
+@pytest.fixture(autouse=True)
+def _force_cpsat(app):
+    """Existing stress tests all assume CP-SAT. Force-enable it."""
+    old = app.config.get('CPSAT_ENABLED', False)
+    app.config['CPSAT_ENABLED'] = True
+    yield
+    app.config['CPSAT_ENABLED'] = old
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

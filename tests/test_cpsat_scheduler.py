@@ -9,6 +9,15 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, date, time
 
 
+@pytest.fixture(autouse=True)
+def _force_cpsat(app):
+    """Existing stress tests all assume CP-SAT. Force-enable it."""
+    old = app.config.get('CPSAT_ENABLED', False)
+    app.config['CPSAT_ENABLED'] = True
+    yield
+    app.config['CPSAT_ENABLED'] = old
+
+
 def _future(days=3):
     """Return a datetime `days` ahead from today."""
     return datetime.now() + timedelta(days=days)
