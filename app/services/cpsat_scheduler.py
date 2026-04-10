@@ -77,6 +77,10 @@ SUPERVISOR_PREFERRED_TYPES = {'Supervisor', 'Digitals', 'Freeosk',
                               'Juicer', 'Juicer Production', 'Juicer Survey', 'Juicer Deep Clean'}
 # Subset of Juicer types that count toward H22/H23 daily/weekly production limits
 JUICER_PRODUCTION_TYPES = {'Juicer Production', 'Juicer'}
+# Primary event types: only one per employee per day (enforced by the unified
+# primary cap, replacing the legacy H11+H13+H22 trio).  Secondaries (Digitals,
+# Freeosk, Supervisor, Juicer Survey, Other) ride along with a primary.
+PRIMARY_EVENT_TYPES = {'Core'} | JUICER_PRODUCTION_TYPES
 # Juicer types that must be pinned to their start date
 JUICER_START_DATE_PINNED = {'Juicer', 'Juicer Production', 'Juicer Deep Clean', 'Juicer Survey'}
 # Digital event types that must be completed on their start date
@@ -647,6 +651,9 @@ class CPSATSchedulingEngine:
         self.existing_core_count_by_emp_week = defaultdict(int)  # (emp_id, week_idx) -> int
         self.existing_juicer_count_by_emp_day = defaultdict(int)
         self.existing_juicer_count_by_emp_week = defaultdict(int)
+        # Combined count of Core + Juicer Production per emp-day — used by the
+        # unified primary-cap constraint (replaces the legacy H11+H13+H22 trio).
+        self.existing_primary_count_by_emp_day = defaultdict(int)
         self.existing_minutes_by_emp_week = defaultdict(int)
 
         # Compute week_start reference (same as _compute_weeks) so we can map
@@ -664,12 +671,15 @@ class CPSATSchedulingEngine:
 
             core_count = sum(1 for e in fixed_entries if e['event_type'] == 'Core')
             juicer_count = sum(1 for e in fixed_entries if e['event_type'] in JUICER_PRODUCTION_TYPES)
+            primary_count = sum(1 for e in fixed_entries if e['event_type'] in PRIMARY_EVENT_TYPES)
             total_minutes = sum(e.get('estimated_time', 60) for e in fixed_entries)
 
             if core_count > 0:
                 self.existing_core_count_by_emp_day[(emp_id, day)] = core_count
             if juicer_count > 0:
                 self.existing_juicer_count_by_emp_day[(emp_id, day)] = juicer_count
+            if primary_count > 0:
+                self.existing_primary_count_by_emp_day[(emp_id, day)] = primary_count
 
             # Compute week index for this date using the same reference
             days_since = (day - week_start).days
@@ -724,6 +734,8 @@ class CPSATSchedulingEngine:
                 self.existing_core_count_by_emp_day[(emp_id, sd)] += 1
             if etype in JUICER_PRODUCTION_TYPES:
                 self.existing_juicer_count_by_emp_day[(emp_id, sd)] += 1
+            if etype in PRIMARY_EVENT_TYPES:
+                self.existing_primary_count_by_emp_day[(emp_id, sd)] += 1
 
             days_since = (sd - week_start_ref).days
             if days_since >= 0:
@@ -874,11 +886,16 @@ class CPSATSchedulingEngine:
         start = max(e_start, earliest)
         valid = [d for d in self.valid_days if start <= d < e_due]
 
-        # Bumpable events are pinned to their currently-scheduled day(s) ONLY.
-        # The solver can displace them (replace with a higher-priority event in
-        # the same slot) but cannot move them to a different day — this protects
-        # the employee's existing day/time assignment.
+        # Bumpable events are generally pinned to their currently-scheduled
+        # day(s) — the solver can displace them (replace with a higher-priority
+        # event in the same slot) but cannot move them to a different day.
+        # EXCEPTION: Core is window-flexible per the primary/secondary rules
+        # (see docs/scheduling_validation_rules.md RULE-001/RULE-022).  When a
+        # higher-priority primary (Juicer Production) needs the Core's slot,
+        # the Core must be free to land anywhere else inside its window.
         if event.id in self.bumpable_event_ids:
+            if etype == 'Core':
+                return valid
             schedules = self.bumpable_schedule_map.get(event.project_ref_num, [])
             pinned_days = set()
             for s in schedules:
@@ -1052,25 +1069,23 @@ class CPSATSchedulingEngine:
                             self.v_assign_day[(eid, d)] <= 1
                         )
 
-        # H11: Max 1 Core event per employee per day
+        # H11 + H13 + H22 unified as a single "primary cap": at most 1 primary
+        # event (Core or Juicer Production) per employee per day. This lets the
+        # objective function decide which primary wins when both a Core and a
+        # Juicer Production compete for the same slot — in practice the
+        # type-priority weight (Juicer > Core) bumps the Core out.
         core_events = [e for e in self.events if self._get_event_type(e) == 'Core']
-        self._add_emp_day_limits(model, core_events, MAX_CORE_EVENTS_PER_DAY)
+        juicer_prod_events = [e for e in self.events
+                              if self._get_event_type(e) in JUICER_PRODUCTION_TYPES]
+        primary_events = [e for e in self.events
+                          if self._get_event_type(e) in PRIMARY_EVENT_TYPES]
+        self._add_emp_day_limits(
+            model, primary_events, 1,
+            existing_counts=self.existing_primary_count_by_emp_day,
+        )
 
         # H12: Max 6 Core events per employee per week
         self._add_emp_week_limits(model, core_events, MAX_CORE_EVENTS_PER_WEEK)
-
-        # H13: Juicer-Core mutual exclusion (same day, same employee)
-        juicer_prod_events = [e for e in self.events
-                              if self._get_event_type(e) in JUICER_PRODUCTION_TYPES]
-        self._add_mutual_exclusion_per_day(model, juicer_prod_events, core_events)
-
-        # H22: Max 1 Juicer Production per employee per day
-        juicer_prod_events = [e for e in self.events
-                              if self._get_event_type(e) in JUICER_PRODUCTION_TYPES]
-        self._add_emp_day_limits(
-            model, juicer_prod_events, 1,
-            existing_counts=self.existing_juicer_count_by_emp_day,
-        )
 
         # H23: Max 5 Juicer Production per employee per week (HARD — was soft S10)
         self._add_emp_week_limits(
@@ -1237,68 +1252,6 @@ class CPSATSchedulingEngine:
 
                 if time_terms:
                     model.Add(sum(time_terms) <= remaining)
-
-    def _add_mutual_exclusion_per_day(self, model, type_a_events, type_b_events):
-        """H13: Two event types can't share the same employee on the same day.
-
-        Also checks existing/pending schedules: if an employee already has
-        a type-B event on day d, all type-A events for that employee on
-        that day are forbidden (and vice versa).
-        """
-        type_a_names = {self._get_event_type(e) for e in type_a_events} or set()
-        type_b_names = {self._get_event_type(e) for e in type_b_events} or set()
-        # Also include the canonical type names for Juicer-Core exclusion
-        # so Phase 3 can detect existing Juicer/Core assignments
-        if not type_a_names:
-            type_a_names = JUICER_PRODUCTION_TYPES
-        if not type_b_names:
-            type_b_names = {'Core'}
-
-        # Pre-compute existing (emp_id, day) with type-A or type-B
-        existing_a = set()  # (emp_id, day) pairs
-        existing_b = set()
-        for (emp_id, day), entries in self.existing_by_emp_day.items():
-            for entry in entries:
-                if entry['event_type'] in type_a_names:
-                    existing_a.add((emp_id, day))
-                if entry['event_type'] in type_b_names:
-                    existing_b.add((emp_id, day))
-
-        for emp_id in self.employee_ids:
-            for d in self.valid_days:
-                # If existing type-B on this emp+day, forbid all type-A
-                if (emp_id, d) in existing_b:
-                    for event in type_a_events:
-                        ind = self._get_indicator(model, event.id, emp_id, d)
-                        if ind is not None:
-                            model.Add(ind == 0)
-                    continue
-                # If existing type-A on this emp+day, forbid all type-B
-                if (emp_id, d) in existing_a:
-                    for event in type_b_events:
-                        ind = self._get_indicator(model, event.id, emp_id, d)
-                        if ind is not None:
-                            model.Add(ind == 0)
-                    continue
-
-                a_inds = []
-                for event in type_a_events:
-                    ind = self._get_indicator(model, event.id, emp_id, d)
-                    if ind is not None:
-                        a_inds.append(ind)
-
-                b_inds = []
-                for event in type_b_events:
-                    ind = self._get_indicator(model, event.id, emp_id, d)
-                    if ind is not None:
-                        b_inds.append(ind)
-
-                if a_inds and b_inds:
-                    has_a = model.NewBoolVar(f'has_a_{emp_id}_{d}')
-                    has_b = model.NewBoolVar(f'has_b_{emp_id}_{d}')
-                    model.AddMaxEquality(has_a, a_inds)
-                    model.AddMaxEquality(has_b, b_inds)
-                    model.Add(has_a + has_b <= 1)
 
     def _add_day_exclusion(self, model, type_a_events, type_b_events,
                            type_a_names=None, type_b_names=None):
@@ -2364,12 +2317,14 @@ class CPSATSchedulingEngine:
         return self.default_times.get(etype, time(11, 0))
 
     def _post_solve_review(self, run, phase_refs=None):
-        """Defensive post-solve review to catch any remaining Core double-bookings.
+        """Defensive post-solve review to catch any remaining primary overcounts.
 
         Runs after _extract_solution() and before commit. Scans proposed
         PendingSchedule records for this run and removes violations:
-          1. Same-run duplicates: 2+ Core events for same (emp, day) in this run
-          2. Cross-run conflicts: new Core conflicts with an existing posted Schedule
+          1. Same-run duplicates: 2+ primary events (Core or Juicer Production)
+             for same (emp, day) in this run
+          2. Cross-run conflicts: new primary conflicts with an existing posted
+             primary (Core or Juicer Production) on the same employee/day
           3. Weekly excess: total Core count (new + existing) exceeds weekly limit
 
         Args:
@@ -2383,6 +2338,7 @@ class CPSATSchedulingEngine:
         Returns count of removed assignments.
         """
         removed = 0
+        MAX_PRIMARY_PER_DAY = 1
 
         # Gather all proposed (non-failed) PendingSchedules from this run
         query = self.PendingSchedule.query.filter_by(
@@ -2404,65 +2360,71 @@ class CPSATSchedulingEngine:
                 event = self.Event.query.filter_by(project_ref_num=ps.event_ref_num).first()
                 event_type_cache[ps.event_ref_num] = event.event_type if event else 'Unknown'
 
-        core_pending = [ps for ps in pending if event_type_cache.get(ps.event_ref_num) == 'Core']
+        primary_pending = [ps for ps in pending
+                           if event_type_cache.get(ps.event_ref_num) in PRIMARY_EVENT_TYPES]
 
-        # --- Check 1: Same-run duplicates (2+ Core for same emp+day) ---
-        emp_day_cores = defaultdict(list)
-        for ps in core_pending:
+        # --- Check 1: Same-run duplicates (2+ primaries for same emp+day) ---
+        emp_day_primaries = defaultdict(list)
+        for ps in primary_pending:
             sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
-            emp_day_cores[(ps.employee_id, sd)].append(ps)
+            emp_day_primaries[(ps.employee_id, sd)].append(ps)
 
-        for (emp_id, day), ps_list in emp_day_cores.items():
-            if len(ps_list) <= MAX_CORE_EVENTS_PER_DAY:
+        for (emp_id, day), ps_list in emp_day_primaries.items():
+            if len(ps_list) <= MAX_PRIMARY_PER_DAY:
                 continue
             # Keep first (highest priority by insertion order), remove rest
-            for ps in ps_list[MAX_CORE_EVENTS_PER_DAY:]:
+            for ps in ps_list[MAX_PRIMARY_PER_DAY:]:
+                etype = event_type_cache.get(ps.event_ref_num, 'primary')
                 logger.warning(
-                    f"POST-REVIEW: Removing same-run duplicate Core for "
+                    f"POST-REVIEW: Removing same-run duplicate primary ({etype}) for "
                     f"employee={emp_id} day={day} event={ps.event_ref_num}"
                 )
                 ps.failure_reason = (
-                    f"Post-review: duplicate Core on {day} (same run). "
-                    f"Limit is {MAX_CORE_EVENTS_PER_DAY} per day."
+                    f"Post-review: duplicate primary event on {day} (same run). "
+                    f"Limit is {MAX_PRIMARY_PER_DAY} primary (Core or Juicer Production) per day."
                 )
                 ps.employee_id = None
                 ps.schedule_datetime = None
                 ps.schedule_time = None
                 removed += 1
 
-        # Refresh core_pending to exclude just-removed ones
-        core_pending = [ps for ps in core_pending if ps.employee_id is not None]
+        # Refresh primary_pending to exclude just-removed ones
+        primary_pending = [ps for ps in primary_pending if ps.employee_id is not None]
 
         # --- Check 2: Cross-run conflicts with posted schedules ---
-        for ps in list(core_pending):
+        for ps in list(primary_pending):
             sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
-            existing_count = self.existing_core_count_by_emp_day.get((ps.employee_id, sd), 0)
-            # Count how many new Core events for this emp+day are still alive (before this one)
+            existing_count = self.existing_primary_count_by_emp_day.get((ps.employee_id, sd), 0)
+            # Count how many new primaries for this emp+day are still alive (other than self)
             new_count = sum(
-                1 for other in core_pending
+                1 for other in primary_pending
                 if other.employee_id == ps.employee_id
                 and other is not ps
                 and (other.schedule_datetime.date() if isinstance(other.schedule_datetime, datetime) else other.schedule_datetime) == sd
             )
             # This pending + others already counted + existing
             total = existing_count + new_count + 1
-            if total > MAX_CORE_EVENTS_PER_DAY:
+            if total > MAX_PRIMARY_PER_DAY:
+                etype = event_type_cache.get(ps.event_ref_num, 'primary')
                 logger.warning(
-                    f"POST-REVIEW: Removing cross-run conflict Core for "
+                    f"POST-REVIEW: Removing cross-run conflict primary ({etype}) for "
                     f"employee={ps.employee_id} day={sd} event={ps.event_ref_num} "
                     f"(existing={existing_count}, new={new_count + 1})"
                 )
                 ps.failure_reason = (
                     f"Post-review: conflicts with {existing_count} existing posted "
-                    f"Core event(s) on {sd}. Limit is {MAX_CORE_EVENTS_PER_DAY} per day."
+                    f"primary event(s) (Core or Juicer Production) on {sd}. "
+                    f"Limit is {MAX_PRIMARY_PER_DAY} primary per day."
                 )
                 ps.employee_id = None
                 ps.schedule_datetime = None
                 ps.schedule_time = None
-                core_pending.remove(ps)
+                primary_pending.remove(ps)
                 removed += 1
 
-        # --- Check 3: Weekly excess ---
+        # --- Check 3: Weekly excess (Core-specific) ---
+        core_pending = [ps for ps in primary_pending
+                        if event_type_cache.get(ps.event_ref_num) == 'Core']
         emp_week_new_cores = defaultdict(list)
         for ps in core_pending:
             sd = ps.schedule_datetime.date() if isinstance(ps.schedule_datetime, datetime) else ps.schedule_datetime
