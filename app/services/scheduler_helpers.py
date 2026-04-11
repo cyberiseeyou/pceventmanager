@@ -31,6 +31,44 @@ SECONDARY_EVENT_TYPES = frozenset({
 })
 
 
+def lookup_rotation(db, models, target_date: date, rotation_type: str):
+    """Look up (primary_emp_id, backup_emp_id) for a date + rotation type.
+
+    Per spec branches JP3 + JP4 + DF1 (and analogous branches in other specs),
+    a `ScheduleException` row for the exact (`target_date`, `rotation_type`)
+    pair fully overrides the standing `RotationAssignment`. Exception rows
+    have no backup slot, so callers receive `(override_emp, None)`.
+
+    If no exception is present, fall back to the standing `RotationAssignment`
+    for the target date's day-of-week. Returns `(None, None)` when neither
+    source has a row.
+
+    Args:
+        db: SQLAlchemy session.
+        models: Model registry (as returned by `get_models()`).
+        target_date: The date for which to look up rotation.
+        rotation_type: E.g., `'juicer'`, `'primary_lead'`.
+
+    Returns:
+        Tuple of `(primary_employee_id, backup_employee_id)`. Either or both
+        elements may be `None`.
+    """
+    ScheduleException = models['ScheduleException']
+    RotationAssignment = models['RotationAssignment']
+    exc = (db.query(ScheduleException)
+           .filter_by(exception_date=target_date, rotation_type=rotation_type)
+           .first())
+    if exc is not None:
+        return (exc.employee_id, None)
+    row = (db.query(RotationAssignment)
+           .filter_by(day_of_week=target_date.weekday(),
+                      rotation_type=rotation_type)
+           .first())
+    if row is None:
+        return (None, None)
+    return (row.employee_id, row.backup_employee_id)
+
+
 def classify_event(event_type: str) -> str:
     """Classify an event type per spec 01-key-concepts.md branches K1–K3.
 

@@ -32,6 +32,27 @@ _PAIRING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches the leading 6-digit event number only. Used by plan 02 (Juicer
+# Production ↔ Juicer Survey pairing) where the project_name does not end
+# in CORE/SUPERVISOR and the 6-digit prefix alone is the matching key.
+_SIX_DIGIT_RE = re.compile(r'^\s*(\d{6})\b')
+
+
+def extract_six_digit_prefix(project_name: str) -> Optional[str]:
+    """Return the 6-digit event number at the start of `project_name`, or None.
+
+    Used to pair a Juicer Production with its matching Juicer Survey (spec
+    02-juicer-production.md branches JP15/JP16). Unlike `extract_pairing_key`,
+    this does NOT require a trailing CORE/Supervisor keyword — the 6-digit
+    prefix is sufficient identification for production/survey pairing.
+    """
+    if not project_name:
+        return None
+    m = _SIX_DIGIT_RE.match(project_name)
+    if not m:
+        return None
+    return m.group(1)
+
 
 def extract_pairing_key(project_name: str) -> Optional[tuple[str, str]]:
     """Return `(six_digit, normalized_prefix)` or None if the name is malformed.

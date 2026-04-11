@@ -603,12 +603,325 @@ class SchedulingEngine:
     # so invariant 1 (exactly one PendingSchedule per event) holds.
 
     def _process_juicer_production(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 02-juicer-production.md."""
+        """Spec 02-juicer-production.md — Juicer Production category handler.
+
+        Processes events in `start_datetime` order (JP1), delegating each to
+        `_schedule_single_juicer_production`. The pool was already sorted by
+        `_process_category` per spec M7 and the `CATEGORY_SORT_KEY` table.
+        """
         for event in pool:
-            self._create_failed_pending_schedule(
-                run, event,
-                "Juicer Production handler not yet implemented (plan 02)",
+            self._schedule_single_juicer_production(event, run)
+
+    def _schedule_single_juicer_production(self, event: object, run: object,
+                                           target_date: Optional[date] = None) -> None:
+        """Schedule one Juicer Production event per spec 02-juicer-production.md.
+
+        Implements the full JP2–JP19 decision tree:
+          1. target_date := event.start_datetime.date() (JP2)
+          2. Look up primary + backup via scheduler_helpers.lookup_rotation
+             (JP3/JP4 — ScheduleException wins over RotationAssignment)
+          3. Try primary on target_date:
+             - available? (JP5 — PTO/weekly/override check via RunCache)
+             - has CORE on target_date? bump it and assign primary @ 9 AM
+               (JP6 + JP17/18), otherwise assign primary directly (JP7).
+          4. If primary unavailable, try backup on target_date (JP8–JP11),
+             bumping any CORE the backup may have (JP10). Per spec "Do NOT"
+             rule, backup is used ONLY when primary is unavailable, never
+             because of a CORE conflict on primary.
+          5. If both unavailable, retry on target_date + 1 (JP12/JP13) while
+             still inside (start, due_datetime). When the loop exhausts all
+             candidate days without success, create a manual-review
+             PendingSchedule with a clear failure_reason (JP14).
+          6. On success, auto-pair the matching Juicer Survey @ 5 PM to the
+             same employee (JP15/JP16).
+
+        Args:
+            event: The Juicer Production event to schedule.
+            run: The active SchedulerRunHistory row.
+            target_date: Optional override used by the retry loop (JP13).
+                When `None`, derived from `event.start_datetime.date()`.
+        """
+        from app.services.scheduler_helpers import lookup_rotation
+
+        if target_date is None:
+            target_date = event.start_datetime.date()  # JP2
+
+        # JP14 upper bound: retry loop must stop strictly before due_datetime
+        due_date = event.due_datetime.date()
+
+        # Track reasons across retries so the final manual-review message
+        # can explain which days were tried and why.
+        retry_log: list[str] = []
+
+        current = target_date
+        while current < due_date:
+            primary_id, backup_id = lookup_rotation(
+                self.db, self.models, current, 'juicer'
+            )  # JP3/JP4
+
+            # Spec edge case: Primary == Backup → treat backup as absent.
+            if backup_id is not None and backup_id == primary_id:
+                backup_id = None
+
+            primary_avail = (primary_id is not None
+                             and self.cache.is_available(primary_id, current))
+            backup_avail = (backup_id is not None
+                            and self.cache.is_available(backup_id, current))
+
+            # JP5/JP7 primary available → bump any CORE and assign.
+            if primary_avail:
+                if self._try_place_juicer_production(
+                    event, run, primary_id, current
+                ):
+                    return
+                # Extremely rare: placement refused (e.g., locked day).
+                # Log reason and fall through to retry.
+                retry_log.append(
+                    f"{current}: primary {primary_id} placement refused"
+                )
+                current += timedelta(days=1)
+                continue
+
+            # JP8: primary unavailable → try backup (JP9–JP11).
+            if backup_avail:
+                if self._try_place_juicer_production(
+                    event, run, backup_id, current
+                ):
+                    return
+                retry_log.append(
+                    f"{current}: backup {backup_id} placement refused"
+                )
+                current += timedelta(days=1)
+                continue
+
+            # JP12/JP13: neither juicer available today → retry next day.
+            retry_log.append(
+                f"{current}: primary {primary_id or '—'} unavailable, "
+                f"backup {backup_id or '—'} unavailable"
             )
+            current += timedelta(days=1)
+
+        # JP14: retry loop exhausted without assignment.
+        reason = (
+            f"Primary and Backup Juicer both unavailable on all days within "
+            f"due date window ({target_date}–{due_date}); "
+            f"retries: {'; '.join(retry_log)}"
+        )
+        self._create_failed_pending_schedule(run, event, reason)
+
+    # -- helpers for _schedule_single_juicer_production -----------------
+
+    def _try_place_juicer_production(self, event: object, run: object,
+                                     employee_id: str, target_date: date) -> bool:
+        """Place a Juicer Production for `employee_id` on `target_date`.
+
+        Detects any CORE conflict on that day (posted Schedule or in-run
+        PendingSchedule) per JP19, bumps it via `_bump_core_to_pool`
+        (JP17/JP18), and then creates the Production's own PendingSchedule
+        at 9 AM via `_create_pending_schedule`. Returns True on success and
+        False if the underlying PendingSchedule creation was refused (e.g.,
+        locked day).
+        """
+        Employee = self.Employee
+        employee = self.db.query(Employee).filter_by(id=employee_id).one()
+
+        # JP19: detect ALL CORE events on (employee, target_date), whether
+        # posted or still in-run pending. Bump each before placing the
+        # Production.
+        core_conflicts = self._find_core_conflicts_for_juicer(
+            run, employee_id, target_date
+        )
+        for conflict in core_conflicts:
+            self._bump_core_to_pool(conflict, run)  # JP6/JP10/JP17/JP18
+
+        schedule_dt = datetime.combine(target_date, time(9, 0))
+        created = self._create_pending_schedule(
+            run, event, employee, schedule_dt,
+            is_swap=False, bumped_event_ref=None, swap_reason=None,
+        )
+        if not created:
+            return False
+
+        run.events_scheduled += 1
+        self.cache.record_primary(
+            employee_id, target_date, 'Juicer Production', event.project_ref_num
+        )
+
+        # JP15/JP16: auto-pair the matching Juicer Survey @ 5 PM.
+        self._pair_juicer_survey_if_any(event, run, employee, target_date)
+
+        current_app.logger.info(
+            f"Juicer Production {event.project_ref_num} → {employee.name} "
+            f"on {target_date} @ 9 AM"
+            + (f" (bumped {len(core_conflicts)} CORE events)"
+               if core_conflicts else "")
+        )
+        return True
+
+    def _find_core_conflicts_for_juicer(self, run: object, employee_id: str,
+                                        target_date: date) -> list:
+        """Return list of CORE schedules/pendings that must be bumped.
+
+        Per spec JP19, the check must examine BOTH:
+          - Posted Schedule rows (from prior runs / imports)
+          - In-run PendingSchedule rows with `failure_reason IS NULL`
+            and `is_swap=False` (a bumped row is already cleared and is
+            no longer occupying the slot)
+        """
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+        Event = self.Event
+
+        posted = (
+            self.db.query(Schedule)
+            .join(Event, Schedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                Schedule.employee_id == employee_id,
+                func.date(Schedule.schedule_datetime) == target_date,
+                Event.event_type == 'Core',
+            )
+            .all()
+        )
+
+        in_run = (
+            self.db.query(PendingSchedule)
+            .join(Event, PendingSchedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                PendingSchedule.scheduler_run_id == run.id,
+                PendingSchedule.employee_id == employee_id,
+                func.date(PendingSchedule.schedule_datetime) == target_date,
+                PendingSchedule.failure_reason.is_(None),
+                PendingSchedule.is_swap.is_(False),
+                Event.event_type == 'Core',
+            )
+            .all()
+        )
+
+        return list(posted) + list(in_run)
+
+    def _bump_core_to_pool(self, core_row: object, run: object) -> None:
+        """Bump a CORE (posted Schedule OR in-run PendingSchedule) and
+        re-queue it into the core_supervisor pool for category 3.
+
+        Implements spec branches JP17 (posted) and JP18 (in-run) plus
+        cross-category invariants K4, K5, and M8.
+
+        - Posted Schedule case (JP17): delete the Schedule row, create a
+          swap-marker PendingSchedule with `is_swap=True`,
+          `bumped_posted_schedule_id=<old>`, `employee_id=NULL`,
+          `schedule_datetime=NULL`, and mark `Event.is_scheduled=False`.
+        - In-run PendingSchedule case (JP18): mutate the existing
+          PendingSchedule in place — clear `employee_id`/`schedule_datetime`,
+          set `is_swap=True`, mark `Event.is_scheduled=False`.
+
+        Both paths then enqueue the CORE event into
+        `self.category_pools['core_supervisor']` and re-sort the pool by
+        `due_datetime` ascending (K5).
+        """
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+        Event = self.Event
+
+        if isinstance(core_row, Schedule):
+            # JP17: posted Schedule → delete, insert swap-marker pending.
+            old = core_row
+            event = (self.db.query(Event)
+                     .filter_by(project_ref_num=old.event_ref_num)
+                     .one())
+            swap = PendingSchedule(
+                scheduler_run_id=run.id,
+                event_ref_num=old.event_ref_num,
+                employee_id=None,
+                schedule_datetime=None,
+                schedule_time=None,
+                status='proposed',
+                is_swap=True,
+                bumped_posted_schedule_id=old.id,
+                bumped_event_ref_num=old.event_ref_num,
+                swap_reason='Bumped by Juicer Production scheduling',
+            )
+            self.db.add(swap)
+            self.db.delete(old)
+            self.bumped_posted_schedule_ids.add(old.id)
+            event.is_scheduled = False
+            self._enqueue_bumped_core(event)
+            self.db.flush()
+            current_app.logger.info(
+                f"Bumped posted CORE {event.project_ref_num} → "
+                f"core_supervisor pool (due {event.due_datetime.date()})"
+            )
+        elif isinstance(core_row, PendingSchedule):
+            # JP18: in-run PendingSchedule → clear and re-queue.
+            old_ps = core_row
+            event = (self.db.query(Event)
+                     .filter_by(project_ref_num=old_ps.event_ref_num)
+                     .one())
+            old_ps.employee_id = None
+            old_ps.schedule_datetime = None
+            old_ps.schedule_time = None
+            old_ps.is_swap = True
+            old_ps.swap_reason = 'Bumped by Juicer Production scheduling'
+            event.is_scheduled = False
+            self._enqueue_bumped_core(event)
+            self.db.flush()
+            current_app.logger.info(
+                f"Bumped in-run CORE {event.project_ref_num} → "
+                f"core_supervisor pool (due {event.due_datetime.date()})"
+            )
+        else:
+            raise TypeError(
+                f"_bump_core_to_pool: unsupported row type {type(core_row)!r}"
+            )
+
+    def _enqueue_bumped_core(self, event: object) -> None:
+        """Append a bumped CORE event to the core_supervisor pool and
+        re-sort by due_datetime ascending (K5)."""
+        pool = self.category_pools.get('core_supervisor', [])
+        if event not in pool:
+            pool.append(event)
+        pool.sort(key=lambda e: e.due_datetime)
+
+    def _pair_juicer_survey_if_any(self, production_event: object, run: object,
+                                   employee: object, target_date: date) -> None:
+        """JP15/JP16: find the Juicer Survey whose name shares the same
+        6-digit prefix as the production event and assign it to the same
+        employee @ 5 PM on `target_date`. If no matching Survey exists,
+        do nothing (JP16).
+
+        Matches by leading 6-digit event number only (via
+        `extract_six_digit_prefix`), not the full CORE/Supervisor pairing
+        key — Juicer Production/Survey names don't end in CORE/SUPERVISOR
+        keywords.
+        """
+        from app.services.scheduler_pairing import extract_six_digit_prefix
+
+        prod_six_digit = extract_six_digit_prefix(production_event.project_name)
+        if prod_six_digit is None:
+            return
+
+        # Only look at the current juicer_survey pool — an unscheduled
+        # Juicer Survey event in this run. Don't touch posted Survey rows.
+        survey_pool = self.category_pools.get('juicer_survey', [])
+        for survey in survey_pool:
+            survey_six_digit = extract_six_digit_prefix(survey.project_name)
+            if survey_six_digit != prod_six_digit:
+                continue
+
+            survey_dt = datetime.combine(target_date, time(17, 0))
+            created = self._create_pending_schedule(
+                run, survey, employee, survey_dt,
+                is_swap=False, bumped_event_ref=None, swap_reason=None,
+            )
+            if created:
+                run.events_scheduled += 1
+                # Remove from the juicer_survey pool so plan 03's handler
+                # doesn't re-process it.
+                survey_pool.remove(survey)
+                current_app.logger.info(
+                    f"Paired Juicer Survey {survey.project_ref_num} → "
+                    f"{employee.name} on {target_date} @ 5 PM"
+                )
+            return
 
     def _process_juicer_survey(self, pool: list, run: object) -> None:
         """Stub — real handler implemented in plan 03-juicer-survey.md."""
@@ -628,18 +941,42 @@ class SchedulingEngine:
         produces exactly one PendingSchedule — holds. Orphan Supervisor
         events (no matching CORE) are dropped by Phase 2 per spec M6 and
         do NOT need a PendingSchedule.
+
+        Plan 02 note: a CORE that was bumped by Juicer Production is already
+        represented in PendingSchedule (as a swap-marker with `is_swap=True`,
+        `employee_id=NULL`, `failure_reason=NULL`). The stub must NOT create
+        a second row for it — skip events that already have any
+        PendingSchedule in this run. Plan 04 will replace this stub with
+        logic that picks up the swap-marker and fills in the new employee.
         """
         for event in pool:
+            if self._has_pending_schedule_in_run(run, event.project_ref_num):
+                continue
             self._create_failed_pending_schedule(
                 run, event,
                 "Core/Supervisor handler not yet implemented (plan 04)",
             )
             paired_supervisor = self.pairs.get(event.id)
-            if paired_supervisor is not None:
+            if paired_supervisor is not None and \
+                    not self._has_pending_schedule_in_run(
+                        run, paired_supervisor.project_ref_num):
                 self._create_failed_pending_schedule(
                     run, paired_supervisor,
                     "Core/Supervisor handler not yet implemented (plan 04)",
                 )
+
+    def _has_pending_schedule_in_run(self, run: object, event_ref_num: int) -> bool:
+        """Return True if a PendingSchedule already exists for this event
+        in this run. Used by category stubs to avoid creating duplicate
+        rows for events already handled by an earlier category (e.g.,
+        a CORE bumped by Juicer Production that carries a swap-marker)."""
+        existing = (self.db.query(self.PendingSchedule.id)
+                    .filter(
+                        self.PendingSchedule.scheduler_run_id == run.id,
+                        self.PendingSchedule.event_ref_num == event_ref_num,
+                    )
+                    .first())
+        return existing is not None
 
     def _process_freeosk(self, pool: list, run: object) -> None:
         """Stub — real handler implemented in plan 05-freeosk.md."""
