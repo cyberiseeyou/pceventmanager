@@ -1069,15 +1069,25 @@ class SchedulingEngine:
             event = work.pop(0)
 
             placement = self._schedule_single_core(event, run)
+            paired_supervisor = self.pairs.get(event.id)
             # `placement` is the successful PendingSchedule row or None for
             # manual review. Only schedule the paired Supervisor if the
             # CORE itself actually landed on a day with an employee.
             if placement is not None:
-                paired_supervisor = self.pairs.get(event.id)
                 if paired_supervisor is not None:
                     self._assign_supervisor(
                         paired_supervisor, placement.schedule_datetime.date(), run
                     )
+            elif paired_supervisor is not None:
+                # CORE went to manual review — the paired Supervisor can't
+                # be placed without its CORE. Record a failed PendingSchedule
+                # so invariant "every event produces one PendingSchedule"
+                # holds and the Supervisor surfaces in the manual-review UI.
+                self._create_failed_pending_schedule(
+                    run, paired_supervisor,
+                    f"Paired CORE {event.project_ref_num} went to manual "
+                    f"review; Supervisor cannot be placed without its CORE",
+                )
 
             # Re-sync `work` with any CORE events that plan 02 or plan 04
             # itself enqueued into the category pool via _enqueue_bumped_core
@@ -1097,9 +1107,134 @@ class SchedulingEngine:
                     continue
                 work.append(e)
 
-        # Orphan Supervisors (unpaired by Phase 2 per M6) never reach this
-        # handler because _partition_events_by_category routes Supervisor
-        # events to nothing; Phase 2 already logged-and-skipped them.
+        # Handle orphan Supervisors — events whose paired CORE is not in
+        # this run's pool (because the CORE is already posted from a prior
+        # run). The spec only covers Supervisors-with-CORE-in-pool; this
+        # extends the handler to look up the CORE's posted Schedule and
+        # mirror its date, per user requirement (2026-04-11 bug fix).
+        self._process_orphan_supervisors(run)
+
+    def _process_orphan_supervisors(self, run: object) -> None:
+        """Schedule Supervisor events whose matching CORE is not in this
+        run's event pool.
+
+        For each unscheduled Supervisor that does NOT already have a
+        PendingSchedule for this run (i.e., wasn't handled via Phase 2
+        pairing), look up the matching CORE's existing posted Schedule
+        by pairing key and schedule the Supervisor on the same day
+        @ 12 PM via `_assign_supervisor`. If no matching CORE exists
+        anywhere (posted or in-run), create a failed PendingSchedule.
+        """
+        from app.services.scheduler_pairing import extract_pairing_key
+
+        Event = self.Event
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+
+        # Re-apply the Phase 1 input filter to pick up unscheduled
+        # Supervisor events. _get_unscheduled_events already includes
+        # them but they were skipped by _partition_events_by_category.
+        today = datetime.now()
+        buffer_days = 0 if getattr(self, 'emergency_mode', False) else 3
+        earliest_due = today + timedelta(days=buffer_days)
+
+        orphan_sups = (
+            self.db.query(Event)
+            .filter(
+                Event.event_type == 'Supervisor',
+                Event.is_scheduled == False,  # noqa: E712
+                ~Event.condition.in_(INACTIVE_CONDITIONS),
+                Event.due_datetime > earliest_due,
+            )
+            .all()
+        )
+
+        if not orphan_sups:
+            return
+
+        # Build a pairing-key → posted Schedule lookup from all CORE
+        # Schedule rows currently in the DB. Matching in Python is
+        # simpler than encoding the regex into SQL and the row count
+        # is bounded.
+        posted_cores: dict = {}
+        core_schedules = (
+            self.db.query(Schedule, Event)
+            .join(Event, Schedule.event_ref_num == Event.project_ref_num)
+            .filter(Event.event_type == 'Core')
+            .all()
+        )
+        for sched, core_event in core_schedules:
+            key = extract_pairing_key(core_event.project_name)
+            if key is None:
+                continue
+            # If multiple CORE schedules share a key, keep the most
+            # recent one (largest schedule_datetime).
+            existing = posted_cores.get(key)
+            if existing is None or sched.schedule_datetime > existing[0].schedule_datetime:
+                posted_cores[key] = (sched, core_event)
+
+        # Also look at in-run CORE PendingSchedule rows — this covers
+        # the edge case where pairing missed a CORE that is actually in
+        # this run's pending (should be rare after the paren-ID fix).
+        in_run_cores = (
+            self.db.query(PendingSchedule, Event)
+            .join(Event, PendingSchedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                PendingSchedule.scheduler_run_id == run.id,
+                PendingSchedule.employee_id.isnot(None),
+                PendingSchedule.failure_reason.is_(None),
+                Event.event_type == 'Core',
+            )
+            .all()
+        )
+        for ps, core_event in in_run_cores:
+            key = extract_pairing_key(core_event.project_name)
+            if key is None:
+                continue
+            if key not in posted_cores:
+                posted_cores[key] = (ps, core_event)
+
+        placed = 0
+        failed = 0
+        for sup in orphan_sups:
+            # Skip if already handled in this run (success or failure).
+            if self._has_pending_schedule_in_run(run, sup.project_ref_num):
+                continue
+
+            key = extract_pairing_key(sup.project_name)
+            if key is None:
+                self._create_failed_pending_schedule(
+                    run, sup,
+                    f"Orphan Supervisor {sup.project_ref_num}: malformed "
+                    f"name, cannot extract pairing key",
+                )
+                failed += 1
+                continue
+
+            match = posted_cores.get(key)
+            if match is None:
+                self._create_failed_pending_schedule(
+                    run, sup,
+                    f"Orphan Supervisor {sup.project_ref_num}: no matching "
+                    f"CORE event is scheduled anywhere (not in current run, "
+                    f"not in posted Schedule)",
+                )
+                failed += 1
+                continue
+
+            matched_row, _matched_event = match
+            target_date = matched_row.schedule_datetime.date()
+            self._assign_supervisor(sup, target_date, run)
+            placed += 1
+            current_app.logger.info(
+                f"Orphan Supervisor {sup.project_ref_num} matched CORE "
+                f"{matched_row.event_ref_num} on {target_date}"
+            )
+
+        if placed or failed:
+            current_app.logger.info(
+                f"Orphan Supervisor handler: placed {placed}, failed {failed}"
+            )
 
     # --- plan 04 helpers -------------------------------------------------
 

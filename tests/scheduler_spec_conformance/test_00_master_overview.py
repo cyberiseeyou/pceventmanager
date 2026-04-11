@@ -248,6 +248,128 @@ def test_m6_phase2_unpaired_supervisor_is_logged_and_skipped(
     ), "Orphan Supervisor must be logged as a WARNING with its ref num"
 
 
+def test_m4_phase2_pairs_by_parenthesized_unique_id_across_version_suffixes(
+    db_session, models, future_datetime
+):
+    """Regression test for 2026-04-11 Supervisor pairing bug: real-world
+    production event names include a trailing version suffix (V2 / V2.1)
+    that differs between a CORE and its matching Supervisor, even though
+    both names contain the same parenthesized unique event ID.
+
+    Before the fix, the pairing regex used "6-digit + lazy name prefix
+    ending in CORE/Supervisor" which captured the version suffix into
+    the prefix, so keys diverged and pairs vanished. The fix uses the
+    parenthesized unique ID as the primary pairing key.
+    """
+    from app.services.scheduler_pairing import pair_cores_and_supervisors
+    Event = models['Event']
+
+    core = Event(
+        project_ref_num=900100,
+        project_name='622055-MAP-Gatorade Low Sugar Variety Pack (260209543468)  - V2.1-CORE',
+        event_type='Core', condition='Unstaffed', is_scheduled=False,
+        start_datetime=future_datetime(5),
+        due_datetime=future_datetime(10),
+        estimated_time=60,
+    )
+    sup = Event(
+        project_ref_num=900101,
+        project_name='622055-MAP-Gatorade Low Sugar Variety Pack (260209543468)  - V2-Supervisor',
+        event_type='Supervisor', condition='Unstaffed', is_scheduled=False,
+        start_datetime=future_datetime(5),
+        due_datetime=future_datetime(10),
+        estimated_time=5,
+    )
+    db_session.add_all([core, sup])
+    db_session.commit()
+
+    pairs = pair_cores_and_supervisors([core, sup])
+    assert pairs.get(core.id) is sup, (
+        "CORE and Supervisor that share the same parenthesized unique ID "
+        "must pair even when their version suffixes differ (V2.1 vs V2)"
+    )
+
+
+def test_orphan_supervisor_matches_posted_core_schedule(
+    greedy_scheduler, models, db_session, future_datetime
+):
+    """Supervisor events whose matching CORE is already posted (from a
+    prior approved run) must still be scheduled on the same day as the
+    posted CORE — the scheduler looks up the CORE's posted Schedule row
+    via the pairing key and assigns the Supervisor to that date.
+    """
+    from datetime import datetime, time
+    Event = models['Event']
+    Schedule = models['Schedule']
+    Employee = models['Employee']
+    RotationAssignment = models['RotationAssignment']
+
+    # Set up a Primary Lead so the CS fallback path has an alternative
+    # and the test doesn't depend on CS availability math.
+    lead = Employee(id='L1', name='Lead', email='l1@ex.com',
+                     is_active=True, job_title='Lead Event Specialist')
+    cs = Employee(id='CS1', name='Mat', email='cs@ex.com',
+                   is_active=True, job_title='Club Supervisor')
+    db_session.add_all([lead, cs])
+    db_session.flush()
+
+    # CORE is already posted to lead L1 on day+5, at 10:15. The Event
+    # row is marked is_scheduled=True, so it WILL NOT appear in this
+    # run's input pool — it's a "posted" event from a previous run.
+    core_day = future_datetime(5).date()
+    core_event = Event(
+        project_ref_num=900200,
+        project_name='623888-MAP-Cookies (260301545555)  - V2.1-CORE',
+        event_type='Core', condition='Scheduled', is_scheduled=True,
+        start_datetime=future_datetime(5),
+        due_datetime=future_datetime(12),
+        estimated_time=60,
+    )
+    db_session.add(core_event)
+    db_session.flush()
+    posted_core = Schedule(
+        event_ref_num=900200,
+        employee_id='L1',
+        schedule_datetime=datetime.combine(core_day, time(10, 15)),
+    )
+    db_session.add(posted_core)
+
+    # Supervisor is unscheduled, CORE is not in this run's event pool.
+    # The scheduler must look up the posted CORE by pairing key and
+    # place the Supervisor on the same day @ 12 PM (S4 via CS fallback
+    # is fine — no has-primary-event check on CS).
+    orphan_sup = Event(
+        project_ref_num=900201,
+        project_name='623888-MAP-Cookies (260301545555)  - V2-Supervisor',
+        event_type='Supervisor', condition='Unstaffed', is_scheduled=False,
+        start_datetime=future_datetime(5),
+        due_datetime=future_datetime(12),
+        estimated_time=5,
+    )
+    db_session.add(orphan_sup)
+    db_session.commit()
+
+    run = greedy_scheduler.run_auto_scheduler(run_type='manual')
+
+    PendingSchedule = models['PendingSchedule']
+    ps = (
+        db_session.query(PendingSchedule)
+        .filter_by(scheduler_run_id=run.id, event_ref_num=900201)
+        .first()
+    )
+    assert ps is not None, (
+        "Orphan Supervisor must have a PendingSchedule row in the run")
+    assert ps.employee_id is not None, (
+        "Orphan Supervisor must be assigned an employee, not left in manual "
+        f"review (failure_reason={ps.failure_reason!r})")
+    assert ps.schedule_datetime.date() == core_day, (
+        f"Orphan Supervisor must be scheduled on the CORE's posted date "
+        f"({core_day}), got {ps.schedule_datetime.date()}")
+    assert ps.schedule_datetime.time() == time(12, 0), (
+        f"Supervisor events must be scheduled at 12 PM, got "
+        f"{ps.schedule_datetime.time()}")
+
+
 # --- Phase 3 category dispatcher (M7) ----------------------------------------
 
 

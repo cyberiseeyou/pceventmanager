@@ -1,14 +1,22 @@
 """Phase 2 — CORE/Supervisor pairing.
 
 Per spec 00-master-overview.md branches M4-M6, CORE events are paired with
-Supervisor events that share:
-  1. The same 6-digit event number at the start of `project_name`, AND
-  2. The same name prefix up to (but not including) the type keyword
-     (CORE or Supervisor, case-insensitive).
+Supervisor events that represent the same product/event. In production data
+the authoritative pairing key is the parenthesized unique event ID that
+appears near the end of the project name (e.g. `(260209543468)`), which is
+stable across CORE and Supervisor variants even when the rest of the name
+differs (e.g. `- V2.1-CORE` vs `- V2-Supervisor`).
+
+If a name has no parenthesized unique ID (legacy / test fixtures), the
+pairer falls back to "6-digit number + name prefix up to the CORE/SUPERVISOR
+keyword" — which is looser but works when both events use the same name
+template.
 
 Unpaired CORE events process alone (no Supervisor in the output).
 Unpaired Supervisor events are logged as warnings and excluded from the
-output — a Supervisor with no matching CORE is invalid input.
+output — a Supervisor with no matching CORE in the current run's event
+pool is still handled downstream by `_process_orphan_supervisors`, which
+looks up the CORE's posted Schedule by pairing key.
 
 This module is pure (no DB, no Flask). Caller passes in any iterable of
 Event-like objects that expose `event_type`, `project_name`,
@@ -21,9 +29,15 @@ from typing import Iterable, Mapping, Optional
 logger = logging.getLogger(__name__)
 
 
-# Matches `<6-digit><sep><prefix><sep>(CORE|Supervisor)` at the start of the
-# project name. The prefix is captured lazily so the pairing key is the
-# shortest string that still satisfies the trailing keyword.
+# Matches a parenthesized 9-12 digit unique event ID anywhere in the name
+# (e.g. `(260209543468)`). This is the authoritative pairing key in real
+# production data and is stable across CORE/Supervisor variants of the
+# same product.
+_PAREN_ID_RE = re.compile(r'\((\d{9,12})\)')
+
+# Legacy fallback: `<6-digit><sep><prefix><sep>(CORE|Supervisor)` at the
+# start of the project name. Used only when the name has no parenthesized
+# unique ID (e.g. in some older test fixtures).
 _PAIRING_RE = re.compile(
     r'^\s*(?P<six_digit>\d{6})[-\s]+'
     r'(?P<prefix>.+?)\s*'
@@ -54,19 +68,34 @@ def extract_six_digit_prefix(project_name: str) -> Optional[str]:
     return m.group(1)
 
 
-def extract_pairing_key(project_name: str) -> Optional[tuple[str, str]]:
-    """Return `(six_digit, normalized_prefix)` or None if the name is malformed.
+def extract_pairing_key(project_name: str):
+    """Return a key tuple that uniquely identifies a CORE/Supervisor pair.
 
-    The normalized_prefix is the text between the 6-digit prefix and the
-    CORE/Supervisor keyword, stripped of leading/trailing whitespace and
-    lowercased for case-insensitive comparison.
+    Preference order:
+      1. `('paren', <unique_id>)` — the parenthesized 9-12 digit event ID
+         (e.g. `('paren', '260209543468')`). Stable across CORE and
+         Supervisor variants of the same product regardless of version
+         suffixes — this is the authoritative key in real data.
+      2. `('prefix', <six_digit>, <lowercased_prefix>)` — legacy fallback
+         for names without a parenthesized ID.
+
+    Returns None if the name is too malformed to extract any key.
+
+    The return value is a tuple (rather than a string) so paren-keyed and
+    prefix-keyed events never collide with each other — an event that
+    matches one scheme will not accidentally pair with an event that
+    matches the other.
     """
     if not project_name:
         return None
+    paren_match = _PAREN_ID_RE.search(project_name)
+    if paren_match:
+        return ('paren', paren_match.group(1))
     m = _PAIRING_RE.match(project_name)
-    if not m:
-        return None
-    return (m.group('six_digit'), m.group('prefix').strip().lower())
+    if m:
+        return ('prefix', m.group('six_digit'),
+                m.group('prefix').strip().lower())
+    return None
 
 
 def pair_cores_and_supervisors(events: Iterable) -> Mapping[int, object]:
