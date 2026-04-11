@@ -482,27 +482,33 @@ class SchedulingEngine:
 
     def _get_unscheduled_events(self) -> List[object]:
         """
-        Get ALL unscheduled/unstaffed events that are not expired
-        and don't already have active pending proposals.
+        Phase 1 input filter — return every Event eligible for this run.
 
-        Returns all unscheduled events that:
-        1. Are not scheduled (is_scheduled == False)
-        2. Are unstaffed (condition == 'Unstaffed')
-        3. Have not passed their due date (not expired)
-        4. Don't have active pending proposals from unapproved runs
+        Implements spec branches M1, M2, M3 from
+        docs/superpowers/specs/2026-04-10-scheduler-rewrite/00-master-overview.md:
 
-        The scheduling logic will ensure the earliest assignment date is 3 days from today.
+        - M1: `is_scheduled == False`
+        - M2: `condition NOT IN ('Canceled', 'Expired')`
+        - M3: `due_datetime > today + buffer_days`, where
+          buffer_days = 0 in Emergency mode and 3 in Normal mode.
+
+        Also excludes events that already have an active (unapproved) pending
+        proposal from a previous, still-running SchedulerRunHistory row — that
+        is a legacy safeguard, not a spec branch.
 
         Returns:
-            List of Event objects that are unscheduled/unstaffed and not expired
+            List of Event objects that pass the Phase 1 filter.
         """
         today = datetime.now()
+        # Emergency mode bypasses the 3-day buffer entirely (spec M3 fine print).
+        buffer_days = 0 if getattr(self, 'emergency_mode', False) else 3
+        earliest_due = today + timedelta(days=buffer_days)
 
         events = self.db.query(self.Event).filter(
             and_(
                 self.Event.is_scheduled == False,
-                self.Event.condition == 'Unstaffed',
-                self.Event.due_datetime >= today
+                ~self.Event.condition.in_(INACTIVE_CONDITIONS),
+                self.Event.due_datetime > earliest_due,
             )
         ).all()
 
