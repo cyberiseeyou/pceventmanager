@@ -1,5 +1,24 @@
 # Scheduler Rewrite — Master Plan (2026-04-10)
 
+> **Status: COMPLETE** (2026-04-11) — all plans 00–08 + 99 landed on
+> `refactor/scheduler-plan-02-juicer-production` and posted for review
+> at `cyberiseeyou/pceventmanager#8`. Full conformance suite: **100
+> passed**. Run-192 regression harness: **17/17 events produce the
+> spec-predicted outcome**. CP-SAT retired from the production path.
+
+| Plan | Title | Status |
+|------|-------|--------|
+| 00 | Foundation — test infra + feature flag flip | ✅ landed |
+| 01 | Phase infrastructure — dispatcher + helpers | ✅ landed |
+| 02 | Juicer Production (JP1–JP19) | ✅ landed |
+| 03 | Juicer Survey + standalone fallback (JS1–JS17 + K4) | ✅ landed |
+| 04 | CORE/Supervisor (C1–C16 + S1–S8) + slot allocator | ✅ landed |
+| 05 | Freeosk subcategories (F1–F11) | ✅ landed |
+| 06 | Digitals subcategories (D1–D15) | ✅ landed |
+| 07 | Other catch-all (O1–O6 + K7) | ✅ landed |
+| 08 | Retire CP-SAT from production path | ✅ landed |
+| 99 | Run-192 regression harness | ✅ landed |
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to execute this plan task-by-task. DO NOT execute inline — each task must be a fresh subagent session to prevent context pollution and drift. See `review-gates.md` for the review gates every task must pass.
 
 **Goal:** Refactor the Flask auto-scheduler so that it follows the 7-image spec at `docs/superpowers/specs/2026-04-10-scheduler-rewrite/` exactly. This is a multi-week refactor of the core scheduling engine that powers production.
