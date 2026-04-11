@@ -394,10 +394,18 @@ def test_js15_cs_unconditional_fallback(
 # ---------------------------------------------------------------------------
 
 
-def test_js16_cs_on_pto_manual_review(
+def test_js16_cs_on_pto_still_assigned_user_override(
     greedy_scheduler, models, db_session, future_datetime, spec_assert
 ):
-    """Spec JS16: CS is on PTO → manual review."""
+    """User override of spec JS16 (2026-04-11 Bug 2 fix): even when the
+    Club Supervisor is on approved PTO, the standalone Juicer Survey
+    fallback is TRULY unconditional — CS is still assigned because the
+    user explicitly chose "without constraints" for this category.
+
+    The old spec-verbatim behavior (manual review when CS is on PTO)
+    is preserved in `_schedule_standalone_juicer_survey`'s docstring as
+    the rule this branch intentionally overrides.
+    """
     _mk_employee(db_session, models, 'jb1', 'Frank')
     _mk_employee(db_session, models, 'cs1', 'Grace',
                  job_title='Club Supervisor', juicer_trained=False)
@@ -411,9 +419,10 @@ def test_js16_cs_on_pto_manual_review(
 
     run = greedy_scheduler.run_auto_scheduler(run_type='manual')
 
-    spec_assert.manual_review(
+    spec_assert.exact_assignment(
         run_id=run.id, event_ref_num=809001,
-        reason_contains='Club Supervisor',
+        employee_id='cs1',
+        scheduled_datetime=datetime.combine(target.date(), time(17, 0)),
     )
 
 

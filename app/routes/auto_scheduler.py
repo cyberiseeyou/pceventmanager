@@ -238,63 +238,36 @@ def get_pending_schedules():
         if ps.failure_reason:
             failed.append(ps_data)
         elif ps.is_swap:
-            # Get bumped event details
-            if ps.bumped_event_ref_num:
-                import re
-                bumped_event = db.session.query(Event).filter_by(project_ref_num=ps.bumped_event_ref_num).first()
-                ps_data['bumped_event_name'] = bumped_event.project_name if bumped_event else 'Unknown'
-                ps_data['bumped_event_ref_num'] = ps.bumped_event_ref_num
-                
-                # Extract 6-digit event numbers from project names
-                if bumped_event:
-                    bumped_match = re.search(r'\d{6}', bumped_event.project_name)
-                    ps_data['bumped_event_number'] = bumped_match.group(0) if bumped_match else str(ps.bumped_event_ref_num)
-                else:
-                    ps_data['bumped_event_number'] = str(ps.bumped_event_ref_num)
-                
-                if event:
-                    replacing_match = re.search(r'\d{6}', event.project_name)
-                    ps_data['replacing_event_number'] = replacing_match.group(0) if replacing_match else str(ps.event_ref_num)
-                else:
-                    ps_data['replacing_event_number'] = str(ps.event_ref_num)
-                
-                # Find where the bumped event is being rescheduled to
-                # Check for ANY successful schedule (could be swap or non-swap)
-                bumped_reschedule = db.session.query(PendingSchedule).filter(
-                    PendingSchedule.scheduler_run_id == run.id,
-                    PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
-                    PendingSchedule.status != 'superseded',
-                    PendingSchedule.failure_reason.is_(None)
-                ).first()
-                
-                if bumped_reschedule:
-                    bumped_employee = db.session.query(Employee).get(bumped_reschedule.employee_id) if bumped_reschedule.employee_id else None
-                    ps_data['bumped_rescheduled_to'] = {
-                        'employee_name': bumped_employee.name if bumped_employee else 'Unassigned',
-                        'schedule_datetime': bumped_reschedule.schedule_datetime.isoformat() if bumped_reschedule.schedule_datetime else None,
-                        'schedule_date': bumped_reschedule.schedule_datetime.date().isoformat() if bumped_reschedule.schedule_datetime else None,
-                        'schedule_time': bumped_reschedule.schedule_time.strftime('%H:%M') if bumped_reschedule.schedule_time else None
-                    }
-                else:
-                    # Check if there's a failed rescheduling attempt
-                    bumped_failed = db.session.query(PendingSchedule).filter(
-                        PendingSchedule.scheduler_run_id == run.id,
-                        PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
-                        PendingSchedule.failure_reason.isnot(None)
-                    ).first()
-                    
-                    if bumped_failed:
-                        ps_data['bumped_rescheduled_to'] = {
-                            'failed': True,
-                            'failure_reason': bumped_failed.failure_reason
-                        }
-                    else:
-                        # This shouldn't happen - scheduler should always reschedule or fail
-                        # But if it does, indicate an error
-                        ps_data['bumped_rescheduled_to'] = {
-                            'failed': True,
-                            'failure_reason': 'Scheduler error: bumped event was not processed'
-                        }
+            # New swap-marker model (scheduler rewrite 2026-04-11): each
+            # swap-marker PendingSchedule row IS the re-placement of one
+            # bumped CORE. `event_ref_num == bumped_event_ref_num` always;
+            # the row's own `employee_id` / `schedule_datetime` hold the
+            # NEW placement; the original slot was a posted Schedule whose
+            # id is in `bumped_posted_schedule_id` (already deleted — we
+            # do not display the old slot because it's no longer stored).
+            #
+            # The UI renders: "Event X → new employee/day/time, bumped by
+            # [swap_reason]". There is no separate "replacing event" — the
+            # Juicer Production that caused the bump is a different row.
+            import re
+            ps_data['bumped_event_name'] = event.project_name if event else 'Unknown'
+            ps_data['bumped_event_ref_num'] = ps.event_ref_num
+            if event:
+                bumped_match = re.search(r'\d{6}', event.project_name)
+                ps_data['bumped_event_number'] = bumped_match.group(0) if bumped_match else str(ps.event_ref_num)
+            else:
+                ps_data['bumped_event_number'] = str(ps.event_ref_num)
+
+            # The "new placement" for the bumped event is this row itself.
+            ps_data['bumped_rescheduled_to'] = {
+                'employee_name': employee.name if employee else 'Unassigned',
+                'schedule_datetime': ps.schedule_datetime.isoformat() if ps.schedule_datetime else None,
+                'schedule_date': ps.schedule_datetime.date().isoformat() if ps.schedule_datetime else None,
+                'schedule_time': ps.schedule_time.strftime('%H:%M') if ps.schedule_time else None,
+            }
+            # The cause (e.g., "Bumped by Juicer Production scheduling")
+            # — rendered as the bump reason in the UI.
+            ps_data['bump_reason'] = ps.swap_reason or 'Unknown reason'
             swaps.append(ps_data)
         else:
             newly_scheduled.append(ps_data)
@@ -1905,24 +1878,14 @@ def export_review_category():
         if ps.failure_reason:
             failed.append(ps_data)
         elif ps.is_swap:
-            # Get bumped event details
-            if ps.bumped_event_ref_num:
-                bumped_event = db.session.query(Event).filter_by(project_ref_num=ps.bumped_event_ref_num).first()
-                ps_data['bumped_event_name'] = bumped_event.project_name if bumped_event else 'Unknown'
-
-                # Find where the bumped event is being rescheduled to
-                bumped_reschedule = db.session.query(PendingSchedule).filter(
-                    PendingSchedule.scheduler_run_id == run.id,
-                    PendingSchedule.event_ref_num == ps.bumped_event_ref_num,
-                    PendingSchedule.status != 'superseded',
-                    PendingSchedule.failure_reason.is_(None)
-                ).first()
-
-                if bumped_reschedule:
-                    bumped_employee = db.session.query(Employee).get(bumped_reschedule.employee_id) if bumped_reschedule.employee_id else None
-                    ps_data['bumped_rescheduled_to'] = f"{bumped_employee.name if bumped_employee else 'Unassigned'} on {bumped_reschedule.schedule_datetime.strftime('%m/%d/%Y %I:%M %p') if bumped_reschedule.schedule_datetime else 'N/A'}"
-                else:
-                    ps_data['bumped_rescheduled_to'] = 'Failed to reschedule'
+            # New swap-marker model: the row IS the bumped event's
+            # re-placement. `event_ref_num == bumped_event_ref_num`; the
+            # row's own schedule holds the new slot.
+            ps_data['bumped_event_name'] = event.project_name if event else 'Unknown'
+            ps_data['bumped_rescheduled_to'] = (
+                f"{employee.name if employee else 'Unassigned'} on "
+                f"{ps.schedule_datetime.strftime('%m/%d/%Y %I:%M %p') if ps.schedule_datetime else 'N/A'}"
+            )
             swaps.append(ps_data)
         else:
             newly_scheduled.append(ps_data)

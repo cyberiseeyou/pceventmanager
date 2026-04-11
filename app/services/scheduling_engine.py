@@ -644,7 +644,9 @@ class SchedulingEngine:
         from app.services.scheduler_helpers import lookup_rotation
 
         if target_date is None:
-            target_date = event.start_datetime.date()  # JP2
+            # JP2, clamped to `today + 3 days` in Normal mode per the
+            # universal lead-time buffer (Bug 4 fix).
+            target_date = self._clamped_target_date(event)
 
         # JP14 upper bound: retry loop must stop strictly before due_datetime
         due_date = event.due_datetime.date()
@@ -945,13 +947,30 @@ class SchedulingEngine:
              (JS7/JS8).
           2. Else Backup Juicer available AND has_primary_event → assign
              @ 5 PM (JS11/JS12).
-          3. Else Club Supervisor unconditional fallback (no has_primary_event
-             check, but still respects CS PTO) → assign @ 5 PM (JS15).
-          4. Else manual review (JS16/JS17).
+          3. Else Club Supervisor **TRULY unconditional** fallback — per
+             user directive "without constraints", this branch ignores PTO,
+             weekly availability, overrides, and all other gating. If a
+             Club Supervisor employee exists, they are assigned (JS15).
+          4. Else (no CS employee at all) manual review (JS17).
+
+        Note: This overrides spec K6 ("unconditional except PTO") for the
+        Juicer Survey category specifically, per explicit user request
+        (Bug 2 fix 2026-04-11). Other CS fallback branches continue to
+        respect PTO via `cache.is_on_pto`.
         """
         from app.services.scheduler_helpers import lookup_rotation
 
-        target_date = survey.start_datetime.date()  # JS5
+        # JS5, clamped by universal 3-day lead-time buffer (Bug 4 fix).
+        target_date = self._clamped_target_date(survey)
+        if target_date > survey.due_datetime.date():
+            self._create_failed_pending_schedule(
+                run, survey,
+                f"Standalone Juicer Survey {survey.project_ref_num}: "
+                f"3-day lead-time window pushes target date past due "
+                f"date ({survey.due_datetime.date()}) — enable emergency "
+                f"mode to schedule",
+            )
+            return
         schedule_dt = datetime.combine(target_date, time(17, 0))
 
         primary_id, backup_id = lookup_rotation(
@@ -975,26 +994,21 @@ class SchedulingEngine:
                                       reason='backup juicer')
             return
 
-        # JS15: Club Supervisor unconditional fallback (still respects PTO).
+        # JS15: Club Supervisor TRULY unconditional fallback — no checks
+        # at all. Assign if a CS employee exists.
         cs_id = self._get_club_supervisor_employee_id()
         if cs_id is None:
-            # JS17
+            # JS17: no Club Supervisor exists → manual review.
             self._create_failed_pending_schedule(
                 run, survey,
                 f"Standalone Juicer Survey on {target_date}: no qualifying "
                 f"juicer and no Club Supervisor employee exists",
             )
             return
-        if not self.cache.is_available(cs_id, target_date):
-            # JS16
-            self._create_failed_pending_schedule(
-                run, survey,
-                f"Standalone Juicer Survey on {target_date}: no qualifying "
-                f"juicer and Club Supervisor unavailable",
-            )
-            return
-        self._place_juicer_survey(run, survey, cs_id, schedule_dt,
-                                  reason='club supervisor unconditional')
+        self._place_juicer_survey(
+            run, survey, cs_id, schedule_dt,
+            reason='club supervisor unconditional (user: no constraints)',
+        )
 
     def _place_juicer_survey(self, run: object, survey: object,
                              employee_id: str, schedule_dt: datetime,
@@ -1140,12 +1154,23 @@ class SchedulingEngine:
         Emergency mode: start = max(event.start_date, today).
         End: event.due_datetime.date() (exclusive — retry loop uses `<`).
         """
-        today = date.today()
-        buffer_days = 0 if getattr(self, 'emergency_mode', False) else 3
-        earliest = today + timedelta(days=buffer_days)
-        start = max(event.start_datetime.date(), earliest)
+        start = self._clamped_target_date(event)
         end = event.due_datetime.date()
         return (start, end)
+
+    def _clamped_target_date(self, event: object) -> date:
+        """Return `max(event.start_datetime.date(), today + buffer_days)`.
+
+        `buffer_days` is 3 in Normal mode and 0 in Emergency mode. This is
+        the universal lead-time clamp applied by every category handler so
+        no event is scheduled within the 3-day window unless emergency
+        mode is active. CORE already used this implicitly via
+        `_compute_date_window`; plans 02/03/05/06/07 now share the same
+        helper so the rule is uniform.
+        """
+        buffer_days = 0 if getattr(self, 'emergency_mode', False) else 3
+        earliest = date.today() + timedelta(days=buffer_days)
+        return max(event.start_datetime.date(), earliest)
 
     def _try_schedule_core_on_day(self, event: object, d: date,
                                   run: object):
@@ -1226,11 +1251,17 @@ class SchedulingEngine:
         Skips employees who are unavailable on `d` or already have a
         primary event on `d` (per spec K1, a primary event blocks
         additional primary events on the same day for that employee).
+
+        Excludes Club Supervisor from the candidate pool — CS is reserved
+        for Supervisor events (S4/S7), secondary-event fallbacks (F10,
+        D15, etc.), and the Other category (O2/O3), and must never be
+        assigned a CORE event.
         """
         Employee = self.Employee
         all_emps = (
             self.db.query(Employee)
-            .filter(Employee.is_active.is_(True))
+            .filter(Employee.is_active.is_(True),
+                    Employee.job_title != 'Club Supervisor')
             .order_by(Employee.id.asc())
             .all()
         )
@@ -1478,12 +1509,13 @@ class SchedulingEngine:
         """Spec S1–S8: place a Supervisor event at 12 PM on `target_date`.
 
         Decision order:
-          S4: Club Supervisor available → assign (no has_primary_event
-              requirement — spec is explicit).
+          S4: Club Supervisor not on approved PTO → assign (no
+              has_primary_event requirement, no weekly-availability check
+              per spec K6: "unconditional except PTO").
           S5: Primary Lead available AND has a CORE on target_date → assign.
           S6: Backup Lead available AND has a CORE on target_date → assign.
           S7: None of the above → Club Supervisor unconditionally (still
-              respecting CS PTO via is_available).
+              respecting CS PTO via cache.is_on_pto).
           S8: CS on PTO or missing → manual review.
         """
         from app.services.scheduler_helpers import lookup_rotation
@@ -1491,8 +1523,9 @@ class SchedulingEngine:
         target_dt = datetime.combine(target_date, time(12, 0))
         cs_id = self._get_club_supervisor_employee_id()
 
-        # S4: CS first, no has_primary_event check.
-        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+        # S4: CS first — only check approved PTO, not weekly availability
+        # (spec K6 "unconditional except PTO").
+        if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
             self._place_supervisor(run, sup_event, cs_id, target_dt,
                                    reason='club supervisor (S4)')
             return
@@ -1520,7 +1553,7 @@ class SchedulingEngine:
 
         # S7: CS unconditional (already respected PTO above in S4, so
         # reaching here means CS is on PTO or missing).
-        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+        if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
             self._place_supervisor(run, sup_event, cs_id, target_dt,
                                    reason='club supervisor unconditional (S7)')
             return
@@ -1614,7 +1647,15 @@ class SchedulingEngine:
         (branches F5–F11)."""
         from app.services.scheduler_helpers import lookup_rotation
 
-        target_date = event.start_datetime.date()  # F5
+        # F5, clamped by universal 3-day lead-time buffer (Bug 4 fix).
+        target_date = self._clamped_target_date(event)
+        if target_date > event.due_datetime.date():
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Freeosk {sub_name} {event.project_ref_num}: 3-day "
+                f"lead-time window pushes target date past due date",
+            )
+            return
         target_time = self._FREEOSK_TIMES[sub_name]  # F6
         target_dt = datetime.combine(target_date, target_time)
 
@@ -1643,9 +1684,9 @@ class SchedulingEngine:
             )
             return
 
-        # F10: Club Supervisor unconditional fallback (respects CS PTO).
+        # F10: Club Supervisor unconditional fallback (spec K6 — PTO only).
         cs_id = self._get_club_supervisor_employee_id()
-        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+        if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
             self._place_secondary_event(
                 run, event, cs_id, target_dt,
                 reason=f"freeosk {sub_name}: club supervisor unconditional (F10)",
@@ -1739,7 +1780,15 @@ class SchedulingEngine:
                                  run: object) -> None:
         """Place a single Digital event per subcategory rules (D4/D5, D8/D9,
         or D12/D13/D14/D15 for teardown)."""
-        target_date = event.start_datetime.date()
+        # Clamped by universal 3-day lead-time buffer (Bug 4 fix).
+        target_date = self._clamped_target_date(event)
+        if target_date > event.due_datetime.date():
+            self._create_failed_pending_schedule(
+                run, event,
+                f"Digital {sub_name} {event.project_ref_num}: 3-day "
+                f"lead-time window pushes target date past due date",
+            )
+            return
         target_time = self._next_digital_time(target_date, sub_name)
         target_dt = datetime.combine(target_date, target_time)
 
@@ -1773,7 +1822,7 @@ class SchedulingEngine:
             return
 
         cs_id = self._get_club_supervisor_employee_id()
-        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+        if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
             self._place_secondary_event(
                 run, event, cs_id, target_dt,
                 reason=f"digital {sub_name}: club supervisor unconditional",
@@ -1819,9 +1868,9 @@ class SchedulingEngine:
             )
             return
 
-        # D15: Club Supervisor unconditional fallback.
+        # D15: Club Supervisor unconditional fallback (spec K6 — PTO only).
         cs_id = self._get_club_supervisor_employee_id()
-        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+        if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
             self._place_secondary_event(
                 run, event, cs_id, target_dt,
                 reason='digital teardown: CS unconditional (D15)',
@@ -1907,11 +1956,19 @@ class SchedulingEngine:
         cs_id = self._get_club_supervisor_employee_id()
 
         for event in pool:
-            target_date = event.start_datetime.date()  # O1
+            # O1, clamped by universal 3-day lead-time buffer (Bug 4 fix).
+            target_date = self._clamped_target_date(event)
+            if target_date > event.due_datetime.date():
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Other event {event.project_ref_num}: 3-day lead-time "
+                    f"window pushes target date past due date",
+                )
+                continue
             target_dt = datetime.combine(target_date, other_time)
 
-            # O2/O3: Club Supervisor first (reversed priority).
-            if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            # O2/O3: Club Supervisor first (reversed priority, spec K6 PTO-only).
+            if cs_id is not None and not self.cache.is_on_pto(cs_id, target_date):
                 self._place_secondary_event(
                     run, event, cs_id, target_dt,
                     reason='other: club supervisor first (O2/O3)',

@@ -406,8 +406,8 @@
             }
             
             let html = '<table class="event-table bump-table" aria-describedby="bumped-events-desc">';
-            html += '<caption id="bumped-events-desc" class="sr-only">List of events being replaced by higher priority events, showing original and replacement details</caption>';
-            html += '<thead><tr><th scope="col">Event Being Bumped</th><th scope="col">Replaced By</th><th scope="col">New Schedule</th><th scope="col">Bumped Event Rescheduled To</th><th scope="col">Actions</th></tr></thead><tbody>';
+            html += '<caption id="bumped-events-desc" class="sr-only">List of events that were bumped out of their original slot and reassigned to a new slot, showing the bump cause and new placement</caption>';
+            html += '<thead><tr><th scope="col">Event Being Bumped</th><th scope="col">Bump Reason</th><th scope="col">New Schedule</th><th scope="col">Actions</th></tr></thead><tbody>';
             data.swaps.forEach(event => {
                 // Format the bumped event info (show number once, then name without number)
                 const bumpedNameClean = stripEventNumber(event.bumped_event_name, event.bumped_event_number);
@@ -415,35 +415,21 @@
                     ? `<strong>${escapeHtml(event.bumped_event_number)}</strong> - ${escapeHtml(bumpedNameClean) || 'Unknown'}`
                     : escapeHtml(event.bumped_event_name) || 'Unknown';
 
-                // Format the replacing event info (show number once, then name without number)
-                const replacingNameClean = stripEventNumber(event.event_name, event.replacing_event_number);
-                const replacingEventDisplay = event.replacing_event_number
-                    ? `<strong>${escapeHtml(event.replacing_event_number)}</strong> - ${escapeHtml(replacingNameClean)}`
-                    : escapeHtml(event.event_name);
+                // Reason for the bump (e.g., "Bumped by Juicer Production scheduling")
+                const bumpReasonDisplay = escapeHtml(event.bump_reason || 'Unknown reason');
 
-                // Format the new schedule for the replacing event
-                const newScheduleDisplay = `${escapeHtml(toTitleCase(event.employee_name))}<br>${formatDateTime(event.schedule_date, event.schedule_time)}`;
-                
-                // Format where the bumped event is being rescheduled to
-                let rescheduledToDisplay;
-                if (event.bumped_rescheduled_to) {
-                    if (event.bumped_rescheduled_to.failed) {
-                        // Show failure reason in red
-                        rescheduledToDisplay = `<span class="text-danger">Failed: ${escapeHtml(event.bumped_rescheduled_to.failure_reason)}</span>`;
-                    } else {
-                        // Show successful reschedule
-                        rescheduledToDisplay = `${escapeHtml(toTitleCase(event.bumped_rescheduled_to.employee_name))}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
-                    }
+                // Where the bumped event was moved to (same row's own schedule)
+                let newScheduleDisplay;
+                if (event.bumped_rescheduled_to && event.bumped_rescheduled_to.schedule_date) {
+                    newScheduleDisplay = `${escapeHtml(toTitleCase(event.bumped_rescheduled_to.employee_name))}<br>${formatDateTime(event.bumped_rescheduled_to.schedule_date, event.bumped_rescheduled_to.schedule_time)}`;
                 } else {
-                    // This should never happen - scheduler always reschedules or fails
-                    rescheduledToDisplay = '<span class="text-danger">Error: Not processed</span>';
+                    newScheduleDisplay = '<span class="text-danger">Not reassigned</span>';
                 }
-                
+
                 html += `<tr>
                     <td>${bumpedEventDisplay}</td>
-                    <td>${replacingEventDisplay}</td>
+                    <td>${bumpReasonDisplay}</td>
                     <td>${newScheduleDisplay}</td>
-                    <td>${rescheduledToDisplay}</td>
                     <td><button class="btn-edit" data-pending-id="${event.id}">Edit</button></td>
                 </tr>`;
             });

@@ -178,6 +178,23 @@ class RunCache:
         self._available[key] = result
         return result
 
+    def is_on_pto(self, emp_id: str, d: date) -> bool:
+        """Return True iff the employee has an approved time-off row
+        covering date `d`. Weekly availability and overrides are NOT
+        consulted — this is the "unconditional except PTO" check used
+        by Club Supervisor fallback branches per spec K6.
+        """
+        if emp_id is None:
+            return False
+        EmployeeTimeOff = self.models['EmployeeTimeOff']
+        off = (self.db.query(EmployeeTimeOff.id)
+               .filter(EmployeeTimeOff.employee_id == emp_id,
+                       EmployeeTimeOff.status == 'approved',
+                       EmployeeTimeOff.start_date <= d,
+                       EmployeeTimeOff.end_date >= d)
+               .first())
+        return off is not None
+
     def _compute_available(self, emp_id: str, d: date) -> bool:
         EmployeeTimeOff = self.models['EmployeeTimeOff']
         EmployeeWeeklyAvailability = self.models['EmployeeWeeklyAvailability']
