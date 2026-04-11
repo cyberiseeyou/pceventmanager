@@ -55,6 +55,30 @@ class SchedulingEngine:
         'Other': 9
     }
 
+    # Spec 00-master-overview.md PHASE 3 — the 6 categories in the order
+    # they must be processed (strict). Branch M7.
+    CATEGORY_ORDER = (
+        'juicer_production',
+        'juicer_survey',
+        'core_supervisor',
+        'freeosk',
+        'digitals',
+        'other',
+    )
+
+    # Per-category sort key within the pool. Juicer Production, Juicer
+    # Survey, Freeosk, Digitals, and Other sort by start_datetime; only
+    # CORE/Supervisor sorts by due_datetime (since CORE is the window-
+    # flexible category where the scheduler picks the actual day).
+    CATEGORY_SORT_KEY = {
+        'juicer_production': lambda e: e.start_datetime,
+        'juicer_survey':     lambda e: e.start_datetime,
+        'core_supervisor':   lambda e: e.due_datetime,
+        'freeosk':           lambda e: e.start_datetime,
+        'digitals':          lambda e: e.start_datetime,
+        'other':             lambda e: e.start_datetime,
+    }
+
     # Load scheduling times from database settings (with fallback defaults)
     @classmethod
     def _get_default_times(cls):
@@ -397,53 +421,28 @@ class SchedulingEngine:
         self.bumped_posted_schedule_ids = set()
 
         try:
-            # Phase 1 — Input filter
+            # Phase 1 — Input filter (spec 00-master-overview.md M1-M3)
             events = self._get_unscheduled_events()
             run.total_events_processed = len(events)
 
             # Phase 2 — CORE/Supervisor pairing by 6-digit prefix + name
-            # prefix, per spec 00-master-overview.md M4-M6. The result is
-            # stashed on self for T3's dispatcher refactor; the legacy lazy
-            # pairing path below is still in use until plan 01 T3 lands.
+            # prefix, per spec 00-master-overview.md M4-M6.
             from app.services.scheduler_pairing import pair_cores_and_supervisors
             self.pairs = pair_cores_and_supervisors(events)
 
-            # Sort by priority (due date first, then event type)
-            events = self._sort_events_by_priority(events)
+            # Phase 3 — Category dispatcher (spec M7). The 6 spec
+            # categories run in strict order. Each category's pool is
+            # sorted by its per-category sort key immediately before the
+            # handler runs. The category handlers are currently STUBS that
+            # produce manual-review entries; plans 02-07 will restore the
+            # real category logic branch-by-branch. See
+            # docs/superpowers/plans/2026-04-10-scheduler-rewrite/.
+            from app.services.scheduler_helpers import RunCache
+            self.cache = RunCache(self.db, self.models, run.id)
+            self.category_pools = self._partition_events_by_category(events)
 
-            # CORRECTED WAVE ORDER (per user requirements - Juicer FIRST, then Core):
-
-            # Wave 1: Juicer events (HIGHEST PRIORITY - can bump Core events if assigned)
-            #         Uses _schedule_juicer_events_wave1() which has bumping logic
-            self._schedule_juicer_events_wave1(run, events)
-
-            # Wave 2: Core events (NEW day-by-day bump-first logic with cascading)
-            #         Supervisor events are scheduled INLINE with Core events
-            failed_core_events = self._schedule_core_events_wave2_new(run, events)
-
-            # ORPHANED SUPERVISOR PASS: Schedule Supervisor events whose Core was scheduled previously
-            current_app.logger.info("=== ORPHANED SUPERVISOR PASS: Scheduling remaining Supervisor events ===")
-            self._schedule_orphaned_supervisor_events(run, events)
-
-            # Wave 3: Freeosk events (9:00 AM to Leads)
-            self._schedule_freeosk_events_wave3(run, events)
-
-            # Wave 4: Digital events (Setup/Refresh at 9:15-10:00, Teardown at 5:00 PM+)
-            self._schedule_digital_events_wave4(run, events)
-
-            # Full-Day Events: Schedule 8+ hour Other events BEFORE regular Other events
-            # These have Core-like constraints (one per employee per day, no Core/Juicer same day)
-            self._schedule_full_day_events(run, events)
-
-            # Wave 5: Other events (Noon to Club Supervisor or Lead)
-            # Note: Full-day events are skipped here as they were scheduled above
-            self._schedule_other_events_wave5(run, events)
-
-            # RESCUE PASS: Give failed urgent Core events another chance to bump less urgent ones
-            # This handles the case where an urgent event was processed first (before less urgent
-            # events were scheduled) and couldn't find anything to bump
-            current_app.logger.info("=== RESCUE PASS: Attempting to schedule failed urgent Core events ===")
-            self._rescue_pass_for_urgent_events(run, events)
+            for category_name in self.CATEGORY_ORDER:
+                self._process_category(category_name, run)
 
             # Mark run as completed
             run.completed_at = datetime.utcnow()
@@ -547,6 +546,124 @@ class SchedulingEngine:
 
         current_app.logger.info(f"Found {len(events)} unscheduled events (expired/pending filtered out)")
         return events
+
+    # --- Phase 3 category dispatcher (spec 00-master-overview.md M7) ------
+
+    def _partition_events_by_category(self, events: List[object]) -> dict:
+        """Partition unscheduled events into the 6 spec categories by event_type.
+
+        Freeosk and Digitals subcategory partitioning (name-pattern
+        matching) happens inside the respective per-category handlers,
+        not here. This function only splits by event_type into the
+        top-level category pools.
+
+        Supervisor events are NOT routed into their own pool — they are
+        paired with CORE events upfront in Phase 2 via `self.pairs` and
+        handled by the core_supervisor category handler.
+        """
+        pools: dict[str, list] = {name: [] for name in self.CATEGORY_ORDER}
+
+        for e in events:
+            etype = e.event_type
+            if etype == 'Juicer Production':
+                pools['juicer_production'].append(e)
+            elif etype == 'Juicer Survey':
+                pools['juicer_survey'].append(e)
+            elif etype == 'Core':
+                pools['core_supervisor'].append(e)
+            elif etype == 'Freeosk':
+                pools['freeosk'].append(e)
+            elif etype in ('Digitals', 'Digital Setup', 'Digital Refresh',
+                           'Digital Teardown'):
+                pools['digitals'].append(e)
+            elif etype == 'Supervisor':
+                # Handled via Phase 2 pairing; skip here to avoid double-processing.
+                continue
+            else:
+                pools['other'].append(e)
+
+        return pools
+
+    def _process_category(self, category_name: str, run: object) -> None:
+        """Dispatch to a category handler.
+
+        Sorts the pool by the category's sort key immediately before the
+        handler runs (so the dispatch order honors spec M7 and the
+        per-category sort keys in the Phase 3 table).
+        """
+        pool = self.category_pools.get(category_name, [])
+        sort_key = self.CATEGORY_SORT_KEY[category_name]
+        pool.sort(key=sort_key)
+        handler = getattr(self, f'_process_{category_name}')
+        handler(pool, run)
+
+    # --- Per-category handler stubs ----
+    # Each of these will be replaced by plan 02–07 with the real logic.
+    # Until then, every event in the pool produces a failed PendingSchedule
+    # so invariant 1 (exactly one PendingSchedule per event) holds.
+
+    def _process_juicer_production(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 02-juicer-production.md."""
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Juicer Production handler not yet implemented (plan 02)",
+            )
+
+    def _process_juicer_survey(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 03-juicer-survey.md."""
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Juicer Survey handler not yet implemented (plan 03)",
+            )
+
+    def _process_core_supervisor(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 04-core-supervisor.md.
+
+        Note: when the real handler lands it must ALSO process the paired
+        Supervisor from `self.pairs[core.id]` for every CORE it schedules.
+        The stub emits failed PendingSchedules for both the CORE and its
+        paired Supervisor (if any) so that invariant 1 — every event
+        produces exactly one PendingSchedule — holds. Orphan Supervisor
+        events (no matching CORE) are dropped by Phase 2 per spec M6 and
+        do NOT need a PendingSchedule.
+        """
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Core/Supervisor handler not yet implemented (plan 04)",
+            )
+            paired_supervisor = self.pairs.get(event.id)
+            if paired_supervisor is not None:
+                self._create_failed_pending_schedule(
+                    run, paired_supervisor,
+                    "Core/Supervisor handler not yet implemented (plan 04)",
+                )
+
+    def _process_freeosk(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 05-freeosk.md."""
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Freeosk handler not yet implemented (plan 05)",
+            )
+
+    def _process_digitals(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 06-digitals.md."""
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Digitals handler not yet implemented (plan 06)",
+            )
+
+    def _process_other(self, pool: list, run: object) -> None:
+        """Stub — real handler implemented in plan 07-other.md."""
+        for event in pool:
+            self._create_failed_pending_schedule(
+                run, event,
+                "Other handler not yet implemented (plan 07)",
+            )
 
     def _sort_events_by_priority(self, events: List[object]) -> List[object]:
         """

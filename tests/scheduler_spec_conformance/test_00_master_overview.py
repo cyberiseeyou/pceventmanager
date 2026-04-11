@@ -242,3 +242,55 @@ def test_m6_phase2_unpaired_supervisor_is_logged_and_skipped(
         'Unpaired Supervisor' in rec.message and '260117' in rec.message
         for rec in caplog.records
     ), "Orphan Supervisor must be logged as a WARNING with its ref num"
+
+
+# --- Phase 3 category dispatcher (M7) ----------------------------------------
+
+
+def test_m7_phase3_strict_category_order(
+    greedy_scheduler, models, db_session, future_datetime
+):
+    """Spec branch M7: Phase 3 dispatches categories in strict order
+    regardless of event count per category.
+
+    The expected order is defined by `SchedulingEngine.CATEGORY_ORDER`.
+    This test creates one event per category and spies on the dispatcher
+    to record the order in which categories are processed.
+    """
+    Event = models['Event']
+
+    # One event per category so we can witness dispatch order. The
+    # Supervisor event pairs with CORE 300003 (same 6-digit prefix).
+    events_data = [
+        (300001, 'Juicer Production', '300001-JUICER-PRODUCTION-Test'),
+        (300002, 'Juicer Survey', '300002-JUICER-SURVEY-Test'),
+        (300003, 'Core', '300003-MAP-Brand-Product CORE'),
+        (300004, 'Supervisor', '300003-MAP-Brand-Product Supervisor'),
+        (300005, 'Freeosk', '300005-FSK-Daily Service-11AM'),
+        (300006, 'Digital Setup', '300006-Digital Demo Refresh'),
+        (300007, 'Other', '300007-Other-Test'),
+    ]
+    for ref, etype, name in events_data:
+        db_session.add(Event(
+            project_ref_num=ref, project_name=name, event_type=etype,
+            condition='Unstaffed', is_scheduled=False,
+            start_datetime=future_datetime(5),
+            due_datetime=future_datetime(10),
+            estimated_time=60,
+        ))
+    db_session.commit()
+
+    # Spy on the dispatcher to record order.
+    seen_order = []
+    original = greedy_scheduler._process_category
+
+    def spy(category_name, run):
+        seen_order.append(category_name)
+        return original(category_name, run)
+
+    greedy_scheduler._process_category = spy
+
+    greedy_scheduler.run_auto_scheduler(run_type='manual')
+
+    assert seen_order == list(greedy_scheduler.CATEGORY_ORDER), (
+        f"Category dispatch order wrong: {seen_order}")
