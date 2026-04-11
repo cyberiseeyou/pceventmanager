@@ -397,9 +397,16 @@ class SchedulingEngine:
         self.bumped_posted_schedule_ids = set()
 
         try:
-            # Get events to schedule
+            # Phase 1 — Input filter
             events = self._get_unscheduled_events()
             run.total_events_processed = len(events)
+
+            # Phase 2 — CORE/Supervisor pairing by 6-digit prefix + name
+            # prefix, per spec 00-master-overview.md M4-M6. The result is
+            # stashed on self for T3's dispatcher refactor; the legacy lazy
+            # pairing path below is still in use until plan 01 T3 lands.
+            from app.services.scheduler_pairing import pair_cores_and_supervisors
+            self.pairs = pair_cores_and_supervisors(events)
 
             # Sort by priority (due date first, then event type)
             events = self._sort_events_by_priority(events)
