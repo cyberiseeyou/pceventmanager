@@ -695,6 +695,11 @@ def submit_time_off_request():
     if not start_date_str or not end_date_str:
         return jsonify({'error': 'Start date and end date are required'}), 400
 
+    # Employees must tell the supervisor WHY they're requesting time off
+    # (Feature C 2026-04-11 — supervisor-requested required field).
+    if not reason:
+        return jsonify({'error': 'A reason is required for time off requests'}), 400
+
     try:
         start_dt = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         end_dt = datetime.strptime(end_date_str, '%Y-%m-%d').date()
@@ -752,7 +757,12 @@ def submit_time_off_request():
 @require_role('supervisor')
 def review_time_off_request(request_id):
     """Supervisor approves or denies a time off request.
-    On approval, returns any conflicting schedules so the supervisor can decide."""
+
+    Also supports re-reviewing already-reviewed requests — a supervisor
+    can flip an approved request to denied (or vice versa) without
+    deleting it. On approval (new or flipped), returns any conflicting
+    schedules so the supervisor can decide how to handle them.
+    """
     db = current_app.extensions['sqlalchemy']
     models = get_models()
     EmployeeTimeOff = models['EmployeeTimeOff']
@@ -761,19 +771,25 @@ def review_time_off_request(request_id):
     if not time_off:
         return jsonify({'error': 'Request not found'}), 404
 
-    if time_off.status != 'pending':
-        return jsonify({'error': f'Request is already {time_off.status}'}), 400
-
     data = request.get_json()
     action = data.get('action')  # 'approve' or 'deny'
     if action not in ('approve', 'deny'):
         return jsonify({'error': 'action must be "approve" or "deny"'}), 400
+
+    # Short-circuit no-op: if the request is already in the requested
+    # state, don't overwrite reviewer metadata.
+    target_status = 'approved' if action == 'approve' else 'denied'
+    if time_off.status == target_status:
+        return jsonify({
+            'error': f'Request is already {time_off.status}',
+        }), 400
 
     user = get_current_user()
     reviewer_name = user.get('full_name', user.get('username', 'Unknown')) if user else 'Unknown'
 
     if action == 'approve':
         time_off.status = 'approved'
+        time_off.denial_reason = None  # clear stale denial reason if re-approving
     else:
         time_off.status = 'denied'
         time_off.denial_reason = (data.get('reason') or '').strip() or None
@@ -818,6 +834,42 @@ def review_time_off_request(request_id):
             response['time_off_id'] = request_id
 
     return jsonify(response)
+
+
+@employees_bp.route('/api/time-off/<int:request_id>/revert-to-pending', methods=['POST'])
+@require_authentication()
+@require_role('supervisor')
+def revert_time_off_to_pending(request_id):
+    """Revert a recently-reviewed time-off request back to pending.
+
+    Used by the "Cancel" button on the approval-conflict dialog: if a
+    supervisor clicks approve, sees the list of conflicting events, and
+    realizes they still need the employee on those events, clicking
+    Cancel calls this endpoint to undo the approval. The request
+    reappears in the pending list for re-review.
+    """
+    db = current_app.extensions['sqlalchemy']
+    models = get_models()
+    EmployeeTimeOff = models['EmployeeTimeOff']
+
+    time_off = EmployeeTimeOff.query.get(request_id)
+    if not time_off:
+        return jsonify({'error': 'Time off request not found'}), 404
+
+    if time_off.status == 'pending':
+        return jsonify({'error': 'Request is already pending'}), 400
+
+    time_off.status = 'pending'
+    time_off.reviewed_by = None
+    time_off.reviewed_at = None
+    time_off.denial_reason = None
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Approval cancelled — request returned to pending.',
+        'status': 'pending',
+    })
 
 
 @employees_bp.route('/api/time-off/<int:request_id>/resolve-conflicts', methods=['POST'])

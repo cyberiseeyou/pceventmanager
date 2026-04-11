@@ -322,6 +322,36 @@
         color: white;
     }
 
+    .btn-change-status {
+        background: #fff;
+        padding: 6px 12px;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        font-size: var(--font-size-small);
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .btn-approve-small {
+        border: 1px solid #059669;
+        color: #059669;
+    }
+
+    .btn-approve-small:hover {
+        background: #059669;
+        color: white;
+    }
+
+    .btn-deny-small {
+        border: 1px solid #d97706;
+        color: #d97706;
+    }
+
+    .btn-deny-small:hover {
+        background: #d97706;
+        color: white;
+    }
+
     .empty-state {
         text-align: center;
         padding: var(--spacing-xl);
@@ -920,6 +950,26 @@
             ? `<div style="font-size:12px;color:#991b1b;margin-top:4px;font-style:italic;">Reason: ${request.denial_reason}</div>`
             : '';
 
+        // Status-change button: flip between approved and denied without
+        // deleting the record. Only show for supervisors — non-supervisor
+        // views won't have the review endpoint available.
+        const escapedEmpName = escapeHtml(request.employee_name);
+        const escapedDateRange = escapeHtml(dateDisplay);
+        let statusChangeButton = '';
+        {% if is_supervisor %}
+        if (status === 'approved') {
+            statusChangeButton = `<button class="btn-change-status btn-deny-small"
+                data-action="change-status-deny"
+                data-request-id="${request.id}"
+                data-employee-name="${escapedEmpName}"
+                data-date-range="${escapedDateRange}">Mark Denied</button>`;
+        } else if (status === 'denied') {
+            statusChangeButton = `<button class="btn-change-status btn-approve-small"
+                data-action="change-status-approve"
+                data-request-id="${request.id}">Mark Approved</button>`;
+        }
+        {% endif %}
+
         return `
         <div class="time-off-request-card" data-status="${status}">
             <div class="time-off-info">
@@ -930,6 +980,7 @@
                 ${denialInfo}
             </div>
             <div class="time-off-actions">
+                ${statusChangeButton}
                 <button class="btn-delete" data-action="delete-request" data-request-id="${request.id}">Delete</button>
             </div>
         </div>
@@ -1391,6 +1442,17 @@
         }
     }
 
+    // Feature B: reuses the same review endpoint to flip a denied
+    // request to approved. If the newly-approved request has schedule
+    // conflicts, the conflict dialog (with Cancel/Keep/Remove) fires
+    // just as it does for a pending → approved flow.
+    async function changeStatusApprove(requestId) {
+        if (!confirm('Change this request to Approved?')) {
+            return;
+        }
+        await approveRequest(requestId);
+    }
+
     function showConflictDialog(timeOffId, conflicts) {
         var conflictList = conflicts.map(function(c) {
             return '<li>' + escapeHtml(c.event_name) + ' — ' +
@@ -1401,7 +1463,7 @@
         modal.className = 'modal-backdrop modal-open';
         modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
         modal.innerHTML = `
-            <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:calc(100% - 32px);max-height:80vh;overflow-y:auto;">
+            <div style="background:#fff;border-radius:12px;padding:24px;max-width:520px;width:calc(100% - 32px);max-height:80vh;overflow-y:auto;">
                 <h3 style="margin:0 0 8px;font-size:18px;color:#1f2937;">Schedule Conflicts Found</h3>
                 <p style="margin:0 0 12px;font-size:14px;color:#6b7280;">
                     This employee has ${conflicts.length} scheduled event(s) during their approved time off:
@@ -1409,6 +1471,9 @@
                 <ul style="margin:0 0 16px;padding-left:20px;font-size:13px;color:#374151;">${conflictList}</ul>
                 <p style="margin:0 0 16px;font-size:14px;color:#6b7280;">What would you like to do?</p>
                 <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                    <button id="conflict-cancel" style="padding:8px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;">
+                        Cancel approval
+                    </button>
                     <button id="conflict-keep" style="padding:8px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;">
                         Keep events, I'll handle manually
                     </button>
@@ -1419,6 +1484,33 @@
             </div>
         `;
         document.body.appendChild(modal);
+
+        // Cancel approval: revert the time-off request back to pending so
+        // the supervisor can re-review after seeing the conflicts.
+        document.getElementById('conflict-cancel').addEventListener('click', async function() {
+            try {
+                var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content;
+                var resp = await fetch('/api/time-off/' + timeOffId + '/revert-to-pending', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+                    }
+                });
+                var result = await resp.json();
+                if (result.success) {
+                    showFlashMessage(result.message || 'Approval cancelled — request returned to pending.', 'success');
+                } else {
+                    showFlashMessage('Error: ' + (result.error || 'Could not cancel approval'), 'error');
+                }
+            } catch (err) {
+                showFlashMessage('Error cancelling approval', 'error');
+            }
+            modal.remove();
+            await loadPendingRequests();
+            await loadAllTimeOffRequests();
+            filterRequests();
+        });
 
         document.getElementById('conflict-keep').addEventListener('click', function() {
             modal.remove();
@@ -1527,6 +1619,18 @@
                 approveRequest(parseInt(target.dataset.requestId));
                 break;
             case 'deny-request':
+                openDenyModal(
+                    parseInt(target.dataset.requestId),
+                    target.dataset.employeeName,
+                    target.dataset.dateRange
+                );
+                break;
+            case 'change-status-approve':
+                changeStatusApprove(parseInt(target.dataset.requestId));
+                break;
+            case 'change-status-deny':
+                // Reuses the deny modal to collect a reason before
+                // flipping an approved request to denied.
                 openDenyModal(
                     parseInt(target.dataset.requestId),
                     target.dataset.employeeName,

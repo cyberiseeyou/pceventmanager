@@ -79,6 +79,24 @@
         box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.15);
     }
 
+    .my-to__textarea {
+        width: 100%;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--color-neutral-200);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-base);
+        font-family: var(--font-primary);
+        box-sizing: border-box;
+        resize: vertical;
+        min-height: 72px;
+    }
+
+    .my-to__textarea:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(27, 155, 216, 0.15);
+    }
+
     .my-to__submit {
         display: inline-flex;
         align-items: center;
@@ -280,6 +298,11 @@
                            min="{{ today.strftime('%Y-%m-%d') }}">
                 </div>
             </div>
+            <div class="my-to__form-group" style="margin-bottom: var(--space-3);">
+                <label class="my-to__label" for="toReason">Reason <span aria-hidden="true" style="color:#dc2626;">*</span></label>
+                <textarea id="toReason" class="my-to__textarea" required maxlength="200"
+                          placeholder="Tell your supervisor why you need time off (e.g., vacation, medical appointment, family event)"></textarea>
+            </div>
             <button type="submit" class="my-to__submit" id="toSubmitBtn">
                 <span class="material-symbols-outlined">send</span>
                 Submit Request
@@ -343,6 +366,7 @@
     const form = document.getElementById('toForm');
     const startInput = document.getElementById('toStart');
     const endInput = document.getElementById('toEnd');
+    const reasonInput = document.getElementById('toReason');
     const msgEl = document.getElementById('toMsg');
     const submitBtn = document.getElementById('toSubmitBtn');
 
@@ -354,6 +378,17 @@
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
         msgEl.hidden = true;
+
+        // Client-side validation — reason is required
+        const reasonText = reasonInput.value.trim();
+        if (!reasonText) {
+            msgEl.textContent = 'Please enter a reason for your time off request.';
+            msgEl.className = 'my-to__msg my-to__msg--error';
+            msgEl.hidden = false;
+            reasonInput.focus();
+            return;
+        }
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
 
@@ -370,6 +405,7 @@
                 body: JSON.stringify({
                     start_date: startInput.value,
                     end_date: endInput.value,
+                    reason: reasonText,
                 }),
             });
 
