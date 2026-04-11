@@ -93,6 +93,31 @@ def freeosk_subcategory(project_name: str):
     return None
 
 
+def digital_subcategory(project_name: str):
+    """Classify a Digital event into a subcategory per spec 06-digitals.md.
+
+    Matches by "name ends with" per the spec table — the `event_type`
+    column is unreliable because the codebase uses a single generic
+    'Digitals' type for all three subcategories in some datasets.
+
+    Returns one of:
+        - 'setup'    — name endswith 'Digital Demo Setup' (D1)
+        - 'refresh'  — name endswith 'Digital Demo Refresh' (D6)
+        - 'teardown' — name endswith 'Digital Demo Tear Down' (D10)
+        - None — unrecognized pattern (caller routes to manual review)
+    """
+    if not project_name:
+        return None
+    name = project_name.strip()
+    if name.endswith('Digital Demo Setup'):
+        return 'setup'
+    if name.endswith('Digital Demo Refresh'):
+        return 'refresh'
+    if name.endswith('Digital Demo Tear Down'):
+        return 'teardown'
+    return None
+
+
 def classify_event(event_type: str) -> str:
     """Classify an event type per spec 01-key-concepts.md branches K1–K3.
 

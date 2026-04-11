@@ -1683,13 +1683,213 @@ class SchedulingEngine:
             f"on {schedule_dt.date()} @ {schedule_dt.strftime('%H:%M')} ({reason})"
         )
 
+    _DIGITAL_SUBCATEGORY_ORDER = ('setup', 'refresh', 'teardown')
+
     def _process_digitals(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 06-digitals.md."""
+        """Spec 06-digitals.md — Digitals category handler.
+
+        Partitions events by name-ends-with rule into Setup / Refresh /
+        Teardown (D1/D6/D10), rejects non-Saturday Setups (D2/D3), then
+        processes each subcategory in order, sorted by start_datetime.
+        Unrecognized names go to manual review.
+        """
+        from app.services.scheduler_helpers import digital_subcategory
+
+        # Per-run counter keyed by (target_date, sub_name) used by
+        # _next_digital_time for +15 min offsets (D4/D8/D12). Initialised
+        # lazily here so each run starts fresh.
+        if not hasattr(self, '_digital_slot_counters'):
+            self._digital_slot_counters: dict = {}
+        self._digital_slot_counters.clear()
+
+        buckets: dict[str, list] = {
+            name: [] for name in self._DIGITAL_SUBCATEGORY_ORDER
+        }
         for event in pool:
-            self._create_failed_pending_schedule(
-                run, event,
-                "Digitals handler not yet implemented (plan 06)",
+            sub = digital_subcategory(event.project_name)
+            if sub is None:
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Digital event {event.project_ref_num}: unrecognized "
+                    f"name pattern {event.project_name!r} (expected one of "
+                    f"'Digital Demo Setup', 'Digital Demo Refresh', "
+                    f"'Digital Demo Tear Down')",
+                )
+                continue
+            if sub == 'setup' and event.start_datetime.date().weekday() != 5:
+                dow_name = event.start_datetime.strftime('%A')
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Digital Demo Setup events must be on Saturdays; event "
+                    f"{event.project_ref_num} has start date "
+                    f"{event.start_datetime.date()} ({dow_name})",
+                )
+                continue
+            buckets[sub].append(event)
+
+        for sub_name in self._DIGITAL_SUBCATEGORY_ORDER:
+            sorted_events = sorted(
+                buckets[sub_name],
+                key=lambda e: (e.start_datetime, e.project_ref_num),
             )
+            for event in sorted_events:
+                self._schedule_single_digital(event, sub_name, run)
+
+    def _schedule_single_digital(self, event: object, sub_name: str,
+                                 run: object) -> None:
+        """Place a single Digital event per subcategory rules (D4/D5, D8/D9,
+        or D12/D13/D14/D15 for teardown)."""
+        target_date = event.start_datetime.date()
+        target_time = self._next_digital_time(target_date, sub_name)
+        target_dt = datetime.combine(target_date, target_time)
+
+        if sub_name == 'teardown':
+            self._schedule_digital_teardown(event, target_date, target_dt, run)
+            return
+
+        # Setup and Refresh: Primary Lead → Backup Lead → CS chain (D5/D9).
+        from app.services.scheduler_helpers import lookup_rotation
+        primary_lead_id, backup_lead_id = lookup_rotation(
+            self.db, self.models, target_date, 'primary_lead'
+        )
+
+        if (primary_lead_id is not None
+                and self.cache.is_available(primary_lead_id, target_date)
+                and self.cache.has_primary_event(primary_lead_id, target_date)):
+            self._place_secondary_event(
+                run, event, primary_lead_id, target_dt,
+                reason=f"digital {sub_name}: primary lead (D5/D9)",
+            )
+            return
+
+        if (backup_lead_id is not None
+                and backup_lead_id != primary_lead_id
+                and self.cache.is_available(backup_lead_id, target_date)
+                and self.cache.has_primary_event(backup_lead_id, target_date)):
+            self._place_secondary_event(
+                run, event, backup_lead_id, target_dt,
+                reason=f"digital {sub_name}: backup lead (D5/D9)",
+            )
+            return
+
+        cs_id = self._get_club_supervisor_employee_id()
+        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            self._place_secondary_event(
+                run, event, cs_id, target_dt,
+                reason=f"digital {sub_name}: club supervisor unconditional",
+            )
+            return
+
+        self._create_failed_pending_schedule(
+            run, event,
+            f"Digital {sub_name} {event.project_ref_num}: no Lead with a "
+            f"primary event on {target_date} and Club Supervisor unavailable",
+        )
+
+    def _schedule_digital_teardown(self, event: object, target_date: date,
+                                   target_dt: datetime, run: object) -> None:
+        """Spec D13/D14/D15: Teardown uses unique "non-Primary Lead scheduled
+        that day" logic instead of the "has primary event" rule used by
+        Setup/Refresh. If no non-Primary Lead qualifies, fall to CS
+        unconditionally."""
+        from app.services.scheduler_helpers import lookup_rotation
+        Employee = self.Employee
+
+        primary_lead_id, _ = lookup_rotation(
+            self.db, self.models, target_date, 'primary_lead'
+        )
+
+        leads = (
+            self.db.query(Employee)
+            .filter(Employee.job_title == 'Lead Event Specialist',
+                    Employee.is_active.is_(True))
+            .order_by(Employee.id.asc())
+            .all()
+        )
+        for lead in leads:
+            if lead.id == primary_lead_id:
+                continue
+            if not self.cache.is_available(lead.id, target_date):
+                continue
+            if not self._is_employee_scheduled_on_day(lead.id, target_date, run):
+                continue
+            self._place_secondary_event(
+                run, event, lead.id, target_dt,
+                reason='digital teardown: non-primary lead scheduled (D13)',
+            )
+            return
+
+        # D15: Club Supervisor unconditional fallback.
+        cs_id = self._get_club_supervisor_employee_id()
+        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            self._place_secondary_event(
+                run, event, cs_id, target_dt,
+                reason='digital teardown: CS unconditional (D15)',
+            )
+            return
+
+        self._create_failed_pending_schedule(
+            run, event,
+            f"Digital teardown {event.project_ref_num}: no non-Primary Lead "
+            f"scheduled on {target_date} and Club Supervisor unavailable",
+        )
+
+    def _next_digital_time(self, target_date: date, sub_name: str) -> time:
+        """Return the next assigned time for a Digital event in `(target_date,
+        sub_name)`, applying +15 min offsets per spec D4/D8/D12.
+
+        The base time depends on the subcategory and (for Refresh) the
+        weekday of target_date.
+        """
+        key = (target_date, sub_name)
+        idx = self._digital_slot_counters.get(key, 0)
+        self._digital_slot_counters[key] = idx + 1
+
+        base = self._digital_base_time(target_date, sub_name)
+        total_minutes = base.hour * 60 + base.minute + idx * 15
+        hh, mm = divmod(total_minutes, 60)
+        return time(hh % 24, mm)
+
+    @staticmethod
+    def _digital_base_time(target_date: date, sub_name: str) -> time:
+        """Spec D4/D8/D12 base times per subcategory."""
+        if sub_name == 'setup':
+            return time(10, 15)
+        if sub_name == 'refresh':
+            # D8: 12:00 on Saturdays, 10:15 otherwise.
+            return time(12, 0) if target_date.weekday() == 5 else time(10, 15)
+        # Teardown
+        return time(17, 0)
+
+    def _is_employee_scheduled_on_day(self, emp_id: str, d: date,
+                                      run: object) -> bool:
+        """True if employee has ANY event (any type) on day `d`, counting
+        both posted Schedule and in-run PendingSchedule (spec D14)."""
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+
+        posted = (
+            self.db.query(Schedule.id)
+            .filter(
+                Schedule.employee_id == emp_id,
+                func.date(Schedule.schedule_datetime) == d,
+            )
+            .first()
+        )
+        if posted is not None:
+            return True
+
+        pending = (
+            self.db.query(PendingSchedule.id)
+            .filter(
+                PendingSchedule.scheduler_run_id == run.id,
+                PendingSchedule.employee_id == emp_id,
+                func.date(PendingSchedule.schedule_datetime) == d,
+                PendingSchedule.failure_reason.is_(None),
+            )
+            .first()
+        )
+        return pending is not None
 
     def _process_other(self, pool: list, run: object) -> None:
         """Stub — real handler implemented in plan 07-other.md."""
