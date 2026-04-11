@@ -69,15 +69,12 @@ def index():
         SchedulerRunHistory.started_at.desc()
     ).first()
 
-    cpsat_enabled = current_app.config.get('CPSAT_ENABLED', False)
-
     return render_template('auto_scheduler_main.html',
                          unscheduled_events_display=unscheduled_events_display,
                          total_events_display=total_events_display,
                          scheduled_events_display=scheduled_events_display,
                          scheduling_percentage=scheduling_percentage,
                          last_run=last_run,
-                         cpsat_enabled=cpsat_enabled,
                          today=today)
 
 
@@ -90,46 +87,24 @@ def run_scheduler():
     db = current_app.extensions['sqlalchemy']
     models = get_models()
 
-    # Use CP-SAT solver if enabled, otherwise fall back to greedy engine
-    use_cpsat = current_app.config.get('CPSAT_ENABLED', False)
-
-    # Allow per-request override via query param: ?solver=cpsat or ?solver=greedy
-    solver_override = request.args.get('solver')
-    if solver_override == 'cpsat':
-        use_cpsat = True
-    elif solver_override == 'greedy':
-        use_cpsat = False
-
     # Check for emergency mode (reduces scheduling buffer from 3 days to 0)
     emergency_mode = request.args.get('emergency') == 'true'
 
+    # After plan 08 (2026-04-10 scheduler rewrite), the production scheduler
+    # is exclusively the greedy SchedulingEngine. CP-SAT has been retired
+    # from the production code path; see
+    # docs/superpowers/plans/2026-04-10-scheduler-rewrite/08-retire-cpsat.md.
     try:
-        if use_cpsat:
-            from app.services.cpsat_scheduler import CPSATSchedulingEngine
-            cpsat_models = dict(models)
-            # CP-SAT engine needs additional models
-            for extra in ['LockedDay', 'EventSchedulingOverride', 'EventTypeOverride',
-                          'EmployeeAvailabilityOverride']:
-                if extra not in cpsat_models and extra in current_app.config:
-                    cpsat_models[extra] = current_app.config[extra]
-            engine = CPSATSchedulingEngine(db.session, cpsat_models)
-            if emergency_mode:
-                engine.emergency_mode = True
-            time_limit = current_app.config.get('CPSAT_TIME_LIMIT', 60)
-            run = engine.run_auto_scheduler(run_type='manual', time_limit_seconds=time_limit)
-            solver_used = 'cpsat'
-        else:
-            engine = SchedulingEngine(db.session, models)
-            if emergency_mode:
-                engine.emergency_mode = True
-            run = engine.run_auto_scheduler(run_type='manual')
-            solver_used = 'greedy'
+        engine = SchedulingEngine(db.session, models)
+        if emergency_mode:
+            engine.emergency_mode = True
+        run = engine.run_auto_scheduler(run_type='manual')
 
         return jsonify({
             'success': True,
             'run_id': run.id,
             'message': 'Scheduler run completed',
-            'solver': solver_used,
+            'solver': 'greedy',
             'stats': {
                 'total_events_processed': run.total_events_processed,
                 'events_scheduled': run.events_scheduled,

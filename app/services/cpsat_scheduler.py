@@ -2,6 +2,19 @@
 CP-SAT Constraint-Programming Auto-Scheduler
 =============================================
 
+⚠️ DEPRECATED as of plan 08 of the 2026-04-10 scheduler rewrite.
+
+The production scheduler is now `app/services/scheduling_engine.py`
+(greedy, spec-conformant). This CP-SAT module is preserved as an
+offline analyzer for historical reference and optional globally-optimal
+analysis, but it is NO LONGER imported by the production auto-schedule
+route. Do NOT import it from production code.
+
+See docs/superpowers/plans/2026-04-10-scheduler-rewrite/08-retire-cpsat.md
+for the retirement rationale and the scheduler rewrite overview.
+
+Original description follows:
+
 Replaces the greedy wave-based heuristic with Google OR-Tools CP-SAT solver
 for globally optimal (or near-optimal) schedule generation.
 

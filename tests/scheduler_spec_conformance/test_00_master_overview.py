@@ -2,13 +2,17 @@
 
 
 def test_m0_default_scheduler_is_greedy(app):
-    """Spec: the production scheduler is the greedy engine, not CP-SAT.
+    """Spec: the production scheduler is the greedy engine.
 
-    Verified indirectly via the CPSAT_ENABLED config default.
+    After plan 08 of the 2026-04-10 scheduler rewrite, CP-SAT is retired
+    from the production code path entirely — the `CPSAT_ENABLED` config
+    flag was removed. Greedy is the only scheduler, so the assertion is
+    now "no CPSAT_ENABLED key exists in config".
     """
-    assert app.config['CPSAT_ENABLED'] is False, (
-        "CPSAT_ENABLED must default to False. Greedy is the "
-        "production scheduler per the 2026-04-10 rewrite.")
+    assert 'CPSAT_ENABLED' not in app.config, (
+        "CPSAT_ENABLED must be absent after plan 08 (retire CP-SAT). "
+        "Greedy is the production scheduler."
+    )
 
 
 # --- Phase 1 input filter (M1–M3) --------------------------------------------

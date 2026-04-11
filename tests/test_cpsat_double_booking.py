@@ -6,6 +6,10 @@ The bug: _add_emp_day_limits() and _add_emp_week_limits() only counted
 new events being placed by the solver, ignoring existing posted Schedule
 records. This allowed the solver to assign Core events to employees who
 already had posted Core events on the same day.
+
+⚠️ DEPRECATED — CP-SAT is retired from the production code path as of
+plan 08 (2026-04-10). These tests are kept for the offline analyzer and
+marked `optional` so CI does not run them by default.
 """
 import pytest
 from collections import defaultdict
@@ -18,6 +22,9 @@ from app.services.cpsat_scheduler import (
     MAX_CORE_EVENTS_PER_DAY,
     MAX_CORE_EVENTS_PER_WEEK,
 )
+
+
+pytestmark = pytest.mark.optional
 
 
 # ---------------------------------------------------------------------------

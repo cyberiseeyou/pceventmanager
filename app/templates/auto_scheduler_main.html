@@ -485,11 +485,7 @@
                 <button data-action="run-auto-scheduler" id="auto-schedule-btn" class="btn btn-primary">
                     Run Auto-Scheduler
                 </button>
-                {% if cpsat_enabled %}
-                <span class="solver-badge solver-badge--cpsat">CP-SAT Solver</span>
-                {% else %}
                 <span class="solver-badge solver-badge--greedy">Greedy Solver</span>
-                {% endif %}
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #991b1b; font-weight: 500; background: #fef2f2; padding: 6px 12px; border-radius: 6px; border: 1px solid #fecaca;">
                     <input type="checkbox" id="emergency-mode-toggle" style="accent-color: #dc2626;">
                     Emergency Mode (no 3-day buffer)

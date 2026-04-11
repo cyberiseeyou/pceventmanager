@@ -3,20 +3,17 @@ Tests for the CP-SAT constraint-programming auto-scheduler.
 
 Covers hard constraints (must be satisfied), soft constraints (objective),
 and integration with the existing PendingSchedule approval workflow.
+
+⚠️ DEPRECATED — CP-SAT is retired from the production code path as of
+plan 08 (2026-04-10). These tests are kept for the offline analyzer and
+marked `optional` so CI does not run them by default.
 """
 import pytest
 from unittest.mock import patch
 from datetime import datetime, timedelta, date, time
 
 
-@pytest.fixture(autouse=True)
-def _auto_force_cpsat(force_cpsat):
-    """Module-level autouse: every test in this file forces CPSAT_ENABLED=True.
-
-    Delegates to the shared `force_cpsat` fixture in tests/conftest.py.
-    TODO(plan-08): remove when CPSAT_ENABLED flag is retired.
-    """
-    pass
+pytestmark = pytest.mark.optional
 
 
 def _future(days=3):

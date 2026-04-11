@@ -10,20 +10,20 @@ Covers:
   - Correctness: no constraint violations ever
   - Completeness: schedulable events are not left unscheduled
   - Optimality: rotation compliance, fairness, priority ordering
+
+⚠️ DEPRECATED — these tests target the retired CP-SAT solver. They are
+marked `optional` so the default `pytest` invocation skips them. Run
+them explicitly with `pytest -m optional tests/test_cpsat_stress.py`.
+See docs/superpowers/plans/2026-04-10-scheduler-rewrite/08-retire-cpsat.md.
 """
 import pytest
 from collections import defaultdict
 from datetime import datetime, timedelta, date, time
 
 
-@pytest.fixture(autouse=True)
-def _auto_force_cpsat(force_cpsat):
-    """Module-level autouse: every test in this file forces CPSAT_ENABLED=True.
-
-    Delegates to the shared `force_cpsat` fixture in tests/conftest.py.
-    TODO(plan-08): remove when CPSAT_ENABLED flag is retired.
-    """
-    pass
+# Opt the entire module out of default CI runs — CP-SAT is no longer
+# in the production code path after plan 08.
+pytestmark = pytest.mark.optional
 
 
 # ---------------------------------------------------------------------------

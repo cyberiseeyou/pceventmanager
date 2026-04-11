@@ -59,14 +59,12 @@ class Config:
     ML_EMPLOYEE_RANKER_PATH = config('ML_EMPLOYEE_RANKER_PATH', default='app/ml/models/artifacts/employee_ranker_latest.pkl')
     ML_SHADOW_MODE = config('ML_SHADOW_MODE', default=False, cast=bool)  # Log predictions without using them
 
-    # CP-SAT Constraint Solver settings
-    # Default is False: the greedy scheduling_engine.py is the production scheduler
-    # per the 2026-04-10 rewrite (docs/superpowers/plans/2026-04-10-scheduler-rewrite/).
-    # Set CPSAT_ENABLED=True in .env to opt back in for local testing.
-    # TODO(plan-08): remove this flag entirely when CP-SAT is retired from the
-    # production code path.
-    CPSAT_ENABLED = config('CPSAT_ENABLED', default=False, cast=bool)
-    CPSAT_TIME_LIMIT = config('CPSAT_TIME_LIMIT', default=15, cast=int)  # Solver time limit in seconds
+    # CP-SAT Constraint Solver settings — RETIRED by plan 08 of the
+    # 2026-04-10 scheduler rewrite. The greedy scheduling_engine.py is the
+    # only scheduler invoked from the production route. CP-SAT remains in
+    # the repo as a deprecated offline analyzer (see
+    # app/services/cpsat_scheduler.py module docstring).
+    # CPSAT_ENABLED / CPSAT_TIME_LIMIT are intentionally removed.
 
     # Web Push VAPID keys (for schedule change notifications)
     VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
