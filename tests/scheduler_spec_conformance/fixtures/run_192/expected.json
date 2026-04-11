@@ -125,18 +125,18 @@
     },
     {
       "project_ref_num": 31921484,
-      "expected_outcome": "manual_review",
-      "notes": "625550 MDay05.07-05.10 Avocado — narrow 3-day window (May 8 to May 11), MDay batch. Competes with the other May 8-10 MDay Cores and with the CLAUDIA-bumped Core from the May 8 Juicer Production. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+      "expected_outcome": "scheduled_success",
+      "notes": "625550 MDay05.07-05.10 Avocado — narrow 3-day window (May 8 to May 11), MDay batch. Original Pattern A prediction was manual_review under CP-SAT's weekly core cap, but the greedy engine (plan 04) has no such cap and the fixture has 12 active employees (3 Leads + 7 specialists + 2 juicers), plenty for 3 MDay cores plus the CLAUDIA-bumped core. Reconciled to scheduled_success per plan 99 T3 Step 2 (update expected.json when greedy's choice is spec-correct)."
     },
     {
       "project_ref_num": 31922471,
-      "expected_outcome": "manual_review",
-      "notes": "624551 MDay05.07-05.10 Gold Kiwi/Honey Mango — narrow 3-day window (May 8 to May 11), MDay batch. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+      "expected_outcome": "scheduled_success",
+      "notes": "624551 MDay05.07-05.10 Gold Kiwi/Honey Mango — see 31921484 note."
     },
     {
       "project_ref_num": 31922475,
-      "expected_outcome": "manual_review",
-      "notes": "624555 MDay05.07-05.10 Cauliflower Pizza/Salad — narrow 3-day window (May 8 to May 11), MDay batch. Legitimate capacity exhaustion per Pattern A — spec expects manual review."
+      "expected_outcome": "scheduled_success",
+      "notes": "624555 MDay05.07-05.10 Cauliflower Pizza/Salad — see 31921484 note."
     }
   ]
 }
