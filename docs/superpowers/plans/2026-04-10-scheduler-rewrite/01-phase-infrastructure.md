@@ -40,9 +40,9 @@ Focus on:
    (c) legacy/dead.
 ```
 
-## Task T0 — Create scheduler_helpers.py with cache classes (branches K8, K9)
+## Task T0 — Create scheduler_helpers.py with cache classes (branch K8)
 
-> **Cross-cutting:** This task implements K8 (has_primary_event query semantics) and K9 (Sun–Sat week boundary math for `primaries_this_week`). The third test case below (`test_run_cache_primaries_this_week_sun_sat`) covers K9 explicitly.
+> **Cross-cutting:** This task implements the `has_primary_event` query semantics (branch K8). It also builds the `primaries_this_week` helper with Sun–Sat week boundary math — this is shared infrastructure for branch K9, but the K9 branch itself is owned by plan 04 (`04-core-supervisor.md` T6) per the traceability table in `specs/01-key-concepts.md`. Plan 01 T0 only provides the helper; plan 04 T6 adds the `test_fewest_primaries_sun_sat_window` test that exercises K9's use-site in the CORE/Supervisor category handler.
 
 **Files:**
 - Create: `app/services/scheduler_helpers.py`
