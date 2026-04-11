@@ -924,12 +924,114 @@ class SchedulingEngine:
             return
 
     def _process_juicer_survey(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 03-juicer-survey.md."""
-        for event in pool:
+        """Spec 03-juicer-survey.md — Juicer Survey category handler.
+
+        Paired surveys (matching Juicer Production found in plan 02) are
+        already represented in PendingSchedule and must be skipped here
+        (JS1/JS2). Standalone surveys flow through the decision tree in
+        `_schedule_standalone_juicer_survey` (JS3–JS17).
+        """
+        for survey in pool:
+            if self._has_pending_schedule_in_run(run, survey.project_ref_num):
+                continue  # JS2: already handled by plan 02 pairing
+            self._schedule_standalone_juicer_survey(survey, run)
+
+    def _schedule_standalone_juicer_survey(self, survey: object,
+                                           run: object) -> None:
+        """Decision tree for a standalone Juicer Survey per spec 03.
+
+        Order:
+          1. Primary Juicer available AND has_primary_event → assign @ 5 PM
+             (JS7/JS8).
+          2. Else Backup Juicer available AND has_primary_event → assign
+             @ 5 PM (JS11/JS12).
+          3. Else Club Supervisor unconditional fallback (no has_primary_event
+             check, but still respects CS PTO) → assign @ 5 PM (JS15).
+          4. Else manual review (JS16/JS17).
+        """
+        from app.services.scheduler_helpers import lookup_rotation
+
+        target_date = survey.start_datetime.date()  # JS5
+        schedule_dt = datetime.combine(target_date, time(17, 0))
+
+        primary_id, backup_id = lookup_rotation(
+            self.db, self.models, target_date, 'juicer'
+        )  # JS6
+
+        # JS8: primary available + has primary event
+        if (primary_id is not None
+                and self.cache.is_available(primary_id, target_date)
+                and self.cache.has_primary_event(primary_id, target_date)):
+            self._place_juicer_survey(run, survey, primary_id, schedule_dt,
+                                      reason='primary juicer')
+            return
+
+        # JS12: backup available + has primary event
+        if (backup_id is not None
+                and backup_id != primary_id
+                and self.cache.is_available(backup_id, target_date)
+                and self.cache.has_primary_event(backup_id, target_date)):
+            self._place_juicer_survey(run, survey, backup_id, schedule_dt,
+                                      reason='backup juicer')
+            return
+
+        # JS15: Club Supervisor unconditional fallback (still respects PTO).
+        cs_id = self._get_club_supervisor_employee_id()
+        if cs_id is None:
+            # JS17
             self._create_failed_pending_schedule(
-                run, event,
-                "Juicer Survey handler not yet implemented (plan 03)",
+                run, survey,
+                f"Standalone Juicer Survey on {target_date}: no qualifying "
+                f"juicer and no Club Supervisor employee exists",
             )
+            return
+        if not self.cache.is_available(cs_id, target_date):
+            # JS16
+            self._create_failed_pending_schedule(
+                run, survey,
+                f"Standalone Juicer Survey on {target_date}: no qualifying "
+                f"juicer and Club Supervisor unavailable",
+            )
+            return
+        self._place_juicer_survey(run, survey, cs_id, schedule_dt,
+                                  reason='club supervisor unconditional')
+
+    def _place_juicer_survey(self, run: object, survey: object,
+                             employee_id: str, schedule_dt: datetime,
+                             *, reason: str) -> None:
+        """Place a standalone Juicer Survey PendingSchedule at 5 PM."""
+        employee = self.db.query(self.Employee).filter_by(id=employee_id).one()
+        created = self._create_pending_schedule(
+            run, survey, employee, schedule_dt,
+            is_swap=False, bumped_event_ref=None, swap_reason=None,
+        )
+        if not created:
+            self._create_failed_pending_schedule(
+                run, survey,
+                f"Standalone Juicer Survey placement refused on "
+                f"{schedule_dt.date()} (locked day or internal error)",
+            )
+            return
+        run.events_scheduled += 1
+        current_app.logger.info(
+            f"Juicer Survey {survey.project_ref_num} → {employee.name} "
+            f"on {schedule_dt.date()} @ 5 PM ({reason})"
+        )
+
+    def _get_club_supervisor_employee_id(self) -> Optional[str]:
+        """Return the id of the active Club Supervisor, or None if none.
+
+        There is at most one Club Supervisor per club in this domain. If
+        multiple active rows exist, return the first one — the downstream
+        handlers treat "at least one CS available" as the qualifying gate.
+        """
+        Employee = self.Employee
+        cs = (self.db.query(Employee)
+              .filter(Employee.job_title == 'Club Supervisor',
+                      Employee.is_active.is_(True))
+              .order_by(Employee.id)
+              .first())
+        return cs.id if cs is not None else None
 
     def _process_core_supervisor(self, pool: list, run: object) -> None:
         """Stub — real handler implemented in plan 04-core-supervisor.md.
