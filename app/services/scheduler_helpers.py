@@ -20,6 +20,37 @@ from sqlalchemy import func
 # docs/superpowers/specs/2026-04-10-scheduler-rewrite/01-key-concepts.md
 PRIMARY_EVENT_TYPES = frozenset({'Core', 'Juicer Production'})
 
+# Secondary events (spec K2) — require a primary event on the same day
+# for the same employee in order to be assigned (except via CS fallback).
+SECONDARY_EVENT_TYPES = frozenset({
+    'Juicer Survey',
+    'Supervisor',
+    'Freeosk',
+    'Digital Setup',
+    'Digital Refresh',
+})
+
+
+def classify_event(event_type: str) -> str:
+    """Classify an event type per spec 01-key-concepts.md branches K1–K3.
+
+    Returns one of:
+      - 'primary'          — Core, Juicer Production (K1)
+      - 'secondary'        — Juicer Survey, Supervisor, Freeosk,
+                             Digital Setup, Digital Refresh (K2)
+      - 'teardown_bucket'  — Digital Teardown (K3) — its own bucket,
+                             neither primary nor secondary
+      - 'other'            — anything else (e.g., the 'Other' category,
+                             'Juicer Deep Clean', unknown types)
+    """
+    if event_type in PRIMARY_EVENT_TYPES:
+        return 'primary'
+    if event_type in SECONDARY_EVENT_TYPES:
+        return 'secondary'
+    if event_type == 'Digital Teardown':
+        return 'teardown_bucket'
+    return 'other'
+
 # Day-of-week column names in the order matching Python's date.weekday() (Mon=0..Sun=6)
 _WEEKDAY_COLUMNS = ('monday', 'tuesday', 'wednesday', 'thursday',
                     'friday', 'saturday', 'sunday')
