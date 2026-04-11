@@ -1568,13 +1568,120 @@ class SchedulingEngine:
                     .first())
         return existing is not None
 
+    # Freeosk subcategory → fixed time (spec 05-freeosk.md F6).
+    _FREEOSK_TIMES = {
+        'daily_service': time(10, 0),
+        'changeover':    time(10, 0),
+        'troubleshooting': time(12, 0),
+    }
+
+    # Strict processing order within the Freeosk category (F3/F4).
+    _FREEOSK_SUBCATEGORY_ORDER = ('daily_service', 'changeover', 'troubleshooting')
+
     def _process_freeosk(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 05-freeosk.md."""
+        """Spec 05-freeosk.md — Freeosk category handler.
+
+        Partitions the pool into three subcategories by name pattern
+        (F1), routes unrecognized events to manual review (F2), then
+        processes subcategories in strict order (F3/F4). Within each
+        subcategory, events are sorted by start_datetime.
+        """
+        from app.services.scheduler_helpers import freeosk_subcategory
+
+        buckets: dict[str, list] = {
+            name: [] for name in self._FREEOSK_SUBCATEGORY_ORDER
+        }
         for event in pool:
+            sub = freeosk_subcategory(event.project_name)
+            if sub is None:
+                self._create_failed_pending_schedule(
+                    run, event,
+                    f"Freeosk event {event.project_ref_num}: unrecognized "
+                    f"name pattern {event.project_name!r} (expected one of "
+                    f"'FSK-Daily Service-11AM', 'CO-11AM', 'Troubleshooting')",
+                )
+                continue
+            buckets[sub].append(event)
+
+        for sub_name in self._FREEOSK_SUBCATEGORY_ORDER:
+            for event in sorted(buckets[sub_name],
+                                 key=lambda e: e.start_datetime):
+                self._schedule_single_freeosk(event, sub_name, run)
+
+    def _schedule_single_freeosk(self, event: object, sub_name: str,
+                                 run: object) -> None:
+        """Place a Freeosk event per the subcategory decision tree
+        (branches F5–F11)."""
+        from app.services.scheduler_helpers import lookup_rotation
+
+        target_date = event.start_datetime.date()  # F5
+        target_time = self._FREEOSK_TIMES[sub_name]  # F6
+        target_dt = datetime.combine(target_date, target_time)
+
+        primary_lead_id, backup_lead_id = lookup_rotation(
+            self.db, self.models, target_date, 'primary_lead'
+        )
+
+        # F7: Primary Lead available + has primary event → assign.
+        if (primary_lead_id is not None
+                and self.cache.is_available(primary_lead_id, target_date)
+                and self.cache.has_primary_event(primary_lead_id, target_date)):
+            self._place_secondary_event(
+                run, event, primary_lead_id, target_dt,
+                reason=f"freeosk {sub_name}: primary lead (F7)",
+            )
+            return
+
+        # F8/F9: Backup Lead available + has primary event → assign.
+        if (backup_lead_id is not None
+                and backup_lead_id != primary_lead_id
+                and self.cache.is_available(backup_lead_id, target_date)
+                and self.cache.has_primary_event(backup_lead_id, target_date)):
+            self._place_secondary_event(
+                run, event, backup_lead_id, target_dt,
+                reason=f"freeosk {sub_name}: backup lead (F9)",
+            )
+            return
+
+        # F10: Club Supervisor unconditional fallback (respects CS PTO).
+        cs_id = self._get_club_supervisor_employee_id()
+        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            self._place_secondary_event(
+                run, event, cs_id, target_dt,
+                reason=f"freeosk {sub_name}: club supervisor unconditional (F10)",
+            )
+            return
+
+        # F11: Manual review.
+        self._create_failed_pending_schedule(
+            run, event,
+            f"Freeosk {sub_name} {event.project_ref_num}: no Lead with a "
+            f"primary event on {target_date} and Club Supervisor unavailable",
+        )
+
+    def _place_secondary_event(self, run: object, event: object,
+                               employee_id: str, schedule_dt: datetime,
+                               *, reason: str) -> None:
+        """Shared placement helper for Freeosk / Digitals / Other category
+        secondary events. Creates a PendingSchedule or falls to manual
+        review if the row creation is refused (e.g., locked day)."""
+        employee = self.db.query(self.Employee).filter_by(id=employee_id).one()
+        created = self._create_pending_schedule(
+            run, event, employee, schedule_dt,
+            is_swap=False, bumped_event_ref=None, swap_reason=None,
+        )
+        if not created:
             self._create_failed_pending_schedule(
                 run, event,
-                "Freeosk handler not yet implemented (plan 05)",
+                f"{event.event_type} {event.project_ref_num} placement "
+                f"refused on {schedule_dt.date()} ({reason})",
             )
+            return
+        run.events_scheduled += 1
+        current_app.logger.info(
+            f"{event.event_type} {event.project_ref_num} → {employee.name} "
+            f"on {schedule_dt.date()} @ {schedule_dt.strftime('%H:%M')} ({reason})"
+        )
 
     def _process_digitals(self, pool: list, run: object) -> None:
         """Stub — real handler implemented in plan 06-digitals.md."""

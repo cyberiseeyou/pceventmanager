@@ -69,6 +69,30 @@ def lookup_rotation(db, models, target_date: date, rotation_type: str):
     return (row.employee_id, row.backup_employee_id)
 
 
+def freeosk_subcategory(project_name: str):
+    """Classify a Freeosk event into a subcategory per spec 05-freeosk.md.
+
+    Returns one of:
+        - 'daily_service' — name contains 'FSK-Daily Service-11AM' (F1)
+        - 'changeover'    — name contains 'CO-11AM' (F1)
+        - 'troubleshooting' — name contains 'Troubleshooting' (F1)
+        - None — unrecognized pattern (F2 — caller routes to manual review)
+
+    Match order is Daily Service → Changeover → Troubleshooting so that a
+    malformed name containing multiple substrings resolves to the
+    earliest-matching subcategory per spec 05 edge case.
+    """
+    if not project_name:
+        return None
+    if 'FSK-Daily Service-11AM' in project_name:
+        return 'daily_service'
+    if 'CO-11AM' in project_name:
+        return 'changeover'
+    if 'Troubleshooting' in project_name:
+        return 'troubleshooting'
+    return None
+
+
 def classify_event(event_type: str) -> str:
     """Classify an event type per spec 01-key-concepts.md branches K1–K3.
 
