@@ -1892,11 +1892,50 @@ class SchedulingEngine:
         return pending is not None
 
     def _process_other(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 07-other.md."""
+        """Spec 07-other.md — catch-all Other category handler.
+
+        Processes events in start_datetime order (the pool was pre-sorted
+        by `_process_category` per spec M7). For each event, implements
+        the REVERSED priority rule: Club Supervisor is the FIRST choice
+        (O2/O3), NOT a fallback — the Primary Lead is the fallback
+        (O4/O5), and manual review is the final exit (O6). Every Other
+        event is assigned at 12:00 PM.
+        """
+        from app.services.scheduler_helpers import lookup_rotation
+
+        other_time = time(12, 0)
+        cs_id = self._get_club_supervisor_employee_id()
+
         for event in pool:
+            target_date = event.start_datetime.date()  # O1
+            target_dt = datetime.combine(target_date, other_time)
+
+            # O2/O3: Club Supervisor first (reversed priority).
+            if cs_id is not None and self.cache.is_available(cs_id, target_date):
+                self._place_secondary_event(
+                    run, event, cs_id, target_dt,
+                    reason='other: club supervisor first (O2/O3)',
+                )
+                continue
+
+            # O4/O5: Primary Lead fallback. No has_primary_event check —
+            # the Other category deliberately skips it.
+            primary_lead_id, _ = lookup_rotation(
+                self.db, self.models, target_date, 'primary_lead'
+            )
+            if (primary_lead_id is not None
+                    and self.cache.is_available(primary_lead_id, target_date)):
+                self._place_secondary_event(
+                    run, event, primary_lead_id, target_dt,
+                    reason='other: primary lead fallback (O5)',
+                )
+                continue
+
+            # O6: Manual review.
             self._create_failed_pending_schedule(
                 run, event,
-                "Other handler not yet implemented (plan 07)",
+                f"Other event {event.project_ref_num}: Club Supervisor on "
+                f"PTO and Primary Lead unavailable on {target_date}",
             )
 
     def _sort_events_by_priority(self, events: List[object]) -> List[object]:
