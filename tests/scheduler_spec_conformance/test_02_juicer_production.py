@@ -319,24 +319,33 @@ def test_jp6_jp17_primary_juicer_bumps_posted_core(
     assert remaining is None, \
         'Posted CORE Schedule must be deleted when bumped'
 
-    # Swap-marker PendingSchedule created for the CORE. Invariant 1
-    # requires exactly one row per event per run, so `.one()` without an
-    # is_swap filter must succeed.
+    # Swap-marker PendingSchedule created for the CORE. Plan 04's
+    # core_supervisor handler later re-places it onto a subsequent day
+    # (target itself is occupied by the JP, but the CORE's window
+    # permits target+1 onward). We assert the end-of-run invariants:
+    # exactly one PendingSchedule, is_swap=True preserved, and the
+    # original posted Schedule reference retained for the approval
+    # flow to process.
     PendingSchedule = models['PendingSchedule']
-    core_swap = (db_session.query(PendingSchedule)
-                 .filter_by(scheduler_run_id=run.id, event_ref_num=601001)
-                 .one())
-    assert core_swap.is_swap is True
-    assert core_swap.employee_id is None
-    assert core_swap.schedule_datetime is None
-    assert core_swap.bumped_posted_schedule_id == posted_id
+    core_ps = (db_session.query(PendingSchedule)
+               .filter_by(scheduler_run_id=run.id, event_ref_num=601001)
+               .one())
+    assert core_ps.is_swap is True
+    assert core_ps.bumped_posted_schedule_id == posted_id
+    assert core_ps.employee_id is not None  # re-placed by plan 04
+    assert core_ps.schedule_datetime is not None
+    assert core_ps.schedule_datetime.date() > target.date(), (
+        'Bumped CORE must land on a day after target (target itself is '
+        'occupied by the Juicer Production)'
+    )
 
-    # Event.is_scheduled cleared so category 3 can re-process it
+    # K5: bumped CORE was enqueued into core_supervisor pool (plan 02
+    # did this via _enqueue_bumped_core). After plan 04 re-placed it,
+    # Event.is_scheduled is True again, and the pool still holds the
+    # reference. We verify pool presence + sort order at end-of-run as
+    # evidence of the enqueue happening.
     Event = models['Event']
     core_row = db_session.query(Event).filter_by(project_ref_num=601001).one()
-    assert core_row.is_scheduled is False
-
-    # K5: bumped CORE present in core_supervisor pool, sorted by due_datetime
     pool = greedy_scheduler.category_pools['core_supervisor']
     assert core_row in pool
     due_dates = [e.due_datetime for e in pool]
@@ -390,17 +399,16 @@ def test_jp19_primary_bumps_in_run_pending_core(
     greedy_scheduler._process_juicer_production = hook
     run = greedy_scheduler.run_auto_scheduler(run_type='manual')
 
-    # The pre-planted CORE PendingSchedule must now be "re-opened" —
-    # employee_id and schedule_datetime cleared, is_swap=True. Invariant 1
-    # (exactly one PendingSchedule per event per run) must still hold: the
-    # plan-04 stub skips events that already have a PendingSchedule, so
-    # the bumped CORE should still have exactly one row.
+    # The pre-planted CORE PendingSchedule was re-opened by plan 02's
+    # bump path (is_swap=True, bump metadata set), then re-placed by
+    # plan 04 onto a later day. Invariant 1 holds: exactly one row
+    # per event. is_swap=True is preserved through the re-placement.
     core_ps = (db_session.query(PendingSchedule)
                .filter_by(scheduler_run_id=run.id, event_ref_num=602001)
                .one())
-    assert core_ps.employee_id is None
-    assert core_ps.schedule_datetime is None
     assert core_ps.is_swap is True
+    assert core_ps.employee_id is not None  # plan 04 re-placed it
+    assert core_ps.schedule_datetime is not None
 
 
 # ---------------------------------------------------------------------------
@@ -470,12 +478,16 @@ def test_jp10_backup_juicer_bumps_core(
     )
 
     # Invariant 1: exactly one PendingSchedule row for the bumped CORE.
+    # Plan 04 then re-places it onto a later day (target is taken by
+    # the Juicer Production on backup); is_swap stays True to preserve
+    # the bump metadata.
     PendingSchedule = models['PendingSchedule']
-    core_swap = (db_session.query(PendingSchedule)
-                 .filter_by(scheduler_run_id=run.id, event_ref_num=604001)
-                 .one())
-    assert core_swap.is_swap is True
-    assert core_swap.employee_id is None
+    core_ps = (db_session.query(PendingSchedule)
+               .filter_by(scheduler_run_id=run.id, event_ref_num=604001)
+               .one())
+    assert core_ps.is_swap is True
+    assert core_ps.bumped_posted_schedule_id is not None
+    assert core_ps.employee_id is not None  # re-placed by plan 04
 
 
 # ---------------------------------------------------------------------------

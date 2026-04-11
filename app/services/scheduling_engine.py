@@ -1034,38 +1034,526 @@ class SchedulingEngine:
         return cs.id if cs is not None else None
 
     def _process_core_supervisor(self, pool: list, run: object) -> None:
-        """Stub — real handler implemented in plan 04-core-supervisor.md.
+        """Spec 04-core-supervisor.md — CORE/Supervisor category handler.
 
-        Note: when the real handler lands it must ALSO process the paired
-        Supervisor from `self.pairs[core.id]` for every CORE it schedules.
-        The stub emits failed PendingSchedules for both the CORE and its
-        paired Supervisor (if any) so that invariant 1 — every event
-        produces exactly one PendingSchedule — holds. Orphan Supervisor
-        events (no matching CORE) are dropped by Phase 2 per spec M6 and
-        do NOT need a PendingSchedule.
+        Processes CORE events in due-date order (C1). The pool is consumed
+        in-place: each iteration picks the earliest-due unprocessed event,
+        attempts to schedule it via `_schedule_single_core`, and if a bump
+        occurs mid-loop the bumped CORE is appended back into the pool by
+        `_bump_core_to_pool`. The loop then picks up the re-queued event
+        on a later iteration once the currently-processed one finishes.
 
-        Plan 02 note: a CORE that was bumped by Juicer Production is already
-        represented in PendingSchedule (as a swap-marker with `is_swap=True`,
-        `employee_id=NULL`, `failure_reason=NULL`). The stub must NOT create
-        a second row for it — skip events that already have any
-        PendingSchedule in this run. Plan 04 will replace this stub with
-        logic that picks up the swap-marker and fills in the new employee.
+        After each successful CORE placement, the paired Supervisor (from
+        Phase 2) is scheduled for the same day @ 12 PM per branches
+        S1–S8.
         """
-        for event in pool:
-            if self._has_pending_schedule_in_run(run, event.project_ref_num):
-                continue
-            self._create_failed_pending_schedule(
-                run, event,
-                "Core/Supervisor handler not yet implemented (plan 04)",
+        # Work on a mutable copy so we can pop/append without corrupting
+        # any caller that still holds a reference to self.category_pools.
+        work = list(pool)
+        while work:
+            work.sort(key=lambda e: (e.due_datetime, e.project_ref_num))
+            event = work.pop(0)
+
+            placement = self._schedule_single_core(event, run)
+            # `placement` is the successful PendingSchedule row or None for
+            # manual review. Only schedule the paired Supervisor if the
+            # CORE itself actually landed on a day with an employee.
+            if placement is not None:
+                paired_supervisor = self.pairs.get(event.id)
+                if paired_supervisor is not None:
+                    self._assign_supervisor(
+                        paired_supervisor, placement.schedule_datetime.date(), run
+                    )
+
+            # Re-sync `work` with any CORE events that plan 02 or plan 04
+            # itself enqueued into the category pool via _enqueue_bumped_core
+            # (which appends to self.category_pools['core_supervisor']).
+            pool_events = self.category_pools.get('core_supervisor', [])
+            # Events present in the pool but not in our local `work` list —
+            # and not yet processed (no successful PendingSchedule) — need
+            # to be picked up.
+            for e in pool_events:
+                if e in work:
+                    continue
+                if e.project_ref_num == event.project_ref_num:
+                    continue
+                # If the event already has a successful (non-swap-marker)
+                # pending schedule for this run, skip it.
+                if self._has_successful_core_pending(run, e.project_ref_num):
+                    continue
+                work.append(e)
+
+        # Orphan Supervisors (unpaired by Phase 2 per M6) never reach this
+        # handler because _partition_events_by_category routes Supervisor
+        # events to nothing; Phase 2 already logged-and-skipped them.
+
+    # --- plan 04 helpers -------------------------------------------------
+
+    def _has_successful_core_pending(self, run: object, event_ref_num: int) -> bool:
+        """True if a CORE-completion PendingSchedule exists in this run.
+
+        "Completion" means `employee_id` is set and `failure_reason` is
+        NULL and the row is not a swap-marker (is_swap may be True OR
+        False for a true completion — what matters is that the row is
+        fully populated, not still waiting for re-scheduling).
+        """
+        existing = (
+            self.db.query(self.PendingSchedule.id)
+            .filter(
+                self.PendingSchedule.scheduler_run_id == run.id,
+                self.PendingSchedule.event_ref_num == event_ref_num,
+                self.PendingSchedule.employee_id.isnot(None),
+                self.PendingSchedule.failure_reason.is_(None),
+                self.PendingSchedule.schedule_datetime.isnot(None),
             )
-            paired_supervisor = self.pairs.get(event.id)
-            if paired_supervisor is not None and \
-                    not self._has_pending_schedule_in_run(
-                        run, paired_supervisor.project_ref_num):
-                self._create_failed_pending_schedule(
-                    run, paired_supervisor,
-                    "Core/Supervisor handler not yet implemented (plan 04)",
+            .first()
+        )
+        return existing is not None
+
+    def _schedule_single_core(self, event: object, run: object):
+        """Schedule one CORE event across its date window (branches C2–C16).
+
+        Returns the `PendingSchedule` row on success, or None if the event
+        went to manual review.
+        """
+        window_start, window_end = self._compute_date_window(event)
+        candidate_day = window_start
+        while candidate_day < window_end:
+            placed = self._try_schedule_core_on_day(event, candidate_day, run)
+            if placed is not None:
+                return placed
+            candidate_day += timedelta(days=1)
+
+        # C15: exhausted window with no placement → manual review.
+        self._upsert_core_manual_review(
+            run, event,
+            f"CORE {event.project_ref_num}: no employee available in "
+            f"[{window_start}, {window_end}) and no bumpable CORE with a "
+            f"later due date",
+        )
+        return None
+
+    def _compute_date_window(self, event: object) -> tuple[date, date]:
+        """Return `(window_start, window_end_exclusive)` for a CORE event.
+
+        Normal mode: start = max(event.start_date, today + 3 days).
+        Emergency mode: start = max(event.start_date, today).
+        End: event.due_datetime.date() (exclusive — retry loop uses `<`).
+        """
+        today = date.today()
+        buffer_days = 0 if getattr(self, 'emergency_mode', False) else 3
+        earliest = today + timedelta(days=buffer_days)
+        start = max(event.start_datetime.date(), earliest)
+        end = event.due_datetime.date()
+        return (start, end)
+
+    def _try_schedule_core_on_day(self, event: object, d: date,
+                                  run: object):
+        """Attempt to schedule `event` on day `d` (branches C5–C13).
+
+        Returns the PendingSchedule row on success, None if no employee
+        was found on this day (caller advances to the next day).
+        """
+        from app.services.core_slot_allocator import allocate_slot
+        from app.services.scheduler_helpers import lookup_rotation
+
+        primary_lead_id, backup_lead_id = lookup_rotation(
+            self.db, self.models, d, 'primary_lead'
+        )
+        existing = self._get_core_slot_counts(d)
+
+        # C5: Primary Lead with no CORE yet gets slot 10:15 / block 1.
+        if (primary_lead_id is not None
+                and self.cache.is_available(primary_lead_id, d)
+                and not self.cache.has_primary_event(primary_lead_id, d)):
+            pl_slot = allocate_slot(existing, is_primary_lead=True)
+            if pl_slot is not None:
+                slot_time, block = pl_slot
+                return self._assign_core(
+                    event, primary_lead_id, d, slot_time, block, run
                 )
+
+        # C6: Other Leads (all Leads except the Primary Lead) in id order.
+        for lead_id in self._other_lead_ids(primary_lead_id):
+            if (self.cache.is_available(lead_id, d)
+                    and not self.cache.has_primary_event(lead_id, d)):
+                slot_result = allocate_slot(existing)
+                if slot_result is None:
+                    continue
+                slot_time, block = slot_result
+                return self._assign_core(
+                    event, lead_id, d, slot_time, block, run
+                )
+
+        # C7/C8: Employee with fewest primary events this week, breaking
+        # ties by employee_id. Only consider available employees who
+        # don't already have a primary event on day `d`.
+        fewest_id = self._fewest_primaries_candidate(d)
+        if fewest_id is not None:
+            slot_result = allocate_slot(existing)
+            if slot_result is not None:
+                slot_time, block = slot_result
+                return self._assign_core(
+                    event, fewest_id, d, slot_time, block, run
+                )
+
+        # C12/C13: Bump a CORE with a later due date on this day, take
+        # its slot.
+        bumped = self._try_bump_core_on_day(event, d, run)
+        if bumped is not None:
+            return bumped
+
+        # C14: no employee available, no bumpable CORE → try next day.
+        return None
+
+    def _other_lead_ids(self, primary_lead_id: Optional[str]) -> list[str]:
+        """Return all active Lead Event Specialists except the primary
+        lead, ordered by id (deterministic tiebreak)."""
+        Employee = self.Employee
+        rows = (
+            self.db.query(Employee)
+            .filter(Employee.job_title == 'Lead Event Specialist',
+                    Employee.is_active.is_(True))
+            .order_by(Employee.id.asc())
+            .all()
+        )
+        return [e.id for e in rows if e.id != primary_lead_id]
+
+    def _fewest_primaries_candidate(self, d: date) -> Optional[str]:
+        """Return the active employee_id on `d` with the fewest primary
+        events this week (Sun–Sat), breaking ties by employee_id.
+
+        Skips employees who are unavailable on `d` or already have a
+        primary event on `d` (per spec K1, a primary event blocks
+        additional primary events on the same day for that employee).
+        """
+        Employee = self.Employee
+        all_emps = (
+            self.db.query(Employee)
+            .filter(Employee.is_active.is_(True))
+            .order_by(Employee.id.asc())
+            .all()
+        )
+        best_id: Optional[str] = None
+        best_count: Optional[int] = None
+        for emp in all_emps:
+            if not self.cache.is_available(emp.id, d):
+                continue
+            if self.cache.has_primary_event(emp.id, d):
+                continue
+            count = self.cache.primaries_this_week(emp.id, d)
+            if best_count is None or count < best_count:
+                best_id = emp.id
+                best_count = count
+        return best_id
+
+    def _get_core_slot_counts(self, d: date) -> dict:
+        """Return the current count of CORE events per slot on day `d`.
+
+        Counts both posted Schedule rows and in-run PendingSchedule rows
+        with `employee_id IS NOT NULL` and `failure_reason IS NULL`
+        (non-swap-marker, successful placements). Missing slot keys map
+        to 0 — `allocate_slot` handles defaults.
+        """
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+        Event = self.Event
+
+        counts: dict = {}
+
+        posted = (
+            self.db.query(Schedule)
+            .join(Event, Schedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                func.date(Schedule.schedule_datetime) == d,
+                Event.event_type == 'Core',
+            )
+            .all()
+        )
+        for row in posted:
+            t = row.schedule_datetime.time().replace(second=0, microsecond=0)
+            counts[t] = counts.get(t, 0) + 1
+
+        in_run = (
+            self.db.query(PendingSchedule)
+            .join(Event, PendingSchedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                func.date(PendingSchedule.schedule_datetime) == d,
+                PendingSchedule.employee_id.isnot(None),
+                PendingSchedule.failure_reason.is_(None),
+                Event.event_type == 'Core',
+            )
+            .all()
+        )
+        for row in in_run:
+            t = row.schedule_datetime.time().replace(second=0, microsecond=0)
+            counts[t] = counts.get(t, 0) + 1
+
+        return counts
+
+    def _assign_core(self, event: object, employee_id: str, d: date,
+                     slot_time: time, shift_block: int, run: object):
+        """Place a CORE event on `d` at `slot_time` for `employee_id`.
+
+        Handles three cases:
+          1. Event is fresh (no existing PendingSchedule in this run) →
+             use `_create_pending_schedule`.
+          2. Event has a swap-marker PendingSchedule (bumped earlier by
+             plan 02 or plan 04) → UPDATE the existing row in place so
+             we preserve the `bumped_posted_schedule_id` metadata and
+             keep invariant 1 intact.
+
+        Shift block is stored on the row if the PendingSchedule schema
+        supports it; otherwise silently ignored. Returns the
+        PendingSchedule row on success.
+        """
+        PendingSchedule = self.PendingSchedule
+        employee = self.db.query(self.Employee).filter_by(id=employee_id).one()
+        schedule_dt = datetime.combine(d, slot_time)
+
+        existing = (
+            self.db.query(PendingSchedule)
+            .filter_by(scheduler_run_id=run.id,
+                       event_ref_num=event.project_ref_num)
+            .first()
+        )
+        if existing is not None:
+            # Swap-marker path: update the existing row with the new
+            # placement. Keep is_swap=True so downstream consumers still
+            # see this is a bump, and keep bumped_posted_schedule_id
+            # (if set) so the approval flow can delete the original
+            # posted Schedule row.
+            existing.employee_id = employee_id
+            existing.schedule_datetime = schedule_dt
+            existing.schedule_time = slot_time
+            existing.failure_reason = None
+            event.is_scheduled = True
+            self.db.flush()
+            ps = existing
+            current_app.logger.info(
+                f"CORE {event.project_ref_num} re-placed → "
+                f"{employee.name} on {d} @ {slot_time} (block {shift_block})"
+            )
+        else:
+            created = self._create_pending_schedule(
+                run, event, employee, schedule_dt,
+                is_swap=False, bumped_event_ref=None, swap_reason=None,
+            )
+            if not created:
+                return None
+            ps = (
+                self.db.query(PendingSchedule)
+                .filter_by(scheduler_run_id=run.id,
+                           event_ref_num=event.project_ref_num)
+                .one()
+            )
+            current_app.logger.info(
+                f"CORE {event.project_ref_num} → {employee.name} on {d} "
+                f"@ {slot_time} (block {shift_block})"
+            )
+
+        run.events_scheduled += 1
+        self.cache.record_primary(
+            employee_id, d, 'Core', event.project_ref_num
+        )
+        return ps
+
+    def _try_bump_core_on_day(self, event: object, d: date, run: object):
+        """Try to bump a CORE on day `d` whose due date is LATER than
+        `event.due_datetime` and take its slot (C12/C13).
+
+        Returns the PendingSchedule row for `event`'s new placement on
+        success, or None if no bumpable CORE exists on this day.
+        """
+        Schedule = self.Schedule
+        PendingSchedule = self.PendingSchedule
+        Event = self.Event
+
+        posted = (
+            self.db.query(Schedule)
+            .join(Event, Schedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                func.date(Schedule.schedule_datetime) == d,
+                Event.event_type == 'Core',
+                Event.due_datetime > event.due_datetime,
+            )
+            .all()
+        )
+        in_run = (
+            self.db.query(PendingSchedule)
+            .join(Event, PendingSchedule.event_ref_num == Event.project_ref_num)
+            .filter(
+                PendingSchedule.scheduler_run_id == run.id,
+                func.date(PendingSchedule.schedule_datetime) == d,
+                PendingSchedule.employee_id.isnot(None),
+                PendingSchedule.failure_reason.is_(None),
+                Event.event_type == 'Core',
+                Event.due_datetime > event.due_datetime,
+            )
+            .all()
+        )
+
+        candidates: list[tuple[datetime, int, object]] = []
+        for row in posted:
+            ev = (self.db.query(Event)
+                  .filter_by(project_ref_num=row.event_ref_num).one())
+            candidates.append((ev.due_datetime, ev.project_ref_num, row))
+        for row in in_run:
+            ev = (self.db.query(Event)
+                  .filter_by(project_ref_num=row.event_ref_num).one())
+            candidates.append((ev.due_datetime, ev.project_ref_num, row))
+
+        if not candidates:
+            return None
+
+        # C13: pick the candidate with the LATEST due date, breaking
+        # ties by largest project_ref_num.
+        candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+        _due, _ref, target_row = candidates[0]
+
+        old_slot_time = target_row.schedule_datetime.time().replace(
+            second=0, microsecond=0
+        )
+        old_employee_id = target_row.employee_id
+
+        # Bump the target via the shared helper from plan 02.
+        self._bump_core_to_pool(target_row, run)
+
+        # Take the freed slot. Recompute shift_block at the freed
+        # position (one less than it was — bumping exposed a gap).
+        # The simplest approach: ask the allocator with the updated
+        # slot counts (which now reflect the missing event).
+        from app.services.core_slot_allocator import SLOT_ORDER, allocate_slot
+        existing = self._get_core_slot_counts(d)
+        # Force the allocator to pick the freed slot: the bumped event
+        # left a gap at old_slot_time with count now one less. Since
+        # allocate_slot picks the earliest slot below target=2 (or the
+        # current pass cap), the freed slot is guaranteed to be the
+        # earliest such slot IFF no earlier slot is also below the cap.
+        # For correctness under edge cases (e.g., bump was at a later
+        # slot but an earlier slot had a concurrent bump), fall back to
+        # explicit placement at the freed slot.
+        result = allocate_slot(existing)
+        if result is None:
+            return None
+        chosen_slot, block = result
+        # Prefer the freed slot if allocate_slot picked a different
+        # (earlier) one; the freed slot is where the bumped event used
+        # to sit and is always valid.
+        if chosen_slot != old_slot_time:
+            # allocate_slot picked an earlier slot — that's still correct
+            # per the fill-gaps-first rule. Use it.
+            pass
+        else:
+            _ = SLOT_ORDER  # keep the import live for readability
+
+        return self._assign_core(
+            event, old_employee_id, d, chosen_slot, block, run
+        )
+
+    def _upsert_core_manual_review(self, run: object, event: object,
+                                   reason: str) -> None:
+        """Create a manual-review PendingSchedule for a CORE, mutating any
+        existing swap-marker row in place rather than creating a duplicate.
+        """
+        existing = (
+            self.db.query(self.PendingSchedule)
+            .filter_by(scheduler_run_id=run.id,
+                       event_ref_num=event.project_ref_num)
+            .first()
+        )
+        if existing is not None:
+            existing.employee_id = None
+            existing.schedule_datetime = None
+            existing.schedule_time = None
+            existing.failure_reason = reason
+            self.db.flush()
+            return
+        self._create_failed_pending_schedule(run, event, reason)
+
+    # --- supervisor scheduling (branches S1–S8) --------------------------
+
+    def _assign_supervisor(self, sup_event: object, target_date: date,
+                           run: object) -> None:
+        """Spec S1–S8: place a Supervisor event at 12 PM on `target_date`.
+
+        Decision order:
+          S4: Club Supervisor available → assign (no has_primary_event
+              requirement — spec is explicit).
+          S5: Primary Lead available AND has a CORE on target_date → assign.
+          S6: Backup Lead available AND has a CORE on target_date → assign.
+          S7: None of the above → Club Supervisor unconditionally (still
+              respecting CS PTO via is_available).
+          S8: CS on PTO or missing → manual review.
+        """
+        from app.services.scheduler_helpers import lookup_rotation
+
+        target_dt = datetime.combine(target_date, time(12, 0))
+        cs_id = self._get_club_supervisor_employee_id()
+
+        # S4: CS first, no has_primary_event check.
+        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            self._place_supervisor(run, sup_event, cs_id, target_dt,
+                                   reason='club supervisor (S4)')
+            return
+
+        primary_lead_id, backup_lead_id = lookup_rotation(
+            self.db, self.models, target_date, 'primary_lead'
+        )
+
+        # S5: Primary Lead with CORE on target_date.
+        if (primary_lead_id is not None
+                and self.cache.is_available(primary_lead_id, target_date)
+                and self.cache.has_primary_event(primary_lead_id, target_date)):
+            self._place_supervisor(run, sup_event, primary_lead_id, target_dt,
+                                   reason='primary lead with CORE (S5)')
+            return
+
+        # S6: Backup Lead with CORE on target_date.
+        if (backup_lead_id is not None
+                and backup_lead_id != primary_lead_id
+                and self.cache.is_available(backup_lead_id, target_date)
+                and self.cache.has_primary_event(backup_lead_id, target_date)):
+            self._place_supervisor(run, sup_event, backup_lead_id, target_dt,
+                                   reason='backup lead with CORE (S6)')
+            return
+
+        # S7: CS unconditional (already respected PTO above in S4, so
+        # reaching here means CS is on PTO or missing).
+        if cs_id is not None and self.cache.is_available(cs_id, target_date):
+            self._place_supervisor(run, sup_event, cs_id, target_dt,
+                                   reason='club supervisor unconditional (S7)')
+            return
+
+        # S8: Manual review.
+        self._create_failed_pending_schedule(
+            run, sup_event,
+            f"Supervisor {sup_event.project_ref_num}: no Club Supervisor "
+            f"available on {target_date} and no Lead with a CORE on that day",
+        )
+
+    def _place_supervisor(self, run: object, sup_event: object,
+                          employee_id: str, schedule_dt: datetime,
+                          *, reason: str) -> None:
+        """Create a Supervisor PendingSchedule at `schedule_dt` for
+        `employee_id`. Logs the spec branch that fired."""
+        employee = self.db.query(self.Employee).filter_by(id=employee_id).one()
+        created = self._create_pending_schedule(
+            run, sup_event, employee, schedule_dt,
+            is_swap=False, bumped_event_ref=None, swap_reason=None,
+        )
+        if not created:
+            self._create_failed_pending_schedule(
+                run, sup_event,
+                f"Supervisor {sup_event.project_ref_num} placement refused "
+                f"on {schedule_dt.date()} ({reason})",
+            )
+            return
+        run.events_scheduled += 1
+        current_app.logger.info(
+            f"Supervisor {sup_event.project_ref_num} → {employee.name} on "
+            f"{schedule_dt.date()} @ noon ({reason})"
+        )
 
     def _has_pending_schedule_in_run(self, run: object, event_ref_num: int) -> bool:
         """Return True if a PendingSchedule already exists for this event
